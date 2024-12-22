@@ -41,3 +41,5 @@ Peekorobo is licensed under the **MIT License**. See the LICENSE file for detail
 Copyright (c) 2024 Rhett R. Adam
 
 ---
+
+![Dozer](assets/dozer.gif)
