@@ -12,8 +12,8 @@ This project is a web application built with [Dash](https://dash.plotly.com/) to
   - Awards won.
 - **Leaderboard Page**: View team rankings by various metrics.
 
-# <img src="assets/1.png" alt="Home" width="250">
+# <img src="assets/1.png" alt="Home" width="600">
 
-# <img src="assets/2.png" alt="Data" width="250">
+# <img src="assets/2.png" alt="Data" width="600">
 
-# <img src="assets/3.png" alt="Leaderboard" width="250">
+# <img src="assets/3.png" alt="Leaderboard" width="600">
