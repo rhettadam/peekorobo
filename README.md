@@ -1,6 +1,6 @@
 ![Logo](assets/logo.png)
 
-This project is a web application built with [Dash](https://dash.plotly.com/) to display detailed information about FRC (FIRST Robotics Competition) teams and events. It uses the [The Blue Alliance (TBA) API](https://www.thebluealliance.com/apidocs/v3) to fetch and display data.
+Peekorobo is a web application built with [Dash](https://dash.plotly.com/) to display detailed information about [FRC (FIRST Robotics Competition)](https://www.firstinspires.org/robotics/frc) teams and events. It uses the [The Blue Alliance (TBA) API](https://www.thebluealliance.com/apidocs/v3) to fetch and display data.
 
 ## Features
 
@@ -36,7 +36,7 @@ https://aurora-vens.onrender.com/
 
 ## **License**
 
-This project is licensed under the **MIT License**. See the LICENSE file for details.
+Peekorobo is licensed under the **MIT License**. See the LICENSE file for details.
 
 Copyright (c) 2024 Rhett R. Adam
 
