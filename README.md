@@ -1,4 +1,4 @@
-# <img src="assets/logo.png" alt="Peek-o-Robo Logo" width="250">
+![Logo](assets/logo.png)
 
 This project is a web application built with [Dash](https://dash.plotly.com/) to display detailed information about FRC (FIRST Robotics Competition) teams and events. It uses the [The Blue Alliance (TBA) API](https://www.thebluealliance.com/apidocs/v3) to fetch and display data.
 
@@ -12,8 +12,32 @@ This project is a web application built with [Dash](https://dash.plotly.com/) to
   - Awards won.
 - **Leaderboard Page**: View team rankings by various metrics.
 
-# <img src="assets/1.png" alt="Home" width="600">
 
-# <img src="assets/2.png" alt="Data" width="600">
+![Home](assets/1.png)
 
-# <img src="assets/3.png" alt="Leaderboard" width="600">
+
+![Data](assets/2.png)
+
+
+![Leaderboard](assets/3.png)
+
+
+## **Running the Application**
+
+Run the Python script to launch the dashboard:
+
+```bash
+python peekorobo.py
+```
+
+Or you can visit the Render Development Build here:
+
+https://aurora-vens.onrender.com/
+
+## **License**
+
+This project is licensed under the **MIT License**. See the LICENSE file for details.
+
+Copyright (c) 2024 Rhett R. Adam
+
+---
