@@ -34,46 +34,59 @@ def tba_get(endpoint: str):
 topbar = dbc.Navbar(
     dbc.Container(
         [
+            # Left: Logo
             dbc.NavbarBrand(
                 html.Img(
                     src="/assets/logo.png",
-                    height="40px",
-                    alt="FRC Logo",
+                    style={
+                        "height": "40px",
+                        "width": "auto",
+                    },
                 ),
                 href="/",
-                className="ms-2",
+                className="navbar-brand-custom",
             ),
-            dbc.Nav(
-                [
-                    dbc.NavItem(dbc.NavLink("Home", href="/")),
-                    dbc.NavItem(dbc.NavLink("Leaderboard", href="/leaderboard")),
-                ],
+            # Right: Hamburger Menu and Collapsible Nav
+            dbc.NavbarToggler(id="navbar-toggler", className="navbar-toggler-custom"),
+            dbc.Collapse(
+                dbc.Nav(
+                    [
+                        dbc.NavItem(dbc.NavLink("Home", href="/")),
+                        dbc.NavItem(dbc.NavLink("Leaderboard", href="/leaderboard")),
+                        dbc.NavItem(dbc.NavLink("Events", href="/events")),
+                        dbc.InputGroup(
+                            [
+                                dbc.Input(
+                                    id="topbar-search-input",
+                                    placeholder="Search teams...",
+                                    type="text",
+                                    style={"width": "200px"},
+                                ),
+                                dbc.Button(
+                                    "Search",
+                                    id="topbar-search-button",
+                                    color="primary",
+                                    style={
+                                        "backgroundColor": "#ffdd00ff",
+                                        "border": "none",
+                                        "color": "#333",
+                                    },
+                                ),
+                            ],
+                            className="ms-auto",
+                            style={"width": "300px"},
+                        ),
+                    ],
+                    className="ms-auto",  # Align links to the right
+                    navbar=True,
+                ),
+                id="navbar-collapse",
+                is_open=False,
                 navbar=True,
             ),
-            # Search Button and Input in Topbar
-            dbc.InputGroup(
-                [
-                    dbc.Input(
-                        id="topbar-search-input",
-                        placeholder="Search teams...",
-                        type="text",
-                        style={"width": "200px"},
-                    ),
-                    dbc.Button(
-                        "Search",
-                        id="topbar-search-button",
-                        color="primary",
-                        style={
-                            "backgroundColor": "#ffdd00ff",
-                            "border": "none",
-                            "color": "#333",
-                        },
-                    ),
-                ],
-                className="ms-auto",
-                style={"width": "300px"},
-            ),
-        ]
+        ],
+        fluid=True,
+        className="d-flex justify-content-between align-items-center",
     ),
     color="light",
     dark=False,
@@ -85,6 +98,16 @@ topbar = dbc.Navbar(
         "boxShadow": "0px 2px 2px rgba(0,0,0,0.1)",  # Optional shadow for better visibility
     },
 )
+
+@app.callback(
+    Output("navbar-collapse", "is_open"),
+    [Input("navbar-toggler", "n_clicks")],
+    [State("navbar-collapse", "is_open")],
+)
+def toggle_navbar(n_clicks, is_open):
+    if n_clicks:
+        return not is_open
+    return is_open
 
 footer = dbc.Container(
     dbc.Row([
@@ -99,55 +122,118 @@ footer = dbc.Container(
     style={"marginTop": "0px", "padding": "5px 0","boxShadow": "0px -2px 2px rgba(0,0,0,0.1)"}
 )
 
-# ---- HOME PAGE LAYOUT ----
 home_layout = html.Div([
     topbar,
     dbc.Container(fluid=True, children=[
-    # Main Content Row
-    dbc.Row([
-        # Left Section: Logo, Text, Search
-        dbc.Col([
-            html.Div([
-                html.Img(src="/assets/logo.png", 
-                         className='homelogo',
-                         style={
-                    "width": "450px", 
-                    "marginBottom": "15px"
-                }),
-                html.P("Search for any FRC Team", style={
-                    "fontSize": "1.5rem", 
-                    "color": "#555", 
-                    "textAlign": "center", 
-                    "marginBottom": "20px"
-                }),
-                dbc.Row([
-                    dbc.Col(dbc.Input(id="input-team-home", type="text", placeholder="Team # (e.g., 254)",
-                                      className="custom-input-box",
-                                      style={"padding": "10px", "borderRadius": "5px", "marginBottom": "1rem", "width": "100%"}), width=6),
-                    dbc.Col(dbc.Input(id="input-year-home", type="text", placeholder="Year (e.g., 2023) optional)",
-                                      className="custom-input-box",
-                                      style={"padding": "10px", "borderRadius": "5px", "marginBottom": "1rem", "width": "100%"}), width=6),
-                ], justify="center"),
-                dbc.Button("Search", id="btn-search-home", color="primary", size="lg",
-                           style={"backgroundColor": "#ffdd00ff", "border": "none", "color": "black", "marginTop": "10px"}),
-            ], style={"textAlign": "center", "display": "flex", "flexDirection": "column", "alignItems": "center"})
-        ], width=6),
-        
-        # Right Section: Bulldozer GIF
-        dbc.Col([
-            html.Div([
-                html.A(
-                    html.Img(
-                        src="/assets/dozer.gif",
-                        style={"width": "600px", "display": "block", "margin": "auto"}
-                    ),
-                    href="https://github.com/rhettadam/peekrobo",
-                    target="_blank"  # Opens in a new tab
+        # Main Content Row
+        dbc.Row(
+            [
+                # Left Section: Logo, Text, Search
+                dbc.Col(
+                    [
+                        html.Div(
+                            [
+                                html.Img(
+                                    src="/assets/logo.png",
+                                    className='homelogo',
+                                    style={
+                                        "width": "350px",
+                                        "marginBottom": "15px",
+                                    },
+                                ),
+                                html.P(
+                                    "Search for any FRC Team",
+                                    style={
+                                        "fontSize": "1.5rem",
+                                        "color": "#555",
+                                        "textAlign": "center",
+                                        "marginBottom": "20px"
+                                    },
+                                ),
+                                dbc.Row(
+                                    [
+                                        dbc.Col(
+                                            dbc.Input(
+                                                id="input-team-home",
+                                                type="text",
+                                                placeholder="Team # (e.g., 254)",
+                                                className="custom-input-box",
+                                                style={"width": "100%"}
+                                            ),
+                                            width=12
+                                        ),
+                                        dbc.Col(
+                                            dbc.Input(
+                                                id="input-year-home",
+                                                type="text",
+                                                placeholder="Year (e.g., 2023) optional",
+                                                className="custom-input-box",
+                                                style={"width": "100%"}
+                                            ),
+                                            width=12
+                                        ),
+                                    ],
+                                    justify="center",
+                                    style={"marginBottom": "1rem"}
+                                ),
+                                dbc.Button(
+                                    "Search",
+                                    id="btn-search-home",
+                                    color="primary",
+                                    size="lg",
+                                    style={
+                                        "backgroundColor": "#ffdd00ff",
+                                        "border": "none",
+                                        "color": "black",
+                                        "marginTop": "10px",
+                                        "width": "35%",
+                                    },
+                                ),
+                            ],
+                            className="logo-search-container",
+                            style={
+                                "textAlign": "center",
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "alignItems": "center"
+                            }
+                        )
+                    ],
+                    width=6,
+                    className="desktop-left-section"
                 ),
-            ], style={"textAlign": "center"}),
-        ], width=6)
-    ], justify="center", align="center", style={"height": "75vh"}),
-], class_name="py-5", style={"backgroundColor": "white"}),
+                # Right Section: Bulldozer GIF
+                dbc.Col(
+                    [
+                        html.Div(
+                            [
+                                html.A(
+                                    html.Img(
+                                        src="/assets/dozer.gif",
+                                        style={
+                                            "width": "100%",  # Make it responsive
+                                            "maxWidth": "600px",
+                                            "display": "block",
+                                            "margin": "auto"
+                                        },
+                                        className="dozer-image"
+                                    ),
+                                    href="https://github.com/rhettadam/peekorobo",
+                                    target="_blank",  # Opens in a new tab
+                                ),
+                            ],
+                            style={"textAlign": "center"}
+                        )
+                    ],
+                    width=6,
+                    className="desktop-right-section"
+                )
+            ],
+            justify="center",
+            align="center",
+            style={"height": "75vh"}
+        ),
+    ], class_name="py-5", style={"backgroundColor": "white"}),
     footer
 ])
 
@@ -177,17 +263,62 @@ def data_layout(team_number, year):
     # Fetch Years Participated
     years_participated = tba_get(f"team/{team_key}/years_participated")
     years_text = ", ".join(map(str, years_participated)) if years_participated else "N/A"
-
+    
+    avatar_data = tba_get(f"team/{team_key}/media/2024")
+    avatar_url = None
+    if avatar_data:
+        for media in avatar_data:
+            if media.get("type") == "avatar" and media.get("details", {}).get("base64Image"):
+                avatar_url = f"data:image/png;base64,{media['details']['base64Image']}"
+                break
+            elif media.get("preferred") and media.get("direct_url"):
+                avatar_url = media["direct_url"]
+                break
+                
     # Team Info Card
     team_card = dbc.Card(
         dbc.CardBody(
             [
-                html.H2(f"Team {team_number}: {nickname}", style={"color": "#333", "fontWeight": "bold"}),
-                html.P([html.I(className="bi bi-geo-alt-fill"), f" Location: {city}, {state}, {country}"]),
-                html.P([html.I(className="bi bi-link-45deg"), " Website: ", 
-                        html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "none"})]),
-                html.P([html.I(className="bi bi-award"), f" Rookie Year: {rookie_year}"]),
-                html.P([html.I(className="bi bi-calendar"), f" Years Participated: {years_text}"]),
+                dbc.Row(
+                    [
+                        # Left Column: Team Info
+                        dbc.Col(
+                            [
+                                html.H2(f"Team {team_number}: {nickname}", style={"color": "#333", "fontWeight": "bold"}),
+                                html.P([html.I(className="bi bi-geo-alt-fill"), f" Location: {city}, {state}, {country}"]),
+                                html.P([html.I(className="bi bi-link-45deg"), " Website: ", 
+                                        html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "none"})]),
+                                html.P([html.I(className="bi bi-award"), f" Rookie Year: {rookie_year}"]),
+                                html.P([html.I(className="bi bi-calendar"), f" Years Participated: {years_text}"]),
+                            ],
+                            width=9,  # Take up most of the space
+                        ),
+                        # Right Column: Avatar
+                        # Right Column: Avatar
+                dbc.Col(
+                    [
+                        html.Img(
+                            src=avatar_url,
+                            alt=f"Team {team_number} Avatar",
+                            style={
+                                "width": "150px",  # Set an explicit width
+                                "height": "150px",  # Set an explicit height
+                                "objectFit": "contain",  # Ensure the image fits within the bounds
+                                "borderRadius": "10px",  # Optional: Rounded corners
+                                "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",  # Optional: Shadow for styling
+                                "marginLeft": "auto",
+                                "marginRight": "auto",  # Center horizontally within the column
+                                "display": "block",  # Ensure it's treated as a block element
+                            },
+                        ) if avatar_url else html.Div("No avatar available.", style={"color": "#777"}),
+                    ],
+                    width=3,  # Allocate less space for the avatar
+                    style={"textAlign": "center"},
+                ),
+
+                    ],
+                    align="center",  # Vertically align the content
+                ),
             ],
             style={"fontSize": "1.1rem"}
         ),
@@ -198,7 +329,7 @@ def data_layout(team_number, year):
             "backgroundColor": "#f9f9f9",
         },
     )
-    
+
         # --- Performance Metrics ---
     if year:
         matches = tba_get(f"team/{team_key}/matches/{year}")
@@ -258,15 +389,9 @@ def data_layout(team_number, year):
     if year:
         events = tba_get(f"team/{team_key}/events/{year}")
     else:
-        # Fetch events from the past 3 years
-        from datetime import datetime
-
-        current_year = datetime.now().year
-        events = []
-        for past_year in range(current_year - 2, current_year + 2):
-            events.extend(tba_get(f"team/{team_key}/events/{past_year}") or [])
-        # Sort events by start date in reverse order
-        events = sorted(events, key=lambda ev: ev.get("start_date", ""), reverse=True)
+        events = tba_get(f"team/{team_key}/events")
+        
+    events = sorted(events, key=lambda ev: ev.get("start_date", ""), reverse=True)
         
     event_key_to_name = {ev["key"]: ev["name"] for ev in events}
 
@@ -277,21 +402,20 @@ def data_layout(team_number, year):
         location = f"{ev.get('city', '')}, {ev.get('state_prov', '')}"
         start_date = ev.get("start_date", "")
         end_date = ev.get("end_date", "")
+        
+        event_name_with_rank = event_name
 
-        # Fetch rankings for the event
-        rankings = tba_get(f"event/{event_key}/rankings")
-        rank = None
-        if rankings and "rankings" in rankings:
-            for entry in rankings["rankings"]:
-                if entry["team_key"] == team_key:
-                    rank = entry["rank"]
-                avg_rank = sum(r["rank"] for r in rankings["rankings"]) / len(rankings["rankings"])
+        if year:
+            rankings = tba_get(f"event/{event_key}/rankings")
+            rank = None
+            if rankings and "rankings" in rankings:
+                for entry in rankings["rankings"]:
+                    if entry["team_key"] == team_key:
+                        rank = entry["rank"]
+                    avg_rank = sum(r["rank"] for r in rankings["rankings"]) / len(rankings["rankings"])
 
-        # Format rank with the event name
-        if rank:
-            event_name_with_rank = f"{event_name} (Rank: {rank})"
-        else:
-            event_name_with_rank = event_name
+            if rank:
+                event_name_with_rank = f"{event_name} (Rank: {rank})"
 
         events_data.append({
             "event_name": event_name_with_rank,
@@ -395,6 +519,11 @@ def data_layout(team_number, year):
                     ),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"}),
+            
+            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            
             footer
         ]
     )
@@ -501,6 +630,11 @@ def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
                 ]),
                 leaderboard_table,
             ]),
+        
+        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+        
         footer
     ])
 @app.callback(
@@ -555,6 +689,119 @@ def update_leaderboard(year, category):
 
     return leaderboard_table_data
 
+def events_layout(year=2024):
+    """Layout for the Events page."""
+    # Fetch the events for the default year (2024)
+    events_data = tba_get(f"events/{year}")
+
+    # Format the events data for the table
+    formatted_events = [
+        {
+            "Event Name": ev["name"],
+            "Location": f"{ev['city']}, {ev['state_prov']}, {ev['country']}",
+            "Start Date": ev["start_date"],
+            "End Date": ev["end_date"],
+            "Event Type": ev["event_type_string"],
+            "Website": f"[Website]({ev['website']})" if ev.get("website") else "N/A"
+        }
+        for ev in events_data or []
+    ]
+
+    events_table = dash_table.DataTable(
+        id="events-table",
+        columns=[
+            {"name": "Event Name", "id": "Event Name"},
+            {"name": "Location", "id": "Location"},
+            {"name": "Start Date", "id": "Start Date"},
+            {"name": "End Date", "id": "End Date"},
+            {"name": "Event Type", "id": "Event Type"},
+            {"name": "Website", "id": "Website", "presentation": "markdown"},
+        ],
+        data=formatted_events,
+        page_size=10,
+        style_table={"overflowX": "auto"},
+        style_data={"border": "1px solid #ddd"},
+        style_header={
+            "backgroundColor": "#FFCC00",
+            "fontWeight": "bold",
+            "textAlign": "center",
+            "border": "1px solid #ddd",
+        },
+        style_cell={
+            "textAlign": "center",
+            "padding": "10px",
+            "border": "1px solid #ddd",
+        },
+    )
+
+    return html.Div([
+        topbar,
+        dbc.Container(
+            [
+                html.H2("Events", className="text-center mb-4"),
+                dbc.Row([
+                    dbc.Col(dcc.Dropdown(
+                        id="year-dropdown",
+                        options=[
+                            {"label": f"{yr}", "value": yr} for yr in range(2000, 2025)
+                        ],
+                        value=year,
+                        placeholder="Select a year",
+                        className="mb-4"
+                    ), width=6),
+                    dbc.Col(dcc.Dropdown(
+                        id="event-type-dropdown",
+                        options=[
+                            {"label": "All", "value": "all"},
+                            {"label": "Season Events", "value": "season"},
+                            {"label": "Off-season Events", "value": "offseason"},
+                        ],
+                        value="all",
+                        placeholder="Filter by Event Type",
+                        className="mb-4"
+                    ), width=6),
+                ]),
+                events_table,
+            ],
+            style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"}
+        ),
+        
+        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+        
+        footer
+    ])
+
+# Update callback for events table
+@app.callback(
+    Output("events-table", "data"),
+    [Input("year-dropdown", "value"), Input("event-type-dropdown", "value")]
+)
+def update_events_table(selected_year, selected_event_type):
+    events_data = tba_get(f"events/{selected_year}")
+    if not events_data:
+        return []
+
+    if selected_event_type == "season":
+        events_data = [ev for ev in events_data if ev["event_type"] not in [99, 100]]  # Exclude Offseason/Preseason
+    elif selected_event_type == "offseason":
+        events_data = [ev for ev in events_data if ev["event_type"] in [99, 100]]  # Offseason/Preseason
+
+    # Format events for display
+    formatted_events = [
+        {
+            "Event Name": ev["name"],
+            "Location": f"{ev['city']}, {ev['state_prov']}, {ev['country']}",
+            "Start Date": ev["start_date"],
+            "End Date": ev["end_date"],
+            "Event Type": ev["event_type_string"],
+            "Website": f"[Website]({ev['website']})" if ev.get("website") else "N/A"
+        }
+        for ev in events_data
+    ]
+    return formatted_events
+
 # -------------- TOP-LEVEL APP LAYOUT --------------
 app.layout = html.Div([
     dcc.Location(id="url", refresh=False),
@@ -566,20 +813,19 @@ app.layout = html.Div([
 @app.callback(
     [Output("url", "pathname"), Output("url", "search")],
     [
-        Input("btn-search-home", "n_clicks"),
-        Input("topbar-search-button", "n_clicks"),
+        Input("btn-search-home", "n_clicks"),  # Button on the home page
+        Input("topbar-search-button", "n_clicks"),  # Button in the topbar
     ],
     [
-        State("input-team-home", "value"),
-        State("input-year-home", "value"),  # Include the year input field
-        State("topbar-search-input", "value"),
+        State("input-team-home", "value"),  # Input from the home page
+        State("input-year-home", "value"),  # Optional year input from the home page
+        State("topbar-search-input", "value"),  # Input from the topbar
     ],
     prevent_initial_call=True,
 )
 def handle_navigation(home_click, topbar_click, home_team_value, home_year_value, topbar_search_value):
     """
-    Handles navigation triggered by either the home search button or the topbar search button,
-    ensuring the search leads to the team's historical data page with optional year.
+    Handles navigation triggered by either the home search button or the topbar search button.
     """
     ctx = dash.callback_context
 
@@ -599,10 +845,13 @@ def handle_navigation(home_click, topbar_click, home_team_value, home_year_value
 
     # Handle the Topbar Search button
     elif trigger_id == "topbar-search-button" and topbar_search_value:
-        return "/data", f"?team={topbar_search_value}"
+        query_params = {"team": topbar_search_value}
+        search = "?" + urllib.parse.urlencode(query_params)
+        return "/data", search
 
     return dash.no_update, dash.no_update
 
+# Update display_page to recognize /events
 @app.callback(
     Output("page-content", "children"),
     Input("url", "pathname"),
@@ -616,6 +865,8 @@ def display_page(pathname, search):
         return data_layout(team_number, year)
     elif pathname == "/leaderboard":
         return leaderboard_layout()
+    elif pathname == "/events":
+        return events_layout()
     else:
         return home_layout
     
