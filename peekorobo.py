@@ -69,7 +69,7 @@ topbar = dbc.Navbar(
                                     style={
                                         "backgroundColor": "#ffdd00ff",
                                         "border": "none",
-                                        "color": "#333",
+                                        "color": "black",
                                     },
                                 ),
                             ],
@@ -158,7 +158,7 @@ home_layout = html.Div([
                                                 type="text",
                                                 placeholder="Team # (e.g., 254)",
                                                 className="custom-input-box",
-                                                style={"width": "100%"}
+                                                style={"width": "100%", "marginBottom": ".4rem"}
                                             ),
                                             width=12
                                         ),
@@ -183,7 +183,7 @@ home_layout = html.Div([
                                     size="lg",
                                     style={
                                         "backgroundColor": "#ffdd00ff",
-                                        "border": "none",
+                                        "border": "2px solid #555",
                                         "color": "black",
                                         "marginTop": "10px",
                                         "width": "35%",
@@ -259,10 +259,6 @@ def data_layout(team_number, year):
     country = team_info.get("country", "")
     website = team_info.get("website", "N/A")
     rookie_year = team_info.get("rookie_year", "N/A")
-
-    # Fetch Years Participated
-    years_participated = tba_get(f"team/{team_key}/years_participated")
-    years_text = ", ".join(map(str, years_participated)) if years_participated else "N/A"
     
     avatar_data = tba_get(f"team/{team_key}/media/2024")
     avatar_url = None
@@ -274,6 +270,21 @@ def data_layout(team_number, year):
             elif media.get("preferred") and media.get("direct_url"):
                 avatar_url = media["direct_url"]
                 break
+    
+    years_participated = tba_get(f"team/{team_key}/years_participated")
+    
+    years_links = [
+        html.A(
+            str(year),
+            href=f"/data?team={team_number}&year={year}",
+            style={
+                "marginRight": "0px",
+                "color": "#007BFF",
+                "textDecoration": "none",
+            },
+        )
+        for year in years_participated
+    ] if years_participated else ["N/A"]
                 
     # Team Info Card
     team_card = dbc.Card(
@@ -289,7 +300,21 @@ def data_layout(team_number, year):
                                 html.P([html.I(className="bi bi-link-45deg"), " Website: ", 
                                         html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "none"})]),
                                 html.P([html.I(className="bi bi-award"), f" Rookie Year: {rookie_year}"]),
-                                html.P([html.I(className="bi bi-calendar"), f" Years Participated: {years_text}"]),
+                                html.Div(
+                                    [
+                                        html.I(className="bi bi-calendar"),
+                                        " Years Participated: ",
+                                        html.Div(
+                                            years_links,
+                                            style={
+                                                "display": "flex",
+                                                "flexWrap": "wrap",  # Allows wrapping to multiple lines
+                                                "gap": "8px",       # Adds spacing between links
+                                            },
+                                        ),
+                                    ],
+                                    style={"marginBottom": "10px"},
+                                ),
                             ],
                             width=9,  # Take up most of the space
                         ),
@@ -399,6 +424,7 @@ def data_layout(team_number, year):
     for ev in events:
         event_key = ev.get("key")
         event_name = ev.get("name", "")
+        event_url = f"https://www.thebluealliance.com/event/{event_key}"
         location = f"{ev.get('city', '')}, {ev.get('state_prov', '')}"
         start_date = ev.get("start_date", "")
         end_date = ev.get("end_date", "")
@@ -415,10 +441,10 @@ def data_layout(team_number, year):
                     avg_rank = sum(r["rank"] for r in rankings["rankings"]) / len(rankings["rankings"])
 
             if rank:
-                event_name_with_rank = f"{event_name} (Rank: {rank})"
+                event_name = f"{event_name} (Rank: {rank})"
 
         events_data.append({
-            "event_name": event_name_with_rank,
+            "event_name": f"[{event_name}]({event_url})",
             "event_location": location,
             "start_date": start_date,
             "end_date": end_date,
@@ -427,7 +453,7 @@ def data_layout(team_number, year):
     # DataTable for Events
     events_table = dash_table.DataTable(
         columns=[
-            {"name": "Event Name", "id": "event_name"},
+            {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
             {"name": "Location", "id": "event_location"},
             {"name": "Start Date", "id": "start_date"},
             {"name": "End Date", "id": "end_date"},

@@ -30,7 +30,7 @@
     }
 
     img:hover {
-        transform: scale(1.1);
+        transform: scale(1.05);
         transition: transform 0.3s ease;
     }
 
@@ -40,24 +40,13 @@
         box-shadow: 0px 0px 8px rgba(255, 221, 0, 0.5);
     }
 
-    /* Hover effects for navbar brand logo */
-    .navbar-brand img:hover {
-        transform: scale(1.05);
-        transition: transform 0.3s ease;
-    }
-
-    .homelogo img:hover {
-        transform: scale(1.05);
-        transition: transform 0.3s ease;
-    }
-
     /* Smooth scrolling for the entire page */
     html {
         scroll-behavior: smooth;
     }
 
     .custom-input-box {
-        border: 2px solid #807e7e; /* Default outline color */
+        border: 2px solid #555; /* Default outline color */
         border-radius: 5px;
         padding: 10px;
         transition: border-color 0.3s ease, box-shadow 0.3s ease;
