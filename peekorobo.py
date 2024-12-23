@@ -715,35 +715,73 @@ def update_leaderboard(year, category):
 
     return leaderboard_table_data
 
-def events_layout(year=2024):
+def events_layout(year=2025):
     """Layout for the Events page."""
-    # Fetch the events for the default year (2024)
-    events_data = tba_get(f"events/{year}")
+    # Dropdown for Year Selection
+    year_dropdown = dcc.Dropdown(
+        id="year-dropdown",
+        options=[{"label": f"{yr}", "value": yr} for yr in range(2000, 2026)],
+        value=year,
+        placeholder="Select a year",
+    )
 
-    # Format the events data for the table
-    formatted_events = [
-        {
-            "Event Name": ev["name"],
-            "Location": f"{ev['city']}, {ev['state_prov']}, {ev['country']}",
-            "Start Date": ev["start_date"],
-            "End Date": ev["end_date"],
-            "Event Type": ev["event_type_string"],
-            "Website": f"[Website]({ev['website']})" if ev.get("website") else "N/A"
-        }
-        for ev in events_data or []
-    ]
+    # Dropdown for Event Type Filter
+    event_type_dropdown = dcc.Dropdown(
+        id="event-type-dropdown",
+        options=[
+            {"label": "All", "value": "all"},
+            {"label": "Season Events", "value": "season"},
+            {"label": "Off-season Events", "value": "offseason"},
+            {"label": "Regional Events", "value": "regional"},
+            {"label": "District Events", "value": "district"},
+            {"label": "Championship Events", "value": "championship"},
+        ],
+        value=["all"],
+        multi=True,  # Enable multi-select
+        placeholder="Filter by Event Type",
+    )
 
+    # Dropdown for Sorting
+    sort_dropdown = dcc.Dropdown(
+        id="sort-dropdown",
+        options=[
+            {"label": "Date (New -> Old)", "value": "newdate"},
+            {"label": "Date (Old -> New)", "value": "olddate"},
+            {"label": "Name", "value": "name"}
+        ],
+        placeholder="Sort by",
+    )
+
+    # Search Input Field
+    search_input = dbc.Input(
+        id="search-input",
+        placeholder="Search by Name or Location...",
+        type="text",
+        debounce=True,  # Trigger callback when user stops typing
+    )
+
+    # Organizing the inputs in a single row
+    filters_row = dbc.Row(
+        [
+            dbc.Col(year_dropdown, width=3),  # Adjust column widths
+            dbc.Col(event_type_dropdown, width=3),
+            dbc.Col(sort_dropdown, width=3),
+            dbc.Col(search_input, width=3),
+        ],
+        className="mb-4",  # Add bottom margin for spacing
+    )
+
+    # Table for Events
     events_table = dash_table.DataTable(
         id="events-table",
         columns=[
-            {"name": "Event Name", "id": "Event Name"},
+            {"name": "Event Name", "id": "Event Name", "presentation": "markdown"},
             {"name": "Location", "id": "Location"},
             {"name": "Start Date", "id": "Start Date"},
             {"name": "End Date", "id": "End Date"},
             {"name": "Event Type", "id": "Event Type"},
-            {"name": "Website", "id": "Website", "presentation": "markdown"},
         ],
-        data=formatted_events,
+        data=[],  # Empty initial data
         page_size=10,
         style_table={"overflowX": "auto"},
         style_data={"border": "1px solid #ddd"},
@@ -765,28 +803,7 @@ def events_layout(year=2024):
         dbc.Container(
             [
                 html.H2("Events", className="text-center mb-4"),
-                dbc.Row([
-                    dbc.Col(dcc.Dropdown(
-                        id="year-dropdown",
-                        options=[
-                            {"label": f"{yr}", "value": yr} for yr in range(2000, 2025)
-                        ],
-                        value=year,
-                        placeholder="Select a year",
-                        className="mb-4"
-                    ), width=6),
-                    dbc.Col(dcc.Dropdown(
-                        id="event-type-dropdown",
-                        options=[
-                            {"label": "All", "value": "all"},
-                            {"label": "Season Events", "value": "season"},
-                            {"label": "Off-season Events", "value": "offseason"},
-                        ],
-                        value="all",
-                        placeholder="Filter by Event Type",
-                        className="mb-4"
-                    ), width=6),
-                ]),
+                filters_row,
                 events_table,
             ],
             style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"}
@@ -799,33 +816,61 @@ def events_layout(year=2024):
         footer
     ])
 
-# Update callback for events table
 @app.callback(
     Output("events-table", "data"),
-    [Input("year-dropdown", "value"), Input("event-type-dropdown", "value")]
+    [
+        Input("year-dropdown", "value"),
+        Input("event-type-dropdown", "value"),
+        Input("sort-dropdown", "value"),
+        Input("search-input", "value")  # New input for search functionality
+    ]
 )
-def update_events_table(selected_year, selected_event_type):
+def update_events_table(selected_year, selected_event_types, sort_option, search_query):
     events_data = tba_get(f"events/{selected_year}")
     if not events_data:
         return []
 
-    if selected_event_type == "season":
+    # Filter by Event Type
+    if "season" in selected_event_types:
         events_data = [ev for ev in events_data if ev["event_type"] not in [99, 100]]  # Exclude Offseason/Preseason
-    elif selected_event_type == "offseason":
+    if "offseason" in selected_event_types:
         events_data = [ev for ev in events_data if ev["event_type"] in [99, 100]]  # Offseason/Preseason
+    if "regional" in selected_event_types:
+        events_data = [ev for ev in events_data if "Regional" in ev.get("event_type_string", "")]
+    if "district" in selected_event_types:
+        events_data = [ev for ev in events_data if "District" in ev.get("event_type_string", "")]
+    if "championship" in selected_event_types:
+        events_data = [ev for ev in events_data if "Championship" in ev.get("event_type_string", "")]
+
+    # Filter by Search Query
+    if search_query:
+        search_query = search_query.lower()
+        events_data = [
+            ev for ev in events_data
+            if search_query in ev["name"].lower() or search_query in ev["city"].lower()
+        ]
 
     # Format events for display
     formatted_events = [
         {
-            "Event Name": ev["name"],
+            "Event Name": f"[{ev['name']}]({ev.get('website', '#')})",
             "Location": f"{ev['city']}, {ev['state_prov']}, {ev['country']}",
             "Start Date": ev["start_date"],
             "End Date": ev["end_date"],
             "Event Type": ev["event_type_string"],
-            "Website": f"[Website]({ev['website']})" if ev.get("website") else "N/A"
         }
         for ev in events_data
     ]
+
+    # Sort Events
+    if sort_option == "olddate":
+        formatted_events = sorted(formatted_events, key=lambda x: x["Start Date"])
+    if sort_option == 'newdate':
+        formatted_events = sorted(formatted_events, key=lambda x: x["Start Date"], reverse=True)
+
+    elif sort_option == "name":
+        formatted_events = sorted(formatted_events, key=lambda x: x["Event Name"].lower())
+
     return formatted_events
 
 # -------------- TOP-LEVEL APP LAYOUT --------------
@@ -898,4 +943,4 @@ def display_page(pathname, search):
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  # Get the PORT from Heroku or default to 8050
-    app.run_server(host="0.0.0.0", port=port, debug=False)
+    app.run_server(host="0.0.0.0", port=port, debug=True)
