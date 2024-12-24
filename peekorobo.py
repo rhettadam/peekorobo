@@ -3,16 +3,23 @@ import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
 from dash.dependencies import Input, Output, State
 import requests
-import urllib.parse  # for URL query string parsing
+import urllib.parse 
 import os
 from dotenv import load_dotenv
 
-# -------------- CONFIG --------------
-TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
-
 def configure():
     load_dotenv()
-# -------------- SETUP --------------
+
+TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
+
+def tba_get(endpoint: str):
+    headers = {"X-TBA-Auth-Key": os.getenv("TBA_API_KEY")}
+    url = f"{TBA_BASE_URL}/{endpoint}"
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        return r.json()
+    return None
+
 app = dash.Dash(
     __name__,
     external_stylesheets=[dbc.themes.BOOTSTRAP],
@@ -20,17 +27,7 @@ app = dash.Dash(
 )
 server = app.server
 
-# -------------- HELPER --------------
-def tba_get(endpoint: str):
-    """Fetch data from TBA with the Read API key."""
-    headers = {"X-TBA-Auth-Key": os.getenv("TBA_API_KEY")}
-    url = f"{TBA_BASE_URL}/{endpoint}"
-    r = requests.get(url, headers=headers)
-    if r.status_code == 200:
-        return r.json()
-    return None
 # -------------- LAYOUTS --------------
-
 topbar = dbc.Navbar(
     dbc.Container(
         [
@@ -44,7 +41,7 @@ topbar = dbc.Navbar(
                                 style={
                                     "height": "40px",
                                     "width": "auto",
-                                    "marginRight": "10px",  # Spacing between logo and links
+                                    "marginRight": "10px",  
                                 },
                             ),
                             href="/",
@@ -74,13 +71,13 @@ topbar = dbc.Navbar(
                                 )),
                             ],
                             navbar=True,
-                            className="ml-3",  # Add some spacing from the logo
+                            className="ml-3",  
                         ),
                         width="auto",
                     ),
                 ],
                 align="center",
-                className="g-0",  # Remove gaps between columns
+                className="g-0",  
             ),
             # Right: Search Bar
             dbc.Row(
@@ -121,7 +118,7 @@ topbar = dbc.Navbar(
     dark=True,
     className="mb-4",
     style={
-        "padding": "10px 0px",  # Thinner padding for a compact navbar
+        "padding": "10px 0px",  
         "position": "sticky",
         "top": "0",
         "zIndex": "1020",
@@ -160,16 +157,15 @@ footer = dbc.Container(
     ]),
     fluid=True,
     style={
-        "backgroundColor": "white",  # Dark background color
-        "padding": "10px 0px",  # Reduce padding to make it thinner
-        "boxShadow": "0px -1px 2px rgba(0, 0, 0, 0.1)",  # Remove harsh bottom shadow
+        "backgroundColor": "white",  
+        "padding": "10px 0px",
+        "boxShadow": "0px -1px 2px rgba(0, 0, 0, 0.1)", 
     }
 )
 
 home_layout = html.Div([
     topbar,
     dbc.Container(fluid=True, children=[
-        # Main Content Row
         dbc.Row(
             [
                 # Left Section: Logo, Text, Search
@@ -255,7 +251,7 @@ home_layout = html.Div([
                                     html.Img(
                                         src="/assets/dozer.gif",
                                         style={
-                                            "width": "100%",  # Make it responsive
+                                            "width": "100%",  
                                             "maxWidth": "600px",
                                             "display": "block",
                                             "margin": "auto"
@@ -263,7 +259,7 @@ home_layout = html.Div([
                                         className="dozer-image"
                                     ),
                                     href="https://github.com/rhettadam/peekorobo",
-                                    target="_blank",  # Opens in a new tab
+                                    target="_blank",
                                 ),
                             ],
                             style={"textAlign": "center"}
@@ -281,8 +277,7 @@ home_layout = html.Div([
     footer
 ])
 
-def data_layout(team_number, year):
-    """Returns a layout with TBA data for the given team/year."""
+def team_layout(team_number, year):
     if not team_number:
         return dbc.Alert("No team number provided. Please go back and search again.", color="warning")
 
@@ -352,17 +347,16 @@ def data_layout(team_number, year):
                                             years_links,
                                             style={
                                                 "display": "flex",
-                                                "flexWrap": "wrap",  # Allows wrapping to multiple lines
-                                                "gap": "8px",       # Adds spacing between links
+                                                "flexWrap": "wrap",  
+                                                "gap": "8px",      
                                             },
                                         ),
                                     ],
                                     style={"marginBottom": "10px"},
                                 ),
                             ],
-                            width=9,  # Take up most of the space
+                            width=9,  
                         ),
-                        # Right Column: Avatar
                         # Right Column: Avatar
                 dbc.Col(
                     [
@@ -370,23 +364,23 @@ def data_layout(team_number, year):
                             src=avatar_url,
                             alt=f"Team {team_number} Avatar",
                             style={
-                                "width": "150px",  # Set an explicit width
-                                "height": "150px",  # Set an explicit height
-                                "objectFit": "contain",  # Ensure the image fits within the bounds
-                                "borderRadius": "10px",  # Optional: Rounded corners
-                                "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",  # Optional: Shadow for styling
+                                "width": "150px",  
+                                "height": "150px", 
+                                "objectFit": "contain",  
+                                "borderRadius": "10px",
+                                "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", 
                                 "marginLeft": "auto",
-                                "marginRight": "auto",  # Center horizontally within the column
-                                "display": "block",  # Ensure it's treated as a block element
+                                "marginRight": "auto",  
+                                "display": "block",  
                             },
                         ) if avatar_url else html.Div("No avatar available.", style={"color": "#777"}),
                     ],
-                    width=3,  # Allocate less space for the avatar
+                    width=3, 
                     style={"textAlign": "center"},
                 ),
 
                     ],
-                    align="center",  # Vertically align the content
+                    align="center", 
                 ),
             ],
             style={"fontSize": "1.1rem"}
@@ -399,7 +393,7 @@ def data_layout(team_number, year):
         },
     )
 
-        # --- Performance Metrics ---
+    # --- Performance Metrics ---
     if year:
         matches = tba_get(f"team/{team_key}/matches/{year}")
     else:
@@ -423,9 +417,9 @@ def data_layout(team_number, year):
     avg_score = total_score / total_matches if total_matches > 0 else 0
     
     win_loss_ratio = html.Span([
-        html.Span(f"{wins}", style={"color": "green", "fontWeight": "bold"}),  # Green for wins
-        html.Span("/", style={"color": "#333", "fontWeight": "bold"}),  # Separator
-        html.Span(f"{losses}", style={"color": "red", "fontWeight": "bold"})  # Red for losses
+        html.Span(f"{wins}", style={"color": "green", "fontWeight": "bold"}),
+        html.Span("/", style={"color": "#333", "fontWeight": "bold"}),
+        html.Span(f"{losses}", style={"color": "red", "fontWeight": "bold"})  
     ])
 
     if year:
@@ -437,7 +431,7 @@ def data_layout(team_number, year):
                     html.P([
                         html.I(className="bi bi-bar-chart-fill"), 
                         " Win/Loss Ratio: ", 
-                        win_loss_ratio  # Use the styled win/loss ratio here
+                        win_loss_ratio  
                     ]),
                     html.P([html.I(className="bi bi-graph-up"), f" Average Match Score: {avg_score:.2f}"]),
                 ],
@@ -599,11 +593,11 @@ def data_layout(team_number, year):
     )
 
 def clean_category_label(raw_label):
-    """Cleans up the raw category label for better display."""
     label = raw_label.replace("typed_", "").replace("_", " ").replace("leaderboard","").title()
     return label
 
 def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
+    
     # Fetch leaderboard data
     leaderboard_data = tba_get(f"insights/leaderboards/{year}")
     if not leaderboard_data:
@@ -626,21 +620,20 @@ def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
             rankings = item.get("data", {}).get("rankings", [])
             for rank in rankings:
                 for team_key in rank.get("keys", []):
-                    # Remove 'frc' prefix to display just the team number
                     team_number = team_key.replace("frc", "")
                     leaderboard_table_data.append({
                         "Team": team_number,
                         "Value": rank.get("value", 0),
                     })
 
-    # Sort data by value (descending)
+    # Sort data by value 
     leaderboard_table_data = sorted(leaderboard_table_data, key=lambda x: x["Value"], reverse=True)
 
     # Create a DataTable
     leaderboard_table = dash_table.DataTable(
         id="leaderboard-table",
         columns=[
-            {"name": "Team", "id": "Team", "presentation": "markdown"},  # Enable markdown for links
+            {"name": "Team", "id": "Team", "presentation": "markdown"}, 
             {"name": "Value", "id": "Value"},
             {"name": "Rank", "id": "Rank"},
         ],
@@ -714,7 +707,7 @@ def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
 )
 def update_leaderboard(year, category):
     if not year:
-        year = 2024  # Default year
+        year = 2024
     leaderboard_data = tba_get(f"insights/leaderboards/{year}")
     if not leaderboard_data:
         return []
@@ -726,7 +719,7 @@ def update_leaderboard(year, category):
             rankings = item.get("data", {}).get("rankings", [])
             break
 
-    # Sort rankings by value (descending) and compute ranks
+    # Sort rankings by value & compute ranks
     sorted_rankings = sorted(rankings, key=lambda x: x["value"], reverse=True)
     current_rank = 0
     last_value = None
@@ -736,7 +729,7 @@ def update_leaderboard(year, category):
             team_number = team_key.replace("frc", "")
             team_link = f"[{team_number}](/data?team={team_number}&year={year})"
 
-            # Assign rank (same rank for teams with the same value)
+            # Assign rank 
             if rank["value"] != last_value:
                 current_rank = i + 1
                 last_value = rank["value"]
@@ -760,7 +753,7 @@ def update_leaderboard(year, category):
     return leaderboard_table_data
 
 def events_layout(year=2025):
-    """Layout for the Events page."""
+    
     # Dropdown for Year Selection
     year_dropdown = dcc.Dropdown(
         id="year-dropdown",
@@ -781,7 +774,7 @@ def events_layout(year=2025):
             {"label": "Championship Events", "value": "championship"},
         ],
         value=["all"],
-        multi=True,  # Enable multi-select
+        multi=True,  
         placeholder="Filter by Event Type",
     )
 
@@ -801,18 +794,18 @@ def events_layout(year=2025):
         id="search-input",
         placeholder="Search by Name or Location...",
         type="text",
-        debounce=True,  # Trigger callback when user stops typing
+        debounce=True, 
     )
 
     # Organizing the inputs in a single row
     filters_row = dbc.Row(
         [
-            dbc.Col(year_dropdown, width=3),  # Adjust column widths
+            dbc.Col(year_dropdown, width=3),  
             dbc.Col(event_type_dropdown, width=3),
             dbc.Col(sort_dropdown, width=3),
             dbc.Col(search_input, width=3),
         ],
-        className="mb-4",  # Add bottom margin for spacing
+        className="mb-4",  
     )
 
     # Table for Events
@@ -825,7 +818,7 @@ def events_layout(year=2025):
             {"name": "End Date", "id": "End Date"},
             {"name": "Event Type", "id": "Event Type"},
         ],
-        data=[],  # Empty initial data
+        data=[],  
         page_size=10,
         style_table={"overflowX": "auto"},
         style_data={"border": "1px solid #ddd"},
@@ -866,7 +859,7 @@ def events_layout(year=2025):
         Input("year-dropdown", "value"),
         Input("event-type-dropdown", "value"),
         Input("sort-dropdown", "value"),
-        Input("search-input", "value")  # New input for search functionality
+        Input("search-input", "value")  
     ]
 )
 def update_events_table(selected_year, selected_event_types, sort_option, search_query):
@@ -876,9 +869,9 @@ def update_events_table(selected_year, selected_event_types, sort_option, search
 
     # Filter by Event Type
     if "season" in selected_event_types:
-        events_data = [ev for ev in events_data if ev["event_type"] not in [99, 100]]  # Exclude Offseason/Preseason
+        events_data = [ev for ev in events_data if ev["event_type"] not in [99, 100]]  
     if "offseason" in selected_event_types:
-        events_data = [ev for ev in events_data if ev["event_type"] in [99, 100]]  # Offseason/Preseason
+        events_data = [ev for ev in events_data if ev["event_type"] in [99, 100]] 
     if "regional" in selected_event_types:
         events_data = [ev for ev in events_data if "Regional" in ev.get("event_type_string", "")]
     if "district" in selected_event_types:
@@ -917,34 +910,28 @@ def update_events_table(selected_year, selected_event_types, sort_option, search
 
     return formatted_events
 
-# -------------- TOP-LEVEL APP LAYOUT --------------
 app.layout = html.Div([
     dcc.Location(id="url", refresh=False),
     html.Div(id="page-content")
 ])
 
-# -------------- CALLBACKS --------------
-
 @app.callback(
     [Output("url", "pathname"), Output("url", "search")],
     [
-        Input("btn-search-home", "n_clicks"),  # Button on the home page
-        Input("topbar-search-button", "n_clicks"),  # Button in the topbar
+        Input("btn-search-home", "n_clicks"), 
+        Input("topbar-search-button", "n_clicks"),  
     ],
     [
-        State("input-team-home", "value"),  # Input from the home page
-        State("input-year-home", "value"),  # Optional year input from the home page
-        State("topbar-search-input", "value"),  # Input from the topbar
+        State("input-team-home", "value"), 
+        State("input-year-home", "value"), 
+        State("topbar-search-input", "value"),  
     ],
     prevent_initial_call=True,
 )
 def handle_navigation(home_click, topbar_click, home_team_value, home_year_value, topbar_search_value):
-    """
-    Handles navigation triggered by either the home search button or the topbar search button.
-    """
+    
     ctx = dash.callback_context
 
-    # Identify which button triggered the callback
     if not ctx.triggered:
         return dash.no_update, dash.no_update
 
@@ -953,7 +940,7 @@ def handle_navigation(home_click, topbar_click, home_team_value, home_year_value
     # Handle the Home Search button
     if trigger_id == "btn-search-home" and home_team_value:
         query_params = {"team": home_team_value}
-        if home_year_value:  # Include year if provided
+        if home_year_value:  
             query_params["year"] = home_year_value
         search = "?" + urllib.parse.urlencode(query_params)
         return "/data", search
@@ -966,7 +953,6 @@ def handle_navigation(home_click, topbar_click, home_team_value, home_year_value
 
     return dash.no_update, dash.no_update
 
-# Update display_page to recognize /events
 @app.callback(
     Output("page-content", "children"),
     Input("url", "pathname"),
@@ -977,7 +963,7 @@ def display_page(pathname, search):
         query_params = urllib.parse.parse_qs(search.lstrip("?")) if search else {}
         team_number = query_params.get("team", [None])[0]
         year = query_params.get("year", [None])[0]
-        return data_layout(team_number, year)
+        return team_layout(team_number, year)
     elif pathname == "/leaderboard":
         return leaderboard_layout()
     elif pathname == "/events":
@@ -986,5 +972,5 @@ def display_page(pathname, search):
         return home_layout
     
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8050))  # Get the PORT from Heroku or default to 8050
-    app.run_server(host="0.0.0.0", port=port, debug=False)
+    port = int(os.environ.get("PORT", 8050))  
+    app.run_server(host="0.0.0.0", port=port, debug=True)
