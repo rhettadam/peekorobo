@@ -45,24 +45,32 @@
         scroll-behavior: smooth;
     }
 
-    .custom-input-box {
-        border: 2px solid #555; /* Default outline color */
-        border-radius: 5px;
-        padding: 10px;
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        /* Default button styles */
+    .custom-navlink {
+        border: none;
+        color: white;
+        font-size: 16px;
+        cursor: pointer;
+        border-radius: 2px;         /* Rounded corners for better aesthetics */
+        transition: all 0.3s ease-in-out;
     }
 
-    /* Outline on hover for input boxes */
-    .custom-input-box:hover {
-        border-color: #ffdd00ff; /* Change to a darker yellow on hover */
-        box-shadow: 0px 0px 8px rgba(255, 221, 0, 0.5); /* Add a glowing shadow */
+    /* Hover Effects */
+    .custom-navlink:hover {
+        color: black;
+        background-color: #ffdd00ff;
+        box-shadow: 0 0 25px #000000;
+        transform: scale(1.05); /* Slightly enlarge the button */
     }
 
-    /* Outline on focus for input boxes */
-    .custom-input-box:focus {
-        border-color: #ffdd00ff; /* Change to orange on focus */
-        box-shadow: 0px 0px 10px rgba(255, 221, 0, 0.75); /* Add a more pronounced glowing effect */
-        outline: none; /* Remove the default browser outline */
+    .button {
+    border: none;
+    color: white;
+    padding: 8px 16px;          /* Adjusted padding for better spacing */
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;         /* Rounded corners for better aesthetics */
+    transition: all 0.3s ease-in-out;
     }
 
     /* Mobile-Specific Styles */

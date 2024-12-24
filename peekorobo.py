@@ -34,68 +34,98 @@ def tba_get(endpoint: str):
 topbar = dbc.Navbar(
     dbc.Container(
         [
-            # Left: Logo
-            dbc.NavbarBrand(
-                html.Img(
-                    src="/assets/logo.png",
-                    style={
-                        "height": "40px",
-                        "width": "auto",
-                    },
-                ),
-                href="/",
-                className="navbar-brand-custom",
+            # Left: Logo and Navigation Links
+            dbc.Row(
+                [
+                    dbc.Col(
+                        dbc.NavbarBrand(
+                            html.Img(
+                                src="/assets/logo.png",
+                                style={
+                                    "height": "40px",
+                                    "width": "auto",
+                                    "marginRight": "10px",  # Spacing between logo and links
+                                },
+                            ),
+                            href="/",
+                            className="navbar-brand-custom",
+                        ),
+                        width="auto",
+                    ),
+                    dbc.Col(
+                        dbc.Nav(
+                            [
+                                dbc.NavItem(dbc.NavLink(
+                                    "Home",
+                                    href="/",
+                                    className="custom-navlink",
+                                    style={"marginRight": "5px"},
+                                )),
+                                dbc.NavItem(dbc.NavLink(
+                                    "Leaderboard",
+                                    href="/leaderboard",
+                                    className="custom-navlink",
+                                    style={"marginRight": "5px"},
+                                )),
+                                dbc.NavItem(dbc.NavLink(
+                                    "Events",
+                                    href="/events",
+                                    className="custom-navlink"
+                                )),
+                            ],
+                            navbar=True,
+                            className="ml-3",  # Add some spacing from the logo
+                        ),
+                        width="auto",
+                    ),
+                ],
+                align="center",
+                className="g-0",  # Remove gaps between columns
             ),
-            # Right: Hamburger Menu and Collapsible Nav
-            dbc.NavbarToggler(id="navbar-toggler", className="navbar-toggler-custom"),
-            dbc.Collapse(
-                dbc.Nav(
-                    [
-                        dbc.NavItem(dbc.NavLink("Home", href="/")),
-                        dbc.NavItem(dbc.NavLink("Leaderboard", href="/leaderboard")),
-                        dbc.NavItem(dbc.NavLink("Events", href="/events")),
+            # Right: Search Bar
+            dbc.Row(
+                [
+                    dbc.Col(
                         dbc.InputGroup(
                             [
                                 dbc.Input(
                                     id="topbar-search-input",
-                                    placeholder="Search teams...",
+                                    placeholder="Team #",
                                     type="text",
-                                    style={"width": "200px"},
+                                    style={"width": "100px"},
                                 ),
                                 dbc.Button(
                                     "Search",
                                     id="topbar-search-button",
                                     color="primary",
                                     style={
-                                        "backgroundColor": "#ffdd00ff",
+                                        "backgroundColor": "#FFDD00",
                                         "border": "none",
                                         "color": "black",
                                     },
                                 ),
                             ],
                             className="ms-auto",
-                            style={"width": "300px"},
                         ),
-                    ],
-                    className="ms-auto",  # Align links to the right
-                    navbar=True,
-                ),
-                id="navbar-collapse",
-                is_open=False,
-                navbar=True,
+                        width="auto",
+                    ),
+                ],
+                align="center",
+                className="ml-auto",
             ),
         ],
         fluid=True,
         className="d-flex justify-content-between align-items-center",
     ),
-    color="light",
-    dark=False,
+    color="#353535",
+    dark=True,
     className="mb-4",
     style={
-        "position": "sticky",  # Makes the navbar sticky
-        "top": "0",           # Sticks to the top of the viewport
-        "zIndex": "1020",     # Ensures it stays on top of other content
-        "boxShadow": "0px 2px 2px rgba(0,0,0,0.1)",  # Optional shadow for better visibility
+        "padding": "10px 0px",  # Thinner padding for a compact navbar
+        "position": "sticky",
+        "top": "0",
+        "zIndex": "1020",
+        "boxShadow": "0px 2px 2px rgba(0,0,0,0.1)",
     },
 )
 
@@ -112,14 +142,28 @@ def toggle_navbar(n_clicks, is_open):
 footer = dbc.Container(
     dbc.Row([
         dbc.Col([
-            html.P("Powered by "),
-            html.A("The Blue Alliance", href="https://www.thebluealliance.com/", target="_blank", style={"color": "#007BFF"}),
-            " | ",
-            html.A("GitHub", href="https://github.com/rhettadam/peekorobo", target="_blank", style={"color": "#007BFF"}),
-        ], style={"textAlign": "center", "color": "#AAA", "fontSize": "14px"})
+            html.P(
+                [
+                    "Built With:  ",
+                    html.A("The Blue Alliance ", href="https://www.thebluealliance.com/", target="_blank", style={"color": "#353535", "textDecoration": "line"}),
+                    " | ",
+                    html.A(" GitHub", href="https://github.com/rhettadam/peekorobo", target="_blank", style={"color": "#353535", "textDecoration": "line"})
+                ],
+                style={
+                    "textAlign": "center",
+                    "color": "#353535",
+                    "fontSize": "12px",
+                    "margin": "2px"
+                }
+            ),
+        ])
     ]),
     fluid=True,
-    style={"marginTop": "0px", "padding": "5px 0","boxShadow": "0px -2px 2px rgba(0,0,0,0.1)"}
+    style={
+        "backgroundColor": "white",  # Dark background color
+        "padding": "10px 0px",  # Reduce padding to make it thinner
+        "boxShadow": "0px -1px 2px rgba(0, 0, 0, 0.1)",  # Remove harsh bottom shadow
+    }
 )
 
 home_layout = html.Div([
@@ -137,7 +181,7 @@ home_layout = html.Div([
                                     src="/assets/logo.png",
                                     className='homelogo',
                                     style={
-                                        "width": "350px",
+                                        "width": "400px",
                                         "marginBottom": "15px",
                                     },
                                 ),
@@ -231,7 +275,7 @@ home_layout = html.Div([
             ],
             justify="center",
             align="center",
-            style={"height": "75vh"}
+            style={"height": "78vh"}
         ),
     ], class_name="py-5", style={"backgroundColor": "white"}),
     footer
