@@ -61,6 +61,12 @@ topbar = dbc.Navbar(
                                     style={"marginRight": "5px"},
                                 )),
                                 dbc.NavItem(dbc.NavLink(
+                                    "Teams",
+                                    href="/teams",
+                                    className="custom-navlink",
+                                    style={"marginRight": "5px"},
+                                )),
+                                dbc.NavItem(dbc.NavLink(
                                     "Leaderboard",
                                     href="/leaderboard",
                                     className="custom-navlink",
@@ -758,16 +764,13 @@ def update_leaderboard(year, category):
     return leaderboard_table_data
 
 def events_layout(year=2025):
-    
-    # Dropdown for Year Selection
+    # Dropdowns
     year_dropdown = dcc.Dropdown(
         id="year-dropdown",
         options=[{"label": f"{yr}", "value": yr} for yr in range(2000, 2026)],
         value=year,
         placeholder="Select a year",
     )
-
-    # Dropdown for Event Type Filter
     event_type_dropdown = dcc.Dropdown(
         id="event-type-dropdown",
         options=[
@@ -779,41 +782,46 @@ def events_layout(year=2025):
             {"label": "Championship Events", "value": "championship"},
         ],
         value=["all"],
-        multi=True,  
+        multi=True,
         placeholder="Filter by Event Type",
     )
-
-    # Dropdown for Sorting
+    week_dropdown = dcc.Dropdown(
+        id="week-dropdown",
+        options=[
+            {"label": "All Weeks", "value": "all"}
+        ] + [{"label": f"Week {i}", "value": i} for i in range(0, 9)],
+        value="all",
+        placeholder="Select Week",
+        clearable=False,
+    )
     sort_dropdown = dcc.Dropdown(
         id="sort-dropdown",
         options=[
             {"label": "Date (New -> Old)", "value": "newdate"},
             {"label": "Date (Old -> New)", "value": "olddate"},
-            {"label": "Name", "value": "name"}
+            {"label": "Name", "value": "name"},
         ],
         placeholder="Sort by",
     )
-
-    # Search Input Field
     search_input = dbc.Input(
         id="search-input",
         placeholder="Search by Name...",
         type="text",
-        debounce=True, 
+        debounce=True,
     )
 
-    # Organizing the inputs in a single row
     filters_row = dbc.Row(
         [
-            dbc.Col(year_dropdown, width=3),  
+            dbc.Col(year_dropdown, width=2),
             dbc.Col(event_type_dropdown, width=3),
-            dbc.Col(sort_dropdown, width=3),
+            dbc.Col(week_dropdown, width=2),
+            dbc.Col(sort_dropdown, width=2),
             dbc.Col(search_input, width=3),
         ],
-        className="mb-4",  
+        className="mb-4",
     )
 
-    # Table for Events
+    # Events Table
     events_table = dash_table.DataTable(
         id="events-table",
         columns=[
@@ -823,7 +831,7 @@ def events_layout(year=2025):
             {"name": "End Date", "id": "End Date"},
             {"name": "Event Type", "id": "Event Type"},
         ],
-        data=[],  
+        data=[],  # will be updated by callback
         page_size=10,
         style_table={"overflowX": "auto"},
         style_data={"border": "1px solid #ddd"},
@@ -840,62 +848,82 @@ def events_layout(year=2025):
         },
     )
 
-    return html.Div([
-        topbar,
-        dbc.Container(
-            [
-                html.H2("Events", className="text-center mb-4"),
-                filters_row,
-                events_table,
-            ],
-            style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"}
-        ),
-        
-        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-        
-        footer
-    ])
+    # Events Map (no button needed)
+    events_map_graph = dcc.Graph(
+        id="events-map",
+        figure={},      # will be updated by callback
+        style={"height": "700px"}  # optional styling
+    )
+
+    return html.Div(
+        [
+            topbar,
+            dbc.Container(
+                [
+                    html.H2("Events", className="text-center mb-4"),
+                    filters_row,
+                    events_table,
+                    events_map_graph,  # show map automatically
+                ],
+                style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
+            ),
+            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            footer,
+        ]
+    )
+
+import plotly.express as px
 
 @app.callback(
-    Output("events-table", "data"),
+    [
+        Output("events-table", "data"),
+        Output("events-map", "figure")
+    ],
     [
         Input("year-dropdown", "value"),
         Input("event-type-dropdown", "value"),
+        Input("week-dropdown", "value"),
         Input("sort-dropdown", "value"),
-        Input("search-input", "value")
-    ]
+        Input("search-input", "value"),
+    ],
 )
-def update_events_table(selected_year, selected_event_types, sort_option, search_query):
+def update_events_table_and_map(selected_year, selected_event_types, selected_week, sort_option, search_query):
+    # --- 1. Fetch & Filter Event Data for Table ---
     events_data = tba_get(f"events/{selected_year}")
     if not events_data:
-        return []
+        return [], {}
 
-    # Ensure selected_event_types is a list
+    # Ensure selected_event_types is list
     if not isinstance(selected_event_types, list):
         selected_event_types = [selected_event_types]
 
     # Filter by Event Type
     if "all" not in selected_event_types:
         filtered_events = []
-        for event_type in selected_event_types:
-            if event_type == "season":
+        for et in selected_event_types:
+            if et == "season":
+                # Exclude off-season type=99 or 100
                 filtered_events.extend([ev for ev in events_data if ev["event_type"] not in [99, 100]])
-            elif event_type == "offseason":
+            elif et == "offseason":
                 filtered_events.extend([ev for ev in events_data if ev["event_type"] in [99, 100]])
-            elif event_type == "regional":
+            elif et == "regional":
                 filtered_events.extend([ev for ev in events_data if "Regional" in ev.get("event_type_string", "")])
-            elif event_type == "district":
+            elif et == "district":
                 filtered_events.extend([ev for ev in events_data if "District" in ev.get("event_type_string", "")])
-            elif event_type == "championship":
+            elif et == "championship":
                 filtered_events.extend([ev for ev in events_data if "Championship" in ev.get("event_type_string", "")])
         events_data = filtered_events
 
-    # Remove duplicates in case multiple filters added the same event
+    # Remove duplicates if multiple filters
     events_data = list({ev["key"]: ev for ev in events_data}.values())
 
-    # Filter by Search Query
+    # Filter by Week
+    if selected_week != "all":
+        events_data = [ev for ev in events_data if ev.get("week") == selected_week]
+
+    # Filter by Search
     if search_query:
         search_query = search_query.lower()
         events_data = [
@@ -903,7 +931,7 @@ def update_events_table(selected_year, selected_event_types, sort_option, search
             if search_query in ev["name"].lower() or search_query in ev["city"].lower()
         ]
 
-    # Format events for display
+    # --- 2. Prepare Table Data ---
     formatted_events = [
         {
             "Event Name": f"[{ev['name']}]({ev.get('website', '#')})",
@@ -915,7 +943,7 @@ def update_events_table(selected_year, selected_event_types, sort_option, search
         for ev in events_data
     ]
 
-    # Sort Events
+    # Sort
     if sort_option == "olddate":
         formatted_events = sorted(formatted_events, key=lambda x: x["Start Date"])
     elif sort_option == "newdate":
@@ -923,8 +951,43 @@ def update_events_table(selected_year, selected_event_types, sort_option, search
     elif sort_option == "name":
         formatted_events = sorted(formatted_events, key=lambda x: x["Event Name"].lower())
 
-    return formatted_events
+    # --- 3. Create Map Figure ---
+    # We still have the unfiltered "events_data" variable, so let's use that
+    # (or use the *filtered* version to match the table—your choice).
+    # Must keep only events that have lat/lng
+    map_events = [ev for ev in events_data if ev.get("lat") is not None and ev.get("lng") is not None]
 
+    fig = {}
+    if map_events:
+        fig = px.scatter_geo(
+            map_events,
+            lat="lat",
+            lon="lng",
+            hover_name="name",
+            hover_data=["city", "start_date", "end_date"],
+            projection="natural earth",
+        )
+        fig.update_traces(
+            marker=dict(
+                symbol='circle',
+                color="yellow",
+                size=10,                 # optional size
+                line=dict(width=1)  # optional border
+            )
+        )
+        fig.update_geos(
+            showcountries=True,
+            countrycolor="black",
+            showsubunits=True,
+            subunitcolor="gray",
+            showland=True,
+            landcolor="white",
+        )
+        fig.update_layout(
+            margin={"r": 0, "t": 30, "l": 0, "b": 0},
+        )
+
+    return formatted_events, fig
 
 def challenges_layout():
     challenges = []
@@ -1064,6 +1127,117 @@ def challenge_details_layout(year):
         ]
     )
 
+def teams_layout(default_year=2025):
+    # Year Dropdown, plus an option for "All"
+    teams_year_dropdown = dcc.Dropdown(
+        id="teams-year-dropdown",
+        options=[{"label": "All", "value": "All"}]
+                 + [{"label": str(y), "value": y} for y in range(1992, 2026)],
+        value=default_year,      # start with "All"
+        clearable=False,
+        placeholder="Select Year",
+    )
+
+    # Teams Table
+    teams_table = dash_table.DataTable(
+        id="teams-table",
+        columns=[
+            {"name": "Team", "id": "team_display"},
+            {"name": "Location", "id": "location_display"}
+        ],
+        data=[],
+        page_size=50,
+        style_table={"overflowX": "auto"},
+        style_header={
+            "backgroundColor": "#FFCC00",
+            "fontWeight": "bold",
+            "textAlign": "center",
+            "border": "1px solid #ddd",
+        },
+        style_cell={
+            "textAlign": "center",
+            "padding": "10px",
+            "border": "1px solid #ddd",
+        },
+    )
+
+    return html.Div(
+        [
+            topbar,
+            dbc.Container(
+                [
+                    html.H2("Teams", className="text-center mb-4"),
+                    dbc.Row(
+                        [
+                            dbc.Col(teams_year_dropdown, width=3),
+                        ],
+                        className="mb-4",
+                    ),
+                    dbc.Row(
+                        dbc.Col(teams_table, width=12),
+                        className="mb-4",
+                    ),
+                ],
+                style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
+            ),
+
+            # Invisible Buttons from your code, etc.
+            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+
+            footer,
+        ]
+    )
+
+@app.callback(
+    Output("teams-table", "data"),
+    [Input("teams-year-dropdown", "value")]
+)
+def update_teams_table(selected_year):
+    all_teams = []
+    page_num = 0
+
+    while True:
+        # 1) If user wants all teams:
+        if not selected_year or selected_year == "All":
+            endpoint = f"teams/{page_num}"      # all teams
+        else:
+            endpoint = f"teams/{selected_year}/{page_num}"  # teams for that year
+
+        page_data = tba_get(endpoint)
+        if not page_data:
+            break
+
+        all_teams.extend(page_data)
+
+        page_num += 1
+
+    # Convert to a structure for the DataTable
+    table_data = []
+    for team in all_teams:
+        # Combine Team # and Nickname
+        number = team.get("team_number", "")
+        nickname = team.get("nickname", "")
+        if nickname:
+            team_display = f"Team {number} - {nickname}"
+        else:
+            team_display = str(number) if number else "Unknown"
+    
+        # Combine City, State, Country
+        city = team.get("city", "")
+        state = team.get("state_prov", "")
+        country = team.get("country", "")
+        location_parts = [part for part in [city, state, country] if part]
+        location_display = ", ".join(location_parts) if location_parts else "Unknown"
+    
+        table_data.append({
+            "team_display": team_display,
+            "location_display": location_display,
+        })
+
+    return table_data
+
 app.layout = html.Div([
     dcc.Location(id="url", refresh=False),
     html.Div(id="page-content")
@@ -1118,6 +1292,8 @@ def display_page(pathname, search):
         team_number = query_params.get("team", [None])[0]
         year = query_params.get("year", [None])[0]
         return team_layout(team_number, year)
+    elif pathname == "/teams":
+        return teams_layout()
     elif pathname == "/leaderboard":
         return leaderboard_layout()
     elif pathname == "/events":
