@@ -64,13 +64,13 @@
     }
 
     .button {
-        border: none;
-        color: white;
-        padding: 8px 16px;          /* Adjusted padding for better spacing */
-        font-size: 16px;
-        cursor: pointer;
-        border-radius: 5px;         /* Rounded corners for better aesthetics */
-        transition: all 0.3s ease-in-out;
+    border: none;
+    color: white;
+    padding: 8px 16px;          /* Adjusted padding for better spacing */
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;         /* Rounded corners for better aesthetics */
+    transition: all 0.3s ease-in-out;
     }
 
     /* Mobile-Specific Styles */

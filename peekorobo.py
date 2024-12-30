@@ -7,6 +7,8 @@ import urllib.parse
 import os
 from dotenv import load_dotenv
 
+from frcgames import frc_games
+
 def configure():
     load_dotenv()
 
@@ -67,8 +69,15 @@ topbar = dbc.Navbar(
                                 dbc.NavItem(dbc.NavLink(
                                     "Events",
                                     href="/events",
-                                    className="custom-navlink"
+                                    className="custom-navlink",
+                                    style={"marginRight": "5px"},
                                 )),
+                                dbc.NavItem(dbc.NavLink(
+                                    "Challenges", 
+                                    href="/challenges", 
+                                    className="custom-navlink",
+                                )),
+
                             ],
                             navbar=True,
                             className="ml-3",  
@@ -422,31 +431,27 @@ def team_layout(team_number, year):
         html.Span(f"{losses}", style={"color": "red", "fontWeight": "bold"})  
     ])
 
-    if year:
-        performance_card = dbc.Card(
-            dbc.CardBody(
-                [
-                    html.H3(f"{year if year else 'All Years'} Performance Metrics", style={"color": "#333", "fontWeight": "bold"}),
-                    html.P([html.I(className="bi bi-trophy-fill"), f" Total Matches Played: {total_matches}"]),
-                    html.P([
-                        html.I(className="bi bi-bar-chart-fill"), 
-                        " Win/Loss Ratio: ", 
-                        win_loss_ratio  
-                    ]),
-                    html.P([html.I(className="bi bi-graph-up"), f" Average Match Score: {avg_score:.2f}"]),
-                ],
-                style={"fontSize": "1.1rem"}
-            ),
-            style={
-                "marginBottom": "20px",
-                "borderRadius": "10px",
-                "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
-                "backgroundColor": "#f9f9f9",
-            },
-        )
-
-    else:
-        performance_card = None
+    performance_card = dbc.Card(
+        dbc.CardBody(
+            [
+                html.H3(f"{year} Performance Metrics", style={"color": "#333", "fontWeight": "bold"}),
+                html.P([html.I(className="bi bi-trophy-fill"), f" Total Matches Played: {total_matches}"]),
+                html.P([
+                    html.I(className="bi bi-bar-chart-fill"), 
+                    " Win/Loss Ratio: ", 
+                    win_loss_ratio  
+                ]),
+                html.P([html.I(className="bi bi-graph-up"), f" Average Match Score: {avg_score:.2f}"]),
+            ],
+            style={"fontSize": "1.1rem"}
+        ),
+        style={
+            "marginBottom": "20px",
+            "borderRadius": "10px",
+            "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+            "backgroundColor": "#f9f9f9",
+        },
+    )
         
     # --- Team Events ---
     if year:
@@ -792,7 +797,7 @@ def events_layout(year=2025):
     # Search Input Field
     search_input = dbc.Input(
         id="search-input",
-        placeholder="Search by Name or Location...",
+        placeholder="Search by Name...",
         type="text",
         debounce=True, 
     )
@@ -859,7 +864,7 @@ def events_layout(year=2025):
         Input("year-dropdown", "value"),
         Input("event-type-dropdown", "value"),
         Input("sort-dropdown", "value"),
-        Input("search-input", "value")  
+        Input("search-input", "value")
     ]
 )
 def update_events_table(selected_year, selected_event_types, sort_option, search_query):
@@ -867,17 +872,28 @@ def update_events_table(selected_year, selected_event_types, sort_option, search
     if not events_data:
         return []
 
+    # Ensure selected_event_types is a list
+    if not isinstance(selected_event_types, list):
+        selected_event_types = [selected_event_types]
+
     # Filter by Event Type
-    if "season" in selected_event_types:
-        events_data = [ev for ev in events_data if ev["event_type"] not in [99, 100]]  
-    if "offseason" in selected_event_types:
-        events_data = [ev for ev in events_data if ev["event_type"] in [99, 100]] 
-    if "regional" in selected_event_types:
-        events_data = [ev for ev in events_data if "Regional" in ev.get("event_type_string", "")]
-    if "district" in selected_event_types:
-        events_data = [ev for ev in events_data if "District" in ev.get("event_type_string", "")]
-    if "championship" in selected_event_types:
-        events_data = [ev for ev in events_data if "Championship" in ev.get("event_type_string", "")]
+    if "all" not in selected_event_types:
+        filtered_events = []
+        for event_type in selected_event_types:
+            if event_type == "season":
+                filtered_events.extend([ev for ev in events_data if ev["event_type"] not in [99, 100]])
+            elif event_type == "offseason":
+                filtered_events.extend([ev for ev in events_data if ev["event_type"] in [99, 100]])
+            elif event_type == "regional":
+                filtered_events.extend([ev for ev in events_data if "Regional" in ev.get("event_type_string", "")])
+            elif event_type == "district":
+                filtered_events.extend([ev for ev in events_data if "District" in ev.get("event_type_string", "")])
+            elif event_type == "championship":
+                filtered_events.extend([ev for ev in events_data if "Championship" in ev.get("event_type_string", "")])
+        events_data = filtered_events
+
+    # Remove duplicates in case multiple filters added the same event
+    events_data = list({ev["key"]: ev for ev in events_data}.values())
 
     # Filter by Search Query
     if search_query:
@@ -902,13 +918,151 @@ def update_events_table(selected_year, selected_event_types, sort_option, search
     # Sort Events
     if sort_option == "olddate":
         formatted_events = sorted(formatted_events, key=lambda x: x["Start Date"])
-    if sort_option == 'newdate':
+    elif sort_option == "newdate":
         formatted_events = sorted(formatted_events, key=lambda x: x["Start Date"], reverse=True)
-
     elif sort_option == "name":
         formatted_events = sorted(formatted_events, key=lambda x: x["Event Name"].lower())
 
     return formatted_events
+
+
+def challenges_layout():
+    challenges = []
+    for year, game in sorted(frc_games.items(), reverse=True):
+        challenges.append(
+            dbc.Card(
+                dbc.CardBody(
+                    dbc.Row(
+                        [
+                            # Game Logo
+                            dbc.Col(
+                                html.Img(
+                                    src=game["logo"],
+                                    style={"width": "150px", "height": "auto", "marginRight": "10px"},
+                                    alt=game["name"],
+                                ),
+                                width="auto",
+                            ),
+                            # Game Info
+                            dbc.Col(
+                                [
+                                    html.H5(
+                                        html.A(
+                                            f"{game['name']} ({year})",
+                                            href=f"/challenge/{year}",
+                                            style={"textDecoration": "none", "color": "#007BFF"},
+                                        ),
+                                        className="mb-1",
+                                    ),
+                                    html.P(
+                                        game.get("summary", "No summary available."),
+                                        style={"color": "#555", "marginBottom": "5px", "fontSize": "0.9rem"},
+                                    ),
+                                ],
+                                width=True,
+                            ),
+                        ],
+                        className="align-items-center",
+                    )
+                ),
+                className="mb-3",
+            )
+        )
+
+    return html.Div(
+        [
+            topbar,
+            dbc.Container(
+                [
+                    html.H2("Challenges", className="text-center mb-4"),
+                    html.P(
+                        "FIRST Robotics Competition is made up of seasons in which the challenge (game), along with the required set of tasks, changes annually. "
+                        "Please click on a season to view more information and results.",
+                        className="text-center mb-4",
+                    ),
+                    *challenges,
+                ],
+                style={"maxWidth": "900px", "margin": "0 auto"},
+            ),
+            
+            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            
+            footer,
+        ]
+    )
+
+def challenge_details_layout(year):
+    game = frc_games.get(
+        year,
+        {"name": "Unknown Game", "video": "#", "logo": "/assets/placeholder.png", "manual": "#", "summary": "No summary available."}
+    )
+
+    return html.Div(
+        [
+            topbar,
+            dbc.Container(
+                [
+                    # Title and Logo
+                    html.H2(f"{game['name']} ({year})", className="text-center mb-4"),
+                    html.Img(
+                        src=game["logo"],
+                        style={"display": "block", "margin": "0 auto", "maxWidth": "400px", "borderRadius": "10px"},
+                        alt=game["name"],
+                        className="mb-4",
+                    ),
+                    # Summary
+                    html.P(
+                        game.get("summary", "No summary available."),
+                        className="text-center mb-4",
+                        style={"fontSize": "1rem", "lineHeight": "1.5", "color": "#555"},
+                    ),
+                    # Game Manual Button
+                    html.Div(
+                        dbc.Button(
+                            "View Game Manual",
+                            href=game["manual"],
+                            target="_blank",
+                            style={"marginBottom": "20px",
+                                  "backgroundColor": "#ffdd00ff",
+                                  "color": "black",
+                                  "border": "2px solid #555"},
+                        ),
+                        className="text-center",
+                    ),
+                    # Video Thumbnail
+                    html.P(
+                        "Watch the official game reveal:",
+                        className="text-center mt-4",
+                    ),
+                    html.Div(
+                        html.A(
+                            html.Img(
+                                src=f"https://img.youtube.com/vi/{game['video'].split('=')[-1]}/0.jpg",
+                                style={
+                                    "maxWidth": "400px",
+                                    "borderRadius": "8px",
+                                    "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+                                },
+                            ),
+                            href=game["video"],
+                            target="_blank",
+                            style={"display": "block", "margin": "0 auto"},
+                        ),
+                        className="text-center",
+                    ),
+                ],
+                style={"maxWidth": "800px", "margin": "0 auto", "padding": "20px"},
+            ),
+            
+            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            
+            footer,
+        ]
+    )
 
 app.layout = html.Div([
     dcc.Location(id="url", refresh=False),
@@ -968,6 +1122,15 @@ def display_page(pathname, search):
         return leaderboard_layout()
     elif pathname == "/events":
         return events_layout()
+    elif pathname == "/challenges":
+        return challenges_layout()
+    elif pathname.startswith("/challenge/"):
+        year = pathname.split("/")[-1]
+        try:
+            year = int(year)
+        except ValueError:
+            year = None
+        return challenge_details_layout(year)
     else:
         return home_layout
     
