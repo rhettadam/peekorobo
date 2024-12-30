@@ -205,7 +205,7 @@ home_layout = html.Div([
                                             dbc.Input(
                                                 id="input-team-home",
                                                 type="text",
-                                                placeholder="Team # (e.g., 254)",
+                                                placeholder="Team # (e.g., 1912)",
                                                 className="custom-input-box",
                                                 style={"width": "100%", "marginBottom": ".4rem"}
                                             ),
@@ -215,7 +215,7 @@ home_layout = html.Div([
                                             dbc.Input(
                                                 id="input-year-home",
                                                 type="text",
-                                                placeholder="Year (e.g., 2023) optional",
+                                                placeholder="Year (e.g., 2024) optional",
                                                 className="custom-input-box",
                                                 style={"width": "100%"}
                                             ),
