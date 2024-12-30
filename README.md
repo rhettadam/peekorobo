@@ -13,19 +13,19 @@ Peekorobo is a web application built with [Dash](https://dash.plotly.com/) to di
 - **Leaderboard Page**: View team rankings by various metrics.
 
 
-![Home](assets/Home.png)
+![Home](assets/readme/Home.png)
 
 
-![Team](assets/Team.png)
+![Team](assets/readme/Team.png)
 
 
-![Event](assets/Event.png)
+![Event](assets/readme/Event.png)
 
 
-![Leaderboard](assets/Leaderboard.png)
+![Leaderboard](assets/readme/Leaderboard.png)
 
 
-![Game](assets/Game.png)
+![Game](assets/readme/Game.png)
 
 
 ## **Running the Application**
