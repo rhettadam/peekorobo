@@ -32,6 +32,7 @@ app = dash.Dash(
 server = app.server
 
 # -------------- LAYOUTS --------------
+# -------------- LAYOUTS --------------
 topbar = dbc.Navbar(
     dbc.Container(
         [
@@ -57,20 +58,8 @@ topbar = dbc.Navbar(
                         dbc.Nav(
                             [
                                 dbc.NavItem(dbc.NavLink(
-                                    "Home",
-                                    href="/",
-                                    className="custom-navlink",
-                                    style={"marginRight": "5px"},
-                                )),
-                                dbc.NavItem(dbc.NavLink(
                                     "Teams",
                                     href="/teams",
-                                    className="custom-navlink",
-                                    style={"marginRight": "5px"},
-                                )),
-                                dbc.NavItem(dbc.NavLink(
-                                    "Leaderboard",
-                                    href="/leaderboard",
                                     className="custom-navlink",
                                     style={"marginRight": "5px"},
                                 )),
@@ -81,11 +70,88 @@ topbar = dbc.Navbar(
                                     style={"marginRight": "5px"},
                                 )),
                                 dbc.NavItem(dbc.NavLink(
+                                    "Leaderboard",
+                                    href="/leaderboard",
+                                    className="custom-navlink",
+                                    style={"marginRight": "5px"},
+                                )),
+                                dbc.NavItem(dbc.NavLink(
                                     "Challenges", 
                                     href="/challenges", 
                                     className="custom-navlink",
                                 )),
-
+                                
+                                # Resources Dropdown
+                                dbc.NavItem(
+                                    dbc.DropdownMenu(
+                                        children=[
+                                            # Communication Section
+                                            dbc.DropdownMenuItem("Communication", header=True),
+                                            dbc.DropdownMenuItem(
+                                                "Chief Delphi", 
+                                                href="https://www.chiefdelphi.com/", 
+                                                target="_blank"
+                                            ),
+                                            dbc.DropdownMenuItem(
+                                                "The Blue Alliance", 
+                                                href="https://www.thebluealliance.com/", 
+                                                target="_blank"
+                                            ),
+                                            dbc.DropdownMenuItem(
+                                                "FRC Subreddit", 
+                                                href="https://www.reddit.com/r/FRC/", 
+                                                target="_blank"
+                                            ),
+                                            dbc.DropdownMenuItem(
+                                                "FRC Discord", 
+                                                href="https://discord.com/invite/frc", 
+                                                target="_blank"
+                                            ),
+                                            dbc.DropdownMenuItem(divider=True),
+                                            
+                                            # Technical Resources Section
+                                            dbc.DropdownMenuItem("Technical Resources", header=True),
+                                            dbc.DropdownMenuItem(
+                                                "FIRST Technical Resources", 
+                                                href="https://www.firstinspires.org/resource-library/frc/technical-resources", 
+                                                target="_blank"
+                                            ),
+                                            dbc.DropdownMenuItem(
+                                                "FRCDesign", 
+                                                href="https://www.frcdesign.org/learning-course/", 
+                                                target="_blank"
+                                            ),
+                                            dbc.DropdownMenuItem(
+                                                "OnShape4FRC", 
+                                                href="https://onshape4frc.com/", 
+                                                target="_blank"
+                                            ),
+                                            dbc.DropdownMenuItem(divider=True),
+                                            
+                                            # Scouting/Statistics Section
+                                            dbc.DropdownMenuItem("Scouting/Statistics", header=True),
+                                            dbc.DropdownMenuItem(
+                                                "Statbotics", 
+                                                href="https://www.statbotics.io/", 
+                                                target="_blank"
+                                            ),
+                                            dbc.DropdownMenuItem(
+                                                "ScoutRadioz", 
+                                                href="https://scoutradioz.com/", 
+                                                target="_blank"
+                                            ),
+                                            dbc.DropdownMenuItem(
+                                                "Peekorobo", 
+                                                href="https://peekorobo-6ec491b9fec0.herokuapp.com/", 
+                                                target="_blank"
+                                            ),
+                                        ],
+                                        nav=True,
+                                        in_navbar=True,
+                                        label="Resources",
+                                        direction="down",
+                                    )
+                                ),
                             ],
                             navbar=True,
                             className="ml-3",  
