@@ -6,6 +6,8 @@ import requests
 import urllib.parse 
 import os
 from dotenv import load_dotenv
+import plotly.express as px
+import json
 
 from frcgames import frc_games
 
@@ -102,9 +104,9 @@ topbar = dbc.Navbar(
                             [
                                 dbc.Input(
                                     id="topbar-search-input",
-                                    placeholder="Team #",
+                                    placeholder="Team # (e.g., 1912)",
                                     type="text",
-                                    style={"width": "100px"},
+                                    style={"width": "165px"},
                                 ),
                                 dbc.Button(
                                     "Search",
@@ -157,9 +159,9 @@ footer = dbc.Container(
             html.P(
                 [
                     "Built With:  ",
-                    html.A("The Blue Alliance ", href="https://www.thebluealliance.com/", target="_blank", style={"color": "#353535", "textDecoration": "line"}),
+                    html.A("The Blue Alliance ", href="https://www.thebluealliance.com/", target="_blank", style={"color": "#3366CC", "textDecoration": "line"}),
                     " | ",
-                    html.A(" GitHub", href="https://github.com/rhettadam/peekorobo", target="_blank", style={"color": "#353535", "textDecoration": "line"})
+                    html.A(" GitHub", href="https://github.com/rhettadam/peekorobo", target="_blank", style={"color": "#3366CC", "textDecoration": "line"})
                 ],
                 style={
                     "textAlign": "center",
@@ -289,6 +291,10 @@ home_layout = html.Div([
             style={"height": "78vh"}
         ),
     ], class_name="py-5", style={"backgroundColor": "white"}),
+
+    dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
+    dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
+    
     footer
 ])
 
@@ -412,7 +418,7 @@ def team_layout(team_number, year):
     if year:
         matches = tba_get(f"team/{team_key}/matches/{year}")
     else:
-        matches = tba_get(f"team/{team_key}/matches")
+        matches = tba_get(f"team/{team_key}/matches/2024")
 
     total_matches = len(matches) if matches else 0
     wins = sum(
@@ -437,10 +443,14 @@ def team_layout(team_number, year):
         html.Span(f"{losses}", style={"color": "red", "fontWeight": "bold"})  
     ])
 
+    if year:
+        perf = html.H3(f"{year} Performance Metrics", style={"color": "#333", "fontWeight": "bold"})
+    else:
+        perf = html.H3("2024 Performance Metrics", style={"color": "#333", "fontWeight": "bold"})
     performance_card = dbc.Card(
         dbc.CardBody(
             [
-                html.H3(f"{year} Performance Metrics", style={"color": "#333", "fontWeight": "bold"}),
+                perf,
                 html.P([html.I(className="bi bi-trophy-fill"), f" Total Matches Played: {total_matches}"]),
                 html.P([
                     html.I(className="bi bi-bar-chart-fill"), 
@@ -598,6 +608,8 @@ def team_layout(team_number, year):
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
+            dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
             
             footer
         ]
@@ -708,6 +720,8 @@ def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
         dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+        dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
+        dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
         
         footer
     ])
@@ -848,11 +862,10 @@ def events_layout(year=2025):
         },
     )
 
-    # Events Map (no button needed)
     events_map_graph = dcc.Graph(
         id="events-map",
-        figure={},      # will be updated by callback
-        style={"height": "700px"}  # optional styling
+        figure={},    
+        style={"height": "700px"}  
     )
 
     return html.Div(
@@ -863,18 +876,18 @@ def events_layout(year=2025):
                     html.H2("Events", className="text-center mb-4"),
                     filters_row,
                     events_table,
-                    events_map_graph,  # show map automatically
+                    events_map_graph,  
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
+            dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
             footer,
         ]
     )
-
-import plotly.express as px
 
 @app.callback(
     [
@@ -951,10 +964,6 @@ def update_events_table_and_map(selected_year, selected_event_types, selected_we
     elif sort_option == "name":
         formatted_events = sorted(formatted_events, key=lambda x: x["Event Name"].lower())
 
-    # --- 3. Create Map Figure ---
-    # We still have the unfiltered "events_data" variable, so let's use that
-    # (or use the *filtered* version to match the table—your choice).
-    # Must keep only events that have lat/lng
     map_events = [ev for ev in events_data if ev.get("lat") is not None and ev.get("lng") is not None]
 
     fig = {}
@@ -977,11 +986,13 @@ def update_events_table_and_map(selected_year, selected_event_types, selected_we
         )
         fig.update_geos(
             showcountries=True,
-            countrycolor="black",
+            countrycolor="gray",
             showsubunits=True,
             subunitcolor="gray",
             showland=True,
-            landcolor="white",
+            landcolor="lightgreen",
+            showocean=True,
+            oceancolor="lightblue",
         )
         fig.update_layout(
             margin={"r": 0, "t": 30, "l": 0, "b": 0},
@@ -1051,6 +1062,8 @@ def challenges_layout():
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
+            dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
             
             footer,
         ]
@@ -1122,27 +1135,118 @@ def challenge_details_layout(year):
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
+            dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
             
             footer,
         ]
     )
 
 def teams_layout(default_year=2025):
-    # Year Dropdown, plus an option for "All"
     teams_year_dropdown = dcc.Dropdown(
         id="teams-year-dropdown",
         options=[{"label": "All", "value": "All"}]
                  + [{"label": str(y), "value": y} for y in range(1992, 2026)],
-        value=default_year,      # start with "All"
+        value=default_year,
         clearable=False,
         placeholder="Select Year",
     )
 
-    # Teams Table
+    country_dropdown = dcc.Dropdown(
+        id="country-dropdown",
+        options=[
+            {"label": "All", "value": "All"},
+            {"label": "USA", "value": "USA"},
+            {"label": "Canada", "value": "Canada"},
+            {"label": "Türkiye", "value": "Türkiye"},
+            {"label": "Mexico", "value": "Mexico"},
+            {"label": "Israel", "value": "Israel"},
+            {"label": "Chinese Taipei", "value": "Chinese Taipei"},
+            {"label": "China", "value": "China"},
+            {"label": "Australia", "value": "Australia"},
+            {"label": "Brazil", "value": "Brazil"},
+            {"label": "India", "value": "India"},
+        ],
+        value="All",
+        clearable=False,
+        placeholder="Select Country",
+    )
+
+    # State Dropdown (static example; feel free to expand or make dynamic)
+    state_dropdown = dcc.Dropdown(
+        id="state-dropdown",
+        options=[
+            {"label": "All", "value": "All"},
+            {"label": "Alabama", "value": "Alabama"},
+            {"label": "Alaska", "value": "Alaska"},
+            {"label": "Arizona", "value": "Arizona"},
+            {"label": "Arkansas", "value": "Arkansas"},
+            {"label": "California", "value": "California"},
+            {"label": "Colorado", "value": "Colorado"},
+            {"label": "Connecticut", "value": "Connecticut"},
+            {"label": "Delaware", "value": "Delaware"},
+            {"label": "Florida", "value": "Florida"},
+            {"label": "Georgia", "value": "Georgia"},
+            {"label": "Hawaii", "value": "Hawaii"},
+            {"label": "Idaho", "value": "Idaho"},
+            {"label": "Illinois", "value": "Illinois"},
+            {"label": "Indiana", "value": "Indiana"},
+            {"label": "Iowa", "value": "Iowa"},
+            {"label": "Kansas", "value": "Kansas"},
+            {"label": "Kentucky", "value": "Kentucky"},
+            {"label": "Louisiana", "value": "Louisiana"},
+            {"label": "Maine", "value": "Maine"},
+            {"label": "Maryland", "value": "Maryland"},
+            {"label": "Massachusetts", "value": "Massachusetts"},
+            {"label": "Michigan", "value": "Michigan"},
+            {"label": "Minnesota", "value": "Minnesota"},
+            {"label": "Mississippi", "value": "Mississippi"},
+            {"label": "Missouri", "value": "Missouri"},
+            {"label": "Montana", "value": "Montana"},
+            {"label": "Nebraska", "value": "Nebraska"},
+            {"label": "Nevada", "value": "Nevada"},
+            {"label": "New Hampshire", "value": "New Hampshire"},
+            {"label": "New Jersey", "value": "New Jersey"},
+            {"label": "New Mexico", "value": "New Mexico"},
+            {"label": "New York", "value": "New York"},
+            {"label": "North Carolina", "value": "North Carolina"},
+            {"label": "North Dakota", "value": "North Dakota"},
+            {"label": "Ohio", "value": "Ohio"},
+            {"label": "Oklahoma", "value": "Oklahoma"},
+            {"label": "Oregon", "value": "Oregon"},
+            {"label": "Pennsylvania", "value": "Pennsylvania"},
+            {"label": "Rhode Island", "value": "Rhode Island"},
+            {"label": "South Carolina", "value": "South Carolina"},
+            {"label": "South Dakota", "value": "South Dakota"},
+            {"label": "Tennessee", "value": "Tennessee"},
+            {"label": "Texas", "value": "Texas"},
+            {"label": "Utah", "value": "Utah"},
+            {"label": "Vermont", "value": "Vermont"},
+            {"label": "Virginia", "value": "Virginia"},
+            {"label": "Washington", "value": "Washington"},
+            {"label": "West Virginia", "value": "West Virginia"},
+            {"label": "Wisconsin", "value": "Wisconsin"},
+            {"label": "Wyoming", "value": "Wyoming"},
+        ],
+        value="All",
+        clearable=False,
+        placeholder="Select State/Province",
+    )
+
+    view_map_button = dbc.Button(
+        "View Map",
+        id="teams-view-map",
+        color="info",
+        style={"backgroundColor": "#ffdd00ff",
+               "color": "black",
+               "border": "2px solid #555",
+               "marginLeft": "10px"},
+    )
+
     teams_table = dash_table.DataTable(
         id="teams-table",
         columns=[
-            {"name": "Team", "id": "team_display"},
+            {"name": "Team", "id": "team_display","presentation": "markdown"},
             {"name": "Location", "id": "location_display"}
         ],
         data=[],
@@ -1161,82 +1265,223 @@ def teams_layout(default_year=2025):
         },
     )
 
+    load_more_button = dbc.Button(
+        "Load More",
+        id="teams-load-more",
+        style={"backgroundColor": "#ffdd00ff",
+               "color": "black",
+               "border": "2px solid #555"},
+    )
+
     return html.Div(
         [
             topbar,
             dbc.Container(
                 [
                     html.H2("Teams", className="text-center mb-4"),
+                    
+                    # Year selector
                     dbc.Row(
                         [
                             dbc.Col(teams_year_dropdown, width=3),
+                            dbc.Col(country_dropdown, width=3),
+                            dbc.Col(state_dropdown, width=3),
+                            dbc.Col(view_map_button, width="auto"),
                         ],
                         className="mb-4",
                     ),
+                    
+                    # Table
                     dbc.Row(
                         dbc.Col(teams_table, width=12),
+                        className="mb-4",
+                    ),
+
+                    # Load More button
+                    dbc.Row(
+                        dbc.Col(load_more_button, width=12),
                         className="mb-4",
                     ),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
 
-            # Invisible Buttons from your code, etc.
+            # Store to hold loaded teams, current page, and selected year
+            dcc.Store(id="teams-store", data={"teams": [], "page": 0, "year": default_year}),
+
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
 
             footer,
         ]
     )
 
 @app.callback(
-    Output("teams-table", "data"),
-    [Input("teams-year-dropdown", "value")]
+    [Output("teams-table", "data"),
+     Output("teams-store", "data")],
+    [
+        Input("teams-year-dropdown", "value"),
+        Input("teams-load-more", "n_clicks"),
+        Input("country-dropdown", "value"),
+        Input("state-dropdown", "value"),
+    ],
+    [State("teams-store", "data")]
 )
-def update_teams_table(selected_year):
-    all_teams = []
-    page_num = 0
+def load_teams(
+    selected_year,
+    load_more_clicks,
+    selected_country,
+    selected_state,
+    store_data
+):
+    ctx = dash.callback_context
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
 
-    while True:
-        # 1) If user wants all teams:
-        if not selected_year or selected_year == "All":
-            endpoint = f"teams/{page_num}"      # all teams
-        else:
-            endpoint = f"teams/{selected_year}/{page_num}"  # teams for that year
+    if not store_data:
+        store_data = {"teams": [], "page": 0, "year": selected_year}
 
+    current_teams = store_data["teams"]
+    current_page = store_data["page"]
+    stored_year = store_data["year"]
+
+    if selected_year != stored_year:
+        current_teams = []
+        current_page = 0
+        stored_year = selected_year
+
+    if not stored_year or stored_year == "All":
+        endpoint_base = "teams"
+    else:
+        endpoint_base = f"teams/{stored_year}"
+
+    if not current_teams and triggered_id in [
+        "teams-year-dropdown",
+        "country-dropdown",
+        "state-dropdown",
+        None
+    ]:
+        for i in range(10):  
+            endpoint = f"{endpoint_base}/{current_page}"
+            page_data = tba_get(endpoint)
+            if not page_data:
+                break
+            current_teams.extend(page_data)
+            current_page += 1
+
+    elif triggered_id == "teams-load-more":
+        endpoint = f"{endpoint_base}/{current_page}"
         page_data = tba_get(endpoint)
-        if not page_data:
-            break
-
-        all_teams.extend(page_data)
-
-        page_num += 1
-
-    # Convert to a structure for the DataTable
+        if page_data:
+            current_teams.extend(page_data)
+            current_page += 1
+            
     table_data = []
-    for team in all_teams:
-        # Combine Team # and Nickname
+    for team in current_teams:
         number = team.get("team_number", "")
         nickname = team.get("nickname", "")
         if nickname:
-            team_display = f"Team {number} - {nickname}"
+            link_text = f"Team {number} - {nickname}"
         else:
-            team_display = str(number) if number else "Unknown"
-    
-        # Combine City, State, Country
+            link_text = str(number) if number else "Unknown"
+
+        # Link to /data?team=###
+        team_display = f"[{link_text}](/data?team={number})"
+
         city = team.get("city", "")
         state = team.get("state_prov", "")
         country = team.get("country", "")
-        location_parts = [part for part in [city, state, country] if part]
-        location_display = ", ".join(location_parts) if location_parts else "Unknown"
-    
+        loc_parts = [p for p in [city, state, country] if p]
+        location_display = ", ".join(loc_parts) if loc_parts else "Unknown"
+
         table_data.append({
             "team_display": team_display,
             "location_display": location_display,
+            "country": country,
+            "state": state,
         })
 
-    return table_data
+    # If user chose a country
+    if selected_country and selected_country != "All":
+        table_data = [row for row in table_data if row["country"] == selected_country]
+
+    # If user chose a state
+    if selected_state and selected_state != "All":
+        table_data = [row for row in table_data if row["state"] == selected_state]
+
+    # Update the store
+    updated_store = {
+        "teams": current_teams,
+        "page": current_page,
+        "year": stored_year
+    }
+
+    return table_data, updated_store
+
+def teams_map_layout():
+    # 1) load your precomputed JSON
+    with open("teams_2025.json", "r", encoding="utf-8") as f:
+        all_teams_2025 = json.load(f)
+
+    # 2) Filter only teams with lat & lng
+    map_teams = [t for t in all_teams_2025 if t.get("lat") and t.get("lng")]
+
+    if not map_teams:
+        # No lat/lng data?
+        fig = px.scatter_geo(title="No teams found with lat/lng")
+    else:
+        fig = px.scatter_geo(
+            map_teams,
+            lat="lat",
+            lon="lng",
+            hover_name="nickname",
+            hover_data=["team_number", "city", "state_prov", "country"],
+            custom_data=["team_number"],
+            projection="natural earth",
+            template="plotly_white",
+        )
+
+        fig.update_traces(
+            marker=dict(
+                symbol='circle',
+                color="yellow",
+                size=5,                 # optional size
+                line=dict(width=.5)  # optional border
+            )
+        )
+        fig.update_geos(
+            showcountries=True,
+            countrycolor="grey",
+            showsubunits=True,
+            subunitcolor="gray",
+            showland=True,
+            landcolor="lightgreen",
+            showocean=True,
+            oceancolor="lightblue",
+        )
+        fig.update_layout(margin={"r":0, "t":0,"l":0,"b":0})
+
+    # Return a layout
+    return html.Div([
+        topbar,
+        dbc.Container([
+            html.H3("Interactive Map: All 2025 Teams", className="text-center mb-4"),
+            dcc.Graph(
+                id="teams-map",
+                figure=fig,
+                style={"height": "80vh", "width": "100%"}
+            ),
+        ], fluid=True),
+
+        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+        dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
+        
+        footer
+    ])
+
 
 app.layout = html.Div([
     dcc.Location(id="url", refresh=False),
@@ -1248,6 +1493,8 @@ app.layout = html.Div([
     [
         Input("btn-search-home", "n_clicks"), 
         Input("topbar-search-button", "n_clicks"),  
+        Input("teams-view-map", "n_clicks"),  
+        Input("teams-map", "clickData"),
     ],
     [
         State("input-team-home", "value"), 
@@ -1256,7 +1503,7 @@ app.layout = html.Div([
     ],
     prevent_initial_call=True,
 )
-def handle_navigation(home_click, topbar_click, home_team_value, home_year_value, topbar_search_value):
+def handle_navigation(home_click, topbar_click, view_map_click, map_clickdata, home_team_value, home_year_value, topbar_search_value):
     
     ctx = dash.callback_context
 
@@ -1279,6 +1526,24 @@ def handle_navigation(home_click, topbar_click, home_team_value, home_year_value
         search = "?" + urllib.parse.urlencode(query_params)
         return "/data", search
 
+    elif trigger_id == "teams-view-map":
+
+        return "/teamsmap", ""  # pathname="/teamsmap", no search
+
+    elif trigger_id == "teams-map":
+        if not map_clickdata:
+            raise dash.exceptions.PreventUpdate
+        
+        point = map_clickdata["points"][0]
+        custom = point.get("customdata", [])
+        if not custom:
+            raise dash.exceptions.PreventUpdate
+
+        team_number = custom[0] 
+        query_params = {"team": team_number}
+        search = "?" + urllib.parse.urlencode(query_params)
+        return "/data", search
+
     return dash.no_update, dash.no_update
 
 @app.callback(
@@ -1294,6 +1559,8 @@ def display_page(pathname, search):
         return team_layout(team_number, year)
     elif pathname == "/teams":
         return teams_layout()
+    elif pathname == "/teamsmap":
+        return teams_map_layout()  
     elif pathname == "/leaderboard":
         return leaderboard_layout()
     elif pathname == "/events":

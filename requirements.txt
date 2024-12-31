@@ -5,5 +5,3 @@ python-dotenv>=0.21.0
 dash-bootstrap-components>=1.6.0
 plotly>=5.24.1
 pandas>=2.2.2
-
-
