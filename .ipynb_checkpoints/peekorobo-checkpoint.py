@@ -24,159 +24,75 @@ def tba_get(endpoint: str):
         return r.json()
     return None
 
-app = dash.Dash(
-    __name__,
+app = dash.Dash(__name__,
+                meta_tags=[{'name': 'viewport', 
+                            'content': 'width=device-width,initial-scale=1.0,'}],
     external_stylesheets=[dbc.themes.BOOTSTRAP],
     suppress_callback_exceptions=True
 )
 server = app.server
 
 # -------------- LAYOUTS --------------
-# -------------- LAYOUTS --------------
 topbar = dbc.Navbar(
     dbc.Container(
         [
-            # Left: Logo and Navigation Links
-            dbc.Row(
-                [
-                    dbc.Col(
-                        dbc.NavbarBrand(
-                            html.Img(
-                                src="/assets/logo.png",
-                                style={
-                                    "height": "40px",
-                                    "width": "auto",
-                                    "marginRight": "10px",  
-                                },
-                            ),
-                            href="/",
-                            className="navbar-brand-custom",
-                        ),
-                        width="auto",
-                    ),
-                    dbc.Col(
-                        dbc.Nav(
-                            [
-                                dbc.NavItem(dbc.NavLink(
-                                    "Teams",
-                                    href="/teams",
-                                    className="custom-navlink",
-                                    style={"marginRight": "5px"},
-                                )),
-                                dbc.NavItem(dbc.NavLink(
-                                    "Events",
-                                    href="/events",
-                                    className="custom-navlink",
-                                    style={"marginRight": "5px"},
-                                )),
-                                dbc.NavItem(dbc.NavLink(
-                                    "Leaderboard",
-                                    href="/leaderboard",
-                                    className="custom-navlink",
-                                    style={"marginRight": "5px"},
-                                )),
-                                dbc.NavItem(dbc.NavLink(
-                                    "Challenges", 
-                                    href="/challenges", 
-                                    className="custom-navlink",
-                                )),
-                                
-                                # Resources Dropdown
-                                dbc.NavItem(
-                                    dbc.DropdownMenu(
-                                        children=[
-                                            # Communication Section
-                                            dbc.DropdownMenuItem("Communication", header=True),
-                                            dbc.DropdownMenuItem(
-                                                "Chief Delphi", 
-                                                href="https://www.chiefdelphi.com/", 
-                                                target="_blank"
-                                            ),
-                                            dbc.DropdownMenuItem(
-                                                "The Blue Alliance", 
-                                                href="https://www.thebluealliance.com/", 
-                                                target="_blank"
-                                            ),
-                                            dbc.DropdownMenuItem(
-                                                "FRC Subreddit", 
-                                                href="https://www.reddit.com/r/FRC/", 
-                                                target="_blank"
-                                            ),
-                                            dbc.DropdownMenuItem(
-                                                "FRC Discord", 
-                                                href="https://discord.com/invite/frc", 
-                                                target="_blank"
-                                            ),
-                                            dbc.DropdownMenuItem(divider=True),
-                                            
-                                            # Technical Resources Section
-                                            dbc.DropdownMenuItem("Technical Resources", header=True),
-                                            dbc.DropdownMenuItem(
-                                                "FIRST Technical Resources", 
-                                                href="https://www.firstinspires.org/resource-library/frc/technical-resources", 
-                                                target="_blank"
-                                            ),
-                                            dbc.DropdownMenuItem(
-                                                "FRCDesign", 
-                                                href="https://www.frcdesign.org/learning-course/", 
-                                                target="_blank"
-                                            ),
-                                            dbc.DropdownMenuItem(
-                                                "OnShape4FRC", 
-                                                href="https://onshape4frc.com/", 
-                                                target="_blank"
-                                            ),
-                                            dbc.DropdownMenuItem(divider=True),
-                                            
-                                            # Scouting/Statistics Section
-                                            dbc.DropdownMenuItem("Scouting/Statistics", header=True),
-                                            dbc.DropdownMenuItem(
-                                                "Statbotics", 
-                                                href="https://www.statbotics.io/", 
-                                                target="_blank"
-                                            ),
-                                            dbc.DropdownMenuItem(
-                                                "ScoutRadioz", 
-                                                href="https://scoutradioz.com/", 
-                                                target="_blank"
-                                            ),
-                                            dbc.DropdownMenuItem(
-                                                "Peekorobo", 
-                                                href="https://peekorobo-6ec491b9fec0.herokuapp.com/", 
-                                                target="_blank"
-                                            ),
-                                        ],
-                                        nav=True,
-                                        in_navbar=True,
-                                        label="Resources",
-                                        direction="down",
-                                    )
-                                ),
-                            ],
-                            navbar=True,
-                            className="ml-3",  
-                        ),
-                        width="auto",
-                    ),
-                ],
-                align="center",
-                className="g-0",  
+            # Left: Logo
+            dbc.NavbarBrand(
+                html.Img(
+                    src="/assets/logo.png",
+                    style={
+                        "height": "40px",
+                        "width": "auto",
+                        "marginRight": "10px",
+                    },
+                ),
+                href="/",
+                className="navbar-brand-custom",
             ),
-            # Right: Search Bar
-            dbc.Row(
-                [
-                    dbc.Col(
+            # Toggler for Mobile
+            dbc.NavbarToggler(id="navbar-toggler", n_clicks=0),
+            # Collapsible Section
+            dbc.Collapse(
+                dbc.Nav(
+                    [
+                        dbc.NavItem(dbc.NavLink("Teams", href="/teams", className="custom-navlink")),
+                        dbc.NavItem(dbc.NavLink("Events", href="/events", className="custom-navlink")),
+                        dbc.NavItem(dbc.NavLink("Leaderboard", href="/leaderboard", className="custom-navlink")),
+                        dbc.NavItem(dbc.NavLink("Challenges", href="/challenges", className="custom-navlink")),
+                        # Resources Dropdown
+                        dbc.DropdownMenu(
+                            label="Resources",
+                            nav=True,
+                            in_navbar=True,
+                            children=[
+                                dbc.DropdownMenuItem("Communication", header=True),
+                                dbc.DropdownMenuItem("Chief Delphi", href="https://www.chiefdelphi.com/", target="_blank"),
+                                dbc.DropdownMenuItem("The Blue Alliance", href="https://www.thebluealliance.com/", target="_blank"),
+                                dbc.DropdownMenuItem("FRC Subreddit", href="https://www.reddit.com/r/FRC/", target="_blank"),
+                                dbc.DropdownMenuItem("FRC Discord", href="https://discord.com/invite/frc", target="_blank"),
+                                dbc.DropdownMenuItem(divider=True),
+                                dbc.DropdownMenuItem("Technical Resources", header=True),
+                                dbc.DropdownMenuItem("FIRST Technical Resources", href="https://www.firstinspires.org/resource-library/frc/technical-resources", target="_blank"),
+                                dbc.DropdownMenuItem("FRCDesign", href="https://www.frcdesign.org/learning-course/", target="_blank"),
+                                dbc.DropdownMenuItem("OnShape4FRC", href="https://onshape4frc.com/", target="_blank"),
+                                dbc.DropdownMenuItem(divider=True),
+                                dbc.DropdownMenuItem("Scouting/Statistics", header=True),
+                                dbc.DropdownMenuItem("Statbotics", href="https://www.statbotics.io/", target="_blank"),
+                                dbc.DropdownMenuItem("ScoutRadioz", href="https://scoutradioz.com/", target="_blank"),
+                                dbc.DropdownMenuItem("Peekorobo", href="https://peekorobo-6ec491b9fec0.herokuapp.com/", target="_blank"),
+                            ],
+                        ),
+                        # Mobile Search Bar (inside collapsible menu)
                         dbc.InputGroup(
                             [
                                 dbc.Input(
-                                    id="topbar-search-input",
+                                    id="mobile-search-input",
                                     placeholder="Team # (e.g., 1912)",
                                     type="text",
-                                    style={"width": "165px"},
                                 ),
                                 dbc.Button(
                                     "Search",
-                                    id="topbar-search-button",
+                                    id="mobile-search-button",
                                     color="primary",
                                     style={
                                         "backgroundColor": "#FFDD00",
@@ -185,23 +101,52 @@ topbar = dbc.Navbar(
                                     },
                                 ),
                             ],
-                            className="ms-auto",
+                            className="mt-3",
+                        ),
+                    ],
+                    navbar=True,
+                ),
+                id="navbar-collapse",
+                is_open=False,
+                navbar=True,
+            ),
+            # Desktop Search Bar (always visible)
+            dbc.Row(
+                [
+                    dbc.Col(
+                        dbc.InputGroup(
+                            [
+                                dbc.Input(
+                                    id="desktop-search-input",
+                                    placeholder="Team # (e.g., 1912)",
+                                    type="text",
+                                ),
+                                dbc.Button(
+                                    "Search",
+                                    id="desktop-search-button",
+                                    color="primary",
+                                    style={
+                                        "backgroundColor": "#FFDD00",
+                                        "border": "none",
+                                        "color": "black",
+                                    },
+                                ),
+                            ],
                         ),
                         width="auto",
+                        className="desktop-search",
                     ),
                 ],
                 align="center",
-                className="ml-auto",
             ),
         ],
         fluid=True,
-        className="d-flex justify-content-between align-items-center",
     ),
     color="#353535",
     dark=True,
     className="mb-4",
     style={
-        "padding": "10px 0px",  
+        "padding": "5px 0px",
         "position": "sticky",
         "top": "0",
         "zIndex": "1020",
@@ -513,6 +458,7 @@ def team_layout(team_number, year):
         perf = html.H3(f"{year} Performance Metrics", style={"color": "#333", "fontWeight": "bold"})
     else:
         perf = html.H3("2024 Performance Metrics", style={"color": "#333", "fontWeight": "bold"})
+
     performance_card = dbc.Card(
         dbc.CardBody(
             [
@@ -1558,18 +1504,20 @@ app.layout = html.Div([
     [Output("url", "pathname"), Output("url", "search")],
     [
         Input("btn-search-home", "n_clicks"), 
-        Input("topbar-search-button", "n_clicks"),  
+        Input("desktop-search-button", "n_clicks"),  
+        Input("mobile-search-button", "n_clicks"),  
         Input("teams-view-map", "n_clicks"),  
         Input("teams-map", "clickData"),
     ],
     [
         State("input-team-home", "value"), 
         State("input-year-home", "value"), 
-        State("topbar-search-input", "value"),  
+        State("desktop-search-input", "value"), 
+        State("mobile-search-input", "value"), 
     ],
     prevent_initial_call=True,
 )
-def handle_navigation(home_click, topbar_click, view_map_click, map_clickdata, home_team_value, home_year_value, topbar_search_value):
+def handle_navigation(home_click, desktop_click, mobile_click, view_map_click, map_clickdata, home_team_value, home_year_value, desktop_search_value, mobile_search_value):
     
     ctx = dash.callback_context
 
@@ -1587,8 +1535,13 @@ def handle_navigation(home_click, topbar_click, view_map_click, map_clickdata, h
         return "/data", search
 
     # Handle the Topbar Search button
-    elif trigger_id == "topbar-search-button" and topbar_search_value:
-        query_params = {"team": topbar_search_value}
+    elif trigger_id == "desktop-search-button" and desktop_search_value:
+        query_params = {"team": desktop_search_value}
+        search = "?" + urllib.parse.urlencode(query_params)
+        return "/data", search
+
+    elif trigger_id == "mobile-search-button" and mobile_search_value:
+        query_params = {"team": mobile_search_value}
         search = "?" + urllib.parse.urlencode(query_params)
         return "/data", search
 

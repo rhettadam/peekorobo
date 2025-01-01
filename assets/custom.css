@@ -1,32 +1,6 @@
 <style>
-
-    .navbar {
-        display: flex;
-        justify-content: space-between; /* Space out logo and hamburger */
-        align-items: center;
-        padding: 10px;
-    }
-
-    /* Custom Navbar Brand */
-    .navbar-brand-custom {
-        flex: 1; /* Pushes the toggler to the far right */
-    }
-
-    /* Custom Toggler */
-    .navbar-toggler-custom {
-        padding: 4px 8px; /* Reduces the padding inside the button */
-        width: auto; /* Shrinks the button width to fit the icon */
-        height: auto; /* Ensures the button doesn't take unnecessary height */
-        border: none; /* Removes the border for a cleaner look */
-    }
-
-    .navbar-collapse {
-        text-align: center; /* Center-align collapsed content */
-    }
-
-    .navbar {
-        box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.1);
-        padding: 10px;
+    html {
+        scroll-behavior: smooth;
     }
 
     img:hover {
@@ -40,69 +14,90 @@
         box-shadow: 0px 0px 8px rgba(255, 221, 0, 0.5);
     }
 
-    /* Smooth scrolling for the entire page */
-    html {
-        scroll-behavior: smooth;
+    .navbar {
+        box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.1);
+        padding: 10px;
     }
 
-        /* Default button styles */
     .custom-navlink {
         border: none;
         color: white;
         font-size: 16px;
         cursor: pointer;
-        border-radius: 2px;         /* Rounded corners for better aesthetics */
+        border-radius: 10px;
         transition: all 0.3s ease-in-out;
     }
 
-    /* Hover Effects */
     .custom-navlink:hover {
         color: black;
         background-color: #ffdd00ff;
         box-shadow: 0 0 25px #000000;
-        transform: scale(1.05); /* Slightly enlarge the button */
+        transform: scale(1.05);
     }
 
     .button {
         border: none;
         color: white;
-        padding: 8px 16px;          /* Adjusted padding for better spacing */
+        padding: 8px 16px;
         font-size: 16px;
         cursor: pointer;
-        border-radius: 5px;         /* Rounded corners for better aesthetics */
+        border-radius: 5px;
         transition: all 0.3s ease-in-out;
+    }
+
+    .navbar-toggler {
+        border: none;
+        color: white;
+    }
+
+    /* Desktop-Specific Styles */
+    @media (min-width: 768px) {
+        .navbar-nav {
+            margin: 0 auto;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #mobile-search-input,
+        #mobile-search-button {
+            display: none;
+        }
     }
 
     /* Mobile-Specific Styles */
     @media (max-width: 768px) {
-
-        .navbar {
-            flex-direction: row;
-        }
-
         .navbar-collapse {
-            flex-direction: column; /* Stack links vertically */
+            flex-direction: column;
+            text-align: center;
         }
 
-        /* Input Boxes for Mobile */
-        .custom-input-box {
-            width: 100%; /* Full width on small screens */
-            margin-bottom: 10px; /* Add spacing between inputs */
+        .navbar-toggler {
+            margin-left: auto;
+            margin-right: 10px;
         }
 
-        /* Buttons for Mobile */
-        button {
-            width: 100%; /* Full width buttons */
+        .navbar-brand-custom {
+            margin-right: auto;
         }
 
-        /* Adjust page padding and margins for mobile */
+        .ms-auto {
+            margin-left: auto !important;
+        }
+
+        .desktop-search {
+            display: none;
+        }
+
         .container-fluid {
-            padding: 15px; /* Reduce padding for mobile */
+            padding: 15px;
         }
-        
+
         .desktop-left-section,
         .desktop-right-section {
-            width: 100%; /* Stack the columns */
+            width: 100%;
         }
 
         .logo-search-container {
@@ -111,32 +106,11 @@
         }
 
         .dozer-image {
-            margin-top: 20px; /* Add space above the dozer image */
+            margin-top: 20px;
         }
 
-        /* Reduce the font size on mobile */
-        body {
-            font-size: 14px; /* Smaller font for better fit */
-        }
-    }
-
-    /* Extra Small Screens (<576px) */
-    @media (max-width: 576px) {
-        .navbar-brand img {
-            max-width: 120px; /* Even smaller logo */
-        }
-
-        .homelogo img {
-            max-width: 200px; /* Scale down main logo */
-        }
-
-        .container-fluid {
-            padding: 10px; /* Even less padding */
-        }
-
-        h1, h2, h3, h4, h5, h6 {
-            font-size: 90%; /* Scale down heading fonts */
+        .body {
+            font-size: 14px;
         }
     }
 </style>
-
