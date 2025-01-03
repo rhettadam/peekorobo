@@ -1,0 +1,130 @@
+[
+    {
+        "team_number": 6,
+        "nickname": "The CogSquad",
+        "city": "Plymouth",
+        "state_prov": "MN",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 19,
+        "nickname": "Big Red",
+        "city": "Greenwich",
+        "state_prov": "CT",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 20,
+        "nickname": "The Rocketeers",
+        "city": "Clifton Park",
+        "state_prov": "New York",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 45,
+        "nickname": "TechnoKats Robotics Team",
+        "city": "Kokomo",
+        "state_prov": "Indiana",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 73,
+        "nickname": "The Illumination",
+        "city": "Rochester",
+        "state_prov": "New York",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 80,
+        "nickname": "Robocolt",
+        "city": "Phoenix",
+        "state_prov": "AZ",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 81,
+        "nickname": "MetalHeads",
+        "city": "Freeport",
+        "state_prov": "Illinois",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 98,
+        "nickname": "Team 98",
+        "city": null,
+        "state_prov": null,
+        "country": null,
+        "epa": null
+    },
+    {
+        "team_number": 126,
+        "nickname": "Gael Force",
+        "city": "Clinton",
+        "state_prov": "Massachusetts",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 144,
+        "nickname": "Operation Orange",
+        "city": "Hamilton",
+        "state_prov": "Ohio",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 148,
+        "nickname": "Robowranglers",
+        "city": "Greenville",
+        "state_prov": "Texas",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 151,
+        "nickname": "Tough Techs",
+        "city": "Nashua",
+        "state_prov": "New Hampshire",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 155,
+        "nickname": "The TechnoNuts",
+        "city": "Berlin",
+        "state_prov": "Connecticut",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 157,
+        "nickname": "AZTECHS",
+        "city": "Marlborough",
+        "state_prov": "Massachusetts",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 191,
+        "nickname": "X-CATS",
+        "city": "Rochester",
+        "state_prov": "New York",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 213,
+        "nickname": "The Dirty Birds",
+        "city": "Keene",
+        "state_prov": "New Hampshire",
+        "country": "USA",
+        "epa": null
+    }
+]

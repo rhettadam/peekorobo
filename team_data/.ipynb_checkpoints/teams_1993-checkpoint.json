@@ -1,0 +1,50 @@
+[
+    {
+        "team_number": 20,
+        "nickname": "The Rocketeers",
+        "city": "Clifton Park",
+        "state_prov": "New York",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 45,
+        "nickname": "TechnoKats Robotics Team",
+        "city": "Kokomo",
+        "state_prov": "Indiana",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 126,
+        "nickname": "Gael Force",
+        "city": "Clinton",
+        "state_prov": "Massachusetts",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 148,
+        "nickname": "Robowranglers",
+        "city": "Greenville",
+        "state_prov": "Texas",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 151,
+        "nickname": "Tough Techs",
+        "city": "Nashua",
+        "state_prov": "New Hampshire",
+        "country": "USA",
+        "epa": null
+    },
+    {
+        "team_number": 191,
+        "nickname": "X-CATS",
+        "city": "Rochester",
+        "state_prov": "New York",
+        "country": "USA",
+        "epa": null
+    }
+]

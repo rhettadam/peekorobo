@@ -110,35 +110,59 @@ topbar = dbc.Navbar(
                 is_open=False,
                 navbar=True,
             ),
-            # Desktop Search Bar (always visible)
             dbc.Row(
                 [
                     dbc.Col(
-                        dbc.InputGroup(
-                            [
-                                dbc.Input(
-                                    id="desktop-search-input",
-                                    placeholder="Team # (e.g., 1912)",
-                                    type="text",
-                                ),
-                                dbc.Button(
-                                    "Search",
-                                    id="desktop-search-button",
-                                    color="primary",
-                                    style={
-                                        "backgroundColor": "#FFDD00",
-                                        "border": "none",
-                                        "color": "black",
-                                    },
-                                ),
-                            ],
-                        ),
+                        [
+                            dbc.InputGroup(
+                                [
+                                    dbc.Input(
+                                        id="desktop-search-input",
+                                        placeholder="Team # (e.g., 1912)",
+                                        type="text",
+                                    ),
+                                    dbc.Button(
+                                        "Search",
+                                        id="desktop-search-button",
+                                        color="primary",
+                                        style={
+                                            "backgroundColor": "#FFDD00",
+                                            "border": "none",
+                                            "color": "black",
+                                        },
+                                    ),
+                                ]
+                            ),
+                            html.Div(
+                                id="search-preview",
+                                style={
+                                    "backgroundColor": "white",  # Solid white background
+                                    "border": "1px solid #ddd",  # Light gray border
+                                    "borderRadius": "8px",  # Rounded corners
+                                    "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",  # Subtle shadow for a floating effect
+                                    "marginTop": "5px",
+                                    "padding": "5px",
+                                    "maxHeight": "200px",
+                                    "overflowY": "auto",
+                                    "overflowX": "hidden",
+                                    "width": "calc(100% - 20px)",  # Matches width to input box
+                                    "zIndex": "1050",  # Ensures it's above other elements
+                                    "position": "absolute",
+                                    "left": "0",  # Aligns with input
+                                    "top": "100%",  # Positions below input
+                                    "display": "none",  # Hidden by default
+                                },
+                            )
+
+                        ],
                         width="auto",
                         className="desktop-search",
+                        style={"position": "relative"},  # Needed for the preview dropdown
                     ),
                 ],
                 align="center",
             ),
+
         ],
         fluid=True,
     ),
@@ -163,6 +187,92 @@ def toggle_navbar(n_clicks, is_open):
     if n_clicks:
         return not is_open
     return is_open
+
+@app.callback(
+    [Output("search-preview", "children"), Output("search-preview", "style")],
+    Input("desktop-search-input", "value"),
+)
+def update_search_preview(input_value):
+    if not input_value:
+        # Hide dropdown when input is empty
+        return [], {"display": "none"}
+
+    teams_data = tba_get("teams/all")  # Fetch all teams
+    if not teams_data:
+        # If no teams data is available, show no results
+        return [html.Div("No results found.", style={"color": "#555"})], {"display": "none"}
+
+    # Filter teams based on input and limit to top 10 results
+    filtered_teams = [
+        team for team in teams_data if str(input_value).lower() in str(team.get("team_number", "")).lower()
+    ][:10]
+
+    # Generate dropdown content
+    children = []
+    for team in filtered_teams:
+        team_key = team.get("key")
+        team_number = team.get("team_number", "Unknown")
+        team_nickname = team.get("nickname", "Unknown")
+
+        # Fetch avatar for each team
+        avatar_data = tba_get(f"team/{team_key}/media/2024")
+        avatar_url = "/assets/default-avatar.png"  # Fallback avatar
+        if avatar_data:
+            for media in avatar_data:
+                if media.get("type") == "avatar" and media.get("details", {}).get("base64Image"):
+                    avatar_url = f"data:image/png;base64,{media['details']['base64Image']}"
+                    break
+                elif media.get("preferred") and media.get("direct_url"):
+                    avatar_url = media["direct_url"]
+                    break
+
+        children.append(
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Img(
+                            src=avatar_url,
+                            style={"width": "40px", "height": "40px", "borderRadius": "50%"},
+                        ),
+                        width="auto",
+                    ),
+                    dbc.Col(
+                        html.A(
+                            f"{team_number} - {team_nickname}",
+                            href=f"/data?team={team_number}",
+                            style={
+                                "lineHeight": "40px",
+                                "textDecoration": "none",
+                                "color": "black",
+                                "cursor": "pointer",
+                            },
+                        ),
+                        width=True,
+                    ),
+                ],
+                style={"padding": "5px", "borderBottom": "1px solid #ddd"},
+                key=team_key,
+            )
+        )
+
+    # Show dropdown with results
+    return children, {
+        "display": "block",
+        "backgroundColor": "white",
+        "border": "1px solid #ddd",
+        "borderRadius": "8px",
+        "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
+        "marginTop": "5px",
+        "padding": "5px",
+        "maxHeight": "200px",
+        "overflowY": "auto",
+        "overflowX": "hidden",
+        "width": "calc(100% - 20px)",
+        "zIndex": "1050",
+        "position": "absolute",
+        "left": "0",
+        "top": "100%",
+    }
 
 footer = dbc.Container(
     dbc.Row([
@@ -1154,7 +1264,7 @@ def challenge_details_layout(year):
         ]
     )
 
-def teams_layout(default_year=2025):
+def teams_layout(default_year=2024):
     teams_year_dropdown = dcc.Dropdown(
         id="teams-year-dropdown",
         options=[{"label": "All", "value": "All"}]
@@ -1258,6 +1368,7 @@ def teams_layout(default_year=2025):
     teams_table = dash_table.DataTable(
         id="teams-table",
         columns=[
+            {"name": "EPA Rank", "id": "epa_rank"},
             {"name": "Team", "id": "team_display","presentation": "markdown"},
             {"name": "Location", "id": "location_display"}
         ],
@@ -1275,14 +1386,6 @@ def teams_layout(default_year=2025):
             "padding": "10px",
             "border": "1px solid #ddd",
         },
-    )
-
-    load_more_button = dbc.Button(
-        "Load More",
-        id="teams-load-more",
-        style={"backgroundColor": "#ffdd00ff",
-               "color": "black",
-               "border": "2px solid #555"},
     )
 
     return html.Div(
@@ -1308,18 +1411,9 @@ def teams_layout(default_year=2025):
                         dbc.Col(teams_table, width=12),
                         className="mb-4",
                     ),
-
-                    # Load More button
-                    dbc.Row(
-                        dbc.Col(load_more_button, width=12),
-                        className="mb-4",
-                    ),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
-
-            # Store to hold loaded teams, current page, and selected year
-            dcc.Store(id="teams-store", data={"teams": [], "page": 0, "year": default_year}),
 
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
@@ -1331,113 +1425,81 @@ def teams_layout(default_year=2025):
     )
 
 @app.callback(
-    [Output("teams-table", "data"),
-     Output("teams-store", "data")],
+    Output("teams-table", "data"),
     [
         Input("teams-year-dropdown", "value"),
-        Input("teams-load-more", "n_clicks"),
         Input("country-dropdown", "value"),
         Input("state-dropdown", "value"),
     ],
-    [State("teams-store", "data")]
 )
-def load_teams(
-    selected_year,
-    load_more_clicks,
-    selected_country,
-    selected_state,
-    store_data
-):
-    ctx = dash.callback_context
-    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
+def load_teams(selected_year, selected_country, selected_state):
+    folder_path = "team_data"  # Replace with the folder containing your JSON files
+    teams_data = []
 
-    if not store_data:
-        store_data = {"teams": [], "page": 0, "year": selected_year}
-
-    current_teams = store_data["teams"]
-    current_page = store_data["page"]
-    stored_year = store_data["year"]
-
-    if selected_year != stored_year:
-        current_teams = []
-        current_page = 0
-        stored_year = selected_year
-
-    if not stored_year or stored_year == "All":
-        endpoint_base = "teams"
+    if selected_year != "All":
+        file_path = os.path.join(folder_path, f"teams_{selected_year}.json")
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                teams_data = json.load(f)
     else:
-        endpoint_base = f"teams/{stored_year}"
+        # Load data from all years if "All" is selected
+        for filename in os.listdir(folder_path):
+            if filename.endswith(".json"):
+                with open(os.path.join(folder_path, filename), "r") as f:
+                    teams_data.extend(json.load(f))
 
-    if not current_teams and triggered_id in [
-        "teams-year-dropdown",
-        "country-dropdown",
-        "state-dropdown",
-        None
-    ]:
-        for i in range(10):  
-            endpoint = f"{endpoint_base}/{current_page}"
-            page_data = tba_get(endpoint)
-            if not page_data:
-                break
-            current_teams.extend(page_data)
-            current_page += 1
+    # Filter by country
+    if selected_country and selected_country != "All":
+        teams_data = [team for team in teams_data if team.get("country") == selected_country]
 
-    elif triggered_id == "teams-load-more":
-        endpoint = f"{endpoint_base}/{current_page}"
-        page_data = tba_get(endpoint)
-        if page_data:
-            current_teams.extend(page_data)
-            current_page += 1
-            
+    # Filter by state
+    if selected_state and selected_state != "All":
+        teams_data = [team for team in teams_data if team.get("state_prov") == selected_state]
+
+    # Sort teams by EPA (descending), handling None values
+    teams_data.sort(key=lambda x: x.get("epa", 0) if x.get("epa") is not None else 0, reverse=True)
+
+    # Assign EPA ranks and emojis
     table_data = []
-    for team in current_teams:
-        number = team.get("team_number", "")
+    for idx, team in enumerate(teams_data):
+        team_number = team.get("team_number", "")
         nickname = team.get("nickname", "")
-        if nickname:
-            link_text = f"Team {number} - {nickname}"
-        else:
-            link_text = str(number) if number else "Unknown"
-
-        # Link to /data?team=###
-        team_display = f"[{link_text}](/data?team={number})"
-
         city = team.get("city", "")
         state = team.get("state_prov", "")
         country = team.get("country", "")
-        loc_parts = [p for p in [city, state, country] if p]
-        location_display = ", ".join(loc_parts) if loc_parts else "Unknown"
+        epa = team.get("epa", 0)
+
+        # Rank with medals
+        rank = idx + 1
+        rank_emoji = ""
+        if rank == 1:
+            rank_emoji = "🥇"
+        elif rank == 2:
+            rank_emoji = "🥈"
+        elif rank == 3:
+            rank_emoji = "🥉"
+
+        epa_formatted = f"{epa:.2f}" if epa is not None else "N/A"
+        epa_rank_display = f"{rank_emoji} {rank} \n Mean EPA: {epa_formatted}"
+
+        team_display = f"[Team {team_number} - {nickname}](/data?team={team_number})" if nickname else f"[Team {team_number}](/data?team={team_number})"
+        location_display = ", ".join(filter(None, [city, state, country]))
 
         table_data.append({
+            "epa_rank": epa_rank_display,
             "team_display": team_display,
-            "location_display": location_display,
-            "country": country,
-            "state": state,
+            "location_display": location_display or "Unknown",
         })
 
-    # If user chose a country
-    if selected_country and selected_country != "All":
-        table_data = [row for row in table_data if row["country"] == selected_country]
-
-    # If user chose a state
-    if selected_state and selected_state != "All":
-        table_data = [row for row in table_data if row["state"] == selected_state]
-
-    # Update the store
-    updated_store = {
-        "teams": current_teams,
-        "page": current_page,
-        "year": stored_year
-    }
-
-    return table_data, updated_store
+    return table_data
 
 def teams_map_layout():
     # 1) load your precomputed JSON
-    with open("teams_2025.json", "r", encoding="utf-8") as f:
-        all_teams_2025 = json.load(f)
+    with open("mapteams_2025.json", "r", encoding="utf-8") as f:
+        map_teams_2025 = json.load(f)
 
     # 2) Filter only teams with lat & lng
-    map_teams = [t for t in all_teams_2025 if t.get("lat") and t.get("lng")]
+    map_teams = [t for t in map_teams_2025 if t.get("lat") and t.get("lng")]
 
     if not map_teams:
         # No lat/lng data?
@@ -1598,4 +1660,4 @@ def display_page(pathname, search):
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run_server(host="0.0.0.0", port=port, debug=False)
+    app.run_server(host="0.0.0.0", port=port, debug=True)
