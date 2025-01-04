@@ -405,25 +405,22 @@ home_layout = html.Div([
 
 
 def calculate_ranks(team_data, selected_team):
-    """
-    Calculate global, country, and state rank for the selected team.
-    """
     global_rank = 1
     country_rank = 1
     state_rank = 1
 
     # Extract selected team's information
     selected_epa = selected_team.get("epa", 0) or 0  # Ensure selected_epa is a number
-    selected_country = selected_team.get("country", "").lower()
-    selected_state = selected_team.get("state_prov", "").lower()
+    selected_country = (selected_team.get("country") or "").lower()
+    selected_state = (selected_team.get("state_prov") or "").lower()
 
     for team in team_data:
         if team.get("team_number") == selected_team.get("team_number"):
             continue
 
         team_epa = team.get("epa", 0) or 0  # Default to 0 if EPA is None
-        team_country = team.get("country", "").lower()
-        team_state = team.get("state_prov", "").lower()
+        team_country = (team.get("country") or "").lower()
+        team_state = (team.get("state_prov") or "").lower()
 
         # Global Rank
         if team_epa > selected_epa:
@@ -469,6 +466,10 @@ def team_layout(team_number, year):
             "Double-check your input or TBA key.",
             color="danger"
         )
+
+    epa_value = selected_team.get("epa", None)
+    epa_display = f"{epa_value:.2f}" if epa_value is not None else "N/A"
+
 
     nickname = selected_team.get("nickname", "Unknown")
     city = selected_team.get("city", "")
@@ -610,7 +611,7 @@ def team_layout(team_number, year):
                         "fontWeight": "bold",
                         "marginBottom": "10px",
                     },
-                ),
+                )
     else:
         perf = html.H5(
                     "2024 Performance Metrics",
@@ -696,7 +697,8 @@ def team_layout(team_number, year):
                                     [
                                         html.P("EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "0.9rem"}),
                                         html.P(
-                                            f"{selected_team.get('epa', 'N/A'):.2f}",
+                                            epa_display,
+
                                             style={
                                                 "fontSize": "1rem",
                                                 "fontWeight": "bold",
@@ -807,7 +809,7 @@ def team_layout(team_number, year):
         page_size=5,
         style_table={"overflowX": "auto",
                     "borderRadius": "10px",
-                    "border": "2px solid #ddd"},
+                    "border": "1px solid #ddd"},
         style_header={
             "backgroundColor": "#FFCC00",
             "fontWeight": "bold",
@@ -821,6 +823,13 @@ def team_layout(team_number, year):
         },
         style_cell_conditional=[
             {"if": {"column_id": "event_name"}, "textAlign": "left"}
+        ],
+        style_data_conditional=[
+            {
+                "if": {"state": "selected"},
+                "backgroundColor": "rgba(255, 221, 0, 0.5)",
+                "border": "1px solid #FFCC00",
+            },
         ],
     )
 
@@ -852,7 +861,7 @@ def team_layout(team_number, year):
         page_size=5,
         style_table={"overflowX": "auto",
                     "borderRadius": "10px",
-                    "border": "2px solid #ddd"},
+                    "border": "1px solid #ddd"},
         style_header={
             "backgroundColor": "#FFCC00",
             "fontWeight": "bold",
@@ -866,6 +875,13 @@ def team_layout(team_number, year):
         },
         style_cell_conditional=[
             {"if": {"column_id": "award_name"}, "textAlign": "left"}
+        ],
+        style_data_conditional=[
+            {
+                "if": {"state": "selected"},
+                "backgroundColor": "rgba(255, 221, 0, 0.5)",
+                "border": "1px solid #FFCC00",
+            },
         ],
     )
 
@@ -952,7 +968,7 @@ def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
         sort_action="native",
         style_table={"overflowX": "auto",
                     "borderRadius": "10px",
-                    "border": "2px solid #ddd"},
+                    "border": "1px solid #ddd"},
         style_cell={
             "textAlign": "left",
             "padding": "10px",
@@ -977,6 +993,11 @@ def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
             {
                 "if": {"filter_query": '{Rank} contains "🥉"'},
                 "fontWeight": "bold",
+            },
+            {
+                "if": {"state": "selected"},
+                "backgroundColor": "rgba(255, 221, 0, 0.5)",
+                "border": "1px solid #FFCC00",
             },
         ],
     )
@@ -1139,7 +1160,7 @@ def events_layout(year=2025):
         page_size=10,
         style_table={"overflowX": "auto",
                     "borderRadius": "10px",
-                    "border": "2px solid #ddd"},
+                    "border": "1px solid #ddd"},
         style_header={
             "backgroundColor": "#FFCC00",
             "fontWeight": "bold",
@@ -1151,6 +1172,13 @@ def events_layout(year=2025):
             "padding": "10px",
             "border": "1px solid #ddd",
         },
+        style_data_conditional=[
+            {
+                "if": {"state": "selected"},
+                "backgroundColor": "rgba(255, 221, 0, 0.5)",
+                "border": "1px solid #FFCC00",
+            },
+        ],
     )
 
     events_map_graph = dcc.Graph(
@@ -1553,7 +1581,7 @@ def teams_layout(default_year=2024):
         page_size=50,
         style_table={"overflowX": "auto",
                     "borderRadius": "10px",
-                    "border": "2px solid #ddd"},
+                    "border": "1px solid #ddd"},
         style_header={
             "backgroundColor": "#FFCC00",
             "fontWeight": "bold",
@@ -1566,15 +1594,8 @@ def teams_layout(default_year=2024):
             "border": "1px solid #ddd",
             "fontSize": "14px",
         },
-        style_data_conditional=[
-            {
-                "if": {"state": "selected"},
-                "backgroundColor": "rgba(255, 221, 0, 0.5)",
-                "border": "1px solid #FFCC00",
-            },
-        ],
-
     )
+
 
     return html.Div(
         [
@@ -1582,8 +1603,6 @@ def teams_layout(default_year=2024):
             dbc.Container(
                 [
                     html.H2("Teams", className="text-center mb-4"),
-                    
-                    # Year selector
                     dbc.Row(
                         [
                             dbc.Col(teams_year_dropdown, width=1),
@@ -1592,7 +1611,7 @@ def teams_layout(default_year=2024):
                             dbc.Col(view_map_button, width="auto"),
                             dbc.Col(search_input, width=4),
                         ],
-                        className="mb-4",
+                        className="mb-4 justify-content-center",
                     ),
                     
                     # Table
