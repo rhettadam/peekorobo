@@ -39,14 +39,13 @@ def calculate_epa(matches, team_key):
 
         if alliance:
             total_score = match["alliances"][alliance]["score"]
-            epa_scores.append(total_score / 3)  # Divide by 3 for three teams in an alliance
+            epa_scores.append(total_score / 3)  
 
     return mean(epa_scores) if epa_scores else None
 
 
 def fetch_and_store_team_data():
-    """Fetch data for all teams from 1992 to 2025 and store it locally."""
-    for year in tqdm(range(2018, 2026), desc="Processing Years"):
+    for year in tqdm(range(1992, 2026), desc="Processing Years"):
         print(f"\nProcessing year {year}...")
         section_count = 0
         combined_teams = []
@@ -70,7 +69,6 @@ def fetch_and_store_team_data():
                     print(f"Failed to fetch matches for team {team_key}: {e}")
                     epa = None
 
-                # Prepare team data
                 team_info = {
                     "team_number": team.get("team_number"),
                     "nickname": team.get("nickname"),
@@ -84,7 +82,6 @@ def fetch_and_store_team_data():
             combined_teams.extend(teams)
             section_count += 1
 
-        # Save combined data for the year
         output_file = f"teams_{year}.json"
         with open(output_file, "w") as f:
             json.dump(combined_teams, f, indent=4)

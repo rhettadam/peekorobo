@@ -1,12 +1,10 @@
-#!/usr/bin/env python3
-
 import os
 import time
 import json
 import requests
 from geopy.geocoders import Nominatim
 from dotenv import load_dotenv
-from tqdm import tqdm  # <-- for progress bars
+from tqdm import tqdm  
 
 load_dotenv()
 
@@ -25,17 +23,11 @@ def tba_get(endpoint: str):
         print(f"Warning: TBA returned {r.status_code} for {url}")
         return None
 
-# Simple cache for geocoding results: address_string -> (lat, lon)
 geo_cache = {}
 geolocator = Nominatim(user_agent="precompute_teams_2025_app")
 
 def geocode_city_state_postal(team):
-    """
-    Attempt to get (lat, lng) from city, state_prov, postal_code, country.
-    Return (lat, lng) or (None, None).
-    We do a 1s delay per call to be polite to Nominatim, and cache results to avoid duplicates.
-    """
-    # If TBA already provided lat/lng (rare, but check anyway)
+
     if team.get("lat") is not None and team.get("lng") is not None:
         return team["lat"], team["lng"]
 
@@ -44,20 +36,17 @@ def geocode_city_state_postal(team):
     postal = team.get("postal_code", "")
     country = team.get("country", "")
 
-    # Build an address string, e.g. "Pontiac, Michigan, 48340, USA"
     parts = [p for p in [city, state, postal, country] if p]
     if not parts:
         return None, None
 
     address_str = ", ".join(parts)
 
-    # Check cache first
     if address_str in geo_cache:
         return geo_cache[address_str]
 
-    # Otherwise, geocode via Nominatim
     try:
-        time.sleep(1)  # be courteous with Nominatim usage
+        time.sleep(1)  
         loc = geolocator.geocode(address_str)
         if loc:
             lat, lng = loc.latitude, loc.longitude
@@ -72,23 +61,16 @@ def geocode_city_state_postal(team):
         return None, None
 
 def main():
-    """
-    1) Fetch all teams for year=2025 with a progress bar for each 500-team page.
-    2) Geocode each team with a second progress bar.
-    3) Write final data to teams_2025.json
-    """
+
     year = 2025
     out_file = "teams_2025.json"
 
     print(f"Precomputing data for year={year}...")
 
-    # 1) Fetch all pages for 2025
     all_teams = []
     page_num = 0
     while True:
         endpoint = f"teams/{year}/{page_num}"
-        # We'll fetch each page in a loop; it's not trivial to guess how many pages upfront.
-        # So let's just fetch until we get <500 or None.
 
         page_data = tba_get(endpoint)
         if not page_data:
@@ -99,14 +81,12 @@ def main():
 
     print(f"\nFetched {len(all_teams)} teams total for {year}.")
 
-    # 2) Now geocode each team. We'll add a progress bar:
     print("Geocoding each team's city/state/postal/country...")
     for team in tqdm(all_teams, desc="Geocoding", unit="team"):
         lat, lng = geocode_city_state_postal(team)
         team["lat"] = lat
         team["lng"] = lng
 
-    # 3) Write to a JSON file
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(all_teams, f, indent=2, ensure_ascii=False)
 

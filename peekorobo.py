@@ -24,11 +24,14 @@ def tba_get(endpoint: str):
         return r.json()
     return None
 
-app = dash.Dash(__name__,
-                meta_tags=[{'name': 'viewport', 
-                            'content': 'width=device-width,initial-scale=1.0,'}],
+app = dash.Dash(
+    __name__,
+    meta_tags=[
+        {'name': 'viewport', 'content': 'width=device-width,initial-scale=1.0,'}
+    ],
     external_stylesheets=[dbc.themes.BOOTSTRAP],
-    suppress_callback_exceptions=True
+    suppress_callback_exceptions=True,
+    title="Peekorobo",
 )
 server = app.server
 
@@ -214,28 +217,9 @@ def update_search_preview(input_value):
         team_number = team.get("team_number", "Unknown")
         team_nickname = team.get("nickname", "Unknown")
 
-        # Fetch avatar for each team
-        avatar_data = tba_get(f"team/{team_key}/media/2024")
-        avatar_url = "/assets/default-avatar.png"  # Fallback avatar
-        if avatar_data:
-            for media in avatar_data:
-                if media.get("type") == "avatar" and media.get("details", {}).get("base64Image"):
-                    avatar_url = f"data:image/png;base64,{media['details']['base64Image']}"
-                    break
-                elif media.get("preferred") and media.get("direct_url"):
-                    avatar_url = media["direct_url"]
-                    break
-
         children.append(
             dbc.Row(
                 [
-                    dbc.Col(
-                        html.Img(
-                            src=avatar_url,
-                            style={"width": "40px", "height": "40px", "borderRadius": "50%"},
-                        ),
-                        width="auto",
-                    ),
                     dbc.Col(
                         html.A(
                             f"{team_number} - {team_nickname}",
@@ -419,11 +403,63 @@ home_layout = html.Div([
     footer
 ])
 
+
+def calculate_ranks(team_data, selected_team):
+    """
+    Calculate global, country, and state rank for the selected team.
+    """
+    global_rank = 1
+    country_rank = 1
+    state_rank = 1
+
+    # Extract selected team's information
+    selected_epa = selected_team.get("epa", 0) or 0  # Ensure selected_epa is a number
+    selected_country = selected_team.get("country", "").lower()
+    selected_state = selected_team.get("state_prov", "").lower()
+
+    for team in team_data:
+        if team.get("team_number") == selected_team.get("team_number"):
+            continue
+
+        team_epa = team.get("epa", 0) or 0  # Default to 0 if EPA is None
+        team_country = team.get("country", "").lower()
+        team_state = team.get("state_prov", "").lower()
+
+        # Global Rank
+        if team_epa > selected_epa:
+            global_rank += 1
+
+        # Country Rank
+        if team_country == selected_country and team_epa > selected_epa:
+            country_rank += 1
+
+        # State Rank
+        if team_state == selected_state and team_epa > selected_epa:
+            state_rank += 1
+
+    return global_rank, country_rank, state_rank
+    
 def team_layout(team_number, year):
     if not team_number:
         return dbc.Alert("No team number provided. Please go back and search again.", color="warning")
 
     team_key = f"frc{team_number}"
+
+    folder_path = "team_data"  # Replace with the correct folder path
+    file_path = os.path.join(folder_path, f"teams_{year or 2024}.json")
+    if not os.path.exists(file_path):
+        return dbc.Alert(f"Data for year {year or 2024} not found.", color="danger")
+
+    with open(file_path, "r") as f:
+        team_data = json.load(f)
+
+    # Find the selected team
+    selected_team = next((team for team in team_data if team["team_number"] == int(team_number)), None)
+    if not selected_team:
+        return dbc.Alert(f"Team {team_number} not found in the data.", color="danger")
+
+    # Calculate Rankings
+    global_rank, country_rank, state_rank = calculate_ranks(team_data, selected_team)
 
     # Fetch Basic Team Info
     team_info = tba_get(f"team/{team_key}")
@@ -434,10 +470,10 @@ def team_layout(team_number, year):
             color="danger"
         )
 
-    nickname = team_info.get("nickname", "Unknown")
-    city = team_info.get("city", "")
-    state = team_info.get("state_prov", "")
-    country = team_info.get("country", "")
+    nickname = selected_team.get("nickname", "Unknown")
+    city = selected_team.get("city", "")
+    state = selected_team.get("state_prov", "")
+    country = selected_team.get("country", "")
     website = team_info.get("website", "N/A")
     rookie_year = team_info.get("rookie_year", "N/A")
     
@@ -565,29 +601,157 @@ def team_layout(team_number, year):
     ])
 
     if year:
-        perf = html.H3(f"{year} Performance Metrics", style={"color": "#333", "fontWeight": "bold"})
+        perf = html.H5(
+                    f"{year} Performance Metrics",
+                    style={
+                        "textAlign": "center",
+                        "color": "#444",
+                        "fontSize": "1.3rem",
+                        "fontWeight": "bold",
+                        "marginBottom": "10px",
+                    },
+                ),
     else:
-        perf = html.H3("2024 Performance Metrics", style={"color": "#333", "fontWeight": "bold"})
+        perf = html.H5(
+                    "2024 Performance Metrics",
+                    style={
+                        "textAlign": "center",
+                        "color": "#444",
+                        "fontSize": "1.3rem",
+                        "fontWeight": "bold",
+                        "marginBottom": "10px",
+                    },
+                )
 
     performance_card = dbc.Card(
         dbc.CardBody(
             [
+                # Title
                 perf,
-                html.P([html.I(className="bi bi-trophy-fill"), f" Total Matches Played: {total_matches}"]),
-                html.P([
-                    html.I(className="bi bi-bar-chart-fill"), 
-                    " Win/Loss Ratio: ", 
-                    win_loss_ratio  
-                ]),
-                html.P([html.I(className="bi bi-graph-up"), f" Average Match Score: {avg_score:.2f}"]),
+                # Ranks and EPA
+                html.Div(
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.P(f"{country} Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
+                                        html.P(
+                                            f"{country_rank}",
+                                            style={
+                                                "fontSize": "1.1rem",
+                                                "fontWeight": "bold",
+                                                "color": "#FFC107",
+                                            },
+                                        ),
+                                    ],
+                                    style={"textAlign": "center"},
+                                ),
+                                width=4,
+                            ),
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.P("Global Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
+                                        html.P(
+                                            f"{global_rank}",
+                                            style={
+                                                "fontSize": "1.1rem",
+                                                "fontWeight": "bold",
+                                                "color": "#007BFF",
+                                            },
+                                        ),
+                                    ],
+                                    style={"textAlign": "center"},
+                                ),
+                                width=4,
+                            ),
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.P(f"{state} Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.1rem"}),
+                                        html.P(
+                                            f"{state_rank}",
+                                            style={
+                                                "fontSize": "1.1rem",
+                                                "fontWeight": "bold",
+                                                "color": "#FFC107",
+                                            },
+                                        ),
+                                    ],
+                                    style={"textAlign": "center"},
+                                ),
+                                width=4,
+                            ),
+                        ],
+                        style={"marginBottom": "10px"},
+                    ),
+                ),
+                # Match Performance
+                html.Div(
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.P("EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "0.9rem"}),
+                                        html.P(
+                                            f"{selected_team.get('epa', 'N/A'):.2f}",
+                                            style={
+                                                "fontSize": "1rem",
+                                                "fontWeight": "bold",
+                                                "color": "#17A2B8",
+                                            },
+                                        ),
+                                    ],
+                                    style={"textAlign": "center"},
+                                ),
+                                width=4,
+                            ),
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.P("Win/Loss Ratio", style={"color": "#666", "marginBottom": "2px", "fontSize": "0.9rem"}),
+                                        html.P(
+                                            win_loss_ratio,
+                                            style={
+                                                "fontSize": "1rem",
+                                                "fontWeight": "bold",
+                                            },
+                                        ),
+                                    ],
+                                    style={"textAlign": "center"},
+                                ),
+                                width=4,
+                            ),
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.P("Avg Match Score", style={"color": "#666", "marginBottom": "2px", "fontSize": "0.9rem"}),
+                                        html.P(
+                                            f"{avg_score:.2f}",
+                                            style={
+                                                "fontSize": "1rem",
+                                                "fontWeight": "bold",
+                                                "color": "#17A2B8",
+                                            },
+                                        ),
+                                    ],
+                                    style={"textAlign": "center"},
+                                ),
+                                width=4,
+                            ),
+                        ],
+                    ),
+                ),
             ],
-            style={"fontSize": "1.1rem"}
         ),
         style={
-            "marginBottom": "20px",
-            "borderRadius": "10px",
-            "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+            "marginBottom": "15px",
+            "borderRadius": "8px",
+            "boxShadow": "0px 2px 4px rgba(0,0,0,0.1)",
             "backgroundColor": "#f9f9f9",
+            "padding": "10px",
         },
     )
         
@@ -641,8 +805,9 @@ def team_layout(team_number, year):
         ],
         data=events_data,
         page_size=5,
-        style_table={"overflowX": "auto"},
-        style_data={"border": "1px solid #ddd"},
+        style_table={"overflowX": "auto",
+                    "borderRadius": "10px",
+                    "border": "2px solid #ddd"},
         style_header={
             "backgroundColor": "#FFCC00",
             "fontWeight": "bold",
@@ -685,8 +850,9 @@ def team_layout(team_number, year):
         ],
         data=awards_data,
         page_size=5,
-        style_table={"overflowX": "auto"},
-        style_data={"border": "1px solid #ddd"},
+        style_table={"overflowX": "auto",
+                    "borderRadius": "10px",
+                    "border": "2px solid #ddd"},
         style_header={
             "backgroundColor": "#FFCC00",
             "fontWeight": "bold",
@@ -784,7 +950,9 @@ def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
         ],
         data=leaderboard_table_data,
         sort_action="native",
-        style_table={"overflowX": "auto"},
+        style_table={"overflowX": "auto",
+                    "borderRadius": "10px",
+                    "border": "2px solid #ddd"},
         style_cell={
             "textAlign": "left",
             "padding": "10px",
@@ -969,8 +1137,9 @@ def events_layout(year=2025):
         ],
         data=[],  # will be updated by callback
         page_size=10,
-        style_table={"overflowX": "auto"},
-        style_data={"border": "1px solid #ddd"},
+        style_table={"overflowX": "auto",
+                    "borderRadius": "10px",
+                    "border": "2px solid #ddd"},
         style_header={
             "backgroundColor": "#FFCC00",
             "fontWeight": "bold",
@@ -1365,6 +1534,14 @@ def teams_layout(default_year=2024):
                "marginLeft": "10px"},
     )
 
+    search_input = dbc.Input(
+        id="search-bar",
+        placeholder="Search teams by name or number...",
+        type="text",
+        debounce=True,
+        className="mb-3",
+    )
+
     teams_table = dash_table.DataTable(
         id="teams-table",
         columns=[
@@ -1374,7 +1551,9 @@ def teams_layout(default_year=2024):
         ],
         data=[],
         page_size=50,
-        style_table={"overflowX": "auto"},
+        style_table={"overflowX": "auto",
+                    "borderRadius": "10px",
+                    "border": "2px solid #ddd"},
         style_header={
             "backgroundColor": "#FFCC00",
             "fontWeight": "bold",
@@ -1385,7 +1564,16 @@ def teams_layout(default_year=2024):
             "textAlign": "center",
             "padding": "10px",
             "border": "1px solid #ddd",
+            "fontSize": "14px",
         },
+        style_data_conditional=[
+            {
+                "if": {"state": "selected"},
+                "backgroundColor": "rgba(255, 221, 0, 0.5)",
+                "border": "1px solid #FFCC00",
+            },
+        ],
+
     )
 
     return html.Div(
@@ -1398,10 +1586,11 @@ def teams_layout(default_year=2024):
                     # Year selector
                     dbc.Row(
                         [
-                            dbc.Col(teams_year_dropdown, width=3),
-                            dbc.Col(country_dropdown, width=3),
-                            dbc.Col(state_dropdown, width=3),
+                            dbc.Col(teams_year_dropdown, width=1),
+                            dbc.Col(country_dropdown, width=2),
+                            dbc.Col(state_dropdown, width=2),
                             dbc.Col(view_map_button, width="auto"),
+                            dbc.Col(search_input, width=4),
                         ],
                         className="mb-4",
                     ),
@@ -1430,9 +1619,10 @@ def teams_layout(default_year=2024):
         Input("teams-year-dropdown", "value"),
         Input("country-dropdown", "value"),
         Input("state-dropdown", "value"),
+        Input("search-bar", "value"),
     ],
 )
-def load_teams(selected_year, selected_country, selected_state):
+def load_teams(selected_year, selected_country, selected_state, search_query):
     folder_path = "team_data"  # Replace with the folder containing your JSON files
     teams_data = []
 
@@ -1456,8 +1646,17 @@ def load_teams(selected_year, selected_country, selected_state):
     if selected_state and selected_state != "All":
         teams_data = [team for team in teams_data if team.get("state_prov") == selected_state]
 
-    # Sort teams by EPA (descending), handling None values
-    teams_data.sort(key=lambda x: x.get("epa", 0) if x.get("epa") is not None else 0, reverse=True)
+    teams_data = sorted(teams_data, key=lambda x: x.get("epa", 0) if x.get("epa") is not None else 0, reverse=True)
+    for idx, team in enumerate(teams_data):
+        team["rank"] = idx + 1
+
+    if search_query:
+        search_query = search_query.lower()
+        teams_data = [
+            team for team in teams_data if
+            search_query in str(team.get("team_number", "")).lower() or
+            search_query in team.get("nickname", "").lower()
+        ]
 
     # Assign EPA ranks and emojis
     table_data = []
@@ -1468,9 +1667,8 @@ def load_teams(selected_year, selected_country, selected_state):
         state = team.get("state_prov", "")
         country = team.get("country", "")
         epa = team.get("epa", 0)
+        rank = team.get("rank", "N/A")
 
-        # Rank with medals
-        rank = idx + 1
         rank_emoji = ""
         if rank == 1:
             rank_emoji = "🥇"
@@ -1494,8 +1692,9 @@ def load_teams(selected_year, selected_country, selected_state):
     return table_data
 
 def teams_map_layout():
-    # 1) load your precomputed JSON
-    with open("mapteams_2025.json", "r", encoding="utf-8") as f:
+    folder_path = "geo"
+    file_path = os.path.join(folder_path, "mapteams_2025.json")
+    with open(file_path, "r", encoding="utf-8") as f:
         map_teams_2025 = json.load(f)
 
     # 2) Filter only teams with lat & lng
