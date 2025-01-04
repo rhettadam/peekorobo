@@ -1,4 +1,4 @@
-![3d](assets/readme/3dhome.png)
+![logo](assets/logo.png)
 
 ### **Peekorobo is a web application for analysing FRC team performance metrics, leveraging data from The Blue Alliance (TBA) to provide insights into team rankings, match performance, and historical trends.**
 
