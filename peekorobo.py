@@ -2,11 +2,12 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
 from dash.dependencies import Input, Output, State
+import plotly.express as px
+
 import requests
 import urllib.parse 
 import os
 from dotenv import load_dotenv
-import plotly.express as px
 import json
 
 from frcgames import frc_games
@@ -148,7 +149,7 @@ topbar = dbc.Navbar(
                                     "maxHeight": "200px",
                                     "overflowY": "auto",
                                     "overflowX": "hidden",
-                                    "width": "calc(100% - 20px)",  # Matches width to input box
+                                    "width": "100%",  # Matches width to input box
                                     "zIndex": "1050",  # Ensures it's above other elements
                                     "position": "absolute",
                                     "left": "0",  # Aligns with input
@@ -200,32 +201,49 @@ def update_search_preview(input_value):
         # Hide dropdown when input is empty
         return [], {"display": "none"}
 
-    teams_data = tba_get("teams/all")  # Fetch all teams
-    if not teams_data:
-        # If no teams data is available, show no results
-        return [html.Div("No results found.", style={"color": "#555"})], {"display": "none"}
+    # Load team data from the 2024 JSON file
+    folder_path = "team_data"  # Replace with the path where your JSON files are stored
+    file_path = os.path.join(folder_path, "teams_2024.json")
+    
+    if not os.path.exists(file_path):
+        return [html.Div("Data not found.", style={"color": "#555"})], {"display": "none"}
+
+    with open(file_path, "r") as f:
+        teams_data = json.load(f)
 
     # Filter teams based on input and limit to top 10 results
     filtered_teams = [
         team for team in teams_data if str(input_value).lower() in str(team.get("team_number", "")).lower()
-    ][:10]
+    ][:20]
+
+    closest_team = None
+    if input_value.isdigit():
+        input_number = int(input_value)
+        closest_team = min(
+            filtered_teams,
+            key=lambda team: abs(input_number - int(team["team_number"])),
+            default=None,
+        )
 
     # Generate dropdown content
     children = []
     for team in filtered_teams:
-        team_key = team.get("key")
         team_number = team.get("team_number", "Unknown")
         team_nickname = team.get("nickname", "Unknown")
+
+        background_color = "white"  # Default background color
+        if closest_team and team_number == closest_team["team_number"]:
+            background_color = "#FFDD00"
 
         children.append(
             dbc.Row(
                 [
                     dbc.Col(
                         html.A(
-                            f"{team_number} - {team_nickname}",
+                            f"{team_number} | {team_nickname}",
                             href=f"/data?team={team_number}",
                             style={
-                                "lineHeight": "40px",
+                                "lineHeight": "20px",
                                 "textDecoration": "none",
                                 "color": "black",
                                 "cursor": "pointer",
@@ -234,8 +252,10 @@ def update_search_preview(input_value):
                         width=True,
                     ),
                 ],
-                style={"padding": "5px", "borderBottom": "1px solid #ddd"},
-                key=team_key,
+                style={"padding": "5px",
+                      "backgroundColor": background_color,
+                      },
+                key=f"team-{team_number}",
             )
         )
 
@@ -247,11 +267,12 @@ def update_search_preview(input_value):
         "borderRadius": "8px",
         "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
         "marginTop": "5px",
+        "marginLeft": "10px",
         "padding": "5px",
         "maxHeight": "200px",
         "overflowY": "auto",
         "overflowX": "hidden",
-        "width": "calc(100% - 20px)",
+        "width": "93%",
         "zIndex": "1050",
         "position": "absolute",
         "left": "0",
@@ -348,7 +369,7 @@ home_layout = html.Div([
                                         "border": "2px solid #555",
                                         "color": "black",
                                         "marginTop": "10px",
-                                        "width": "35%",
+                                        "width": "50%",
                                     },
                                 ),
                             ],
@@ -476,7 +497,6 @@ def team_layout(team_number, year):
     state = selected_team.get("state_prov", "")
     country = selected_team.get("country", "")
     website = team_info.get("website", "N/A")
-    rookie_year = team_info.get("rookie_year", "N/A")
     
     avatar_data = tba_get(f"team/{team_key}/media/2024")
     avatar_url = None
@@ -503,6 +523,8 @@ def team_layout(team_number, year):
         )
         for year in years_participated
     ] if years_participated else ["N/A"]
+
+    rookie_year = years_participated[0]
                 
     # Team Info Card
     team_card = dbc.Card(
@@ -695,12 +717,12 @@ def team_layout(team_number, year):
                             dbc.Col(
                                 html.Div(
                                     [
-                                        html.P("EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "0.9rem"}),
+                                        html.P("EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
                                         html.P(
                                             epa_display,
 
                                             style={
-                                                "fontSize": "1rem",
+                                                "fontSize": "1.1rem",
                                                 "fontWeight": "bold",
                                                 "color": "#17A2B8",
                                             },
@@ -713,11 +735,11 @@ def team_layout(team_number, year):
                             dbc.Col(
                                 html.Div(
                                     [
-                                        html.P("Win/Loss Ratio", style={"color": "#666", "marginBottom": "2px", "fontSize": "0.9rem"}),
+                                        html.P("Win/Loss Ratio", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
                                         html.P(
                                             win_loss_ratio,
                                             style={
-                                                "fontSize": "1rem",
+                                                "fontSize": "1.1rem",
                                                 "fontWeight": "bold",
                                             },
                                         ),
@@ -729,11 +751,11 @@ def team_layout(team_number, year):
                             dbc.Col(
                                 html.Div(
                                     [
-                                        html.P("Avg Match Score", style={"color": "#666", "marginBottom": "2px", "fontSize": "0.9rem"}),
+                                        html.P("Avg Match Score", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
                                         html.P(
                                             f"{avg_score:.2f}",
                                             style={
-                                                "fontSize": "1rem",
+                                                "fontSize": "1.1rem",
                                                 "fontWeight": "bold",
                                                 "color": "#17A2B8",
                                             },
@@ -822,7 +844,7 @@ def team_layout(team_number, year):
             "border": "1px solid #ddd",
         },
         style_cell_conditional=[
-            {"if": {"column_id": "event_name"}, "textAlign": "left"}
+            {"if": {"column_id": "event_name"}, "textAlign": "center"}
         ],
         style_data_conditional=[
             {
@@ -884,6 +906,7 @@ def team_layout(team_number, year):
             },
         ],
     )
+
 
     # Final Layout
     return html.Div(
@@ -1369,7 +1392,7 @@ def challenges_layout():
                 [
                     html.H2("Challenges", className="text-center mb-4"),
                     html.P(
-                        "FIRST Robotics Competition is made up of seasons in which the challenge (game), along with the required set of tasks, changes annually. "
+                        "The FIRST Robotics Competition is made up of seasons in which the challenge (game), along with the required set of tasks, changes annually. "
                         "Please click on a season to view more information and results.",
                         className="text-center mb-4",
                     ),
@@ -1594,6 +1617,13 @@ def teams_layout(default_year=2024):
             "border": "1px solid #ddd",
             "fontSize": "14px",
         },
+        style_data_conditional=[
+            {
+                "if": {"state": "selected"},
+                "backgroundColor": "rgba(255, 221, 0, 0.5)",
+                "border": "1px solid #FFCC00",
+            },
+        ]
     )
 
 
@@ -1696,10 +1726,13 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
         elif rank == 3:
             rank_emoji = "🥉"
 
-        epa_formatted = f"{epa:.2f}" if epa is not None else "N/A"
-        epa_rank_display = f"{rank_emoji} {rank} \n Mean EPA: {epa_formatted}"
+        if rank in [1, 2, 3]:
+            epa_rank_display = f"{rank_emoji} | EPA: {epa:.2f}" if epa is not None else f"{rank_emoji} | EPA: N/A"
+        else:
+            epa_rank_display = f"{rank} | EPA: {epa:.2f}" if epa is not None else f"{rank} | EPA: N/A"
 
-        team_display = f"[Team {team_number} - {nickname}](/data?team={team_number})" if nickname else f"[Team {team_number}](/data?team={team_number})"
+        team_display = f"[Team {team_number} | {nickname}](/data?team={team_number}&year={selected_year})" if nickname else f"[Team {team_number}](/data?team={team_number}&year={selected_year})"
+        
         location_display = ", ".join(filter(None, [city, state, country]))
 
         table_data.append({
