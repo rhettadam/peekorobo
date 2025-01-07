@@ -128,7 +128,7 @@
 ### Local Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/username/peekorobo.git
+   git clone https://github.com/rhettadam/peekorobo.git
    cd peekorobo
    ```
 
@@ -154,8 +154,7 @@
 ### Heroku Development Build
 You can visit the Heroku Development Build here:
 
-https://peekorobo-6ec491b9fec0.h
-
+https://peekorobo-6ec491b9fec0.herokuapp.com/
 ---
 
 ## **License**
