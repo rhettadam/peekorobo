@@ -4,6 +4,9 @@ from dash import html, dcc, dash_table
 from dash.dependencies import Input, Output, State
 import plotly.express as px
 
+import folium
+from folium.plugins import MarkerCluster
+
 import requests
 import urllib.parse 
 import os
@@ -1749,53 +1752,56 @@ def teams_map_layout():
     with open(file_path, "r", encoding="utf-8") as f:
         map_teams_2025 = json.load(f)
 
-    # 2) Filter only teams with lat & lng
+    # Filter only teams with lat & lng
     map_teams = [t for t in map_teams_2025 if t.get("lat") and t.get("lng")]
 
-    if not map_teams:
-        # No lat/lng data?
-        fig = px.scatter_geo(title="No teams found with lat/lng")
-    else:
-        fig = px.scatter_geo(
-            map_teams,
-            lat="lat",
-            lon="lng",
-            hover_name="nickname",
-            hover_data=["team_number", "city", "state_prov", "country"],
-            custom_data=["team_number"],
-            projection="natural earth",
-            template="plotly_white",
-        )
+    # Create a Folium map centered on the USA
+    m = folium.Map(location=[39.8283, -98.5795], zoom_start=4, tiles="OpenStreetMap")
 
-        fig.update_traces(
-            marker=dict(
-                symbol='circle',
-                color="yellow",
-                size=5,                 # optional size
-                line=dict(width=.5)  # optional border
-            )
-        )
-        fig.update_geos(
-            showcountries=True,
-            countrycolor="grey",
-            showsubunits=True,
-            subunitcolor="gray",
-            showland=True,
-            landcolor="lightgreen",
-            showocean=True,
-            oceancolor="lightblue",
-        )
-        fig.update_layout(margin={"r":0, "t":0,"l":0,"b":0})
+    # Add state lines (using GeoJSON from Natural Earth or another source)
+    folium.GeoJson(
+        "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json",
+        name="State Boundaries",
+        style_function=lambda x: {
+            "color": "black",
+            "weight": 1,
+            "fillOpacity": 0.1,
+        },
+    ).add_to(m)
 
-    # Return a layout
+    # Use MarkerCluster for better performance with large datasets
+    marker_cluster = MarkerCluster(
+        disableClusteringAtZoom=10,  # Stops clustering at higher zoom levels
+    ).add_to(m)
+
+
+    # Add team locations to the map
+    for team in map_teams:
+        folium.Marker(
+            location=[team["lat"], team["lng"]],
+            popup=folium.Popup(
+                f"<b>Team {team['team_number']}:</b> {team['nickname']}<br>"
+                f"<b>Location:</b> {team['city']}, {team['state_prov']}, {team['country']}",
+                max_width=250,
+            ),
+            icon=folium.Icon(color="blue", icon="info-sign"),
+        ).add_to(marker_cluster)
+
+    # Add a layer control
+    folium.LayerControl().add_to(m)
+
+    # Save the map to an HTML file
+    map_file_path = "assets/teams_map.html"
+    m.save(map_file_path)
+
+    # Return a Dash layout embedding the map
     return html.Div([
         topbar,
         dbc.Container([
             html.H3("Interactive Map: All 2025 Teams", className="text-center mb-4"),
-            dcc.Graph(
-                id="teams-map",
-                figure=fig,
-                style={"height": "80vh", "width": "100%"}
+            html.Iframe(
+                srcDoc=open(map_file_path, "r").read(),
+                style={"width": "100%", "height": "80vh", "border": "none"}
             ),
         ], fluid=True),
 
@@ -1804,9 +1810,8 @@ def teams_map_layout():
         dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
         dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
         
-        footer
+        footer,
     ])
-
 
 app.layout = html.Div([
     dcc.Location(id="url", refresh=False),
@@ -1911,4 +1916,4 @@ def display_page(pathname, search):
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run_server(host="0.0.0.0", port=port, debug=False)
+    app.run_server(host="0.0.0.0", port=port, debug=True)
