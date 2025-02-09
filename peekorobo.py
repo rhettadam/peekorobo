@@ -15,6 +15,7 @@ import json
 import numpy as np
 
 from frcgames import frc_games
+from locations import COUNTRIES, STATES
 
 def configure():
     load_dotenv()
@@ -127,7 +128,7 @@ topbar = dbc.Navbar(
                                 [
                                     dbc.Input(
                                         id="desktop-search-input",
-                                        placeholder="Team # (e.g., 1912)",
+                                        placeholder="Team name or # (eg., 1912)",
                                         type="text",
                                     ),
                                     dbc.Button(
@@ -216,17 +217,31 @@ def update_search_preview(input_value):
     with open(file_path, "r") as f:
         teams_data = json.load(f)
 
-    # Filter teams based on input and limit to top 10 results
+    input_value = input_value.lower()
+    
+    # Search for both team numbers and nicknames
     filtered_teams = [
-        team for team in teams_data if str(input_value).lower() in str(team.get("team_number", "")).lower()
-    ][:20]
+        team for team in teams_data 
+        if input_value in str(team.get("team_number", "")).lower()
+        or input_value in team.get("nickname", "").lower()
+    ][:20]  # Limit results to the top 20
 
-    closest_team = None
+    # Find closest numeric match if input is a number
+    closest_team_number = None
+    closest_team_nickname = None
+
     if input_value.isdigit():
         input_number = int(input_value)
-        closest_team = min(
+        closest_team_number = min(
             filtered_teams,
             key=lambda team: abs(input_number - int(team["team_number"])),
+            default=None,
+        )
+    else:
+        # Find the closest nickname match using a simple string similarity comparison
+        closest_team_nickname = min(
+            filtered_teams,
+            key=lambda team: len(set(input_value) & set(team["nickname"].lower())),
             default=None,
         )
 
@@ -236,9 +251,11 @@ def update_search_preview(input_value):
         team_number = team.get("team_number", "Unknown")
         team_nickname = team.get("nickname", "Unknown")
 
-        background_color = "white"  # Default background color
-        if closest_team and team_number == closest_team["team_number"]:
-            background_color = "#FFDD00"
+        # Highlight the closest matching team number or nickname
+        background_color = "white"
+        if (closest_team_number and team_number == closest_team_number["team_number"]) or \
+           (closest_team_nickname and team_nickname == closest_team_nickname["nickname"]):
+            background_color = "#FFDD00"  # Yellow highlight
 
         children.append(
             dbc.Row(
@@ -257,9 +274,7 @@ def update_search_preview(input_value):
                         width=True,
                     ),
                 ],
-                style={"padding": "5px",
-                      "backgroundColor": background_color,
-                      },
+                style={"padding": "5px", "backgroundColor": background_color},
                 key=f"team-{team_number}",
             )
         )
@@ -531,8 +546,38 @@ def team_layout(team_number, year):
         for year in years_participated
     ] if years_participated else ["N/A"]
 
+        # Add "ALL" button linking to team profile without year
+    years_links.append(
+        html.A(
+            "History",
+            href=f"/data?team={team_number}",  # No year specified
+            style={
+                "marginLeft": "0px",
+                "color": "#007BFF",  # Orange to differentiate it
+                "fontWeight": "bold",
+                "textDecoration": "none",
+            },
+        )
+    )
+
     rookie_year = years_participated[0]
+
+    hof = [2486, 321, 1629, 503, 4613, 1816, 1902, 1311, 2834, 2614, 3132, 987, 597, 27, 1538, 1114, 359, 341, 236, 842, 365, 111, 67, 254, 103, 175, 22, 16, 120, 23, 47, 51, 144, 151, 191, 7]
                 
+        # Check if the team is in the Hall of Fame
+    is_hof_team = int(team_number) in hof
+    
+    hof_badge = (
+        html.Div(
+            [
+                html.Span("🏆", style={"fontSize": "1.5rem"}),
+                html.Span(" Hall of Fame", style={"color": "gold", "fontSize": "1.2rem", "fontWeight": "bold", "marginLeft": "5px"})
+            ],
+            style={"display": "flex", "alignItems": "center", "marginBottom": "8px"}  # Adds spacing below
+        )
+        if is_hof_team else None
+    )
+    
     # Team Info Card
     team_card = dbc.Card(
         dbc.CardBody(
@@ -543,8 +588,9 @@ def team_layout(team_number, year):
                         dbc.Col(
                             [
                                 html.H2(f"Team {team_number}: {nickname}", style={"color": "#333", "fontWeight": "bold"}),
-                                html.P([html.I(className="bi bi-geo-alt-fill"), f" Location: {city}, {state}, {country}"]),
-                                html.P([html.I(className="bi bi-link-45deg"), " Website: ", 
+                                hof_badge if is_hof_team else None,  # Hall of Fame badge here
+                                html.P([html.I(className="bi bi-geo-alt-fill"), f"📍 {city}, {state}, {country}"]),
+                                html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
                                         html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "none"})]),
                                 html.P([html.I(className="bi bi-award"), f" Rookie Year: {rookie_year}"]),
                                 html.Div(
@@ -566,27 +612,26 @@ def team_layout(team_number, year):
                             width=9,  
                         ),
                         # Right Column: Avatar
-                dbc.Col(
-                    [
-                        html.Img(
-                            src=avatar_url,
-                            alt=f"Team {team_number} Avatar",
-                            style={
-                                "width": "150px",  
-                                "height": "150px", 
-                                "objectFit": "contain",  
-                                "borderRadius": "10px",
-                                "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", 
-                                "marginLeft": "auto",
-                                "marginRight": "auto",  
-                                "display": "block",  
-                            },
-                        ) if avatar_url else html.Div("No avatar available.", style={"color": "#777"}),
-                    ],
-                    width=3, 
-                    style={"textAlign": "center"},
-                ),
-
+                        dbc.Col(
+                            [
+                                html.Img(
+                                    src=avatar_url,
+                                    alt=f"Team {team_number} Avatar",
+                                    style={
+                                        "width": "150px",  
+                                        "height": "150px", 
+                                        "objectFit": "contain",  
+                                        "borderRadius": "10px",
+                                        "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", 
+                                        "marginLeft": "auto",
+                                        "marginRight": "auto",  
+                                        "display": "block",  
+                                    },
+                                ) if avatar_url else html.Div("No avatar available.", style={"color": "#777"}),
+                            ],
+                            width=3, 
+                            style={"textAlign": "center"},
+                        ),
                     ],
                     align="center", 
                 ),
@@ -600,7 +645,6 @@ def team_layout(team_number, year):
             "backgroundColor": "#f9f9f9",
         },
     )
-
     # --- Performance Metrics ---
     if year:
         matches = tba_get(f"team/{team_key}/matches/{year}")
@@ -862,6 +906,7 @@ def team_layout(team_number, year):
         ],
     )
 
+    
     # --- Team Awards ---
     if year:
         awards = tba_get(f"team/{team_key}/awards/{year}")
@@ -913,6 +958,75 @@ def team_layout(team_number, year):
             },
         ],
     )
+    
+    blue_banner_awards = ["Chairman's", "Impact", "Woodie Flowers", "Winner"]
+    blue_banners = []
+    if awards:
+        for award in awards:
+            award_name = award.get("name", "")
+            event_key = award.get
+            event_name = event_key_to_name.get(award.get("event_key"), "Unknown Event")
+    
+            # Check if this award is a "blue banner" award
+            if any(keyword in award_name.lower() for keyword in ["chairman's", "impact", "winner", "woodie flowers"]):
+                blue_banners.append({"award_name": award_name, "event_name": event_name})
+
+    blue_banner_section = html.Div(
+        [
+            html.Div(
+                [
+                    html.A(
+                        href=f"https://www.thebluealliance.com/event/{banner.get('event_key', '#')}" if banner.get("event_key") else "#",
+                        target="_blank" if banner.get("event_key") else "",
+                        children=[
+                            html.Div(
+                                [
+                                    html.Img(
+                                        src="/assets/banner.png",
+                                        style={"width": "120px", "height": "auto", "position": "relative"},
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.P(
+                                                banner.get("award_name", "Unknown Award"),
+                                                style={
+                                                    "fontSize": "0.8rem",
+                                                    "color": "white",
+                                                    "fontWeight": "bold",
+                                                    "textAlign": "center",
+                                                    "marginBottom": "3px",
+                                                },
+                                            ),
+                                            html.P(
+                                                banner.get("event_name", "Unknown Event"),
+                                                style={
+                                                    "fontSize": "0.6rem",
+                                                    "color": "white",
+                                                    "textAlign": "center",
+                                                },
+                                            ),
+                                        ],
+                                        style={
+                                            "position": "absolute",
+                                            "top": "50%",
+                                            "left": "50%",
+                                            "transform": "translate(-50%, -50%)",
+                                        },
+                                    ),
+                                ],
+                                style={"position": "relative", "marginBottom": "15px"},
+                            ),
+                        ],
+                        style={"textDecoration": "none"} if banner.get("event_key") else {},
+                    )
+                    for banner in blue_banners
+                ],
+                style={"display": "flex", "flexWrap": "wrap", "justifyContent": "center", "gap": "10px"},
+            ),
+        ],
+        style={"marginBottom": "15px", "borderRadius": "8px", "backgroundColor": "white", "padding": "10px"},
+    )
+    
 
 
     # Final Layout
@@ -927,6 +1041,7 @@ def team_layout(team_number, year):
                     events_table,
                     html.H3("Team Awards", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
                     awards_table,
+                    blue_banner_section,
                     html.Br(),
                     dbc.Button(
                         "Go Back",
@@ -1296,7 +1411,7 @@ def update_events_table_and_map(selected_year, selected_event_types, selected_we
     # --- 2. Prepare Table Data ---
     formatted_events = [
         {
-            "Event Name": f"[{ev['name']}]({ev.get('website', '#')})",
+            "Event Name": f"[{ev['name']}]({'https://www.thebluealliance.com/event/' + ev['key']})",
             "Location": f"{ev['city']}, {ev['state_prov']}, {ev['country']}",
             "Start Date": ev["start_date"],
             "End Date": ev["end_date"],
@@ -1494,8 +1609,7 @@ def challenge_details_layout(year):
 def teams_layout(default_year=2024):
     teams_year_dropdown = dcc.Dropdown(
         id="teams-year-dropdown",
-        options=[{"label": "All", "value": "All"}]
-                 + [{"label": str(y), "value": y} for y in range(1992, 2026)],
+        options=[{"label": str(y), "value": y} for y in range(1992, 2026)],
         value=default_year,
         clearable=False,
         placeholder="Select Year",
@@ -1503,79 +1617,18 @@ def teams_layout(default_year=2024):
 
     country_dropdown = dcc.Dropdown(
         id="country-dropdown",
-        options=[
-            {"label": "All", "value": "All"},
-            {"label": "USA", "value": "USA"},
-            {"label": "Canada", "value": "Canada"},
-            {"label": "Türkiye", "value": "Türkiye"},
-            {"label": "Mexico", "value": "Mexico"},
-            {"label": "Israel", "value": "Israel"},
-            {"label": "Chinese Taipei", "value": "Chinese Taipei"},
-            {"label": "China", "value": "China"},
-            {"label": "Australia", "value": "Australia"},
-            {"label": "Brazil", "value": "Brazil"},
-            {"label": "India", "value": "India"},
-        ],
+        options=COUNTRIES,
         value="All",
         clearable=False,
         placeholder="Select Country",
     )
 
-    # State Dropdown (static example; feel free to expand or make dynamic)
+    # Initialize state dropdown with properly formatted options
     state_dropdown = dcc.Dropdown(
         id="state-dropdown",
-        options=[
-            {"label": "All", "value": "All"},
-            {"label": "Alabama", "value": "Alabama"},
-            {"label": "Alaska", "value": "Alaska"},
-            {"label": "Arizona", "value": "Arizona"},
-            {"label": "Arkansas", "value": "Arkansas"},
-            {"label": "California", "value": "California"},
-            {"label": "Colorado", "value": "Colorado"},
-            {"label": "Connecticut", "value": "Connecticut"},
-            {"label": "Delaware", "value": "Delaware"},
-            {"label": "Florida", "value": "Florida"},
-            {"label": "Georgia", "value": "Georgia"},
-            {"label": "Hawaii", "value": "Hawaii"},
-            {"label": "Idaho", "value": "Idaho"},
-            {"label": "Illinois", "value": "Illinois"},
-            {"label": "Indiana", "value": "Indiana"},
-            {"label": "Iowa", "value": "Iowa"},
-            {"label": "Kansas", "value": "Kansas"},
-            {"label": "Kentucky", "value": "Kentucky"},
-            {"label": "Louisiana", "value": "Louisiana"},
-            {"label": "Maine", "value": "Maine"},
-            {"label": "Maryland", "value": "Maryland"},
-            {"label": "Massachusetts", "value": "Massachusetts"},
-            {"label": "Michigan", "value": "Michigan"},
-            {"label": "Minnesota", "value": "Minnesota"},
-            {"label": "Mississippi", "value": "Mississippi"},
-            {"label": "Missouri", "value": "Missouri"},
-            {"label": "Montana", "value": "Montana"},
-            {"label": "Nebraska", "value": "Nebraska"},
-            {"label": "Nevada", "value": "Nevada"},
-            {"label": "New Hampshire", "value": "New Hampshire"},
-            {"label": "New Jersey", "value": "New Jersey"},
-            {"label": "New Mexico", "value": "New Mexico"},
-            {"label": "New York", "value": "New York"},
-            {"label": "North Carolina", "value": "North Carolina"},
-            {"label": "North Dakota", "value": "North Dakota"},
-            {"label": "Ohio", "value": "Ohio"},
-            {"label": "Oklahoma", "value": "Oklahoma"},
-            {"label": "Oregon", "value": "Oregon"},
-            {"label": "Pennsylvania", "value": "Pennsylvania"},
-            {"label": "Rhode Island", "value": "Rhode Island"},
-            {"label": "South Carolina", "value": "South Carolina"},
-            {"label": "South Dakota", "value": "South Dakota"},
-            {"label": "Tennessee", "value": "Tennessee"},
-            {"label": "Texas", "value": "Texas"},
-            {"label": "Utah", "value": "Utah"},
-            {"label": "Vermont", "value": "Vermont"},
-            {"label": "Virginia", "value": "Virginia"},
-            {"label": "Washington", "value": "Washington"},
-            {"label": "West Virginia", "value": "West Virginia"},
-            {"label": "Wisconsin", "value": "Wisconsin"},
-            {"label": "Wyoming", "value": "Wyoming"},
+        options=[{"label": "All States", "value": "All"}] + [
+            {"label": state["label"], "value": state["value"]}
+            for state in STATES.get("USA", []) if isinstance(state, dict)
         ],
         value="All",
         clearable=False,
@@ -1586,7 +1639,6 @@ def teams_layout(default_year=2024):
         id="search-bar",
         placeholder="Search teams by name or number...",
         type="text",
-        debounce=True,
         className="mb-3",
     )
 
@@ -1595,35 +1647,20 @@ def teams_layout(default_year=2024):
         columns=[
             {"name": "EPA Rank", "id": "epa_rank"},
             {"name": "EPA", "id": "epar", "presentation": "markdown"},
-            {"name": "Team", "id": "team_display","presentation": "markdown"},
+            {"name": "Team", "id": "team_display", "presentation": "markdown"},
             {"name": "Location", "id": "location_display"}
         ],
         data=[],
         page_size=50,
-        style_table={"overflowX": "auto",
-                    "borderRadius": "10px",
-                    "border": "1px solid #ddd"},
-        style_header={
-            "backgroundColor": "#FFCC00",
-            "fontWeight": "bold",
-            "textAlign": "center",
-            "border": "1px solid #ddd",
-        },
-        style_cell={
-            "textAlign": "center",
-            "padding": "10px",
-            "border": "1px solid #ddd",
-            "fontSize": "14px",
-        },
-        style_data_conditional=[
-            {
-                "if": {"state": "selected"},
-                "backgroundColor": "rgba(255, 221, 0, 0.5)",
-                "border": "1px solid #FFCC00",
-            },
-        ]
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "1px solid #ddd"},
+        style_header={"backgroundColor": "#FFCC00", "fontWeight": "bold", "textAlign": "center", "border": "1px solid #ddd"},
+        style_cell={"textAlign": "center", "padding": "10px", "border": "1px solid #ddd", "fontSize": "14px"},
+        style_data_conditional=[{
+            "if": {"state": "selected"},
+            "backgroundColor": "rgba(255, 221, 0, 0.5)",
+            "border": "1px solid #FFCC00",
+        }],
     )
-
 
     return html.Div(
         [
@@ -1640,21 +1677,14 @@ def teams_layout(default_year=2024):
                         ],
                         className="mb-4 justify-content-center",
                     ),
-                    
-                    # Table
-                    dbc.Row(
-                        dbc.Col(teams_table, width=12),
-                        className="mb-4",
-                    ),
+                    dbc.Row(dbc.Col(teams_table, width=12), className="mb-4"),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
-
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
             dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
-
             footer,
         ]
     )
@@ -1677,9 +1707,11 @@ def get_epa_display(epa, percentiles):
 
     return f"{color} {epa:.2f}"
 
-# Example: Update load_teams callback
 @app.callback(
-    Output("teams-table", "data"),
+    [
+        Output("teams-table", "data"),
+        Output("state-dropdown", "options"),  # Dynamically update states based on selected country
+    ],
     [
         Input("teams-year-dropdown", "value"),
         Input("country-dropdown", "value"),
@@ -1688,31 +1720,21 @@ def get_epa_display(epa, percentiles):
     ],
 )
 def load_teams(selected_year, selected_country, selected_state, search_query):
-    folder_path = "team_data"  # Replace with your folder path
+    folder_path = "team_data"  # Update this path if necessary
     teams_data = []
 
-    # Load and filter data
-    if selected_year != "All":
-        file_path = os.path.join(folder_path, f"teams_{selected_year}.json")
-        if os.path.exists(file_path):
-            with open(file_path, "r") as f:
-                teams_data = json.load(f)
+    # Load team data for the selected year
+    file_path = os.path.join(folder_path, f"teams_{selected_year}.json")
+    if os.path.exists(file_path):
+        with open(file_path, "r") as f:
+            teams_data = json.load(f)
     else:
-        for filename in os.listdir(folder_path):
-            if filename.endswith(".json"):
-                with open(os.path.join(folder_path, filename), "r") as f:
-                    teams_data.extend(json.load(f))
+        return [], [{"label": "All States", "value": "All"}]  # Return empty if no data for the selected year
 
-    # Filter by country
-    if selected_country and selected_country != "All":
-        teams_data = [team for team in teams_data if team.get("country") == selected_country]
+    # Ensure EPA values exist and sort teams by EPA descending
+    teams_data = sorted(teams_data, key=lambda x: x.get("epa", 0) or 0, reverse=True)
 
-    # Filter by state
-    if selected_state and selected_state != "All":
-        teams_data = [team for team in teams_data if team.get("state_prov") == selected_state]
-
-    # Sort and rank by EPA
-    teams_data = sorted(teams_data, key=lambda x: x.get("epa", 0) if x.get("epa") is not None else 0, reverse=True)
+    # Compute EPA percentiles for ranking
     epa_values = [team["epa"] for team in teams_data if team.get("epa") is not None]
     percentiles = {
         "99": np.percentile(epa_values, 99) if epa_values else 0,
@@ -1721,35 +1743,61 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
         "25": np.percentile(epa_values, 25) if epa_values else 0,
     }
 
+    # Assign global ranks
+    for idx, team in enumerate(teams_data):
+        team["global_rank"] = idx + 1
+
+    # **Fix state options (remove nested dicts)**
+    if selected_country and selected_country in STATES:
+        state_options = [{"label": "All States", "value": "All"}] + [
+            {"label": state["label"], "value": state["value"]}
+            for state in STATES[selected_country] if isinstance(state, dict)
+        ]
+    else:
+        state_options = [{"label": "All States", "value": "All"}]
+
+    # Apply filters
+    if selected_country and selected_country != "All":
+        teams_data = [team for team in teams_data if team.get("country", "").lower() == selected_country.lower()]
+
+    if selected_state and selected_state != "All":
+        teams_data = [team for team in teams_data if team.get("state_prov", "").lower() == selected_state.lower()]
+
+    # Apply search query (matches team number, nickname, and city)
+    if search_query:
+        search_query = search_query.lower()
+        teams_data = [
+            team for team in teams_data
+            if search_query in str(team.get("team_number", "")).lower()
+            or search_query in team.get("nickname", "").lower()
+            or search_query in team.get("city", "").lower()
+        ]
+
     # Generate table data
     table_data = []
-    for idx, team in enumerate(teams_data):
+    for team in teams_data:
         team_number = team.get("team_number", "")
-        nickname = team.get("nickname", "")
-        city = team.get("city", "")
+        nickname = team.get("nickname", "Unknown")
+        city = team.get("city", "Unknown")
         state = team.get("state_prov", "")
         country = team.get("country", "")
         epa = team.get("epa", None)
-        rank = idx + 1
+        global_rank = team.get("global_rank", "N/A")
 
-        team_display = (
-            f"[Team {team_number} | {nickname}](/data?team={team_number}&year={selected_year})"
-            if nickname
-            else f"[Team {team_number}](/data?team={team_number}&year={selected_year})"
-        )
+        team_display = f"[{team_number} | {nickname}](/data?team={team_number}&year={selected_year})"
         location_display = ", ".join(filter(None, [city, state, country]))
         epa_display = get_epa_display(epa, percentiles)
 
         table_data.append(
             {
-                "epa_rank": f"🥇" if rank == 1 else f"🥈" if rank == 2 else f"🥉" if rank == 3 else rank,
+                "epa_rank": f"🥇" if global_rank == 1 else f"🥈" if global_rank == 2 else f"🥉" if global_rank == 3 else global_rank,
                 "epar": epa_display,
                 "team_display": team_display,
                 "location_display": location_display or "Unknown",
             }
         )
 
-    return table_data
+    return table_data, state_options  # Returning both table data and state dropdown options
 
 def teams_map_layout():
     # Generate and get the map file path
@@ -1807,25 +1855,52 @@ def handle_navigation(
 
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
-    # Helper function to build the search URL
-    def build_search(team_value, year_value=None):
-        if not team_value:
-            return dash.no_update, dash.no_update
-        query_params = {"team": team_value}
+    # Get input value from the triggered element
+    if trigger_id in ["btn-search-home", "input-team-home"]:
+        search_value = home_team_value
+        year_value = home_year_value
+    elif trigger_id in ["desktop-search-button", "desktop-search-input"]:
+        search_value = desktop_search_value
+        year_value = None
+    elif trigger_id in ["mobile-search-button", "mobile-search-input"]:
+        search_value = mobile_search_value
+        year_value = None
+    else:
+        return dash.no_update, dash.no_update
+
+    if not search_value:
+        return dash.no_update, dash.no_update
+
+    search_value = search_value.strip().lower()
+
+    # Load the team data
+    folder_path = "team_data"
+    selected_year = year_value if year_value else "2024"
+    file_path = os.path.join(folder_path, f"teams_{selected_year}.json")
+
+    if not os.path.exists(file_path):
+        return "/", ""  # Redirect to home if no data
+
+    with open(file_path, "r") as f:
+        teams_data = json.load(f)
+
+    # Search by number or name
+    matching_team = next(
+        (team for team in teams_data if 
+         str(team.get("team_number", "")).lower() == search_value or 
+         search_value in team.get("nickname", "").lower()), 
+        None
+    )
+
+    if matching_team:
+        team_number = matching_team.get("team_number", "")
+        query_params = {"team": team_number}
         if year_value and year_value.isdigit():
             query_params["year"] = year_value
         search = "?" + urllib.parse.urlencode(query_params)
         return "/data", search
 
-    # Handle search/navigation triggers
-    if trigger_id in ["btn-search-home", "input-team-home"]:
-        return build_search(home_team_value, home_year_value)
-    elif trigger_id in ["desktop-search-button", "desktop-search-input"]:
-        return build_search(desktop_search_value)
-    elif trigger_id in ["mobile-search-button", "mobile-search-input"]:
-        return build_search(mobile_search_value)
-
-    return dash.no_update, dash.no_update
+    return "/", ""  # Redirect to home if no match
 
 @app.callback(
     Output("page-content", "children"),
