@@ -12,6 +12,7 @@ import urllib.parse
 import os
 from dotenv import load_dotenv
 import json
+import numpy as np
 
 from frcgames import frc_games
 
@@ -63,6 +64,7 @@ topbar = dbc.Navbar(
                 dbc.Nav(
                     [
                         dbc.NavItem(dbc.NavLink("Teams", href="/teams", className="custom-navlink")),
+                        dbc.NavItem(dbc.NavLink("Map", href="/teamsmap", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Events", href="/events", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Insights", href="/insights", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Challenges", href="/challenges", className="custom-navlink")),
@@ -1580,16 +1582,6 @@ def teams_layout(default_year=2024):
         placeholder="Select State/Province",
     )
 
-    view_map_button = dbc.Button(
-        "View Map",
-        id="teams-view-map",
-        color="info",
-        style={"backgroundColor": "#ffdd00ff",
-               "color": "black",
-               "border": "2px solid #555",
-               "marginLeft": "10px"},
-    )
-
     search_input = dbc.Input(
         id="search-bar",
         placeholder="Search teams by name or number...",
@@ -1602,6 +1594,7 @@ def teams_layout(default_year=2024):
         id="teams-table",
         columns=[
             {"name": "EPA Rank", "id": "epa_rank"},
+            {"name": "EPA", "id": "epar", "presentation": "markdown"},
             {"name": "Team", "id": "team_display","presentation": "markdown"},
             {"name": "Location", "id": "location_display"}
         ],
@@ -1643,7 +1636,6 @@ def teams_layout(default_year=2024):
                             dbc.Col(teams_year_dropdown, width=1),
                             dbc.Col(country_dropdown, width=2),
                             dbc.Col(state_dropdown, width=2),
-                            dbc.Col(view_map_button, width="auto"),
                             dbc.Col(search_input, width=4),
                         ],
                         className="mb-4 justify-content-center",
@@ -1667,6 +1659,25 @@ def teams_layout(default_year=2024):
         ]
     )
 
+def get_epa_display(epa, percentiles):
+    """Returns a formatted string with a colored circle based on EPA percentile."""
+    if epa is None:
+        return "N/A"
+    
+    if epa >= percentiles["99"]:
+        color = "🔵"  # Blue circle
+    elif epa >= percentiles["90"]:
+        color = "🟢"  # Green circle
+    elif epa >= percentiles["75"]:
+        color = "🟡"  # Yellow circle
+    elif epa >= percentiles["25"]:
+        color = "🟠"  # Orange circle
+    else:
+        color = "🔴"  # Red circle
+
+    return f"{color} {epa:.2f}"
+
+# Example: Update load_teams callback
 @app.callback(
     Output("teams-table", "data"),
     [
@@ -1677,16 +1688,16 @@ def teams_layout(default_year=2024):
     ],
 )
 def load_teams(selected_year, selected_country, selected_state, search_query):
-    folder_path = "team_data"  # Replace with the folder containing your JSON files
+    folder_path = "team_data"  # Replace with your folder path
     teams_data = []
 
+    # Load and filter data
     if selected_year != "All":
         file_path = os.path.join(folder_path, f"teams_{selected_year}.json")
         if os.path.exists(file_path):
             with open(file_path, "r") as f:
                 teams_data = json.load(f)
     else:
-        # Load data from all years if "All" is selected
         for filename in os.listdir(folder_path):
             if filename.endswith(".json"):
                 with open(os.path.join(folder_path, filename), "r") as f:
@@ -1700,19 +1711,17 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
     if selected_state and selected_state != "All":
         teams_data = [team for team in teams_data if team.get("state_prov") == selected_state]
 
+    # Sort and rank by EPA
     teams_data = sorted(teams_data, key=lambda x: x.get("epa", 0) if x.get("epa") is not None else 0, reverse=True)
-    for idx, team in enumerate(teams_data):
-        team["rank"] = idx + 1
+    epa_values = [team["epa"] for team in teams_data if team.get("epa") is not None]
+    percentiles = {
+        "99": np.percentile(epa_values, 99) if epa_values else 0,
+        "90": np.percentile(epa_values, 90) if epa_values else 0,
+        "75": np.percentile(epa_values, 75) if epa_values else 0,
+        "25": np.percentile(epa_values, 25) if epa_values else 0,
+    }
 
-    if search_query:
-        search_query = search_query.lower()
-        teams_data = [
-            team for team in teams_data if
-            search_query in str(team.get("team_number", "")).lower() or
-            search_query in team.get("nickname", "").lower()
-        ]
-
-    # Assign EPA ranks and emojis
+    # Generate table data
     table_data = []
     for idx, team in enumerate(teams_data):
         team_number = team.get("team_number", "")
@@ -1720,58 +1729,43 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
         city = team.get("city", "")
         state = team.get("state_prov", "")
         country = team.get("country", "")
-        epa = team.get("epa", 0)
-        rank = team.get("rank", "N/A")
+        epa = team.get("epa", None)
+        rank = idx + 1
 
-        rank_emoji = ""
-        if rank == 1:
-            rank_emoji = "🥇"
-        elif rank == 2:
-            rank_emoji = "🥈"
-        elif rank == 3:
-            rank_emoji = "🥉"
-
-        if rank in [1, 2, 3]:
-            epa_rank_display = f"{rank_emoji} | EPA: {epa:.2f}" if epa is not None else f"{rank_emoji} | EPA: N/A"
-        else:
-            epa_rank_display = f"{rank} | EPA: {epa:.2f}" if epa is not None else f"{rank} | EPA: N/A"
-
-        team_display = f"[Team {team_number} | {nickname}](/data?team={team_number}&year={selected_year})" if nickname else f"[Team {team_number}](/data?team={team_number}&year={selected_year})"
-        
+        team_display = (
+            f"[Team {team_number} | {nickname}](/data?team={team_number}&year={selected_year})"
+            if nickname
+            else f"[Team {team_number}](/data?team={team_number}&year={selected_year})"
+        )
         location_display = ", ".join(filter(None, [city, state, country]))
+        epa_display = get_epa_display(epa, percentiles)
 
-        table_data.append({
-            "epa_rank": epa_rank_display,
-            "team_display": team_display,
-            "location_display": location_display or "Unknown",
-        })
+        table_data.append(
+            {
+                "epa_rank": f"🥇" if rank == 1 else f"🥈" if rank == 2 else f"🥉" if rank == 3 else rank,
+                "epar": epa_display,
+                "team_display": team_display,
+                "location_display": location_display or "Unknown",
+            }
+        )
 
     return table_data
 
 def teams_map_layout():
-    # Path to the pre-generated map file
-    map_file_path = "assets/teams_map.html"
+    # Generate and get the map file path
+    map_path = "assets/teams_map.html"
 
-    # Ensure the file exists
-    if not os.path.exists(map_file_path):
-        return html.Div([
-            topbar,
-            dbc.Container([
-                dbc.Alert("The map file does not exist. Please generate it first.", color="danger")
-            ], fluid=True),
-            footer,
-        ])
-
-    # Serve the existing map file without reprocessing the data
     return html.Div([
         topbar,
-        dcc.Location(id="url", refresh=False),
-        dbc.Container([
-            html.Iframe(
-                src=f"/{map_file_path}",  # Path to the static map file
-                style={"width": "100%", "height": "87vh", "border": "none"},
-            ),
-        ], fluid=True),
+        dbc.Container(
+            [
+                html.Iframe(
+                    src=f"/{map_path}",  # Reference the generated HTML file
+                    style={"width": "100%", "height": "840px", "border": "none"},
+                ),
+            ],
+            fluid=True
+        ),
         footer,
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
@@ -1793,8 +1787,6 @@ app.layout = html.Div([
         Input("desktop-search-input", "n_submit"),
         Input("mobile-search-button", "n_clicks"),
         Input("mobile-search-input", "n_submit"),
-        Input("teams-view-map", "n_clicks"),
-        Input("teams-map", "clickData"),
     ],
     [
         State("input-team-home", "value"),
@@ -1806,55 +1798,32 @@ app.layout = html.Div([
 )
 def handle_navigation(
     home_click, home_submit, desktop_click, desktop_submit, 
-    mobile_click, mobile_submit, view_map_click, map_clickdata, 
-    home_team_value, home_year_value, desktop_search_value, mobile_search_value
+    mobile_click, mobile_submit, home_team_value, home_year_value, 
+    desktop_search_value, mobile_search_value
 ):
     ctx = dash.callback_context
-
     if not ctx.triggered:
         return dash.no_update, dash.no_update
 
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    print(f"Triggered by: {trigger_id}")
 
     # Helper function to build the search URL
     def build_search(team_value, year_value=None):
         if not team_value:
             return dash.no_update, dash.no_update
         query_params = {"team": team_value}
-        if year_value and year_value.isdigit():  # Ensure year is valid
+        if year_value and year_value.isdigit():
             query_params["year"] = year_value
         search = "?" + urllib.parse.urlencode(query_params)
         return "/data", search
 
-    # Home Search (Button or Enter Key)
+    # Handle search/navigation triggers
     if trigger_id in ["btn-search-home", "input-team-home"]:
         return build_search(home_team_value, home_year_value)
-
-    # Desktop Search (Button or Enter Key)
     elif trigger_id in ["desktop-search-button", "desktop-search-input"]:
         return build_search(desktop_search_value)
-
-    # Mobile Search (Button or Enter Key)
     elif trigger_id in ["mobile-search-button", "mobile-search-input"]:
         return build_search(mobile_search_value)
-
-    # Handle View Map Button
-    elif trigger_id == "teams-view-map":
-        return "/teamsmap", ""
-
-    # Handle Clicking a Team on the Map
-    elif trigger_id == "teams-map":
-        if not map_clickdata:
-            raise dash.exceptions.PreventUpdate
-
-        point = map_clickdata["points"][0]
-        custom = point.get("customdata", [])
-        if not custom:
-            raise dash.exceptions.PreventUpdate
-
-        team_number = custom[0]
-        return build_search(team_number)
 
     return dash.no_update, dash.no_update
 
