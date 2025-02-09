@@ -64,7 +64,7 @@ topbar = dbc.Navbar(
                     [
                         dbc.NavItem(dbc.NavLink("Teams", href="/teams", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Events", href="/events", className="custom-navlink")),
-                        dbc.NavItem(dbc.NavLink("Leaderboard", href="/leaderboard", className="custom-navlink")),
+                        dbc.NavItem(dbc.NavLink("Insights", href="/insights", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Challenges", href="/challenges", className="custom-navlink")),
                         # Resources Dropdown
                         dbc.DropdownMenu(
@@ -296,16 +296,18 @@ footer = dbc.Container(
                     "textAlign": "center",
                     "color": "#353535",
                     "fontSize": "12px",
-                    "margin": "2px"
+                    "margin": "0",  # Minimized margin
+                    "padding": "0",  # Minimized padding
                 }
             ),
-        ])
-    ]),
+        ], style={"padding": "0"})  # Ensure no padding in columns
+    ], style={"margin": "0"}),  # Ensure no margin in rows
     fluid=True,
     style={
-        "backgroundColor": "white",  
+        "backgroundColor": "white",
         "padding": "10px 0px",
-        "boxShadow": "0px -1px 2px rgba(0, 0, 0, 0.1)", 
+        "boxShadow": "0px -1px 2px rgba(0, 0, 0, 0.1)",
+        "margin": "0",  # Eliminate default container margin
     }
 )
 
@@ -946,51 +948,51 @@ def team_layout(team_number, year):
     )
 
 def clean_category_label(raw_label):
-    label = raw_label.replace("typed_", "").replace("_", " ").replace("leaderboard","").title()
+    label = raw_label.replace("typed_", "").replace("_", " ").replace("insights","").title()
     return label
 
-def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
+def insights_layout(year=2024, category="typed_leaderboard_blue_banners"):
     
     # Fetch leaderboard data
-    leaderboard_data = tba_get(f"insights/leaderboards/{year}")
-    if not leaderboard_data:
-        return html.Div("Error fetching leaderboard data.")
+    insights_data = tba_get(f"insights/leaderboards/{year}")
+    if not insights_data:
+        return html.Div("Error fetching insights data.")
 
     # Extract leaderboard categories and clean labels
-    leaderboard_categories = [
+    insights_categories = [
         {"label": clean_category_label(item["name"]), "value": item["name"]}
-        for item in leaderboard_data
+        for item in insights_data
     ]
 
     # Default to the first category if not provided
-    if category not in [item["value"] for item in leaderboard_categories]:
-        category = leaderboard_categories[0]["value"]
+    if category not in [item["value"] for item in insights_categories]:
+        category = insights_categories[0]["value"]
 
     # Filter data for the selected category
-    leaderboard_table_data = []
-    for item in leaderboard_data:
+    insights_table_data = []
+    for item in insights_data:
         if item["name"] == category:
             rankings = item.get("data", {}).get("rankings", [])
             for rank in rankings:
                 for team_key in rank.get("keys", []):
                     team_number = team_key.replace("frc", "")
-                    leaderboard_table_data.append({
+                    insights_table_data.append({
                         "Team": team_number,
                         "Value": rank.get("value", 0),
                     })
 
     # Sort data by value 
-    leaderboard_table_data = sorted(leaderboard_table_data, key=lambda x: x["Value"], reverse=True)
+    insights_table_data = sorted(insights_table_data, key=lambda x: x["Value"], reverse=True)
 
     # Create a DataTable
-    leaderboard_table = dash_table.DataTable(
-        id="leaderboard-table",
+    insights_table = dash_table.DataTable(
+        id="insights-table",
         columns=[
             {"name": "Team", "id": "Team", "presentation": "markdown"}, 
             {"name": "Value", "id": "Value"},
             {"name": "Rank", "id": "Rank"},
         ],
-        data=leaderboard_table_data,
+        data=insights_table_data,
         sort_action="native",
         style_table={"overflowX": "auto",
                     "borderRadius": "10px",
@@ -1032,7 +1034,7 @@ def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
         topbar,
         dbc.Container(
             [
-                html.H2("Leaderboard", className="text-center mb-4"),
+                html.H2("Insights", className="text-center mb-4"),
                 dbc.Row([
                     dbc.Col(dcc.Dropdown(
                         id="year-selector",
@@ -1045,13 +1047,13 @@ def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
                     ), width=6),
                     dbc.Col(dcc.Dropdown(
                         id="category-selector",
-                        options=leaderboard_categories,
+                        options=insights_categories,
                         value=category,
                         placeholder="Select Category",
                         className="mb-4"
                     ), width=6),
                 ]),
-                leaderboard_table,
+                insights_table,
             ]),
         
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
@@ -1063,20 +1065,20 @@ def leaderboard_layout(year=2024, category="typed_leaderboard_blue_banners"):
         footer
     ])
 @app.callback(
-    Output("leaderboard-table", "data"),
+    Output("insights-table", "data"),
     Input("year-selector", "value"),
     Input("category-selector", "value"),
 )
-def update_leaderboard(year, category):
+def update_insights(year, category):
     if not year:
         year = 2024
-    leaderboard_data = tba_get(f"insights/leaderboards/{year}")
-    if not leaderboard_data:
+    insights_data = tba_get(f"insights/leaderboards/{year}")
+    if not insights_data:
         return []
 
-    leaderboard_table_data = []
+    insights_table_data = []
     rankings = []
-    for item in leaderboard_data:
+    for item in insights_data:
         if item["name"] == category:
             rankings = item.get("data", {}).get("rankings", [])
             break
@@ -1106,13 +1108,13 @@ def update_leaderboard(year, category):
             else:
                 rank_display = f"{current_rank}"
 
-            leaderboard_table_data.append({
+            insights_table_data.append({
                 "Team": team_link,
                 "Value": rank.get("value", 0),
                 "Rank": rank_display,
             })
 
-    return leaderboard_table_data
+    return insights_table_data
 
 def events_layout(year=2025):
     # Dropdowns
@@ -1140,7 +1142,7 @@ def events_layout(year=2025):
         id="week-dropdown",
         options=[
             {"label": "All Weeks", "value": "all"}
-        ] + [{"label": f"Week {i}", "value": i} for i in range(0, 9)],
+        ] + [{"label": f"Week {i+1}", "value": i} for i in range(0, 9)],
         value="all",
         placeholder="Select Week",
         clearable=False,
@@ -1747,70 +1749,34 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
     return table_data
 
 def teams_map_layout():
-    folder_path = "geo"
-    file_path = os.path.join(folder_path, "mapteams_2025.json")
-    with open(file_path, "r", encoding="utf-8") as f:
-        map_teams_2025 = json.load(f)
-
-    # Filter only teams with lat & lng
-    map_teams = [t for t in map_teams_2025 if t.get("lat") and t.get("lng")]
-
-    # Create a Folium map centered on the USA
-    m = folium.Map(location=[39.8283, -98.5795], zoom_start=4, tiles="OpenStreetMap")
-
-    # Add state lines (using GeoJSON from Natural Earth or another source)
-    folium.GeoJson(
-        "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json",
-        name="State Boundaries",
-        style_function=lambda x: {
-            "color": "black",
-            "weight": 1,
-            "fillOpacity": 0.1,
-        },
-    ).add_to(m)
-
-    # Use MarkerCluster for better performance with large datasets
-    marker_cluster = MarkerCluster(
-        disableClusteringAtZoom=10,  # Stops clustering at higher zoom levels
-    ).add_to(m)
-
-
-    # Add team locations to the map
-    for team in map_teams:
-        folium.Marker(
-            location=[team["lat"], team["lng"]],
-            popup=folium.Popup(
-                f"<b>Team {team['team_number']}:</b> {team['nickname']}<br>"
-                f"<b>Location:</b> {team['city']}, {team['state_prov']}, {team['country']}",
-                max_width=250,
-            ),
-            icon=folium.Icon(color="blue", icon="info-sign"),
-        ).add_to(marker_cluster)
-
-    # Add a layer control
-    folium.LayerControl().add_to(m)
-
-    # Save the map to an HTML file
+    # Path to the pre-generated map file
     map_file_path = "assets/teams_map.html"
-    m.save(map_file_path)
 
-    # Return a Dash layout embedding the map
+    # Ensure the file exists
+    if not os.path.exists(map_file_path):
+        return html.Div([
+            topbar,
+            dbc.Container([
+                dbc.Alert("The map file does not exist. Please generate it first.", color="danger")
+            ], fluid=True),
+            footer,
+        ])
+
+    # Serve the existing map file without reprocessing the data
     return html.Div([
         topbar,
+        dcc.Location(id="url", refresh=False),
         dbc.Container([
-            html.H3("Interactive Map: All 2025 Teams", className="text-center mb-4"),
             html.Iframe(
-                srcDoc=open(map_file_path, "r").read(),
-                style={"width": "100%", "height": "80vh", "border": "none"}
+                src=f"/{map_file_path}",  # Path to the static map file
+                style={"width": "100%", "height": "87vh", "border": "none"},
             ),
         ], fluid=True),
-
+        footer,
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
         dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
         dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
-        
-        footer,
     ])
 
 app.layout = html.Div([
@@ -1821,65 +1787,74 @@ app.layout = html.Div([
 @app.callback(
     [Output("url", "pathname"), Output("url", "search")],
     [
-        Input("btn-search-home", "n_clicks"), 
-        Input("desktop-search-button", "n_clicks"),  
-        Input("mobile-search-button", "n_clicks"),  
-        Input("teams-view-map", "n_clicks"),  
+        Input("btn-search-home", "n_clicks"),
+        Input("input-team-home", "n_submit"),
+        Input("desktop-search-button", "n_clicks"),
+        Input("desktop-search-input", "n_submit"),
+        Input("mobile-search-button", "n_clicks"),
+        Input("mobile-search-input", "n_submit"),
+        Input("teams-view-map", "n_clicks"),
         Input("teams-map", "clickData"),
     ],
     [
-        State("input-team-home", "value"), 
-        State("input-year-home", "value"), 
-        State("desktop-search-input", "value"), 
-        State("mobile-search-input", "value"), 
+        State("input-team-home", "value"),
+        State("input-year-home", "value"),
+        State("desktop-search-input", "value"),
+        State("mobile-search-input", "value"),
     ],
     prevent_initial_call=True,
 )
-def handle_navigation(home_click, desktop_click, mobile_click, view_map_click, map_clickdata, home_team_value, home_year_value, desktop_search_value, mobile_search_value):
-    
+def handle_navigation(
+    home_click, home_submit, desktop_click, desktop_submit, 
+    mobile_click, mobile_submit, view_map_click, map_clickdata, 
+    home_team_value, home_year_value, desktop_search_value, mobile_search_value
+):
     ctx = dash.callback_context
 
     if not ctx.triggered:
         return dash.no_update, dash.no_update
 
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    print(f"Triggered by: {trigger_id}")
 
-    # Handle the Home Search button
-    if trigger_id == "btn-search-home" and home_team_value:
-        query_params = {"team": home_team_value}
-        if home_year_value:  
-            query_params["year"] = home_year_value
+    # Helper function to build the search URL
+    def build_search(team_value, year_value=None):
+        if not team_value:
+            return dash.no_update, dash.no_update
+        query_params = {"team": team_value}
+        if year_value and year_value.isdigit():  # Ensure year is valid
+            query_params["year"] = year_value
         search = "?" + urllib.parse.urlencode(query_params)
         return "/data", search
 
-    # Handle the Topbar Search button
-    elif trigger_id == "desktop-search-button" and desktop_search_value:
-        query_params = {"team": desktop_search_value}
-        search = "?" + urllib.parse.urlencode(query_params)
-        return "/data", search
+    # Home Search (Button or Enter Key)
+    if trigger_id in ["btn-search-home", "input-team-home"]:
+        return build_search(home_team_value, home_year_value)
 
-    elif trigger_id == "mobile-search-button" and mobile_search_value:
-        query_params = {"team": mobile_search_value}
-        search = "?" + urllib.parse.urlencode(query_params)
-        return "/data", search
+    # Desktop Search (Button or Enter Key)
+    elif trigger_id in ["desktop-search-button", "desktop-search-input"]:
+        return build_search(desktop_search_value)
 
+    # Mobile Search (Button or Enter Key)
+    elif trigger_id in ["mobile-search-button", "mobile-search-input"]:
+        return build_search(mobile_search_value)
+
+    # Handle View Map Button
     elif trigger_id == "teams-view-map":
+        return "/teamsmap", ""
 
-        return "/teamsmap", ""  # pathname="/teamsmap", no search
-
+    # Handle Clicking a Team on the Map
     elif trigger_id == "teams-map":
         if not map_clickdata:
             raise dash.exceptions.PreventUpdate
-        
+
         point = map_clickdata["points"][0]
         custom = point.get("customdata", [])
         if not custom:
             raise dash.exceptions.PreventUpdate
 
-        team_number = custom[0] 
-        query_params = {"team": team_number}
-        search = "?" + urllib.parse.urlencode(query_params)
-        return "/data", search
+        team_number = custom[0]
+        return build_search(team_number)
 
     return dash.no_update, dash.no_update
 
@@ -1898,8 +1873,8 @@ def display_page(pathname, search):
         return teams_layout()
     elif pathname == "/teamsmap":
         return teams_map_layout()  
-    elif pathname == "/leaderboard":
-        return leaderboard_layout()
+    elif pathname == "/insights":
+        return insights_layout()
     elif pathname == "/events":
         return events_layout()
     elif pathname == "/challenges":
@@ -1916,4 +1891,4 @@ def display_page(pathname, search):
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run_server(host="0.0.0.0", port=port, debug=True)
+    app.run_server(host="0.0.0.0", port=port, debug=False)
