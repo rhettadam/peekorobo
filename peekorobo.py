@@ -629,7 +629,7 @@ def team_layout(team_number, year):
                                     },
                                 ) if avatar_url else html.Div("No avatar available.", style={"color": "#777"}),
                             ],
-                            width=3, 
+                            width=3,
                             style={"textAlign": "center"},
                         ),
                     ],
@@ -1057,9 +1057,6 @@ def team_layout(team_number, year):
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-            dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
-            dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
-            
             footer
         ]
     )
@@ -1068,25 +1065,42 @@ def clean_category_label(raw_label):
     label = raw_label.replace("typed_", "").replace("_", " ").replace("insights","").title()
     return label
 
-def insights_layout(year=2024, category="typed_leaderboard_blue_banners"):
-    
+def insights_layout(year=2024, category="typed_leaderboard_blue_banners", notable_category="notables_division_finals_appearances"):
     # Fetch leaderboard data
     insights_data = tba_get(f"insights/leaderboards/{year}")
-    if not insights_data:
-        return html.Div("Error fetching insights data.")
+    notables_data = tba_get(f"insights/notables/{year}")
+    
+    if not insights_data or not notables_data:
+        return html.Div("Error fetching insights or notables data.")
 
-    # Extract leaderboard categories and clean labels
+    # Extract leaderboard and notable categories
     insights_categories = [
         {"label": clean_category_label(item["name"]), "value": item["name"]}
         for item in insights_data
     ]
+    notable_categories = [
+        {"label": clean_category_label(item["name"]), "value": item["name"]}
+        for item in notables_data
+    ]
+    
+    if not notable_categories:
+        print("Error: No notable categories found")
+    else:
+        print("Notable Categories:", notable_categories)
+
 
     # Default to the first category if not provided
     if category not in [item["value"] for item in insights_categories]:
         category = insights_categories[0]["value"]
 
-    # Filter data for the selected category
+    if not notable_categories:
+        notable_category = None
+    elif notable_category not in [item["value"] for item in notable_categories]:
+        notable_category = notable_categories[0]["value"]
+
+    # Filter data for the selected categories
     insights_table_data = []
+    notable_entries = []
     for item in insights_data:
         if item["name"] == category:
             rankings = item.get("data", {}).get("rankings", [])
@@ -1098,53 +1112,54 @@ def insights_layout(year=2024, category="typed_leaderboard_blue_banners"):
                         "Value": rank.get("value", 0),
                     })
 
-    # Sort data by value 
+    notable_entries = []
+    for item in notables_data:
+        if item["name"] == notable_category:
+            entries = item.get("data", {}).get("entries", [])
+            print(f"Entries for category {notable_category}:", entries)  # Debugging
+            notable_entries.extend([
+                {
+                    "Context": entry["context"][0] if entry.get("context") else "N/A",
+                    "Team": entry["team_key"].replace("frc", ""),
+                }
+                for entry in entries
+            ])
+    
+    if not notable_entries:
+        print("Error: Notable entries not found for the selected category")
+    else:
+        print("Notable Entries:", notable_entries)
+
+    # Sort insights data by value
     insights_table_data = sorted(insights_table_data, key=lambda x: x["Value"], reverse=True)
 
-    # Create a DataTable
+    # Create DataTables
     insights_table = dash_table.DataTable(
         id="insights-table",
         columns=[
-            {"name": "Team", "id": "Team", "presentation": "markdown"}, 
+            {"name": "Team", "id": "Team", "presentation": "markdown"},
             {"name": "Value", "id": "Value"},
             {"name": "Rank", "id": "Rank"},
         ],
         data=insights_table_data,
+        page_size=10,
         sort_action="native",
-        style_table={"overflowX": "auto",
-                    "borderRadius": "10px",
-                    "border": "1px solid #ddd"},
-        style_cell={
-            "textAlign": "left",
-            "padding": "10px",
-            "fontFamily": "Arial, sans-serif",
-            "fontSize": "14px",
-        },
-        style_header={
-            "backgroundColor": "#FFCC00",
-            "color": "#333",
-            "fontWeight": "bold",
-            "border": "1px solid #ddd",
-        },
-        style_data_conditional=[
-            {
-                "if": {"filter_query": '{Rank} contains "🥇"'},
-                "fontWeight": "bold",
-            },
-            {
-                "if": {"filter_query": '{Rank} contains "🥈"'},
-                "fontWeight": "bold",
-            },
-            {
-                "if": {"filter_query": '{Rank} contains "🥉"'},
-                "fontWeight": "bold",
-            },
-            {
-                "if": {"state": "selected"},
-                "backgroundColor": "rgba(255, 221, 0, 0.5)",
-                "border": "1px solid #FFCC00",
-            },
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "1px solid #ddd"},
+        style_cell={"textAlign": "left", "padding": "10px", "fontFamily": "Arial, sans-serif", "fontSize": "14px"},
+        style_header={"backgroundColor": "#FFCC00", "color": "#333", "fontWeight": "bold", "border": "1px solid #ddd"},
+    )
+
+    notables_table = dash_table.DataTable(
+        id="notables-table",
+        columns=[
+            {"name": "Context", "id": "Context"},
+            {"name": "Team", "id": "Team"},
         ],
+        data=notable_entries,
+        page_size=10,
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "1px solid #ddd"},
+        style_header={"backgroundColor": "#FFCC00", "color": "#333", "fontWeight": "bold", "border": "1px solid #ddd"},
+        style_cell={"textAlign": "left", "padding": "10px", "fontFamily": "Arial, sans-serif", "fontSize": "14px"},
     )
 
     return html.Div([
@@ -1155,52 +1170,62 @@ def insights_layout(year=2024, category="typed_leaderboard_blue_banners"):
                 dbc.Row([
                     dbc.Col(dcc.Dropdown(
                         id="year-selector",
-                        options=[
-                            {"label": f"{year}", "value": year} for year in range(2000, 2025)
-                        ],
+                        options=[{"label": f"{year}", "value": year} for year in range(2000, 2025)],
                         value=year,
                         placeholder="Select Year",
                         className="mb-4"
-                    ), width=6),
+                    ), width=4),
                     dbc.Col(dcc.Dropdown(
                         id="category-selector",
                         options=insights_categories,
                         value=category,
-                        placeholder="Select Category",
+                        placeholder="Select Insights Category",
                         className="mb-4"
-                    ), width=6),
+                    ), width=4),
+                    dbc.Col(dcc.Dropdown(
+                        id="notable-category-selector",
+                        options=notable_categories,
+                        value=notable_category,
+                        placeholder="Select Notables Category",
+                        className="mb-4",
+                        disabled=notable_category is None  # Disable dropdown if no notable categories
+                    ), width=4),
                 ]),
+                html.H3("Insights", className="mt-4"),
                 insights_table,
-            ]),
-        
+                html.H3("Notables", className="mt-4"),
+                notables_table,
+            ],
+            style={"maxWidth": "1200px", "margin": "0 auto"},
+        ),
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
         dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-        dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
-        dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
-        
-        footer
+        footer,
     ])
+
 @app.callback(
-    Output("insights-table", "data"),
-    Input("year-selector", "value"),
-    Input("category-selector", "value"),
+    [Output("insights-table", "data"), Output("notables-table", "data")],
+    [Input("year-selector", "value"), Input("category-selector", "value"), Input("notable-category-selector", "value")],
 )
-def update_insights(year, category):
+def update_insights(year, category, notable_category):
     if not year:
         year = 2024
+    
+    # Fetch leaderboard and notables data
     insights_data = tba_get(f"insights/leaderboards/{year}")
-    if not insights_data:
-        return []
+    notables_data = tba_get(f"insights/notables/{year}")
+    if not insights_data or not notables_data:
+        return [], []
 
+    # Insights data processing
     insights_table_data = []
     rankings = []
     for item in insights_data:
         if item["name"] == category:
             rankings = item.get("data", {}).get("rankings", [])
-            break
 
-    # Sort rankings by value & compute ranks
+    # Sort rankings by value and compute ranks
     sorted_rankings = sorted(rankings, key=lambda x: x["value"], reverse=True)
     current_rank = 0
     last_value = None
@@ -1210,28 +1235,33 @@ def update_insights(year, category):
             team_number = team_key.replace("frc", "")
             team_link = f"[{team_number}](/data?team={team_number}&year={year})"
 
-            # Assign rank 
+            # Assign rank
             if rank["value"] != last_value:
                 current_rank = i + 1
                 last_value = rank["value"]
 
             # Style rank based on position
-            if current_rank == 1:
-                rank_display = "🥇 1"
-            elif current_rank == 2:
-                rank_display = "🥈 2"
-            elif current_rank == 3:
-                rank_display = "🥉 3"
-            else:
-                rank_display = f"{current_rank}"
-
+            rank_display = f"{current_rank}" if current_rank > 3 else ["🥇", "🥈", "🥉"][current_rank - 1] + f" {current_rank}"
             insights_table_data.append({
                 "Team": team_link,
                 "Value": rank.get("value", 0),
                 "Rank": rank_display,
             })
 
-    return insights_table_data
+    # Notables data processing
+    notables_data_processed = []
+    for item in notables_data:
+        if item["name"] == notable_category:
+            entries = item.get("data", {}).get("entries", [])
+            notables_data_processed.extend([
+                {
+                    "Context": entry["context"][0] if entry.get("context") else "N/A",
+                    "Team": entry["team_key"].replace("frc", ""),
+                }
+                for entry in entries
+            ])
+
+    return insights_table_data, notables_data_processed
 
 def events_layout(year=2025):
     # Dropdowns
@@ -1239,17 +1269,17 @@ def events_layout(year=2025):
         id="year-dropdown",
         options=[{"label": f"{yr}", "value": yr} for yr in range(2000, 2026)],
         value=year,
-        placeholder="Select a year",
+        placeholder="Year",
     )
     event_type_dropdown = dcc.Dropdown(
         id="event-type-dropdown",
         options=[
             {"label": "All", "value": "all"},
-            {"label": "Season Events", "value": "season"},
-            {"label": "Off-season Events", "value": "offseason"},
-            {"label": "Regional Events", "value": "regional"},
-            {"label": "District Events", "value": "district"},
-            {"label": "Championship Events", "value": "championship"},
+            {"label": "Season", "value": "season"},
+            {"label": "Off-season", "value": "offseason"},
+            {"label": "Regional", "value": "regional"},
+            {"label": "District", "value": "district"},
+            {"label": "Championship", "value": "championship"},
         ],
         value=["all"],
         multi=True,
@@ -1258,35 +1288,24 @@ def events_layout(year=2025):
     week_dropdown = dcc.Dropdown(
         id="week-dropdown",
         options=[
-            {"label": "All Weeks", "value": "all"}
+            {"label": "All", "value": "all"}
         ] + [{"label": f"Week {i+1}", "value": i} for i in range(0, 9)],
         value="all",
-        placeholder="Select Week",
+        placeholder="Week",
         clearable=False,
-    )
-    sort_dropdown = dcc.Dropdown(
-        id="sort-dropdown",
-        options=[
-            {"label": "Date (New -> Old)", "value": "newdate"},
-            {"label": "Date (Old -> New)", "value": "olddate"},
-            {"label": "Name", "value": "name"},
-        ],
-        placeholder="Sort by",
     )
     search_input = dbc.Input(
         id="search-input",
-        placeholder="Search by Name...",
+        placeholder="Search",
         type="text",
-        debounce=True,
     )
 
     filters_row = dbc.Row(
         [
-            dbc.Col(year_dropdown, width=2),
-            dbc.Col(event_type_dropdown, width=3),
-            dbc.Col(week_dropdown, width=2),
-            dbc.Col(sort_dropdown, width=2),
-            dbc.Col(search_input, width=3),
+            dbc.Col(year_dropdown, xs=3, sm=4, md=2),
+            dbc.Col(event_type_dropdown, xs=3, sm=3, md=2),
+            dbc.Col(week_dropdown, xs=3, sm=4, md=2),
+            dbc.Col(search_input, xs=3, sm=4, md=2),
         ],
         className="mb-4",
     )
@@ -1362,11 +1381,10 @@ def events_layout(year=2025):
         Input("year-dropdown", "value"),
         Input("event-type-dropdown", "value"),
         Input("week-dropdown", "value"),
-        Input("sort-dropdown", "value"),
         Input("search-input", "value"),
     ],
 )
-def update_events_table_and_map(selected_year, selected_event_types, selected_week, sort_option, search_query):
+def update_events_table_and_map(selected_year, selected_event_types, selected_week, search_query):
     # --- 1. Fetch & Filter Event Data for Table ---
     events_data = tba_get(f"events/{selected_year}")
     if not events_data:
@@ -1420,14 +1438,6 @@ def update_events_table_and_map(selected_year, selected_event_types, selected_we
         for ev in events_data
     ]
 
-    # Sort
-    if sort_option == "olddate":
-        formatted_events = sorted(formatted_events, key=lambda x: x["Start Date"])
-    elif sort_option == "newdate":
-        formatted_events = sorted(formatted_events, key=lambda x: x["Start Date"], reverse=True)
-    elif sort_option == "name":
-        formatted_events = sorted(formatted_events, key=lambda x: x["Event Name"].lower())
-
     map_events = [ev for ev in events_data if ev.get("lat") is not None and ev.get("lng") is not None]
 
     fig = {}
@@ -1463,6 +1473,159 @@ def update_events_table_and_map(selected_year, selected_event_types, selected_we
         )
 
     return formatted_events, fig
+
+def event_layout(event_key):
+    # Fetch event details
+    event_details = tba_get(f"event/{event_key}")
+    if not event_details:
+        return dbc.Alert("Event details could not be fetched.", color="danger")
+
+    # Fetch additional data endpoints
+    rankings = tba_get(f"event/{event_key}/rankings") or {"rankings": []}
+    oprs = tba_get(f"event/{event_key}/oprs") or {"oprs": {}}
+    coprs = tba_get(f"event/{event_key}/coprs") or {"coprs": {}}
+    insights = tba_get(f"event/{event_key}/insights") or {}
+
+    # Event information
+    event_name = event_details.get("name", "Unknown Event")
+    event_location = f"{event_details.get('city', '')}, {event_details.get('state_prov', '')}, {event_details.get('country', '')}"
+    start_date = event_details.get("start_date", "N/A")
+    end_date = event_details.get("end_date", "N/A")
+    event_type = event_details.get("event_type_string", "N/A")
+    website = event_details.get("website", "#")
+
+    # Layout for event details
+    header_layout = html.Div(
+        [
+            html.H2(event_name, className="text-center mb-4"),
+            html.P(f"Location: {event_location}", className="text-center"),
+            html.P(f"Dates: {start_date} - {end_date}", className="text-center"),
+            html.P(f"Type: {event_type}", className="text-center"),
+            html.A("Visit Event Website", href=website, target="_blank", className="d-block text-center mb-4"),
+        ]
+    )
+
+    # Dropdown to select data
+    dropdown = dbc.DropdownMenu(
+        label="Select Data to Display",
+        children=[
+            dbc.DropdownMenuItem("Rankings", id="dropdown-rankings"),
+            dbc.DropdownMenuItem("OPRs", id="dropdown-oprs"),
+            dbc.DropdownMenuItem("COPRs", id="dropdown-coprs"),
+            dbc.DropdownMenuItem("Insights", id="dropdown-insights"),
+        ],
+        color="primary",
+        className="mb-4",
+    )
+
+    # Data containers
+    rankings_table = dash_table.DataTable(
+        id="rankings-table",
+        columns=[
+            {"name": "Rank", "id": "Rank"},
+            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "Wins", "id": "Wins"},
+            {"name": "Losses", "id": "Losses"},
+            {"name": "Ties", "id": "Ties"},
+            {"name": "DQ", "id": "DQ"},
+        ],
+        data=[
+            {
+                "Rank": rank.get("rank", "N/A"),
+                "Team": f"[{rank.get('team_key', 'N/A').replace('frc', '')}](/data?team={rank.get('team_key', '').replace('frc', '')})",
+                "Wins": rank.get("record", {}).get("wins", "N/A"),
+                "Losses": rank.get("record", {}).get("losses", "N/A"),
+                "Ties": rank.get("record", {}).get("ties", "N/A"),
+                "DQ": rank.get("dq", "N/A"),
+            }
+            for rank in (rankings.get("rankings", []) if rankings else [])
+        ],
+        page_size=10,
+    )
+
+    oprs_table = dash_table.DataTable(
+        id="oprs-table",
+        columns=[
+            {"name": "Team", "id": "Team"},
+            {"name": "OPR", "id": "OPR"},
+        ],
+        data=[
+            {"Team": team.replace("frc", ""), "OPR": value}
+            for team, value in (oprs.get("oprs", {}) if oprs else {}).items()
+        ],
+        page_size=10,
+    )
+
+    coprs_table = dash_table.DataTable(
+        id="coprs-table",
+        columns=[
+            {"name": "Team", "id": "Team"},
+            {"name": "COPR", "id": "COPR"},
+        ],
+        data=[
+            {"Team": team.replace("frc", ""), "COPR": value}
+            for team, value in (coprs.get("coprs", {}) if coprs else {}).items()
+        ],
+        page_size=10,
+    )
+
+    insights_table = dash_table.DataTable(
+        id="insights-table",
+        columns=[
+            {"name": "Metric", "id": "Metric"},
+            {"name": "Value", "id": "Value"},
+        ],
+        data=[
+            {"Metric": metric.replace("_", " ").title(), "Value": value}
+            for metric, value in (insights.items() if insights else {})
+        ],
+        page_size=5,
+    )
+
+    # Layout with Dropdown and dynamic table
+    return html.Div(
+        [
+            topbar,
+            dbc.Container(
+                [
+                    header_layout,
+                    dropdown,
+                    html.Div(id="data-display-container", children=[rankings_table]),  # Default to rankings
+                ],
+                style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
+            ),
+            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            footer,
+        ]
+    )
+
+# Callback to update the displayed table based on the dropdown selection
+@app.callback(
+    Output("data-display-container", "children"),
+    [Input("dropdown-rankings", "n_clicks"),
+     Input("dropdown-oprs", "n_clicks"),
+     Input("dropdown-coprs", "n_clicks"),
+     Input("dropdown-insights", "n_clicks")],
+)
+def update_display(show_rankings, show_oprs, show_coprs, show_insights):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return 
+
+    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    if button_id == "dropdown-rankings":
+        return rankings_table
+    elif button_id == "dropdown-oprs":
+        return oprs_table
+    elif button_id == "dropdown-coprs":
+        return coprs_table
+    elif button_id == "dropdown-insights":
+        return insights_table
+
+    return rankings_table  # Fallback
 
 def challenges_layout():
     challenges = []
@@ -1522,13 +1685,9 @@ def challenges_layout():
                 ],
                 style={"maxWidth": "900px", "margin": "0 auto"},
             ),
-            
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-            dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
-            dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
-            
             footer,
         ]
     )
@@ -1599,9 +1758,6 @@ def challenge_details_layout(year):
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-            dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
-            dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
-            
             footer,
         ]
     )
@@ -1637,7 +1793,7 @@ def teams_layout(default_year=2024):
 
     search_input = dbc.Input(
         id="search-bar",
-        placeholder="Search teams by name or number...",
+        placeholder="Search",
         type="text",
         className="mb-3",
     )
@@ -1670,21 +1826,20 @@ def teams_layout(default_year=2024):
                     html.H2("Teams", className="text-center mb-4"),
                     dbc.Row(
                         [
-                            dbc.Col(teams_year_dropdown, width=1),
-                            dbc.Col(country_dropdown, width=2),
-                            dbc.Col(state_dropdown, width=2),
-                            dbc.Col(search_input, width=4),
+                            dbc.Col(teams_year_dropdown, xs=3, sm=4, md=2),  # Adjust widths for mobile
+                            dbc.Col(country_dropdown, xs=3, sm=6, md=3),
+                            dbc.Col(state_dropdown, xs=3, sm=4, md=3),
+                            dbc.Col(search_input, xs=3, sm=6, md=4),  # Full-width on mobile
                         ],
                         className="mb-4 justify-content-center",
                     ),
                     dbc.Row(dbc.Col(teams_table, width=12), className="mb-4"),
                 ],
-                style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
+                style={"padding": "10px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-            dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
             footer,
         ]
     )
@@ -1818,7 +1973,6 @@ def teams_map_layout():
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
         dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-        dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
     ])
 
 app.layout = html.Div([
@@ -1913,6 +2067,9 @@ def display_page(pathname, search):
         team_number = query_params.get("team", [None])[0]
         year = query_params.get("year", [None])[0]
         return team_layout(team_number, year)
+    elif pathname.startswith("/event/"):
+        event_key = pathname.split("/")[-1]  # Extract event_key from URL
+        return event_layout(event_key)
     elif pathname == "/teams":
         return teams_layout()
     elif pathname == "/teamsmap":
@@ -1935,4 +2092,4 @@ def display_page(pathname, search):
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run_server(host="0.0.0.0", port=port, debug=False)
+    app.run_server(host="0.0.0.0", port=port, debug=True)
