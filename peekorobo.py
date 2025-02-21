@@ -33,12 +33,15 @@ def tba_get(endpoint: str):
 app = dash.Dash(
     __name__,
     meta_tags=[
-        {'name': 'viewport', 'content': 'width=device-width,initial-scale=1.0,'}
+        {'name': 'viewport', 'content': 'width=device-width, initial-scale=1.0'},
+        {'name': 'description', 'content': 'Peekorobo - A scouting and statistics platform for FRC teams that provides detailed insights and resources'},
+        {'name': 'keywords', 'content': 'FRC, Robotics, Scouting, FIRST, FIRST Robotics Competition, Statbotics, TBA, The Blue Alliance, Competition, Statistics'},
     ],
     external_stylesheets=[dbc.themes.BOOTSTRAP],
     suppress_callback_exceptions=True,
     title="Peekorobo",
 )
+
 server = app.server
 
 # -------------- LAYOUTS --------------
@@ -97,7 +100,7 @@ topbar = dbc.Navbar(
                             [
                                 dbc.Input(
                                     id="mobile-search-input",
-                                    placeholder="Team # (e.g., 1912)",
+                                    placeholder="Team name or # (e.g., 1912)",
                                     type="text",
                                 ),
                                 dbc.Button(
@@ -361,7 +364,7 @@ home_layout = html.Div([
                                             dbc.Input(
                                                 id="input-team-home",
                                                 type="text",
-                                                placeholder="Team # (e.g., 1912)",
+                                                placeholder="Team name or # (e.g., 1912)",
                                                 className="custom-input-box",
                                                 style={"width": "100%", "marginBottom": ".4rem"}
                                             ),
@@ -1085,8 +1088,6 @@ def insights_layout(year=2024, category="typed_leaderboard_blue_banners", notabl
     
     if not notable_categories:
         print("Error: No notable categories found")
-    else:
-        print("Notable Categories:", notable_categories)
 
 
     # Default to the first category if not provided
@@ -1127,8 +1128,6 @@ def insights_layout(year=2024, category="typed_leaderboard_blue_banners", notabl
     
     if not notable_entries:
         print("Error: Notable entries not found for the selected category")
-    else:
-        print("Notable Entries:", notable_entries)
 
     # Sort insights data by value
     insights_table_data = sorted(insights_table_data, key=lambda x: x["Value"], reverse=True)
@@ -1986,6 +1985,7 @@ app.layout = html.Div([
     [
         Input("btn-search-home", "n_clicks"),
         Input("input-team-home", "n_submit"),
+        Input("input-year-home", "n_submit"),  # ADD THIS LINE
         Input("desktop-search-button", "n_clicks"),
         Input("desktop-search-input", "n_submit"),
         Input("mobile-search-button", "n_clicks"),
@@ -2000,7 +2000,7 @@ app.layout = html.Div([
     prevent_initial_call=True,
 )
 def handle_navigation(
-    home_click, home_submit, desktop_click, desktop_submit, 
+    home_click, home_submit, home_year_submit, desktop_click, desktop_submit, 
     mobile_click, mobile_submit, home_team_value, home_year_value, 
     desktop_search_value, mobile_search_value
 ):
@@ -2011,7 +2011,7 @@ def handle_navigation(
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
     # Get input value from the triggered element
-    if trigger_id in ["btn-search-home", "input-team-home"]:
+    if trigger_id in ["btn-search-home", "input-team-home", "input-year-home"]:  # Include input-year-home here
         search_value = home_team_value
         year_value = home_year_value
     elif trigger_id in ["desktop-search-button", "desktop-search-input"]:
