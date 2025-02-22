@@ -68,7 +68,7 @@ topbar = dbc.Navbar(
                 dbc.Nav(
                     [
                         dbc.NavItem(dbc.NavLink("Teams", href="/teams", className="custom-navlink")),
-                        dbc.NavItem(dbc.NavLink("Map", href="/teamsmap", className="custom-navlink")),
+                        dbc.NavItem(dbc.NavLink("Map", href="/map", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Events", href="/events", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Insights", href="/insights", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Challenges", href="/challenges", className="custom-navlink")),
@@ -1964,7 +1964,7 @@ def teams_map_layout():
             [
                 html.Iframe(
                     src=f"/{map_path}",  # Reference the generated HTML file
-                    style={"width": "100%", "height": "840px", "border": "none"},
+                    style={"width": "100%", "height": "847px", "border": "none"},
                 ),
             ],
             fluid=True
@@ -2074,7 +2074,7 @@ def display_page(pathname):
     if pathname == "/teams":
         return teams_layout()
     
-    if pathname == "/teamsmap":
+    if pathname == "/map":
         return teams_map_layout()
     
     if pathname == "/insights":
