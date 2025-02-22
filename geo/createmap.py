@@ -136,7 +136,7 @@ def generate_team_map(output_file="assets/teams_map.html"):
             f"<b>Location:</b> {team['city']}, {team['state_prov']}, {team['country']}<br>"
             f"<b>Global Rank:</b> #{global_rank}<br>"
             f"<b>EPA:</b> {epa_display}<br>"
-            f"<a href='/data?team={team_id}' target='_top'>View Team Page</a>"
+            f"<a href='/team/{team_id}' target='_top'>View Team Page</a>"
         )
 
         folium.Marker(

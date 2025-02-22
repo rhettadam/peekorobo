@@ -211,7 +211,7 @@ def update_search_preview(input_value):
         return [], {"display": "none"}
 
     # Load team data from the 2024 JSON file
-    folder_path = "team_data"  # Replace with the path where your JSON files are stored
+    folder_path = "team_data" 
     file_path = os.path.join(folder_path, "teams_2024.json")
     
     if not os.path.exists(file_path):
@@ -266,7 +266,7 @@ def update_search_preview(input_value):
                     dbc.Col(
                         html.A(
                             f"{team_number} | {team_nickname}",
-                            href=f"/data?team={team_number}",
+                            href=f"/team/{team_number}",
                             style={
                                 "lineHeight": "20px",
                                 "textDecoration": "none",
@@ -539,7 +539,7 @@ def team_layout(team_number, year):
     years_links = [
         html.A(
             str(year),
-            href=f"/data?team={team_number}&year={year}",
+            href=f"/team/{team_number}/{year}",
             style={
                 "marginRight": "0px",
                 "color": "#007BFF",
@@ -553,7 +553,7 @@ def team_layout(team_number, year):
     years_links.append(
         html.A(
             "History",
-            href=f"/data?team={team_number}",  # No year specified
+            href=f"/team/{team_number}",  # No year specified
             style={
                 "marginLeft": "0px",
                 "color": "#007BFF",  # Orange to differentiate it
@@ -1232,7 +1232,7 @@ def update_insights(year, category, notable_category):
         team_keys = rank.get("keys", [])
         for team_key in team_keys:
             team_number = team_key.replace("frc", "")
-            team_link = f"[{team_number}](/data?team={team_number}&year={year})"
+            team_link = f"[{team_number}](/team/{team_number}/{year})"
 
             # Assign rank
             if rank["value"] != last_value:
@@ -1532,7 +1532,7 @@ def event_layout(event_key):
         data=[
             {
                 "Rank": rank.get("rank", "N/A"),
-                "Team": f"[{rank.get('team_key', 'N/A').replace('frc', '')}](/data?team={rank.get('team_key', '').replace('frc', '')})",
+                "Team": f"[{rank.get('team_key', 'N/A').replace('frc', '')}](/team/{rank.get('team_key', '').replace('frc', '')})",
                 "Wins": rank.get("record", {}).get("wins", "N/A"),
                 "Losses": rank.get("record", {}).get("losses", "N/A"),
                 "Ties": rank.get("record", {}).get("ties", "N/A"),
@@ -1939,7 +1939,7 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
         epa = team.get("epa", None)
         global_rank = team.get("global_rank", "N/A")
 
-        team_display = f"[{team_number} | {nickname}](/data?team={team_number}&year={selected_year})"
+        team_display = f"[{team_number} | {nickname}](/team/{team_number}/{selected_year})"
         location_display = ", ".join(filter(None, [city, state, country]))
         epa_display = get_epa_display(epa, percentiles)
 
@@ -1981,11 +1981,11 @@ app.layout = html.Div([
 ])
 
 @app.callback(
-    [Output("url", "pathname"), Output("url", "search")],
+    Output("url", "pathname"),
     [
         Input("btn-search-home", "n_clicks"),
         Input("input-team-home", "n_submit"),
-        Input("input-year-home", "n_submit"),  # ADD THIS LINE
+        Input("input-year-home", "n_submit"),
         Input("desktop-search-button", "n_clicks"),
         Input("desktop-search-input", "n_submit"),
         Input("mobile-search-button", "n_clicks"),
@@ -2006,12 +2006,12 @@ def handle_navigation(
 ):
     ctx = dash.callback_context
     if not ctx.triggered:
-        return dash.no_update, dash.no_update
+        return dash.no_update
 
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
-    # Get input value from the triggered element
-    if trigger_id in ["btn-search-home", "input-team-home", "input-year-home"]:  # Include input-year-home here
+    # Determine which input was triggered
+    if trigger_id in ["btn-search-home", "input-team-home", "input-year-home"]:
         search_value = home_team_value
         year_value = home_year_value
     elif trigger_id in ["desktop-search-button", "desktop-search-input"]:
@@ -2021,25 +2021,25 @@ def handle_navigation(
         search_value = mobile_search_value
         year_value = None
     else:
-        return dash.no_update, dash.no_update
+        return dash.no_update
 
     if not search_value:
-        return dash.no_update, dash.no_update
+        return dash.no_update
 
     search_value = search_value.strip().lower()
 
-    # Load the team data
+    # Load team data
     folder_path = "team_data"
     selected_year = year_value if year_value else "2024"
     file_path = os.path.join(folder_path, f"teams_{selected_year}.json")
 
     if not os.path.exists(file_path):
-        return "/", ""  # Redirect to home if no data
+        return "/"
 
     with open(file_path, "r") as f:
         teams_data = json.load(f)
 
-    # Search by number or name
+    # Search for the team by number or name
     matching_team = next(
         (team for team in teams_data if 
          str(team.get("team_number", "")).lower() == search_value or 
@@ -2049,48 +2049,53 @@ def handle_navigation(
 
     if matching_team:
         team_number = matching_team.get("team_number", "")
-        query_params = {"team": team_number}
         if year_value and year_value.isdigit():
-            query_params["year"] = year_value
-        search = "?" + urllib.parse.urlencode(query_params)
-        return "/data", search
+            return f"/team/{team_number}/{year_value}"
+        return f"/team/{team_number}"
 
-    return "/", ""  # Redirect to home if no match
+    return "/"
 
 @app.callback(
     Output("page-content", "children"),
-    Input("url", "pathname"),
-    Input("url", "search")
+    Input("url", "pathname")
 )
-def display_page(pathname, search):
-    if pathname == "/data":
-        query_params = urllib.parse.parse_qs(search.lstrip("?")) if search else {}
-        team_number = query_params.get("team", [None])[0]
-        year = query_params.get("year", [None])[0]
+def display_page(pathname):
+    path_parts = pathname.strip("/").split("/")
+
+    if len(path_parts) >= 2 and path_parts[0] == "team":
+        team_number = path_parts[1]
+        year = path_parts[2] if len(path_parts) > 2 else None
         return team_layout(team_number, year)
-    elif pathname.startswith("/event/"):
-        event_key = pathname.split("/")[-1]  # Extract event_key from URL
+    
+    if pathname.startswith("/event/"):
+        event_key = pathname.split("/")[-1]
         return event_layout(event_key)
-    elif pathname == "/teams":
+    
+    if pathname == "/teams":
         return teams_layout()
-    elif pathname == "/teamsmap":
-        return teams_map_layout()  
-    elif pathname == "/insights":
+    
+    if pathname == "/teamsmap":
+        return teams_map_layout()
+    
+    if pathname == "/insights":
         return insights_layout()
-    elif pathname == "/events":
+    
+    if pathname == "/events":
         return events_layout()
-    elif pathname == "/challenges":
+    
+    if pathname == "/challenges":
         return challenges_layout()
-    elif pathname.startswith("/challenge/"):
+    
+    if pathname.startswith("/challenge/"):
         year = pathname.split("/")[-1]
         try:
             year = int(year)
         except ValueError:
             year = None
         return challenge_details_layout(year)
-    else:
-        return home_layout
-    
+
+    return home_layout
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
     app.run_server(host="0.0.0.0", port=port, debug=False)
