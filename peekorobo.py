@@ -95,6 +95,7 @@ topbar = dbc.Navbar(
                                 dbc.DropdownMenuItem("Peekorobo", href="https://peekorobo-6ec491b9fec0.herokuapp.com/", target="_blank"),
                             ],
                         ),
+                        
                         # Mobile Search Bar (inside collapsible menu)
                         dbc.InputGroup(
                             [
@@ -449,7 +450,6 @@ home_layout = html.Div([
     footer
 ])
 
-
 def calculate_ranks(team_data, selected_team):
     global_rank = 1
     country_rank = 1
@@ -566,9 +566,14 @@ def team_layout(team_number, year):
     rookie_year = years_participated[0]
 
     hof = [2486, 321, 1629, 503, 4613, 1816, 1902, 1311, 2834, 2614, 3132, 987, 597, 27, 1538, 1114, 359, 341, 236, 842, 365, 111, 67, 254, 103, 175, 22, 16, 120, 23, 47, 51, 144, 151, 191, 7]
+
+    wcp = [126,148,144,100,73,71,45,1,48,176,25,232,255,125,279,294,365,66,173,65,111,469,435,494,67,330,503,217,296,522,190,987,177,1114,971,254,973,180,16,1241,1477,610,2848,74,118,1678,1671,5012,2481,120,1086,2767,862,1676,1011,2928,5499,27,2708,4027,2976,3075,3707,4481,1218,1323,5026,4201,1619,3175,6672,4414,4096,609,1690,4522,9432,321]
+
+    
                 
         # Check if the team is in the Hall of Fame
     is_hof_team = int(team_number) in hof
+    is_wcp_team = int(team_number) in wcp
     
     hof_badge = (
         html.Div(
@@ -579,6 +584,16 @@ def team_layout(team_number, year):
             style={"display": "flex", "alignItems": "center", "marginBottom": "8px"}  # Adds spacing below
         )
         if is_hof_team else None
+    )
+    wcp_badge = (
+        html.Div(
+            [
+                html.Span("🌎", style={"fontSize": "1.5rem"}),
+                html.Span(" World Champions", style={"color": "blue", "fontSize": "1.2rem", "fontWeight": "bold", "marginLeft": "5px"})
+            ],
+            style={"display": "flex", "alignItems": "center", "marginBottom": "8px"}  # Adds spacing below
+        )
+        if is_wcp_team else None
     )
     
     # Team Info Card
@@ -592,6 +607,7 @@ def team_layout(team_number, year):
                             [
                                 html.H2(f"Team {team_number}: {nickname}", style={"color": "#333", "fontWeight": "bold"}),
                                 hof_badge if is_hof_team else None,  # Hall of Fame badge here
+                                wcp_badge if is_wcp_team else None,  # World Champions badge
                                 html.P([html.I(className="bi bi-geo-alt-fill"), f"📍 {city}, {state}, {country}"]),
                                 html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
                                         html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "none"})]),
@@ -1474,13 +1490,86 @@ def update_events_table_and_map(selected_year, selected_event_types, selected_we
 
     return formatted_events, fig
 
+import os
+import json
+import numpy as np
+
+def get_epa_display(epa, percentiles):
+    """Returns a formatted string with a colored circle based on EPA percentile."""
+    if epa is None:
+        return "N/A"
+    
+    if epa >= percentiles["99"]:
+        color = "🔵"  # Blue circle
+    elif epa >= percentiles["90"]:
+        color = "🟢"  # Green circle
+    elif epa >= percentiles["75"]:
+        color = "🟡"  # Yellow circle
+    elif epa >= percentiles["25"]:
+        color = "🟠"  # Orange circle
+    else:
+        color = "🔴"  # Red circle
+
+    return f"{color} {epa:.2f}"
+
+def load_teams_and_compute_epa_ranks(year):
+    """
+    Loads teams data from teams_<year>.json, computes EPA percentiles and global ranks.
+    Returns a dict { team_number: {"epa": float or None, "rank": int, "epa_display": str } } for easy lookups.
+    """
+    folder_path = "team_data"
+    epa_info = {}
+
+    # Attempt to load the file
+    file_path = os.path.join(folder_path, f"teams_{year}.json")
+    if not os.path.exists(file_path):
+        return epa_info  # Return empty if no file for that year
+
+    with open(file_path, "r") as f:
+        teams_data = json.load(f)
+
+    # Sort by EPA descending
+    teams_data = sorted(teams_data, key=lambda x: x.get("epa", 0) or 0, reverse=True)
+
+    # Collect all EPA values to compute percentiles
+    epa_values = [t["epa"] for t in teams_data if t.get("epa") is not None]
+    if not epa_values:
+        return epa_info
+
+    percentiles = {
+        "99": np.percentile(epa_values, 99),
+        "90": np.percentile(epa_values, 90),
+        "75": np.percentile(epa_values, 75),
+        "25": np.percentile(epa_values, 25),
+    }
+
+    # Assign global rank and build a quick lookup
+    for idx, t in enumerate(teams_data):
+        team_number = t["team_number"]
+        epa_val = t.get("epa", None)
+        rank = idx + 1
+        epa_info[team_number] = {
+            "epa": epa_val,
+            "rank": rank,
+            "epa_display": get_epa_display(epa_val, percentiles),
+        }
+
+    return epa_info
+
+
 def event_layout(event_key):
     # Fetch event details
     event_details = tba_get(f"event/{event_key}")
     if not event_details:
         return dbc.Alert("Event details could not be fetched.", color="danger")
 
-    # Fetch additional data endpoints
+    # Gather year from event details to load appropriate EPA file
+    event_year = event_details.get("year", 2024)  # fallback default if not found
+
+    # Pre‐load the relevant EPA data for lookups in the callback
+    epa_data = load_teams_and_compute_epa_ranks(event_year)
+
+    # Fetch additional data
     rankings = tba_get(f"event/{event_key}/rankings") or {"rankings": []}
     oprs = tba_get(f"event/{event_key}/oprs") or {"oprs": {}}
     coprs = tba_get(f"event/{event_key}/coprs") or {"coprs": {}}
@@ -1505,92 +1594,32 @@ def event_layout(event_key):
         ]
     )
 
-    # Dropdown to select data
-    dropdown = dbc.DropdownMenu(
-        label="Select Data to Display",
-        children=[
-            dbc.DropdownMenuItem("Rankings", id="dropdown-rankings"),
-            dbc.DropdownMenuItem("OPRs", id="dropdown-oprs"),
-            dbc.DropdownMenuItem("COPRs", id="dropdown-coprs"),
-            dbc.DropdownMenuItem("Insights", id="dropdown-insights"),
+    # Button Group for Data Selection
+    data_buttons = dbc.ButtonGroup(
+        [
+            dbc.Button("Rankings", id="btn-rankings", color="primary", outline=True),
+            dbc.Button("OPRs", id="btn-oprs", color="primary", outline=True),
+            dbc.Button("COPRs", id="btn-coprs", color="primary", outline=True),
+            dbc.Button("Insights", id="btn-insights", color="primary", outline=True),
         ],
-        color="primary",
-        className="mb-4",
+        size="md",
+        className="mb-4 d-flex justify-content-center",
     )
 
-    # Data containers
-    rankings_table = dash_table.DataTable(
-        id="rankings-table",
-        columns=[
-            {"name": "Rank", "id": "Rank"},
-            {"name": "Team", "id": "Team", "presentation": "markdown"},
-            {"name": "Wins", "id": "Wins"},
-            {"name": "Losses", "id": "Losses"},
-            {"name": "Ties", "id": "Ties"},
-            {"name": "DQ", "id": "DQ"},
-        ],
-        data=[
-            {
-                "Rank": rank.get("rank", "N/A"),
-                "Team": f"[{rank.get('team_key', 'N/A').replace('frc', '')}](/team/{rank.get('team_key', '').replace('frc', '')})",
-                "Wins": rank.get("record", {}).get("wins", "N/A"),
-                "Losses": rank.get("record", {}).get("losses", "N/A"),
-                "Ties": rank.get("record", {}).get("ties", "N/A"),
-                "DQ": rank.get("dq", "N/A"),
-            }
-            for rank in (rankings.get("rankings", []) if rankings else [])
-        ],
-        page_size=10,
-    )
-
-    oprs_table = dash_table.DataTable(
-        id="oprs-table",
-        columns=[
-            {"name": "Team", "id": "Team"},
-            {"name": "OPR", "id": "OPR"},
-        ],
-        data=[
-            {"Team": team.replace("frc", ""), "OPR": value}
-            for team, value in (oprs.get("oprs", {}) if oprs else {}).items()
-        ],
-        page_size=10,
-    )
-
-    coprs_table = dash_table.DataTable(
-        id="coprs-table",
-        columns=[
-            {"name": "Team", "id": "Team"},
-            {"name": "COPR", "id": "COPR"},
-        ],
-        data=[
-            {"Team": team.replace("frc", ""), "COPR": value}
-            for team, value in (coprs.get("coprs", {}) if coprs else {}).items()
-        ],
-        page_size=10,
-    )
-
-    insights_table = dash_table.DataTable(
-        id="insights-table",
-        columns=[
-            {"name": "Metric", "id": "Metric"},
-            {"name": "Value", "id": "Value"},
-        ],
-        data=[
-            {"Metric": metric.replace("_", " ").title(), "Value": value}
-            for metric, value in (insights.items() if insights else {})
-        ],
-        page_size=5,
-    )
-
-    # Layout with Dropdown and dynamic table
+    # Store data in `dcc.Store`, plus store epa_data as well for the callback
     return html.Div(
         [
             topbar,
             dbc.Container(
                 [
                     header_layout,
-                    dropdown,
-                    html.Div(id="data-display-container", children=[rankings_table]),  # Default to rankings
+                    data_buttons,
+                    dcc.Store(id="store-rankings", data=rankings),
+                    dcc.Store(id="store-oprs", data=oprs),
+                    dcc.Store(id="store-coprs", data=coprs),
+                    dcc.Store(id="store-insights", data=insights),
+                    dcc.Store(id="store-event-epa", data=epa_data),  # to pass epa data
+                    html.Div(id="data-display-container"),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
@@ -1601,31 +1630,111 @@ def event_layout(event_key):
         ]
     )
 
-# Callback to update the displayed table based on the dropdown selection
+
 @app.callback(
     Output("data-display-container", "children"),
-    [Input("dropdown-rankings", "n_clicks"),
-     Input("dropdown-oprs", "n_clicks"),
-     Input("dropdown-coprs", "n_clicks"),
-     Input("dropdown-insights", "n_clicks")],
+    [
+        Input("btn-rankings", "n_clicks"),
+        Input("btn-oprs", "n_clicks"),
+        Input("btn-coprs", "n_clicks"),
+        Input("btn-insights", "n_clicks"),
+    ],
+    [
+        State("store-rankings", "data"),
+        State("store-oprs", "data"),
+        State("store-coprs", "data"),
+        State("store-insights", "data"),
+        State("store-event-epa", "data"),  # epa_data for the event year
+    ],
+    prevent_initial_call=True,
 )
-def update_display(show_rankings, show_oprs, show_coprs, show_insights):
+def update_display(n_rankings, n_oprs, n_coprs, n_insights, rankings, oprs, coprs, insights, epa_data):
     ctx = dash.callback_context
     if not ctx.triggered:
-        return 
+        return dbc.Alert("Select a data category above.", color="info")
 
     button_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
-    if button_id == "dropdown-rankings":
-        return rankings_table
-    elif button_id == "dropdown-oprs":
-        return oprs_table
-    elif button_id == "dropdown-coprs":
-        return coprs_table
-    elif button_id == "dropdown-insights":
-        return insights_table
+    if button_id == "btn-rankings":
+        # Add columns for EPA Rank and EPA
+        columns = [
+            {"name": "Rank", "id": "Rank"},
+            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "Wins", "id": "Wins"},
+            {"name": "Losses", "id": "Losses"},
+            {"name": "Ties", "id": "Ties"},
+            {"name": "DQ", "id": "DQ"},
+            {"name": "EPA Rank", "id": "EPA_Rank"},
+            {"name": "EPA", "id": "EPA"},
+        ]
 
-    return rankings_table  # Fallback
+        data_rows = []
+        for rank in rankings.get("rankings", []):
+            team_key = rank.get("team_key", "N/A")
+            team_number_str = team_key.replace("frc", "")
+            try:
+                team_number = int(team_number_str)
+            except ValueError:
+                team_number = None
+
+            # Lookup epa data for this team
+            epa_rank = "N/A"
+            epa_display = "N/A"
+            if team_number and str(team_number) in epa_data:
+                epa_info = epa_data[str(team_number)]
+                epa_rank = epa_info["rank"]
+                epa_display = epa_info["epa_display"]  # formatted string with emojis
+
+            data_rows.append(
+                {
+                    "Rank": rank.get("rank", "N/A"),
+                    "Team": f"[{team_number_str}](/team/{team_number_str})",
+                    "Wins": rank.get("record", {}).get("wins", "N/A"),
+                    "Losses": rank.get("record", {}).get("losses", "N/A"),
+                    "Ties": rank.get("record", {}).get("ties", "N/A"),
+                    "DQ": rank.get("dq", "N/A"),
+                    "EPA_Rank": epa_rank,
+                    "EPA": epa_display,
+                }
+            )
+
+        return dash_table.DataTable(
+            columns=columns,
+            data=data_rows,
+            page_size=10,
+        )
+    
+    elif button_id == "btn-oprs":
+        return dash_table.DataTable(
+            columns=[{"name": "Team", "id": "Team"}, {"name": "OPR", "id": "OPR"}],
+            data=[
+                {"Team": team.replace("frc", ""), "OPR": value}
+                for team, value in oprs.get("oprs", {}).items()
+            ],
+            page_size=10,
+        )
+
+    elif button_id == "btn-coprs":
+        return dash_table.DataTable(
+            columns=[{"name": "Team", "id": "Team"}, {"name": "COPR", "id": "COPR"}],
+            data=[
+                {"Team": team.replace("frc", ""), "COPR": value}
+                for team, value in coprs.get("coprs", {}).items()
+            ],
+            page_size=10,
+        )
+
+    elif button_id == "btn-insights":
+        return dash_table.DataTable(
+            columns=[{"name": "Metric", "id": "Metric"}, {"name": "Value", "id": "Value"}],
+            data=[
+                {"Metric": metric.replace("_", " ").title(), "Value": value}
+                for metric, value in insights.items()
+            ],
+            page_size=5,
+        )
+
+    return dbc.Alert("No data available.", color="warning")
 
 def challenges_layout():
     challenges = []

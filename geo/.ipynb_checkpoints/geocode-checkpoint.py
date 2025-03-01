@@ -3,25 +3,23 @@ import time
 import json
 import requests
 from geopy.geocoders import Nominatim
-from dotenv import load_dotenv
 from tqdm import tqdm  
 
-load_dotenv()
+from dotenv import load_dotenv
+
+# Load environment variables
+def configure():
+    load_dotenv()
 
 TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
-TBA_KEY = os.getenv("TBA_API_KEY")
-if not TBA_KEY:
-    raise ValueError("No TBA_API_KEY found in environment/.env")
 
 def tba_get(endpoint: str):
-    headers = {"X-TBA-Auth-Key": TBA_KEY}
+    headers = {"X-TBA-Auth-Key": os.getenv("TBA_API_KEY")}
     url = f"{TBA_BASE_URL}/{endpoint}"
     r = requests.get(url, headers=headers)
     if r.status_code == 200:
         return r.json()
-    else:
-        print(f"Warning: TBA returned {r.status_code} for {url}")
-        return None
+    return None
 
 geo_cache = {}
 geolocator = Nominatim(user_agent="precompute_teams_2025_app")

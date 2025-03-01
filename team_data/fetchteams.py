@@ -45,7 +45,7 @@ def calculate_epa(matches, team_key):
 
 
 def fetch_and_store_team_data():
-    for year in tqdm(range(1992, 2026), desc="Processing Years"):
+    for year in tqdm(range(2025,2026), desc="Processing Years"):
         print(f"\nProcessing year {year}...")
         section_count = 0
         combined_teams = []
