@@ -1531,11 +1531,14 @@ def load_teams_and_compute_epa_ranks(year):
 
 def event_layout(event_key):
     # Fetch event details
+
+    parsed_year, event_code = parse_event_key(event_key)
+    
     event_details = tba_get(f"event/{event_key}")
     if not event_details:
         return dbc.Alert("Event details could not be fetched.", color="danger")
 
-    event_year = event_details.get("year", 2024)
+    event_year = parsed_year if parsed_year else event_details.get("year", 2024)
     epa_data = load_teams_and_compute_epa_ranks(event_year)
 
     # TBA calls
@@ -1552,9 +1555,10 @@ def event_layout(event_key):
     event_type = event_details.get("event_type_string", "N/A")
     website = event_details.get("website", "#")
 
+    # Build the header card (left side), ensuring it can stretch
     header_card = dbc.Card(
         dbc.CardBody([
-            html.H2(event_name, className="card-title mb-3", style={"fontWeight": "bold"}),
+            html.H2(f"{event_name} ({event_year})", className="card-title mb-3", style={"fontWeight": "bold"}),
             html.P(f"Location: {event_location}", className="card-text"),
             html.P(f"Dates: {start_date} - {end_date}", className="card-text"),
             html.P(f"Type: {event_type}", className="card-text"),
@@ -1570,8 +1574,71 @@ def event_layout(event_key):
                 },
             )
         ]),
-        className="mb-4 shadow-sm",
+        className="mb-4 shadow-sm flex-fill",  # flex-fill ensures the card occupies full height
         style={"borderRadius": "10px"}
+    )
+
+    year_dropdown = dcc.Dropdown(
+        id="year-dropdown",
+        options=[{"label": str(y), "value": y} for y in range(1992, 2031)],
+        value=event_year,
+        clearable=False,
+        style={"width": "150px"}
+    )
+
+    dropdown_card = dbc.Card(
+        dbc.CardBody([
+            html.Label("Year:", style={"fontWeight": "bold"}),
+            year_dropdown
+        ]),
+        className="mb-4 shadow-sm flex-fill",
+        style={"borderRadius": "10px", "padding": "10px"}
+    )
+
+    # ------------------ Last Match Thumbnail (Right side) ------------------
+    last_match = None
+    if event_matches:
+        # Prefer finals if available
+        final_matches = [m for m in event_matches if m.get("comp_level") == "f"]
+        if final_matches:
+            final_matches.sort(key=lambda m: m.get("match_number", 0))
+            last_match = final_matches[-1]
+        else:
+            event_matches.sort(key=lambda m: m.get("match_number", 0))
+            last_match = event_matches[-1]
+
+    last_match_thumbnail = None
+    if last_match:
+        video_key = None
+        for vid in last_match.get("videos", []):
+            if vid.get("type") == "youtube":
+                video_key = vid.get("key")
+                break
+        if video_key:
+            thumbnail_url = f"https://img.youtube.com/vi/{video_key}/hqdefault.jpg"
+            last_match_thumbnail = dbc.Card(
+                dbc.CardBody(
+                    html.A(
+                        html.Img(
+                            src=thumbnail_url,
+                            style={"width": "100%", "borderRadius": "5px"},
+                        ),
+                        href=f"https://www.youtube.com/watch?v={video_key}",
+                        target="_blank"
+                    )
+                ),
+                className="mb-4 shadow-sm flex-fill",  # Make this card also fill its parent column
+                style={"borderRadius": "10px"}
+            )
+
+    # ------------------ Combine header card & thumbnail in one row ------------------
+    # Use .d-flex and .align-items-stretch to ensure both columns match height
+    header_layout = dbc.Row(
+        [
+            dbc.Col(header_card, md=8, className="d-flex align-items-stretch"),
+            dbc.Col(last_match_thumbnail, md=4, className="d-flex align-items-stretch") if last_match_thumbnail else dbc.Col()
+        ],
+        className="mb-4"
     )
 
     tab_style = {"color": "#3b3b3b"}
@@ -1592,10 +1659,8 @@ def event_layout(event_key):
             topbar,
             dbc.Container(
                 [
-                    # Instead of just header_card, we show the new row with buttons
-                    header_card,
+                    header_layout,   # Row with event card (left) and last match thumbnail (right)
                     data_tabs,
-
                     # Hidden data storage
                     dcc.Store(id="store-rankings", data=rankings),
                     dcc.Store(id="store-oprs", data=oprs),
@@ -1603,7 +1668,6 @@ def event_layout(event_key):
                     dcc.Store(id="store-event-teams", data=event_teams),
                     dcc.Store(id="store-event-matches", data=event_matches),
                     dcc.Store(id="store-event-year", data=event_year),
-
                     # The tab content
                     html.Div(id="data-display-container"),
                 ],
@@ -1615,7 +1679,6 @@ def event_layout(event_key):
             footer,
         ]
     )
-
 
 def create_team_card_spotlight(team, epa_data, event_year):
     """
@@ -1664,7 +1727,7 @@ def create_team_card_spotlight(team, epa_data, event_year):
             [
                 html.H5(f"#{t_num} | {nickname}", className="card-title mb-3"),
                 html.P(f"Location: {location_str}", className="card-text"),
-                html.P(f"EPA: {epa_display} (Rank: {epa_rank})", className="card-text"),
+                html.P(f"EPA: {epa_display} (Global Rank: {epa_rank})", className="card-text"),
                 dbc.Button("View Team", href=team_url, color="warning", className="mt-2"),
             ]
         )
@@ -1682,6 +1745,18 @@ def create_team_card_spotlight(team, epa_data, event_year):
             "alignItems": "stretch",
         },
     )
+
+import re
+
+def parse_event_key(event_key):
+    """
+    If event_key = '2024cc', returns (2024, 'cc').
+    Otherwise returns (None, event_key) as a fallback.
+    """
+    m = re.match(r'^(\d{4})(.+)$', event_key)
+    if m:
+        return int(m.group(1)), m.group(2)
+    return None, event_key
 
 @app.callback(
     Output("data-display-container", "children"),
@@ -1783,27 +1858,40 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
     elif active_tab == "oprs":
         data = []
         # Convert each frcXXXX to a clickable link
-        for team, val in (oprs.get("oprs") or {}).items():
-            tnum_str = team.replace("frc", "")
+        for team_key, opr_val in (oprs.get("oprs") or {}).items():
+            tnum_str = team_key.replace("frc", "")
+    
+            # Retrieve EPA & Rank from epa_data if available
+            epa_rank = "N/A"
+            epa_display = "N/A"
+            if tnum_str in epa_data:
+                epa_info = epa_data[tnum_str]
+                epa_rank = epa_info.get("rank", "N/A")
+                epa_display = epa_info.get("epa_display", "N/A")
+    
             data.append({
-                "OPR": val,
-                "Team": f"[{tnum_str}](/team/{tnum_str})",  # link
+                "Team": f"[{tnum_str}](/team/{tnum_str})",  # clickable link
+                "OPR": opr_val,
+                "EPA Rank": epa_rank,
+                "EPA": epa_display,
             })
-
+    
         # Sort by OPR descending
         data.sort(key=lambda x: x["OPR"], reverse=True)
-
-        # Assign rank
+    
+        # Assign a simple "OPR Rank" (just for display)
         for i, row in enumerate(data):
-            row["Rank"] = i + 1
-
-        # Mark the "Team" column as markdown
+            row["OPR Rank"] = i + 1
+    
+        # Define the columns, marking "Team" as Markdown
         columns = [
-            {"name": "Rank", "id": "Rank"},
+            {"name": "OPR Rank", "id": "OPR Rank"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
             {"name": "OPR", "id": "OPR"},
+            {"name": "EPA Rank", "id": "EPA Rank"},
+            {"name": "EPA", "id": "EPA"},
         ]
-
+    
         return dash_table.DataTable(
             columns=columns,
             data=data,
@@ -1812,6 +1900,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             style_header=common_style_header,
             style_cell=common_style_cell,
         )
+
 
     # ------------------ TEAMS TAB ------------------
     elif active_tab == "teams":
@@ -1879,7 +1968,11 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
         )
 
         return html.Div([
-            html.H4("Spotlight Teams", className="text-center mb-4"),
+            html.H4(
+                "Spotlight Teams", 
+                className="text-center mb-4",
+                style={"fontWeight": "bold"}
+            ),
             spotlight_layout,
             epa_legend_layout(),
             teams_table
@@ -1939,7 +2032,16 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 else:
                     pred_str = "N/A"
 
+                video_link = "N/A"
+                for vid in match.get("videos", []):
+                    if vid.get("type") == "youtube":
+                        youtube_id = vid.get("key")
+                        if youtube_id:
+                            video_link = f"[Watch](https://www.youtube.com/watch?v={youtube_id})"
+                            break
+
                 rows.append({
+                    "Video": video_link,  
                     "Match": match_label,
                     # team numbers as clickable links
                     "Red Teams": format_teams_markdown(red_teams),
@@ -1955,6 +2057,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
         playoff_data = build_match_rows(playoff_matches)
 
         match_columns = [
+            {"name": "Video", "id": "Video", "presentation": "markdown"}, 
             {"name": "Match", "id": "Match"},
             # Mark "Red Teams"/"Blue Teams" as "presentation: markdown" to enable clickable links
             {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
