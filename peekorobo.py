@@ -1,6 +1,6 @@
 import dash
 import dash_bootstrap_components as dbc
-from dash import html, dcc, dash_table
+from dash import callback, html, dcc, dash_table
 from dash.dependencies import Input, Output, State
 import plotly.express as px
 
@@ -13,6 +13,7 @@ import os
 from dotenv import load_dotenv
 import json
 import numpy as np
+import datetime
 
 from frcgames import frc_games
 from locations import COUNTRIES, STATES
@@ -1188,7 +1189,7 @@ def insights_layout(year=2024, category="typed_leaderboard_blue_banners", notabl
                 dbc.Row([
                     dbc.Col(dcc.Dropdown(
                         id="year-selector",
-                        options=[{"label": f"{year}", "value": year} for year in range(2000, 2025)],
+                        options=[{"label": f"{year}", "value": year} for year in range(2000, 2026)],
                         value=year,
                         placeholder="Select Year",
                         className="mb-4"
@@ -1282,12 +1283,12 @@ def update_insights(year, category, notable_category):
     return insights_table_data, notables_data_processed
 
 def events_layout(year=2025):
-    # Dropdowns
     year_dropdown = dcc.Dropdown(
         id="year-dropdown",
-        options=[{"label": f"{yr}", "value": yr} for yr in range(2000, 2026)],
+        options=[{"label": str(yr), "value": yr} for yr in range(2000, 2026)],
         value=year,
         placeholder="Year",
+        clearable=False
     )
     event_type_dropdown = dcc.Dropdown(
         id="event-type-dropdown",
@@ -1305,9 +1306,10 @@ def events_layout(year=2025):
     )
     week_dropdown = dcc.Dropdown(
         id="week-dropdown",
-        options=[
-            {"label": "All", "value": "all"}
-        ] + [{"label": f"Week {i+1}", "value": i} for i in range(0, 9)],
+        options=(
+            [{"label": "All", "value": "all"}] +
+            [{"label": f"Week {i+1}", "value": i} for i in range(0, 9)]
+        ),
         value="all",
         placeholder="Week",
         clearable=False,
@@ -1320,54 +1322,19 @@ def events_layout(year=2025):
 
     filters_row = dbc.Row(
         [
-            dbc.Col(year_dropdown, xs=3, sm=4, md=2),
-            dbc.Col(event_type_dropdown, xs=3, sm=3, md=2),
-            dbc.Col(week_dropdown, xs=3, sm=4, md=2),
-            dbc.Col(search_input, xs=3, sm=4, md=2),
+            dbc.Col(year_dropdown, xs=6, sm=3, md=2),
+            dbc.Col(event_type_dropdown, xs=6, sm=3, md=2),
+            dbc.Col(week_dropdown, xs=6, sm=3, md=2),
+            dbc.Col(search_input, xs=6, sm=3, md=2),
         ],
-        className="mb-4",
-        style={"display": "flex", "justifyContent": "center", "gap": "10px"},
-    )
-
-    # Events Table
-    events_table = dash_table.DataTable(
-        id="events-table",
-        columns=[
-            {"name": "Event Name", "id": "Event Name", "presentation": "markdown"},
-            {"name": "Location", "id": "Location"},
-            {"name": "Start Date", "id": "Start Date"},
-            {"name": "End Date", "id": "End Date"},
-            {"name": "Event Type", "id": "Event Type"},
-        ],
-        data=[],  # will be updated by callback
-        page_size=10,
-        style_table={"overflowX": "auto",
-                    "borderRadius": "10px",
-                    "border": "1px solid #ddd"},
-        style_header={
-            "backgroundColor": "#FFCC00",
-            "fontWeight": "bold",
-            "textAlign": "center",
-            "border": "1px solid #ddd",
-        },
-        style_cell={
-            "textAlign": "center",
-            "padding": "10px",
-            "border": "1px solid #ddd",
-        },
-        style_data_conditional=[
-            {
-                "if": {"state": "selected"},
-                "backgroundColor": "rgba(255, 221, 0, 0.5)",
-                "border": "1px solid #FFCC00",
-            },
-        ],
+        className="mb-4 justify-content-center",
+        style={"gap": "10px"},
     )
 
     events_map_graph = dcc.Graph(
         id="events-map",
-        figure={},    
-        style={"height": "700px"}  
+        figure={},
+        style={"height": "700px"}
     )
 
     return html.Div(
@@ -1375,26 +1342,57 @@ def events_layout(year=2025):
             topbar,
             dbc.Container(
                 [
-                    html.H2("Events", className="text-center mb-4"),
+                    # Upcoming Events at the top
+                    html.H3("Upcoming Events", className="mb-4 mt-4 text-center"),
+                    dbc.Row(id="upcoming-events-container", className="justify-content-center"),
+
+                    # All Events in cards
+                    html.H3("All Events", className="mb-4 mt-4 text-center"),
                     filters_row,
-                    events_table,
-                    events_map_graph,  
+                    html.Div(
+                        id="all-events-container",
+                        className="d-flex flex-wrap justify-content-center"
+                    ),
+    
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-            dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
-            dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
-            footer,
+            footer
         ]
+    )
+
+# Helper to build a Bootstrap Card for one event
+def create_event_card(event):
+    event_url = f"https://www.peekorobo.com/event/{event['key']}"
+    location = f"{event.get('city','')}, {event.get('state_prov','')}, {event.get('country','')}"
+    start = event.get('start_date', 'N/A')
+    end = event.get('end_date', 'N/A')
+    event_type = event.get('event_type_string', 'N/A')
+
+    return dbc.Card(
+        [
+            dbc.CardBody(
+                [
+                    html.H5(event["name"], className="card-title mb-3"),
+                    html.P(location, className="card-text"),
+                    html.P(f"Dates: {start} - {end}", className="card-text"),
+                    html.P(f"Type: {event_type}", className="card-text"),
+                    dbc.Button("View Details", href=event_url, target="_blank",
+                               color="warning", className="mt-2"),
+                ]
+            )
+        ],
+        className="mb-4 shadow",
+        style={"width": "18rem", "margin": "10px"}
     )
 
 @app.callback(
     [
-        Output("events-table", "data"),
-        Output("events-map", "figure")
+        Output("upcoming-events-container", "children"),
+        Output("all-events-container", "children"),
     ],
     [
         Input("year-dropdown", "value"),
@@ -1404,116 +1402,118 @@ def events_layout(year=2025):
     ],
 )
 def update_events_table_and_map(selected_year, selected_event_types, selected_week, search_query):
-    # --- 1. Fetch & Filter Event Data for Table ---
+    # 1. Fetch event data for the chosen year
     events_data = tba_get(f"events/{selected_year}")
     if not events_data:
-        return [], {}
+        return [], [], {}
 
-    # Ensure selected_event_types is list
+    # Make sure selected_event_types is a list
     if not isinstance(selected_event_types, list):
         selected_event_types = [selected_event_types]
 
-    # Filter by Event Type
+    # 2. Filter by event type
     if "all" not in selected_event_types:
-        filtered_events = []
+        filtered = []
         for et in selected_event_types:
             if et == "season":
-                # Exclude off-season type=99 or 100
-                filtered_events.extend([ev for ev in events_data if ev["event_type"] not in [99, 100]])
+                # Exclude off-seasons (type=99 or 100)
+                filtered.extend([ev for ev in events_data if ev["event_type"] not in [99, 100]])
             elif et == "offseason":
-                filtered_events.extend([ev for ev in events_data if ev["event_type"] in [99, 100]])
+                filtered.extend([ev for ev in events_data if ev["event_type"] in [99, 100]])
             elif et == "regional":
-                filtered_events.extend([ev for ev in events_data if "Regional" in ev.get("event_type_string", "")])
+                filtered.extend([ev for ev in events_data if "Regional" in ev.get("event_type_string", "")])
             elif et == "district":
-                filtered_events.extend([ev for ev in events_data if "District" in ev.get("event_type_string", "")])
+                filtered.extend([ev for ev in events_data if "District" in ev.get("event_type_string", "")])
             elif et == "championship":
-                filtered_events.extend([ev for ev in events_data if "Championship" in ev.get("event_type_string", "")])
-        events_data = filtered_events
+                filtered.extend([ev for ev in events_data if "Championship" in ev.get("event_type_string", "")])
+        # Remove duplicates if multiple filters
+        events_data = list({ev["key"]: ev for ev in filtered}.values())
 
-    # Remove duplicates if multiple filters
-    events_data = list({ev["key"]: ev for ev in events_data}.values())
-
-    # Filter by Week
+    # 3. Filter by Week
     if selected_week != "all":
         events_data = [ev for ev in events_data if ev.get("week") == selected_week]
 
-    # Filter by Search
+    # 4. Filter by search query
     if search_query:
-        search_query = search_query.lower()
+        q = search_query.lower()
         events_data = [
             ev for ev in events_data
-            if search_query in ev["name"].lower() or search_query in ev["city"].lower()
+            if q in ev.get("name","").lower() or q in ev.get("city","").lower()
         ]
 
-    # --- 2. Prepare Table Data ---
-    formatted_events = [
-        {
-            "Event Name": f"[{ev['name']}]({'https://www.thebluealliance.com/event/' + ev['key']})",
-            "Location": f"{ev['city']}, {ev['state_prov']}, {ev['country']}",
-            "Start Date": ev["start_date"],
-            "End Date": ev["end_date"],
-            "Event Type": ev["event_type_string"],
-        }
-        for ev in events_data
-    ]
+    # Sort by start_date to identify "upcoming" events easily
+    def parse_date(d):
+        try:
+            return datetime.datetime.strptime(d, "%Y-%m-%d").date()
+        except:
+            return datetime.date(1900, 1, 1)
 
-    map_events = [ev for ev in events_data if ev.get("lat") is not None and ev.get("lng") is not None]
+    for ev in events_data:
+        ev["_start_date_obj"] = parse_date(ev.get("start_date", "1900-01-01"))
+    events_data.sort(key=lambda x: x["_start_date_obj"])
 
-    fig = {}
-    if map_events:
-        fig = px.scatter_geo(
-            map_events,
-            lat="lat",
-            lon="lng",
-            hover_name="name",
-            hover_data=["city", "start_date", "end_date"],
-            projection="natural earth",
-        )
-        fig.update_traces(
-            marker=dict(
-                symbol='circle',
-                color="yellow",
-                size=10,                 # optional size
-                line=dict(width=1)  # optional border
-            )
-        )
-        fig.update_geos(
-            showcountries=True,
-            countrycolor="gray",
-            showsubunits=True,
-            subunitcolor="gray",
-            showland=True,
-            landcolor="lightgreen",
-            showocean=True,
-            oceancolor="lightblue",
-        )
-        fig.update_layout(
-            margin={"r": 0, "t": 30, "l": 0, "b": 0},
-        )
+    # 5. Separate upcoming events (start_date >= today)
+    today = datetime.date.today()
+    upcoming = [ev for ev in events_data if ev["_start_date_obj"] >= today]
+    upcoming = upcoming[:5]  # limit to top 5 upcoming
 
-    return formatted_events, fig
+    # "All events" is the entire (filtered) list (including upcoming)
+    all_events = events_data
 
-import os
-import json
-import numpy as np
+    # 6. Create cards for upcoming events
+    upcoming_cards = [dbc.Col(create_event_card(ev), width="auto") for ev in upcoming]
+    upcoming_layout = dbc.Row(upcoming_cards, className="justify-content-center")
+
+    # 7. Create cards for all events
+    all_event_cards = [create_event_card(ev) for ev in all_events]
+
+    return upcoming_layout, all_event_cards
 
 def get_epa_display(epa, percentiles):
-    """Returns a formatted string with a colored circle based on EPA percentile."""
+
     if epa is None:
         return "N/A"
-    
+
     if epa >= percentiles["99"]:
-        color = "🔵"  # Blue circle
+        color = "🟣"  # Purple
+    elif epa >= percentiles["95"]:
+        color = "🔵"  # Blue
     elif epa >= percentiles["90"]:
-        color = "🟢"  # Green circle
+        color = "🟢"  # Green
     elif epa >= percentiles["75"]:
-        color = "🟡"  # Yellow circle
+        color = "🟡"  # Yellow
+    elif epa >= percentiles["50"]:
+        color = "🟠"  # Orange
     elif epa >= percentiles["25"]:
-        color = "🟠"  # Orange circle
+        color = "🟤"  # Brown
     else:
-        color = "🔴"  # Red circle
+        color = "🔴"  # Red
 
     return f"{color} {epa:.2f}"
+
+def epa_legend_layout():
+    """
+    Returns a small legend explaining the emojis.
+    """
+    return dbc.Alert(
+        [
+            html.H5("EPA Color Key:", className="mb-3", style={"fontWeight": "bold"}),
+            html.Div("🔵  ≥ 99% percentile"),
+            html.Div("🟣  ≥ 95% percentile"),
+            html.Div("🟢  ≥ 90% percentile"),
+            html.Div("🟡  ≥ 75% percentile"),
+            html.Div("🟤  ≥ 50% percentile"),
+            html.Div("🟠  ≥ 25% percentile"),
+            html.Div("🔴  < 25% percentile"),
+        ],
+        color="light",
+        style={
+            "border": "1px solid #ccc",
+            "borderRadius": "10px",
+            "padding": "10px",
+            "fontSize": "0.9rem",
+        },
+    )
 
 def load_teams_and_compute_epa_ranks(year):
     """
@@ -1539,12 +1539,20 @@ def load_teams_and_compute_epa_ranks(year):
     if not epa_values:
         return epa_info
 
-    percentiles = {
-        "99": np.percentile(epa_values, 99),
-        "90": np.percentile(epa_values, 90),
-        "75": np.percentile(epa_values, 75),
-        "25": np.percentile(epa_values, 25),
-    }
+    epa_values = [t["epa"] for t in teams_data if t.get("epa") is not None]
+    if epa_values:
+        percentiles = {
+            "99": np.percentile(epa_values, 99),
+            "95": np.percentile(epa_values, 95),
+            "90": np.percentile(epa_values, 90),
+            "75": np.percentile(epa_values, 75),
+            "50": np.percentile(epa_values, 50),
+            "25": np.percentile(epa_values, 25),
+        }
+    else:
+        # fallback zeros
+        percentiles = {"99":0, "95":0, "90":0, "75":0, "50":0, "25":0}
+
 
     # Assign global rank and build a quick lookup
     for idx, t in enumerate(teams_data):
@@ -1559,26 +1567,22 @@ def load_teams_and_compute_epa_ranks(year):
 
     return epa_info
 
-
 def event_layout(event_key):
     # Fetch event details
     event_details = tba_get(f"event/{event_key}")
     if not event_details:
         return dbc.Alert("Event details could not be fetched.", color="danger")
 
-    # Gather year from event details to load appropriate EPA file
-    event_year = event_details.get("year", 2024)  # fallback default if not found
-
-    # Pre‐load the relevant EPA data for lookups in the callback
+    event_year = event_details.get("year", 2024)
     epa_data = load_teams_and_compute_epa_ranks(event_year)
 
-    # Fetch additional data
+    # TBA calls
     rankings = tba_get(f"event/{event_key}/rankings") or {"rankings": []}
     oprs = tba_get(f"event/{event_key}/oprs") or {"oprs": {}}
-    coprs = tba_get(f"event/{event_key}/coprs") or {"coprs": {}}
-    insights = tba_get(f"event/{event_key}/insights") or {}
+    event_teams = tba_get(f"event/{event_key}/teams") or []
+    event_matches = tba_get(f"event/{event_key}/matches") or []
 
-    # Event information
+    # Basic info
     event_name = event_details.get("name", "Unknown Event")
     event_location = f"{event_details.get('city', '')}, {event_details.get('state_prov', '')}, {event_details.get('country', '')}"
     start_date = event_details.get("start_date", "N/A")
@@ -1586,42 +1590,56 @@ def event_layout(event_key):
     event_type = event_details.get("event_type_string", "N/A")
     website = event_details.get("website", "#")
 
-    # Layout for event details
-    header_layout = html.Div(
-        [
-            html.H2(event_name, className="text-center mb-4"),
-            html.P(f"Location: {event_location}", className="text-center"),
-            html.P(f"Dates: {start_date} - {end_date}", className="text-center"),
-            html.P(f"Type: {event_type}", className="text-center"),
-            html.A("Visit Event Website", href=website, target="_blank", className="d-block text-center mb-4"),
-        ]
+    header_card = dbc.Card(
+        dbc.CardBody([
+            html.H2(event_name, className="card-title mb-3", style={"fontWeight": "bold"}),
+            html.P(f"Location: {event_location}", className="card-text"),
+            html.P(f"Dates: {start_date} - {end_date}", className="card-text"),
+            html.P(f"Type: {event_type}", className="card-text"),
+            dbc.Button(
+                "Visit Event Website",
+                href=website,
+                external_link=True,
+                className="mt-3",
+                style={
+                    "backgroundColor": "#FFCC00",
+                    "borderColor": "#FFCC00",
+                    "color": "black",
+                },
+            )
+        ]),
+        className="mb-4 shadow-sm",
+        style={"borderRadius": "10px"}
     )
 
-    # Button Group for Data Selection
-    data_buttons = dbc.ButtonGroup(
+    # Tab styling
+    tab_style = {"color": "#3b3b3b"}
+
+    data_tabs = dbc.Tabs(
         [
-            dbc.Button("Rankings", id="btn-rankings", color="primary", outline=True),
-            dbc.Button("OPRs", id="btn-oprs", color="primary", outline=True),
-            dbc.Button("COPRs", id="btn-coprs", color="primary", outline=True),
-            dbc.Button("Insights", id="btn-insights", color="primary", outline=True),
+            dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
+            dbc.Tab(label="Rankings", tab_id="rankings", label_style=tab_style, active_label_style=tab_style),
+            dbc.Tab(label="OPRs", tab_id="oprs", label_style=tab_style, active_label_style=tab_style),
+            dbc.Tab(label="Matches", tab_id="matches", label_style=tab_style, active_label_style=tab_style),
         ],
-        size="md",
-        className="mb-4 d-flex justify-content-center",
+        id="event-data-tabs",
+        active_tab="teams",  # <--- Make "teams" the default tab
+        className="mb-4",
     )
 
-    # Store data in `dcc.Store`, plus store epa_data as well for the callback
     return html.Div(
         [
             topbar,
             dbc.Container(
                 [
-                    header_layout,
-                    data_buttons,
+                    header_card,
+                    data_tabs,
                     dcc.Store(id="store-rankings", data=rankings),
                     dcc.Store(id="store-oprs", data=oprs),
-                    dcc.Store(id="store-coprs", data=coprs),
-                    dcc.Store(id="store-insights", data=insights),
-                    dcc.Store(id="store-event-epa", data=epa_data),  # to pass epa data
+                    dcc.Store(id="store-event-epa", data=epa_data),
+                    dcc.Store(id="store-event-teams", data=event_teams),
+                    dcc.Store(id="store-event-matches", data=event_matches),
+                    dcc.Store(id="store-event-year", data=event_year),
                     html.Div(id="data-display-container"),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
@@ -1633,33 +1651,106 @@ def event_layout(event_key):
         ]
     )
 
+def create_team_card_spotlight(team, epa_data, event_year):
+    """
+    Similar to your 'teams page' approach: fetch avatar, display EPA & rank.
+    """
+    from urllib.parse import quote
+
+    t_num = team.get("team_number", None)
+    nickname = team.get("nickname", "Unknown")
+    city = team.get("city", "")
+    state = team.get("state_prov", "")
+    country = team.get("country", "")
+    location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
+
+    # Pull from epa_data (string keys)
+    epa_rank = "N/A"
+    epa_display = "N/A"
+    if t_num and str(t_num) in epa_data:
+        info = epa_data[str(t_num)]
+        epa_rank = info.get("rank", "N/A")
+        epa_display = info.get("epa_display", "N/A")
+
+    # Avatars
+    avatar_url = get_team_avatar(t_num, event_year)
+
+    # Build the link to /team/<num>/<year>
+    team_url = f"/team/{t_num}/{event_year}"
+
+    card_elems = []
+    if avatar_url:
+        card_elems.append(
+            dbc.CardImg(
+                src=avatar_url,
+                top=True,
+                style={
+                    "width": "100%",
+                    "height": "150px",
+                    "objectFit": "contain",
+                    "backgroundColor": "#fff",
+                    "padding": "5px"
+                }
+            )
+        )
+    card_elems.append(
+        dbc.CardBody(
+            [
+                html.H5(f"#{t_num} | {nickname}", className="card-title mb-3"),
+                html.P(f"Location: {location_str}", className="card-text"),
+                html.P(f"EPA: {epa_display} (Rank: {epa_rank})", className="card-text"),
+                dbc.Button("View Team", href=team_url, color="warning", className="mt-2"),
+            ]
+        )
+    )
+
+    return dbc.Card(
+        card_elems,
+        className="m-2 shadow",
+        style={
+            "width": "18rem",
+            "height": "26rem",
+            "display": "flex",
+            "flexDirection": "column",
+            "justifyContent": "start",
+            "alignItems": "stretch",
+        },
+    )
 
 @app.callback(
     Output("data-display-container", "children"),
-    [
-        Input("btn-rankings", "n_clicks"),
-        Input("btn-oprs", "n_clicks"),
-        Input("btn-coprs", "n_clicks"),
-        Input("btn-insights", "n_clicks"),
-    ],
-    [
-        State("store-rankings", "data"),
-        State("store-oprs", "data"),
-        State("store-coprs", "data"),
-        State("store-insights", "data"),
-        State("store-event-epa", "data"),  # epa_data for the event year
-    ],
-    prevent_initial_call=True,
+    Input("event-data-tabs", "active_tab"),
+    State("store-rankings", "data"),
+    State("store-oprs", "data"),
+    State("store-event-epa", "data"),
+    State("store-event-teams", "data"),
+    State("store-event-matches", "data"),
+    State("store-event-year", "data"), 
 )
-def update_display(n_rankings, n_oprs, n_coprs, n_insights, rankings, oprs, coprs, insights, epa_data):
-    ctx = dash.callback_context
-    if not ctx.triggered:
+def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matches, event_year):
+    if not active_tab:
         return dbc.Alert("Select a data category above.", color="info")
 
-    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    # Common DataTable styling
+    common_style_table = {
+        "overflowX": "auto",
+        "border": "1px solid #ddd",
+        "borderRadius": "5px",
+    }
+    common_style_header = {
+        "backgroundColor": "#F2F2F2",
+        "fontWeight": "bold",
+        "border": "1px solid #ddd",
+        "textAlign": "center",
+    }
+    common_style_cell = {
+        "textAlign": "center",
+        "border": "1px solid #ddd",
+        "padding": "8px",
+    }
 
-    if button_id == "btn-rankings":
-        # Add columns for EPA Rank and EPA
+    # ------------------ RANKINGS TAB ------------------
+    if active_tab == "rankings":
         columns = [
             {"name": "Rank", "id": "Rank"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
@@ -1672,73 +1763,279 @@ def update_display(n_rankings, n_oprs, n_coprs, n_insights, rankings, oprs, copr
         ]
 
         data_rows = []
-        for rank in rankings.get("rankings", []):
-            team_key = rank.get("team_key", "N/A")
-            team_number_str = team_key.replace("frc", "")
+        for rank_info in (rankings.get("rankings", []) or []):
+            team_key = rank_info.get("team_key", "")
+            tnum_str = team_key.replace("frc", "")
             try:
-                team_number = int(team_number_str)
+                tnum = int(tnum_str)
             except ValueError:
-                team_number = None
+                tnum = None
 
-            # Lookup epa data for this team
             epa_rank = "N/A"
             epa_display = "N/A"
-            if team_number and str(team_number) in epa_data:
-                epa_info = epa_data[str(team_number)]
+            if tnum and str(tnum) in epa_data:
+                epa_info = epa_data[str(tnum)]
                 epa_rank = epa_info["rank"]
-                epa_display = epa_info["epa_display"]  # formatted string with emojis
+                epa_display = epa_info["epa_display"]
 
             data_rows.append(
                 {
-                    "Rank": rank.get("rank", "N/A"),
-                    "Team": f"[{team_number_str}](/team/{team_number_str})",
-                    "Wins": rank.get("record", {}).get("wins", "N/A"),
-                    "Losses": rank.get("record", {}).get("losses", "N/A"),
-                    "Ties": rank.get("record", {}).get("ties", "N/A"),
-                    "DQ": rank.get("dq", "N/A"),
+                    "Rank": rank_info.get("rank", "N/A"),
+                    "Team": f"[{tnum_str}](/team/{tnum_str})",
+                    "Wins": rank_info.get("record", {}).get("wins", "N/A"),
+                    "Losses": rank_info.get("record", {}).get("losses", "N/A"),
+                    "Ties": rank_info.get("record", {}).get("ties", "N/A"),
+                    "DQ": rank_info.get("dq", "N/A"),
                     "EPA_Rank": epa_rank,
                     "EPA": epa_display,
                 }
             )
 
+        # Sort by "Rank" ascending
+        def safe_int(val):
+            try:
+                return int(val)
+            except:
+                return 999999
+        data_rows.sort(key=lambda r: safe_int(r["Rank"]))
+
         return dash_table.DataTable(
             columns=columns,
             data=data_rows,
             page_size=10,
+            style_table=common_style_table,
+            style_header=common_style_header,
+            style_cell=common_style_cell,
         )
-    
-    elif button_id == "btn-oprs":
+
+    # ------------------ OPRS TAB ------------------
+    elif active_tab == "oprs":
+        data = []
+        # Convert each frcXXXX to a clickable link
+        for team, val in (oprs.get("oprs") or {}).items():
+            tnum_str = team.replace("frc", "")
+            data.append({
+                "OPR": val,
+                "Team": f"[{tnum_str}](/team/{tnum_str})",  # link
+            })
+
+        # Sort by OPR descending
+        data.sort(key=lambda x: x["OPR"], reverse=True)
+
+        # Assign rank
+        for i, row in enumerate(data):
+            row["Rank"] = i + 1
+
+        # Mark the "Team" column as markdown
+        columns = [
+            {"name": "Rank", "id": "Rank"},
+            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "OPR", "id": "OPR"},
+        ]
+
         return dash_table.DataTable(
-            columns=[{"name": "Team", "id": "Team"}, {"name": "OPR", "id": "OPR"}],
-            data=[
-                {"Team": team.replace("frc", ""), "OPR": value}
-                for team, value in oprs.get("oprs", {}).items()
-            ],
+            columns=columns,
+            data=data,
             page_size=10,
+            style_table=common_style_table,
+            style_header=common_style_header,
+            style_cell=common_style_cell,
         )
 
-    elif button_id == "btn-coprs":
-        return dash_table.DataTable(
-            columns=[{"name": "Team", "id": "Team"}, {"name": "COPR", "id": "COPR"}],
-            data=[
-                {"Team": team.replace("frc", ""), "COPR": value}
-                for team, value in coprs.get("coprs", {}).items()
-            ],
+    # ------------------ TEAMS TAB ------------------
+    elif active_tab == "teams":
+        # 1) Identify top 3 by ascending epa rank:
+        def safe_int(val):
+            try: return int(val)
+            except: return 999999
+
+        sorted_teams = sorted(
+            event_teams,
+            key=lambda t: safe_int(epa_data.get(str(t.get("team_number")), {}).get("rank", 999999))
+        )
+        top_3 = sorted_teams[:3]
+
+        # 2) Build spotlight cards for top_3
+        spotlight_cards = []
+        for top_team in top_3:
+            card = create_team_card_spotlight(top_team, epa_data, event_year)
+            spotlight_cards.append(dbc.Col(card, width="auto"))
+
+        spotlight_layout = dbc.Row(spotlight_cards, className="justify-content-center mb-4")
+
+        # 3) Build the standard table (like before)
+        rows = []
+        for t in event_teams:
+            t_num = t.get("team_number")
+            t_str = str(t_num) if t_num else "N/A"
+            epa_rank = "N/A"
+            epa_disp = "N/A"
+            if t_num and str(t_num) in epa_data:
+                e_info = epa_data[str(t_num)]
+                epa_rank = e_info["rank"]
+                epa_disp = e_info["epa_display"]
+
+            city = t.get("city", "")
+            st = t.get("state_prov", "")
+            ctry = t.get("country", "")
+            loc = ", ".join(filter(None, [city, st, ctry])) or "Unknown"
+
+            rows.append({
+                "EPA Rank": epa_rank,
+                "EPA": epa_disp,
+                "Team Number": f"[{t_str}](/team/{t_str})",
+                "Nickname": t.get("nickname", "Unknown"),
+                "Location": loc,
+            })
+
+        rows.sort(key=lambda r: safe_int(r["EPA Rank"]))
+
+        columns = [
+            {"name": "EPA Rank", "id": "EPA Rank"},
+            {"name": "EPA", "id": "EPA"},
+            {"name": "Team Number", "id": "Team Number", "presentation": "markdown"},
+            {"name": "Nickname", "id": "Nickname"},
+            {"name": "Location", "id": "Location"},
+        ]
+
+        teams_table = dash_table.DataTable(
+            columns=columns,
+            data=rows,
             page_size=10,
+            style_table=common_style_table,
+            style_header=common_style_header,
+            style_cell=common_style_cell,
         )
 
-    elif button_id == "btn-insights":
-        return dash_table.DataTable(
-            columns=[{"name": "Metric", "id": "Metric"}, {"name": "Value", "id": "Value"}],
-            data=[
-                {"Metric": metric.replace("_", " ").title(), "Value": value}
-                for metric, value in insights.items()
-            ],
-            page_size=5,
-        )
+        return html.Div([
+            html.H4("Spotlight Teams", className="text-center mb-4"),
+            spotlight_layout,
+            epa_legend_layout(),
+            teams_table
+        ])
 
+
+    # ------------------ MATCHES TAB ------------------
+    elif active_tab == "matches":
+        all_matches = event_matches or []
+
+        # Sort matches
+        comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
+        def match_sort_key(m):
+            cl = m.get("comp_level", "")
+            lvl = comp_level_order.get(cl, 99)
+            num = m.get("match_number", 9999)
+            return (lvl, num)
+
+        all_matches.sort(key=match_sort_key)
+        qual_matches = [m for m in all_matches if m.get("comp_level") == "qm"]
+        playoff_matches = [m for m in all_matches if m.get("comp_level") != "qm"]
+
+        # Make the alliance team numbers clickable
+        def format_teams_markdown(team_list):
+            # e.g. ["frc254","frc111"] -> ["[254](/team/254)","[111](/team/111)"] -> "254, 111"
+            links = []
+            for t in team_list:
+                t_str = t.replace("frc", "")
+                links.append(f"[{t_str}](/team/{t_str})")
+            return ", ".join(links)
+
+        def sum_epa(team_list):
+            total = 0.0
+            for tkey in team_list:
+                t_str = tkey.replace("frc", "")
+                if t_str in epa_data:
+                    val = epa_data[t_str].get("epa", 0) or 0
+                    total += val
+            return total
+
+        def build_match_rows(matches):
+            rows = []
+            for match in matches:
+                red_teams = match["alliances"]["red"].get("team_keys", [])
+                blue_teams = match["alliances"]["blue"].get("team_keys", [])
+                red_score = match["alliances"]["red"].get("score", 0)
+                blue_score = match["alliances"]["blue"].get("score", 0)
+                winner = match.get("winning_alliance", "")
+                match_label = match.get("comp_level", "").upper() + str(match.get("match_number", ""))
+
+                red_sum = sum_epa(red_teams)
+                blue_sum = sum_epa(blue_teams)
+                if (red_sum + blue_sum) > 0:
+                    p_red = red_sum / (red_sum + blue_sum)
+                    p_blue = 1.0 - p_red
+                    pred_str = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
+                else:
+                    pred_str = "N/A"
+
+                rows.append({
+                    "Match": match_label,
+                    # team numbers as clickable links
+                    "Red Teams": format_teams_markdown(red_teams),
+                    "Blue Teams": format_teams_markdown(blue_teams),
+                    "Red Score": red_score,
+                    "Blue Score": blue_score,
+                    "Winner": winner.title() if winner else "N/A",
+                    "Prediction": pred_str,
+                })
+            return rows
+
+        qual_data = build_match_rows(qual_matches)
+        playoff_data = build_match_rows(playoff_matches)
+
+        match_columns = [
+            {"name": "Match", "id": "Match"},
+            # Mark "Red Teams"/"Blue Teams" as "presentation: markdown" to enable clickable links
+            {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
+            {"name": "Blue Teams", "id": "Blue Teams", "presentation": "markdown"},
+            {"name": "Red Score", "id": "Red Score"},
+            {"name": "Blue Score", "id": "Blue Score"},
+            {"name": "Winner", "id": "Winner"},
+            {"name": "Prediction", "id": "Prediction", "presentation": "markdown"},
+        ]
+
+        row_style = [
+            {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "#ffe6e6"},
+            {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
+        ]
+
+        qual_table = [
+            html.H5("Qualification Matches", className="mb-3 mt-3"),
+            dash_table.DataTable(
+                columns=match_columns,
+                data=qual_data,
+                page_size=10,
+                style_table=common_style_table,
+                style_header=common_style_header,
+                style_cell=common_style_cell,
+                style_data_conditional=row_style,
+            )
+        ] if qual_data else [
+            html.H5("Qualification Matches", className="mb-3 mt-3"),
+            dbc.Alert("No qualification matches found.", color="info"),
+        ]
+
+        playoff_table = [
+            html.H5("Playoff Matches", className="mb-3 mt-5"),
+            dash_table.DataTable(
+                columns=match_columns,
+                data=playoff_data,
+                page_size=10,
+                style_table=common_style_table,
+                style_header=common_style_header,
+                style_cell=common_style_cell,
+                style_data_conditional=row_style,
+            )
+        ] if playoff_data else [
+            html.H5("Playoff Matches", className="mb-3 mt-5"),
+            dbc.Alert("No playoff matches found.", color="info"),
+        ]
+
+        return html.Div(qual_table + playoff_table)
+
+    # No recognized tab
     return dbc.Alert("No data available.", color="warning")
-
+    
 def challenges_layout():
     challenges = []
     for year, game in sorted(frc_games.items(), reverse=True):
@@ -1874,6 +2171,124 @@ def challenge_details_layout(year):
         ]
     )
 
+def get_team_avatar(team_number, year=2024):
+    team_key = f"frc{team_number}"
+    avatar_data = tba_get(f"team/{team_key}/media/{year}")
+    if not avatar_data:
+        return None
+    
+    # Try to find a base64 Avatar first
+    for media in avatar_data:
+        if media.get("type") == "avatar" and media.get("details", {}).get("base64Image"):
+            return f"data:image/png;base64,{media['details']['base64Image']}"
+    
+    # Otherwise, fallback to direct_url if preferred or "avatar" isn't found
+    for media in avatar_data:
+        if media.get("preferred") and media.get("direct_url"):
+            return media["direct_url"]
+
+    return None
+
+def get_epa_display(epa, percentiles):
+
+    if epa is None:
+        return "N/A"
+
+    if epa >= percentiles["99"]:
+        color = "🟣"  # Purple
+    elif epa >= percentiles["95"]:
+        color = "🔵"  # Blue
+    elif epa >= percentiles["90"]:
+        color = "🟢"  # Green
+    elif epa >= percentiles["75"]:
+        color = "🟡"  # Yellow
+    elif epa >= percentiles["50"]:
+        color = "🟠"  # Orange
+    elif epa >= percentiles["25"]:
+        color = "🟤"  # Brown
+    else:
+        color = "🔴"  # Red
+
+    return f"{color} {epa:.2f}"
+
+def epa_legend_layout():
+    return dbc.Alert(
+        [
+            html.H5("EPA Color Key (Percentile):", className="mb-3", style={"fontWeight": "bold"}),
+            html.Div("🟣  ≥ 99% | 🔵  ≥ 95% | 🟢  ≥ 90% | 🟡  ≥ 75% | 🟠  ≥ 50% | 🟤  ≥ 25% | 🔴  < 25%"),
+        ],
+        color="light",
+        style={
+            "border": "1px solid #ccc",
+            "borderRadius": "10px",
+            "padding": "10px",
+            "fontSize": "0.9rem",
+        },
+    )
+
+def create_team_card(team, selected_year, avatar_url=None):
+    team_number = team.get("team_number", "N/A")
+    nickname = team.get("nickname", "Unknown")
+    epa = team.get("epa", None)
+    rank = team.get("global_rank", "N/A")
+
+    location_pieces = []
+    if city := team.get("city"): 
+        location_pieces.append(city)
+    if state := team.get("state_prov"):
+        location_pieces.append(state)
+    if country := team.get("country"):
+        location_pieces.append(country)
+    location_str = ", ".join(location_pieces) if location_pieces else "Unknown"
+
+    # If epa is None, display "N/A"; otherwise format
+    epa_str = f"{epa:.2f}" if isinstance(epa, (int, float)) else "N/A"
+    # Build team URL for more details
+    team_url = f"/team/{team_number}/{selected_year}"
+
+    card_body = []
+    # Avatar at top if we have one
+    if avatar_url:
+        card_body.append(
+            dbc.CardImg(
+                src=avatar_url,
+                top=True,
+                style={
+                    "width": "100%",
+                    "height": "150px",
+                    "objectFit": "contain",
+                    "backgroundColor": "#fff",
+                    "padding": "5px"
+                }
+            )
+        )
+
+    card_body.append(
+        dbc.CardBody(
+            [
+                html.H5(f"#{team_number} | {nickname}", className="card-title mb-3"),
+                html.P(f"Location: {location_str}", className="card-text"),
+                html.P(f"EPA: {epa_str} (Global Rank: {rank})", className="card-text"),
+                dbc.Button("View Team", href=team_url, color="warning", className="mt-2"),
+            ]
+        )
+    )
+
+    return dbc.Card(
+        card_body,
+        className="m-2 shadow",
+        style={
+            # fix width/height so each card is the same size
+            "width": "18rem",
+            "height": "26rem",     # tweak as needed
+            "display": "flex",
+            "flexDirection": "column",
+            "justifyContent": "start",
+            "alignItems": "stretch",
+        },
+    )
+
+
 def teams_layout(default_year=2024):
     teams_year_dropdown = dcc.Dropdown(
         id="teams-year-dropdown",
@@ -1885,19 +2300,15 @@ def teams_layout(default_year=2024):
 
     country_dropdown = dcc.Dropdown(
         id="country-dropdown",
-        options=COUNTRIES,
+        options=COUNTRIES,  # e.g. [{"label": "All", "value": "All"}, {"label": "USA", "value": "USA"}, ...]
         value="All",
         clearable=False,
         placeholder="Select Country",
     )
 
-    # Initialize state dropdown with properly formatted options
     state_dropdown = dcc.Dropdown(
         id="state-dropdown",
-        options=[{"label": "All States", "value": "All"}] + [
-            {"label": state["label"], "value": state["value"]}
-            for state in STATES.get("USA", []) if isinstance(state, dict)
-        ],
+        options=[{"label": "All States", "value": "All"}],
         value="All",
         clearable=False,
         placeholder="Select State/Province",
@@ -1910,24 +2321,46 @@ def teams_layout(default_year=2024):
         className="mb-3",
     )
 
+    filters_row = dbc.Row(
+        [
+            dbc.Col(teams_year_dropdown, xs=6, sm=4, md=2),
+            dbc.Col(country_dropdown, xs=6, sm=4, md=2),
+            dbc.Col(state_dropdown, xs=6, sm=4, md=2),
+            dbc.Col(search_input, xs=6, sm=4, md=3),
+        ],
+        className="mb-4 justify-content-center",
+    )
+
     teams_table = dash_table.DataTable(
         id="teams-table",
         columns=[
             {"name": "EPA Rank", "id": "epa_rank"},
             {"name": "EPA", "id": "epar", "presentation": "markdown"},
             {"name": "Team", "id": "team_display", "presentation": "markdown"},
-            {"name": "Location", "id": "location_display"}
+            {"name": "Location", "id": "location_display"},
         ],
         data=[],
         page_size=50,
         style_table={"overflowX": "auto", "borderRadius": "10px", "border": "1px solid #ddd"},
-        style_header={"backgroundColor": "#FFCC00", "fontWeight": "bold", "textAlign": "center", "border": "1px solid #ddd"},
-        style_cell={"textAlign": "center", "padding": "10px", "border": "1px solid #ddd", "fontSize": "14px"},
-        style_data_conditional=[{
-            "if": {"state": "selected"},
-            "backgroundColor": "rgba(255, 221, 0, 0.5)",
-            "border": "1px solid #FFCC00",
-        }],
+        style_header={
+            "backgroundColor": "#FFCC00",
+            "fontWeight": "bold",
+            "textAlign": "center",
+            "border": "1px solid #ddd",
+        },
+        style_cell={
+            "textAlign": "center",
+            "padding": "10px",
+            "border": "1px solid #ddd",
+            "fontSize": "14px",
+        },
+        style_data_conditional=[
+            {
+                "if": {"state": "selected"},
+                "backgroundColor": "rgba(255, 221, 0, 0.5)",
+                "border": "1px solid #FFCC00",
+            },
+        ],
     )
 
     return html.Div(
@@ -1935,17 +2368,18 @@ def teams_layout(default_year=2024):
             topbar,
             dbc.Container(
                 [
-                    html.H2("Teams", className="text-center mb-4"),
+                    html.H4("Top 3 Teams", className="text-center mb-4"),
+                    dbc.Row(id="top-teams-container", className="justify-content-center mb-5"),
+
+                    filters_row,
+
+                    # The Key for EPA emojis
+                    epa_legend_layout(),  # <--- Inserting the color key here
+
                     dbc.Row(
-                        [
-                            dbc.Col(teams_year_dropdown, xs=3, sm=4, md=2),  # Adjust widths for mobile
-                            dbc.Col(country_dropdown, xs=3, sm=6, md=3),
-                            dbc.Col(state_dropdown, xs=3, sm=4, md=3),
-                            dbc.Col(search_input, xs=3, sm=6, md=4),  # Full-width on mobile
-                        ],
-                        className="mb-4 justify-content-center",
+                        dbc.Col(teams_table, width=12),
+                        className="mb-4",
                     ),
-                    dbc.Row(dbc.Col(teams_table, width=12), className="mb-4"),
                 ],
                 style={"padding": "10px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
@@ -1956,28 +2390,11 @@ def teams_layout(default_year=2024):
         ]
     )
 
-def get_epa_display(epa, percentiles):
-    """Returns a formatted string with a colored circle based on EPA percentile."""
-    if epa is None:
-        return "N/A"
-    
-    if epa >= percentiles["99"]:
-        color = "🔵"  # Blue circle
-    elif epa >= percentiles["90"]:
-        color = "🟢"  # Green circle
-    elif epa >= percentiles["75"]:
-        color = "🟡"  # Yellow circle
-    elif epa >= percentiles["25"]:
-        color = "🟠"  # Orange circle
-    else:
-        color = "🔴"  # Red circle
-
-    return f"{color} {epa:.2f}"
-
-@app.callback(
+@callback(
     [
         Output("teams-table", "data"),
-        Output("state-dropdown", "options"),  # Dynamically update states based on selected country
+        Output("state-dropdown", "options"),
+        Output("top-teams-container", "children"),  # For top-3 featured teams
     ],
     [
         Input("teams-year-dropdown", "value"),
@@ -1987,84 +2404,116 @@ def get_epa_display(epa, percentiles):
     ],
 )
 def load_teams(selected_year, selected_country, selected_state, search_query):
-    folder_path = "team_data"  # Update this path if necessary
-    teams_data = []
-
-    # Load team data for the selected year
+    folder_path = "team_data"
     file_path = os.path.join(folder_path, f"teams_{selected_year}.json")
-    if os.path.exists(file_path):
-        with open(file_path, "r") as f:
-            teams_data = json.load(f)
+    if not os.path.exists(file_path):
+        # No data for this year
+        return [], [{"label": "All States", "value": "All"}], []
+
+    # 1) Load the raw data
+    with open(file_path, "r") as f:
+        teams_data = json.load(f)
+
+    # 2) Sort by descending EPA, treating None as 0
+    teams_data.sort(key=lambda t: t["epa"] if t.get("epa") is not None else 0, reverse=True)
+
+    epa_values = [t["epa"] for t in teams_data if t.get("epa") is not None]
+    if epa_values:
+        percentiles = {
+            "99": np.percentile(epa_values, 99),
+            "95": np.percentile(epa_values, 95),
+            "90": np.percentile(epa_values, 90),
+            "75": np.percentile(epa_values, 75),
+            "50": np.percentile(epa_values, 50),
+            "25": np.percentile(epa_values, 25),
+        }
     else:
-        return [], [{"label": "All States", "value": "All"}]  # Return empty if no data for the selected year
+        # fallback zeros
+        percentiles = {"99":0, "95":0, "90":0, "75":0, "50":0, "25":0}
 
-    # Ensure EPA values exist and sort teams by EPA descending
-    teams_data = sorted(teams_data, key=lambda x: x.get("epa", 0) or 0, reverse=True)
 
-    # Compute EPA percentiles for ranking
-    epa_values = [team["epa"] for team in teams_data if team.get("epa") is not None]
-    percentiles = {
-        "99": np.percentile(epa_values, 99) if epa_values else 0,
-        "90": np.percentile(epa_values, 90) if epa_values else 0,
-        "75": np.percentile(epa_values, 75) if epa_values else 0,
-        "25": np.percentile(epa_values, 25) if epa_values else 0,
-    }
+    # 4) Assign global ranks
+    for idx, t in enumerate(teams_data):
+        t["global_rank"] = idx + 1
 
-    # Assign global ranks
-    for idx, team in enumerate(teams_data):
-        team["global_rank"] = idx + 1
-
-    # **Fix state options (remove nested dicts)**
+    # 5) Build State dropdown
     if selected_country and selected_country in STATES:
         state_options = [{"label": "All States", "value": "All"}] + [
-            {"label": state["label"], "value": state["value"]}
-            for state in STATES[selected_country] if isinstance(state, dict)
+            {"label": s["label"], "value": s["value"]} for s in STATES[selected_country] if isinstance(s, dict)
         ]
     else:
         state_options = [{"label": "All States", "value": "All"}]
 
-    # Apply filters
+    # 6) Apply filters
+    # Filter by country
     if selected_country and selected_country != "All":
-        teams_data = [team for team in teams_data if team.get("country", "").lower() == selected_country.lower()]
-
-    if selected_state and selected_state != "All":
-        teams_data = [team for team in teams_data if team.get("state_prov", "").lower() == selected_state.lower()]
-
-    # Apply search query (matches team number, nickname, and city)
-    if search_query:
-        search_query = search_query.lower()
         teams_data = [
-            team for team in teams_data
-            if search_query in str(team.get("team_number", "")).lower()
-            or search_query in team.get("nickname", "").lower()
-            or search_query in team.get("city", "").lower()
+            t for t in teams_data
+            if t.get("country", "").lower() == selected_country.lower()
+        ]
+    # Filter by state
+    if selected_state and selected_state != "All":
+        teams_data = [
+            t for t in teams_data
+            if t.get("state_prov", "").lower() == selected_state.lower()
+        ]
+    # Search filter
+    if search_query:
+        q = search_query.lower()
+        teams_data = [
+            t for t in teams_data
+            if (q in str(t.get("team_number", "")).lower())
+               or (q in t.get("nickname", "").lower())
+               or (q in t.get("city", "").lower())
         ]
 
-    # Generate table data
-    table_data = []
-    for team in teams_data:
-        team_number = team.get("team_number", "")
-        nickname = team.get("nickname", "Unknown")
-        city = team.get("city", "Unknown")
-        state = team.get("state_prov", "")
-        country = team.get("country", "")
-        epa = team.get("epa", None)
-        global_rank = team.get("global_rank", "N/A")
+    # 7) Prepare DataTable rows
+    table_rows = []
+    for t in teams_data:
+        rank = t.get("global_rank", "N/A")
+        epa = t.get("epa", None)
+        epa_markdown = get_epa_display(epa, percentiles)
+        
+        team_num = t.get("team_number", "")
+        nickname = t.get("nickname", "Unknown")
+        city = t.get("city", "Unknown")
+        state = t.get("state_prov", "")
+        country = t.get("country", "")
+        location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
 
-        team_display = f"[{team_number} | {nickname}](/team/{team_number}/{selected_year})"
-        location_display = ", ".join(filter(None, [city, state, country]))
-        epa_display = get_epa_display(epa, percentiles)
+        # For rank, show 🥇/🥈/🥉 if 1/2/3
+        if rank == 1:
+            rank_str = "🥇"
+        elif rank == 2:
+            rank_str = "🥈"
+        elif rank == 3:
+            rank_str = "🥉"
+        else:
+            rank_str = rank
 
-        table_data.append(
-            {
-                "epa_rank": f"🥇" if global_rank == 1 else f"🥈" if global_rank == 2 else f"🥉" if global_rank == 3 else global_rank,
-                "epar": epa_display,
-                "team_display": team_display,
-                "location_display": location_display or "Unknown",
-            }
-        )
+        table_rows.append({
+            "epa_rank": rank_str,
+            "epar": epa_markdown,
+            "team_display": f"[{team_num} | {nickname}](/team/{team_num}/{selected_year})",
+            "location_display": location_str,
+        })
 
-    return table_data, state_options  # Returning both table data and state dropdown options
+    # 8) Build top-3 “Featured Teams”
+    top_3 = teams_data[:3]  # after filters
+    featured_cards = []
+    for top_team in top_3:
+        t_num = top_team.get("team_number", None)
+        if t_num is not None:
+            # fetch that team's avatar (only for top 3)
+            avatar_url = get_team_avatar(t_num, selected_year)
+            featured_cards.append(create_team_card(top_team, selected_year, avatar_url=avatar_url))
+
+    top_teams_layout = dbc.Row(
+        [dbc.Col(card, width="auto") for card in featured_cards],
+        className="justify-content-center"
+    )
+
+    return table_rows, state_options, top_teams_layout
 
 def teams_map_layout():
     # Generate and get the map file path
