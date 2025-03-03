@@ -523,6 +523,8 @@ def team_layout(team_number, year):
     state = selected_team.get("state_prov", "")
     country = selected_team.get("country", "")
     website = team_info.get("website", "N/A")
+    if website and website.startswith("http://"):
+        website = "https://" + website[len("http://"):]
     
     avatar_data = tba_get(f"team/{team_key}/media/2024")
     avatar_url = None
@@ -867,7 +869,7 @@ def team_layout(team_number, year):
     for ev in events:
         event_key = ev.get("key")
         event_name = ev.get("name", "")
-        event_url = f"https://www.thebluealliance.com/event/{event_key}"
+        event_url = f"https://www.peekorobo.com/event/{event_key}"
         location = f"{ev.get('city', '')}, {ev.get('state_prov', '')}"
         start_date = ev.get("start_date", "")
         end_date = ev.get("end_date", "")
@@ -1331,29 +1333,26 @@ def events_layout(year=2025):
         style={"gap": "10px"},
     )
 
-    events_map_graph = dcc.Graph(
-        id="events-map",
-        figure={},
-        style={"height": "700px"}
-    )
-
     return html.Div(
         [
             topbar,
             dbc.Container(
                 [
-                    # Upcoming Events at the top
+                    # Upcoming Events
                     html.H3("Upcoming Events", className="mb-4 mt-4 text-center"),
                     dbc.Row(id="upcoming-events-container", className="justify-content-center"),
 
-                    # All Events in cards
+                    # Ongoing Events
+                    html.H3("Ongoing Events", className="mb-4 mt-4 text-center"),
+                    dbc.Row(id="ongoing-events-container", className="justify-content-center"),
+
+                    # All Events
                     html.H3("All Events", className="mb-4 mt-4 text-center"),
                     filters_row,
                     html.Div(
                         id="all-events-container",
                         className="d-flex flex-wrap justify-content-center"
                     ),
-    
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
@@ -1386,12 +1385,17 @@ def create_event_card(event):
             )
         ],
         className="mb-4 shadow",
-        style={"width": "18rem", "margin": "10px"}
+        style={
+            "width": "18rem",
+            "height": "20rem",  # force uniform height
+            "margin": "10px"
+        }
     )
 
 @app.callback(
     [
         Output("upcoming-events-container", "children"),
+        Output("ongoing-events-container", "children"),  # new
         Output("all-events-container", "children"),
     ],
     [
@@ -1401,13 +1405,13 @@ def create_event_card(event):
         Input("search-input", "value"),
     ],
 )
-def update_events_table_and_map(selected_year, selected_event_types, selected_week, search_query):
-    # 1. Fetch event data for the chosen year
+def update_events_table(selected_year, selected_event_types, selected_week, search_query):
+    # 1. Fetch event data
     events_data = tba_get(f"events/{selected_year}")
     if not events_data:
-        return [], [], {}
+        return [], [], []
 
-    # Make sure selected_event_types is a list
+    # make selected_event_types a list
     if not isinstance(selected_event_types, list):
         selected_event_types = [selected_event_types]
 
@@ -1416,24 +1420,22 @@ def update_events_table_and_map(selected_year, selected_event_types, selected_we
         filtered = []
         for et in selected_event_types:
             if et == "season":
-                # Exclude off-seasons (type=99 or 100)
                 filtered.extend([ev for ev in events_data if ev["event_type"] not in [99, 100]])
             elif et == "offseason":
                 filtered.extend([ev for ev in events_data if ev["event_type"] in [99, 100]])
             elif et == "regional":
-                filtered.extend([ev for ev in events_data if "Regional" in ev.get("event_type_string", "")])
+                filtered.extend([ev for ev in events_data if "Regional" in ev.get("event_type_string","")])
             elif et == "district":
-                filtered.extend([ev for ev in events_data if "District" in ev.get("event_type_string", "")])
+                filtered.extend([ev for ev in events_data if "District" in ev.get("event_type_string","")])
             elif et == "championship":
-                filtered.extend([ev for ev in events_data if "Championship" in ev.get("event_type_string", "")])
-        # Remove duplicates if multiple filters
+                filtered.extend([ev for ev in events_data if "Championship" in ev.get("event_type_string","")])
         events_data = list({ev["key"]: ev for ev in filtered}.values())
 
-    # 3. Filter by Week
+    # 3. Filter by week
     if selected_week != "all":
         events_data = [ev for ev in events_data if ev.get("week") == selected_week]
 
-    # 4. Filter by search query
+    # 4. Filter by search
     if search_query:
         q = search_query.lower()
         events_data = [
@@ -1441,79 +1443,39 @@ def update_events_table_and_map(selected_year, selected_event_types, selected_we
             if q in ev.get("name","").lower() or q in ev.get("city","").lower()
         ]
 
-    # Sort by start_date to identify "upcoming" events easily
+    # 5. Parse and sort by start_date
     def parse_date(d):
         try:
             return datetime.datetime.strptime(d, "%Y-%m-%d").date()
         except:
             return datetime.date(1900, 1, 1)
-
     for ev in events_data:
-        ev["_start_date_obj"] = parse_date(ev.get("start_date", "1900-01-01"))
+        ev["_start_date_obj"] = parse_date(ev.get("start_date","1900-01-01"))
+        ev["_end_date_obj"]   = parse_date(ev.get("end_date","1900-01-01"))
     events_data.sort(key=lambda x: x["_start_date_obj"])
 
-    # 5. Separate upcoming events (start_date >= today)
     today = datetime.date.today()
-    upcoming = [ev for ev in events_data if ev["_start_date_obj"] >= today]
-    upcoming = upcoming[:5]  # limit to top 5 upcoming
 
-    # "All events" is the entire (filtered) list (including upcoming)
+    # 6. Identify upcoming, ongoing
+    upcoming = [ev for ev in events_data if ev["_start_date_obj"] > today]
+    ongoing = [ev for ev in events_data if ev["_start_date_obj"] <= today <= ev["_end_date_obj"]]
+
+    # "All events" is the entire filtered list
     all_events = events_data
 
-    # 6. Create cards for upcoming events
-    upcoming_cards = [dbc.Col(create_event_card(ev), width="auto") for ev in upcoming]
-    upcoming_layout = dbc.Row(upcoming_cards, className="justify-content-center")
+    # 7. Build card layouts
+    # upcoming
+    up_cards = [dbc.Col(create_event_card(ev), width="auto") for ev in upcoming[:5]]  # top 5 upcoming
+    upcoming_layout = dbc.Row(up_cards, className="justify-content-center")
 
-    # 7. Create cards for all events
+    # ongoing
+    ongoing_cards = [dbc.Col(create_event_card(ev), width="auto") for ev in ongoing]
+    ongoing_layout = dbc.Row(ongoing_cards, className="justify-content-center")
+
+    # all
     all_event_cards = [create_event_card(ev) for ev in all_events]
 
-    return upcoming_layout, all_event_cards
-
-def get_epa_display(epa, percentiles):
-
-    if epa is None:
-        return "N/A"
-
-    if epa >= percentiles["99"]:
-        color = "🟣"  # Purple
-    elif epa >= percentiles["95"]:
-        color = "🔵"  # Blue
-    elif epa >= percentiles["90"]:
-        color = "🟢"  # Green
-    elif epa >= percentiles["75"]:
-        color = "🟡"  # Yellow
-    elif epa >= percentiles["50"]:
-        color = "🟠"  # Orange
-    elif epa >= percentiles["25"]:
-        color = "🟤"  # Brown
-    else:
-        color = "🔴"  # Red
-
-    return f"{color} {epa:.2f}"
-
-def epa_legend_layout():
-    """
-    Returns a small legend explaining the emojis.
-    """
-    return dbc.Alert(
-        [
-            html.H5("EPA Color Key:", className="mb-3", style={"fontWeight": "bold"}),
-            html.Div("🔵  ≥ 99% percentile"),
-            html.Div("🟣  ≥ 95% percentile"),
-            html.Div("🟢  ≥ 90% percentile"),
-            html.Div("🟡  ≥ 75% percentile"),
-            html.Div("🟤  ≥ 50% percentile"),
-            html.Div("🟠  ≥ 25% percentile"),
-            html.Div("🔴  < 25% percentile"),
-        ],
-        color="light",
-        style={
-            "border": "1px solid #ccc",
-            "borderRadius": "10px",
-            "padding": "10px",
-            "fontSize": "0.9rem",
-        },
-    )
+    return upcoming_layout, ongoing_layout, all_event_cards
 
 def load_teams_and_compute_epa_ranks(year):
     """
@@ -1612,9 +1574,7 @@ def event_layout(event_key):
         style={"borderRadius": "10px"}
     )
 
-    # Tab styling
     tab_style = {"color": "#3b3b3b"}
-
     data_tabs = dbc.Tabs(
         [
             dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
@@ -1623,8 +1583,35 @@ def event_layout(event_key):
             dbc.Tab(label="Matches", tab_id="matches", label_style=tab_style, active_label_style=tab_style),
         ],
         id="event-data-tabs",
-        active_tab="teams",  # <--- Make "teams" the default tab
+        active_tab="teams",
         className="mb-4",
+    )
+
+    # Create a row where the left col is the header card, and the right col has our two new buttons
+    header_with_buttons = dbc.Row(
+        [
+            dbc.Col(header_card, width=8),
+            dbc.Col(
+                [
+                    dbc.Button(
+                        "Return to All Events",
+                        href="/events",
+                        color="secondary",
+                        className="mb-2 me-2",  # small margin bottom & right
+                    ),
+                    dbc.Button(
+                        "TBA Page",
+                        href=f"https://www.thebluealliance.com/event/{event_key}",
+                        color="info",
+                        className="mb-2",
+                        external_link=True
+                    ),
+                ],
+                width="auto",
+                style={"textAlign": "right"},
+            )
+        ],
+        className="mb-4 justify-content-between"
     )
 
     return html.Div(
@@ -1632,24 +1619,27 @@ def event_layout(event_key):
             topbar,
             dbc.Container(
                 [
-                    header_card,
+                    # Instead of just header_card, we show the new row with buttons
+                    header_with_buttons,
                     data_tabs,
+
+                    # Hidden data storage
                     dcc.Store(id="store-rankings", data=rankings),
                     dcc.Store(id="store-oprs", data=oprs),
                     dcc.Store(id="store-event-epa", data=epa_data),
                     dcc.Store(id="store-event-teams", data=event_teams),
                     dcc.Store(id="store-event-matches", data=event_matches),
                     dcc.Store(id="store-event-year", data=event_year),
+
+                    # The tab content
                     html.Div(id="data-display-container"),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
-            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
             footer,
         ]
     )
+
 
 def create_team_card_spotlight(team, epa_data, event_year):
     """
