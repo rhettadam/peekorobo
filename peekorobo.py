@@ -2599,7 +2599,7 @@ def teams_map_layout():
             [
                 html.Iframe(
                     src=f"/{map_path}",  # Reference the generated HTML file
-                    style={"width": "100%", "height": "847px", "border": "none"},
+                    style={"width": "100%", "height": "1100px", "border": "none"},
                 ),
             ],
             fluid=True
