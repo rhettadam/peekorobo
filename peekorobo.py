@@ -1587,40 +1587,13 @@ def event_layout(event_key):
         className="mb-4",
     )
 
-    # Create a row where the left col is the header card, and the right col has our two new buttons
-    header_with_buttons = dbc.Row(
-        [
-            dbc.Col(header_card, width=8),
-            dbc.Col(
-                [
-                    dbc.Button(
-                        "Return to All Events",
-                        href="/events",
-                        color="secondary",
-                        className="mb-2 me-2",  # small margin bottom & right
-                    ),
-                    dbc.Button(
-                        "TBA Page",
-                        href=f"https://www.thebluealliance.com/event/{event_key}",
-                        color="info",
-                        className="mb-2",
-                        external_link=True
-                    ),
-                ],
-                width="auto",
-                style={"textAlign": "right"},
-            )
-        ],
-        className="mb-4 justify-content-between"
-    )
-
     return html.Div(
         [
             topbar,
             dbc.Container(
                 [
                     # Instead of just header_card, we show the new row with buttons
-                    header_with_buttons,
+                    header_card,
                     data_tabs,
 
                     # Hidden data storage
@@ -1636,6 +1609,9 @@ def event_layout(event_key):
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
+            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
             footer,
         ]
     )
@@ -1789,7 +1765,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 return 999999
         data_rows.sort(key=lambda r: safe_int(r["Rank"]))
 
-        return dash_table.DataTable(
+        rankings_table = dash_table.DataTable(
             columns=columns,
             data=data_rows,
             page_size=10,
@@ -1797,6 +1773,11 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             style_header=common_style_header,
             style_cell=common_style_cell,
         )
+        
+        return html.Div([
+            epa_legend_layout(),
+            rankings_table
+        ])
 
     # ------------------ OPRS TAB ------------------
     elif active_tab == "oprs":
