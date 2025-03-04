@@ -35,7 +35,7 @@ app = dash.Dash(
     __name__,
     meta_tags=[
         {'name': 'viewport', 'content': 'width=device-width, initial-scale=1.0'},
-        {'name': 'description', 'content': 'Peekorobo - A scouting and statistics platform for FRC teams that provides detailed insights and resources'},
+        {'name': 'description', 'content': 'A scouting and statistics platform for FRC teams that provides detailed insights and resources'},
         {'name': 'keywords', 'content': 'FRC, Robotics, Scouting, FIRST, FIRST Robotics Competition, Statbotics, TBA, The Blue Alliance, Competition, Statistics'},
     ],
     external_stylesheets=[dbc.themes.BOOTSTRAP],
@@ -488,7 +488,6 @@ def team_layout(team_number, year):
         return dbc.Alert("No team number provided. Please go back and search again.", color="warning")
 
     team_key = f"frc{team_number}"
-
     folder_path = "team_data"  # Replace with the correct folder path
     file_path = os.path.join(folder_path, f"teams_{year or 2024}.json")
     if not os.path.exists(file_path):
@@ -509,20 +508,27 @@ def team_layout(team_number, year):
     team_info = tba_get(f"team/{team_key}")
     if not team_info:
         return dbc.Alert(
-            f"Error: Could not fetch info for team {team_number}. "
-            "Double-check your input or TBA key.",
+            f"Error: Could not fetch info for team {team_number}. Double-check your input or TBA key.",
             color="danger"
         )
 
+    # Overall EPA from stored team data
     epa_value = selected_team.get("epa", None)
     epa_display = f"{epa_value:.2f}" if epa_value is not None else "N/A"
 
+    # Get additional EPA components
+    auto_epa = selected_team.get("auto_epa", None)
+    teleop_epa = selected_team.get("teleop_epa", None)
+    endgame_epa = selected_team.get("endgame_epa", None)
+    auto_epa_display = f"{auto_epa:.2f}" if auto_epa is not None else "N/A"
+    teleop_epa_display = f"{teleop_epa:.2f}" if teleop_epa is not None else "N/A"
+    endgame_epa_display = f"{endgame_epa:.2f}" if endgame_epa is not None else "N/A"
 
     nickname = selected_team.get("nickname", "Unknown")
     city = selected_team.get("city", "")
     state = selected_team.get("state_prov", "")
     country = selected_team.get("country", "")
-    website = team_info.get("website", "N/A")
+    website = selected_team.get("website", "N/A")
     if website and website.startswith("http://"):
         website = "https://" + website[len("http://"):]
     
@@ -538,28 +544,27 @@ def team_layout(team_number, year):
                 break
     
     years_participated = tba_get(f"team/{team_key}/years_participated")
-    
     years_links = [
         html.A(
-            str(year),
-            href=f"/team/{team_number}/{year}",
+            str(yr),
+            href=f"/team/{team_number}/{yr}",
             style={
                 "marginRight": "0px",
                 "color": "#007BFF",
                 "textDecoration": "none",
             },
         )
-        for year in years_participated
+        for yr in years_participated
     ] if years_participated else ["N/A"]
 
-        # Add "ALL" button linking to team profile without year
+    # Add "ALL" button linking to team profile without year
     years_links.append(
         html.A(
             "History",
             href=f"/team/{team_number}",  # No year specified
             style={
                 "marginLeft": "0px",
-                "color": "#007BFF",  # Orange to differentiate it
+                "color": "#007BFF",
                 "fontWeight": "bold",
                 "textDecoration": "none",
             },
@@ -569,12 +574,8 @@ def team_layout(team_number, year):
     rookie_year = years_participated[0]
 
     hof = [2486, 321, 1629, 503, 4613, 1816, 1902, 1311, 2834, 2614, 3132, 987, 597, 27, 1538, 1114, 359, 341, 236, 842, 365, 111, 67, 254, 103, 175, 22, 16, 120, 23, 47, 51, 144, 151, 191, 7]
-
     wcp = [126,148,144,100,73,71,45,1,48,176,25,232,255,125,279,294,365,66,173,65,111,469,435,494,67,330,503,217,296,522,190,987,177,1114,971,254,973,180,16,1241,1477,610,2848,74,118,1678,1671,5012,2481,120,1086,2767,862,1676,1011,2928,5499,27,2708,4027,2976,3075,3707,4481,1218,1323,5026,4201,1619,3175,6672,4414,4096,609,1690,4522,9432,321]
 
-    
-                
-        # Check if the team is in the Hall of Fame
     is_hof_team = int(team_number) in hof
     is_wcp_team = int(team_number) in wcp
     
@@ -584,7 +585,7 @@ def team_layout(team_number, year):
                 html.Span("🏆", style={"fontSize": "1.5rem"}),
                 html.Span(" Hall of Fame", style={"color": "gold", "fontSize": "1.2rem", "fontWeight": "bold", "marginLeft": "5px"})
             ],
-            style={"display": "flex", "alignItems": "center", "marginBottom": "8px"}  # Adds spacing below
+            style={"display": "flex", "alignItems": "center", "marginBottom": "8px"}
         )
         if is_hof_team else None
     )
@@ -594,7 +595,7 @@ def team_layout(team_number, year):
                 html.Span("🌎", style={"fontSize": "1.5rem"}),
                 html.Span(" World Champions", style={"color": "blue", "fontSize": "1.2rem", "fontWeight": "bold", "marginLeft": "5px"})
             ],
-            style={"display": "flex", "alignItems": "center", "marginBottom": "8px"}  # Adds spacing below
+            style={"display": "flex", "alignItems": "center", "marginBottom": "8px"}
         )
         if is_wcp_team else None
     )
@@ -605,12 +606,11 @@ def team_layout(team_number, year):
             [
                 dbc.Row(
                     [
-                        # Left Column: Team Info
                         dbc.Col(
                             [
                                 html.H2(f"Team {team_number}: {nickname}", style={"color": "#333", "fontWeight": "bold"}),
-                                hof_badge if is_hof_team else None,  # Hall of Fame badge here
-                                wcp_badge if is_wcp_team else None,  # World Champions badge
+                                hof_badge if is_hof_team else None,
+                                wcp_badge if is_wcp_team else None,
                                 html.P([html.I(className="bi bi-geo-alt-fill"), f"📍 {city}, {state}, {country}"]),
                                 html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
                                         html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "none"})]),
@@ -621,29 +621,22 @@ def team_layout(team_number, year):
                                         " Years Participated: ",
                                         html.Div(
                                             years_links,
-                                            style={
-                                                "display": "flex",
-                                                "flexWrap": "wrap",  
-                                                "gap": "8px",      
-                                            },
+                                            style={"display": "flex", "flexWrap": "wrap", "gap": "8px"},
                                         ),
                                     ],
                                     style={"marginBottom": "10px"},
                                 ),
                             ],
-                            width=9,  
+                            width=9,
                         ),
-                        # Right Column: Avatar
                         dbc.Col(
                             [
                                 html.Img(
                                     src=avatar_url,
                                     alt=f"Team {team_number} Avatar",
                                     style={
-                                        # Let it grow up to 150px on desktop
                                         "maxWidth": "150px",
-                                        # But never exceed the parent's width on mobile
-                                        "width": "100%",   
+                                        "width": "100%",
                                         "height": "auto",
                                         "objectFit": "contain",
                                         "borderRadius": "10px",
@@ -658,7 +651,7 @@ def team_layout(team_number, year):
                             style={"textAlign": "center"},
                         )
                     ],
-                    align="center", 
+                    align="center",
                 ),
             ],
             style={"fontSize": "1.1rem"}
@@ -670,6 +663,7 @@ def team_layout(team_number, year):
             "backgroundColor": "#f9f9f9",
         },
     )
+    
     # --- Performance Metrics ---
     if year:
         matches = tba_get(f"team/{team_key}/matches/{year}")
@@ -692,42 +686,42 @@ def team_layout(team_number, year):
         for match in matches
     ) if matches else 0
     avg_score = total_score / total_matches if total_matches > 0 else 0
-    
+
     win_loss_ratio = html.Span([
         html.Span(f"{wins}", style={"color": "green", "fontWeight": "bold"}),
         html.Span("/", style={"color": "#333", "fontWeight": "bold"}),
-        html.Span(f"{losses}", style={"color": "red", "fontWeight": "bold"})  
+        html.Span(f"{losses}", style={"color": "red", "fontWeight": "bold"})
     ])
 
     if year:
         perf = html.H5(
-                    f"{year} Performance Metrics",
-                    style={
-                        "textAlign": "center",
-                        "color": "#444",
-                        "fontSize": "1.3rem",
-                        "fontWeight": "bold",
-                        "marginBottom": "10px",
-                    },
-                )
+            f"{year} Performance Metrics",
+            style={
+                "textAlign": "center",
+                "color": "#444",
+                "fontSize": "1.3rem",
+                "fontWeight": "bold",
+                "marginBottom": "10px",
+            },
+        )
     else:
         perf = html.H5(
-                    "2024 Performance Metrics",
-                    style={
-                        "textAlign": "center",
-                        "color": "#444",
-                        "fontSize": "1.3rem",
-                        "fontWeight": "bold",
-                        "marginBottom": "10px",
-                    },
-                )
+            "2024 Performance Metrics",
+            style={
+                "textAlign": "center",
+                "color": "#444",
+                "fontSize": "1.3rem",
+                "fontWeight": "bold",
+                "marginBottom": "10px",
+            },
+        )
 
     performance_card = dbc.Card(
         dbc.CardBody(
             [
                 # Title
                 perf,
-                # Ranks and EPA
+                # Ranks row
                 html.Div(
                     dbc.Row(
                         [
@@ -735,14 +729,7 @@ def team_layout(team_number, year):
                                 html.Div(
                                     [
                                         html.P(f"{country} Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(
-                                            f"{country_rank}",
-                                            style={
-                                                "fontSize": "1.1rem",
-                                                "fontWeight": "bold",
-                                                "color": "#FFC107",
-                                            },
-                                        ),
+                                        html.P(f"{country_rank}", style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#FFC107"}),
                                     ],
                                     style={"textAlign": "center"},
                                 ),
@@ -752,14 +739,7 @@ def team_layout(team_number, year):
                                 html.Div(
                                     [
                                         html.P("Global Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(
-                                            f"{global_rank}",
-                                            style={
-                                                "fontSize": "1.1rem",
-                                                "fontWeight": "bold",
-                                                "color": "#007BFF",
-                                            },
-                                        ),
+                                        html.P(f"{global_rank}", style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#007BFF"}),
                                     ],
                                     style={"textAlign": "center"},
                                 ),
@@ -769,14 +749,7 @@ def team_layout(team_number, year):
                                 html.Div(
                                     [
                                         html.P(f"{state} Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.1rem"}),
-                                        html.P(
-                                            f"{state_rank}",
-                                            style={
-                                                "fontSize": "1.1rem",
-                                                "fontWeight": "bold",
-                                                "color": "#FFC107",
-                                            },
-                                        ),
+                                        html.P(f"{state_rank}", style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#FFC107"}),
                                     ],
                                     style={"textAlign": "center"},
                                 ),
@@ -786,7 +759,7 @@ def team_layout(team_number, year):
                         style={"marginBottom": "10px"},
                     ),
                 ),
-                # Match Performance
+                # Match Performance row
                 html.Div(
                     dbc.Row(
                         [
@@ -794,15 +767,7 @@ def team_layout(team_number, year):
                                 html.Div(
                                     [
                                         html.P("EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(
-                                            epa_display,
-
-                                            style={
-                                                "fontSize": "1.1rem",
-                                                "fontWeight": "bold",
-                                                "color": "#17A2B8",
-                                            },
-                                        ),
+                                        html.P(epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
                                     ],
                                     style={"textAlign": "center"},
                                 ),
@@ -812,13 +777,7 @@ def team_layout(team_number, year):
                                 html.Div(
                                     [
                                         html.P("Win/Loss Ratio", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(
-                                            win_loss_ratio,
-                                            style={
-                                                "fontSize": "1.1rem",
-                                                "fontWeight": "bold",
-                                            },
-                                        ),
+                                        html.P(win_loss_ratio, style={"fontSize": "1.1rem", "fontWeight": "bold"}),
                                     ],
                                     style={"textAlign": "center"},
                                 ),
@@ -828,14 +787,7 @@ def team_layout(team_number, year):
                                 html.Div(
                                     [
                                         html.P("Avg Match Score", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(
-                                            f"{avg_score:.2f}",
-                                            style={
-                                                "fontSize": "1.1rem",
-                                                "fontWeight": "bold",
-                                                "color": "#17A2B8",
-                                            },
-                                        ),
+                                        html.P(f"{avg_score:.2f}", style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
                                     ],
                                     style={"textAlign": "center"},
                                 ),
@@ -844,15 +796,46 @@ def team_layout(team_number, year):
                         ],
                     ),
                 ),
+                # New EPA Components Row
+                html.Div(
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.P("Auto EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
+                                        html.P(auto_epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
+                                    ],
+                                    style={"textAlign": "center"},
+                                ),
+                                width=4,
+                            ),
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.P("Teleop EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
+                                        html.P(teleop_epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
+                                    ],
+                                    style={"textAlign": "center"},
+                                ),
+                                width=4,
+                            ),
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.P("Endgame EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
+                                        html.P(endgame_epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
+                                    ],
+                                    style={"textAlign": "center"},
+                                ),
+                                width=4,
+                            ),
+                        ]
+                    )
+                ),
             ],
         ),
-        style={
-            "marginBottom": "15px",
-            "borderRadius": "8px",
-            "boxShadow": "0px 2px 4px rgba(0,0,0,0.1)",
-            "backgroundColor": "#f9f9f9",
-            "padding": "10px",
-        },
+        style={"marginBottom": "15px", "borderRadius": "8px", "boxShadow": "0px 2px 4px rgba(0,0,0,0.1)", "backgroundColor": "#f9f9f9", "padding": "10px"},
     )
         
     # --- Team Events ---
@@ -860,11 +843,8 @@ def team_layout(team_number, year):
         events = tba_get(f"team/{team_key}/events/{year}")
     else:
         events = tba_get(f"team/{team_key}/events")
-        
     events = sorted(events, key=lambda ev: ev.get("start_date", ""), reverse=True)
-        
     event_key_to_name = {ev["key"]: ev["name"] for ev in events}
-
     events_data = []
     for ev in events:
         event_key = ev.get("key")
@@ -873,9 +853,6 @@ def team_layout(team_number, year):
         location = f"{ev.get('city', '')}, {ev.get('state_prov', '')}"
         start_date = ev.get("start_date", "")
         end_date = ev.get("end_date", "")
-        
-        event_name_with_rank = event_name
-
         if year:
             rankings = tba_get(f"event/{event_key}/rankings")
             rank = None
@@ -883,11 +860,8 @@ def team_layout(team_number, year):
                 for entry in rankings["rankings"]:
                     if entry["team_key"] == team_key:
                         rank = entry["rank"]
-                    avg_rank = sum(r["rank"] for r in rankings["rankings"]) / len(rankings["rankings"])
-
-            if rank:
-                event_name = f"{event_name} (Rank: {rank})"
-
+                if rank:
+                    event_name = f"{event_name} (Rank: {rank})"
         events_data.append({
             "event_name": f"[{event_name}]({event_url})",
             "event_location": location,
@@ -895,7 +869,6 @@ def team_layout(team_number, year):
             "end_date": end_date,
         })
 
-    # DataTable for Events
     events_table = dash_table.DataTable(
         columns=[
             {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
@@ -905,42 +878,17 @@ def team_layout(team_number, year):
         ],
         data=events_data,
         page_size=5,
-        style_table={"overflowX": "auto",
-                    "borderRadius": "10px",
-                    "border": "1px solid #ddd"},
-        style_header={
-            "backgroundColor": "#FFCC00",
-            "fontWeight": "bold",
-            "textAlign": "center",
-            "border": "1px solid #ddd",
-        },
-        style_cell={
-            "textAlign": "center",
-            "padding": "10px",
-            "border": "1px solid #ddd",
-        },
-        style_cell_conditional=[
-            {"if": {"column_id": "event_name"}, "textAlign": "center"}
-        ],
-        style_data_conditional=[
-            {
-                "if": {"state": "selected"},
-                "backgroundColor": "rgba(255, 221, 0, 0.5)",
-                "border": "1px solid #FFCC00",
-            },
-        ],
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "1px solid #ddd"},
+        style_header={"backgroundColor": "#FFCC00", "fontWeight": "bold", "textAlign": "center", "border": "1px solid #ddd"},
+        style_cell={"textAlign": "center", "padding": "10px", "border": "1px solid #ddd"},
+        style_cell_conditional=[{"if": {"column_id": "event_name"}, "textAlign": "center"}],
+        style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
     )
-
     
-    # --- Team Awards ---
     if year:
         awards = tba_get(f"team/{team_key}/awards/{year}")
     else:
-        awards = sorted(
-            tba_get(f"team/{team_key}/awards") or [],
-            key=lambda aw: aw.get("year", 0),
-            reverse=True
-        )
+        awards = sorted(tba_get(f"team/{team_key}/awards") or [], key=lambda aw: aw.get("year", 0), reverse=True)
     awards_data = [
         {
             "award_name": aw.get("name", "Unknown Award"),
@@ -949,7 +897,6 @@ def team_layout(team_number, year):
         }
         for aw in (awards or [])
     ]
-
     awards_table = dash_table.DataTable(
         columns=[
             {"name": "Award Name", "id": "award_name"},
@@ -958,30 +905,11 @@ def team_layout(team_number, year):
         ],
         data=awards_data,
         page_size=5,
-        style_table={"overflowX": "auto",
-                    "borderRadius": "10px",
-                    "border": "1px solid #ddd"},
-        style_header={
-            "backgroundColor": "#FFCC00",
-            "fontWeight": "bold",
-            "textAlign": "center",
-            "border": "1px solid #ddd",
-        },
-        style_cell={
-            "textAlign": "center",
-            "padding": "10px",
-            "border": "1px solid #ddd",
-        },
-        style_cell_conditional=[
-            {"if": {"column_id": "award_name"}, "textAlign": "left"}
-        ],
-        style_data_conditional=[
-            {
-                "if": {"state": "selected"},
-                "backgroundColor": "rgba(255, 221, 0, 0.5)",
-                "border": "1px solid #FFCC00",
-            },
-        ],
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "1px solid #ddd"},
+        style_header={"backgroundColor": "#FFCC00", "fontWeight": "bold", "textAlign": "center", "border": "1px solid #ddd"},
+        style_cell={"textAlign": "center", "padding": "10px", "border": "1px solid #ddd"},
+        style_cell_conditional=[{"if": {"column_id": "award_name"}, "textAlign": "left"}],
+        style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
     )
     
     blue_banner_awards = ["Chairman's", "Impact", "Woodie Flowers", "Winner"]
@@ -989,13 +917,9 @@ def team_layout(team_number, year):
     if awards:
         for award in awards:
             award_name = award.get("name", "")
-            event_key = award.get
             event_name = event_key_to_name.get(award.get("event_key"), "Unknown Event")
-    
-            # Check if this award is a "blue banner" award
             if any(keyword in award_name.lower() for keyword in ["chairman's", "impact", "winner", "woodie flowers"]):
                 blue_banners.append({"award_name": award_name, "event_name": event_name})
-
     blue_banner_section = html.Div(
         [
             html.Div(
@@ -1014,29 +938,14 @@ def team_layout(team_number, year):
                                         [
                                             html.P(
                                                 banner.get("award_name", "Unknown Award"),
-                                                style={
-                                                    "fontSize": "0.8rem",
-                                                    "color": "white",
-                                                    "fontWeight": "bold",
-                                                    "textAlign": "center",
-                                                    "marginBottom": "3px",
-                                                },
+                                                style={"fontSize": "0.8rem", "color": "white", "fontWeight": "bold", "textAlign": "center", "marginBottom": "3px"},
                                             ),
                                             html.P(
                                                 banner.get("event_name", "Unknown Event"),
-                                                style={
-                                                    "fontSize": "0.6rem",
-                                                    "color": "white",
-                                                    "textAlign": "center",
-                                                },
+                                                style={"fontSize": "0.6rem", "color": "white", "textAlign": "center"},
                                             ),
                                         ],
-                                        style={
-                                            "position": "absolute",
-                                            "top": "50%",
-                                            "left": "50%",
-                                            "transform": "translate(-50%, -50%)",
-                                        },
+                                        style={"position": "absolute", "top": "50%", "left": "50%", "transform": "translate(-50%, -50%)"},
                                     ),
                                 ],
                                 style={"position": "relative", "marginBottom": "15px"},
@@ -1052,9 +961,6 @@ def team_layout(team_number, year):
         style={"marginBottom": "15px", "borderRadius": "8px", "backgroundColor": "white", "padding": "10px"},
     )
     
-
-
-    # Final Layout
     return html.Div(
         [
             topbar,
@@ -1068,21 +974,14 @@ def team_layout(team_number, year):
                     awards_table,
                     blue_banner_section,
                     html.Br(),
-                    dbc.Button(
-                        "Go Back",
-                        id="btn-go-back",
-                        color="secondary",
-                        href="/",
-                        external_link=True,
-                        style={"borderRadius": "5px", "padding": "10px 20px", "marginTop": "20px"},
-                    ),
+                    dbc.Button("Go Back", id="btn-go-back", color="secondary", href="/", external_link=True, style={"borderRadius": "5px", "padding": "10px 20px", "marginTop": "20px"}),
                 ],
-                style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"}),
-            
+                style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
+            ),
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-            footer
+            footer,
         ]
     )
 
@@ -1979,6 +1878,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
         ])
 
 
+
     # ------------------ MATCHES TAB ------------------
     elif active_tab == "matches":
         all_matches = event_matches or []
@@ -2409,8 +2309,11 @@ def teams_layout(default_year=2024):
         id="teams-table",
         columns=[
             {"name": "EPA Rank", "id": "epa_rank"},
-            {"name": "EPA", "id": "epar", "presentation": "markdown"},
             {"name": "Team", "id": "team_display", "presentation": "markdown"},
+            {"name": "EPA", "id": "epar"},
+            {"name": "Auto EPA", "id": "auto_epa"},
+            {"name": "Teleop EPA", "id": "teleop_epa"},
+            {"name": "Endgame EPA", "id": "endgame_epa"},
             {"name": "Location", "id": "location_display"},
         ],
         data=[],
@@ -2444,16 +2347,9 @@ def teams_layout(default_year=2024):
                 [
                     html.H4("Top 3 Teams", className="text-center mb-4"),
                     dbc.Row(id="top-teams-container", className="justify-content-center mb-5"),
-
                     filters_row,
-
-                    # The Key for EPA emojis
-                    epa_legend_layout(),  # <--- Inserting the color key here
-
-                    dbc.Row(
-                        dbc.Col(teams_table, width=12),
-                        className="mb-4",
-                    ),
+                    epa_legend_layout(),  # EPA color key
+                    dbc.Row(dbc.Col(teams_table, width=12), className="mb-4"),
                 ],
                 style={"padding": "10px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
@@ -2488,29 +2384,68 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
     with open(file_path, "r") as f:
         teams_data = json.load(f)
 
-    # 2) Sort by descending EPA, treating None as 0
+    # 2) Sort teams by descending overall EPA (treating None as 0)
     teams_data.sort(key=lambda t: t["epa"] if t.get("epa") is not None else 0, reverse=True)
 
-    epa_values = [t["epa"] for t in teams_data if t.get("epa") is not None]
-    if epa_values:
-        percentiles = {
-            "99": np.percentile(epa_values, 99),
-            "95": np.percentile(epa_values, 95),
-            "90": np.percentile(epa_values, 90),
-            "75": np.percentile(epa_values, 75),
-            "50": np.percentile(epa_values, 50),
-            "25": np.percentile(epa_values, 25),
+    # Build percentile dictionaries for each EPA component
+    overall_values = [t["epa"] for t in teams_data if t.get("epa") is not None]
+    auto_values = [t["auto_epa"] for t in teams_data if t.get("auto_epa") is not None]
+    teleop_values = [t["teleop_epa"] for t in teams_data if t.get("teleop_epa") is not None]
+    endgame_values = [t["endgame_epa"] for t in teams_data if t.get("endgame_epa") is not None]
+
+    if overall_values:
+        overall_percentiles = {
+            "99": np.percentile(overall_values, 99),
+            "95": np.percentile(overall_values, 95),
+            "90": np.percentile(overall_values, 90),
+            "75": np.percentile(overall_values, 75),
+            "50": np.percentile(overall_values, 50),
+            "25": np.percentile(overall_values, 25),
         }
     else:
-        # fallback zeros
-        percentiles = {"99":0, "95":0, "90":0, "75":0, "50":0, "25":0}
+        overall_percentiles = {"99": 0, "95": 0, "90": 0, "75": 0, "50": 0, "25": 0}
 
+    if auto_values:
+        auto_percentiles = {
+            "99": np.percentile(auto_values, 99),
+            "95": np.percentile(auto_values, 95),
+            "90": np.percentile(auto_values, 90),
+            "75": np.percentile(auto_values, 75),
+            "50": np.percentile(auto_values, 50),
+            "25": np.percentile(auto_values, 25),
+        }
+    else:
+        auto_percentiles = {"99": 0, "95": 0, "90": 0, "75": 0, "50": 0, "25": 0}
 
-    # 4) Assign global ranks
+    if teleop_values:
+        teleop_percentiles = {
+            "99": np.percentile(teleop_values, 99),
+            "95": np.percentile(teleop_values, 95),
+            "90": np.percentile(teleop_values, 90),
+            "75": np.percentile(teleop_values, 75),
+            "50": np.percentile(teleop_values, 50),
+            "25": np.percentile(teleop_values, 25),
+        }
+    else:
+        teleop_percentiles = {"99": 0, "95": 0, "90": 0, "75": 0, "50": 0, "25": 0}
+
+    if endgame_values:
+        endgame_percentiles = {
+            "99": np.percentile(endgame_values, 99),
+            "95": np.percentile(endgame_values, 95),
+            "90": np.percentile(endgame_values, 90),
+            "75": np.percentile(endgame_values, 75),
+            "50": np.percentile(endgame_values, 50),
+            "25": np.percentile(endgame_values, 25),
+        }
+    else:
+        endgame_percentiles = {"99": 0, "95": 0, "90": 0, "75": 0, "50": 0, "25": 0}
+
+    # 3) Assign global ranks
     for idx, t in enumerate(teams_data):
         t["global_rank"] = idx + 1
 
-    # 5) Build State dropdown
+    # 4) Build State dropdown options.
     if selected_country and selected_country in STATES:
         state_options = [{"label": "All States", "value": "All"}] + [
             {"label": s["label"], "value": s["value"]} for s in STATES[selected_country] if isinstance(s, dict)
@@ -2518,20 +2453,17 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
     else:
         state_options = [{"label": "All States", "value": "All"}]
 
-    # 6) Apply filters
-    # Filter by country
+    # 5) Apply filters.
     if selected_country and selected_country != "All":
         teams_data = [
             t for t in teams_data
             if t.get("country", "").lower() == selected_country.lower()
         ]
-    # Filter by state
     if selected_state and selected_state != "All":
         teams_data = [
             t for t in teams_data
             if t.get("state_prov", "").lower() == selected_state.lower()
         ]
-    # Search filter
     if search_query:
         q = search_query.lower()
         teams_data = [
@@ -2541,13 +2473,20 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
                or (q in t.get("city", "").lower())
         ]
 
-    # 7) Prepare DataTable rows
+    # 6) Prepare DataTable rows including EPA components with percentage emojis.
     table_rows = []
     for t in teams_data:
         rank = t.get("global_rank", "N/A")
-        epa = t.get("epa", None)
-        epa_markdown = get_epa_display(epa, percentiles)
-        
+        overall_epa = t.get("epa")
+        auto_epa = t.get("auto_epa")
+        teleop_epa = t.get("teleop_epa")
+        endgame_epa = t.get("endgame_epa")
+
+        overall_display = get_epa_display(overall_epa, overall_percentiles)
+        auto_display = get_epa_display(auto_epa, auto_percentiles) if auto_epa is not None else "N/A"
+        teleop_display = get_epa_display(teleop_epa, teleop_percentiles) if teleop_epa is not None else "N/A"
+        endgame_display = get_epa_display(endgame_epa, endgame_percentiles) if endgame_epa is not None else "N/A"
+
         team_num = t.get("team_number", "")
         nickname = t.get("nickname", "Unknown")
         city = t.get("city", "Unknown")
@@ -2555,7 +2494,6 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
         country = t.get("country", "")
         location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
 
-        # For rank, show 🥇/🥈/🥉 if 1/2/3
         if rank == 1:
             rank_str = "🥇"
         elif rank == 2:
@@ -2567,25 +2505,24 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
 
         table_rows.append({
             "epa_rank": rank_str,
-            "epar": epa_markdown,
             "team_display": f"[{team_num} | {nickname}](/team/{team_num}/{selected_year})",
+            "epar": overall_display,
+            "auto_epa": auto_display,
+            "teleop_epa": teleop_display,
+            "endgame_epa": endgame_display,
             "location_display": location_str,
         })
 
-    # 8) Build top-3 “Featured Teams”
+    # 7) Build top-3 “Featured Teams”
     top_3 = teams_data[:3]  # after filters
     featured_cards = []
     for top_team in top_3:
-        t_num = top_team.get("team_number", None)
+        t_num = top_team.get("team_number")
         if t_num is not None:
-            # fetch that team's avatar (only for top 3)
             avatar_url = get_team_avatar(t_num, selected_year)
             featured_cards.append(create_team_card(top_team, selected_year, avatar_url=avatar_url))
-
-    top_teams_layout = dbc.Row(
-        [dbc.Col(card, width="auto") for card in featured_cards],
-        className="justify-content-center"
-    )
+    top_teams_layout = dbc.Row([dbc.Col(card, width="auto") for card in featured_cards],
+                               className="justify-content-center")
 
     return table_rows, state_options, top_teams_layout
 
@@ -2733,4 +2670,4 @@ def display_page(pathname):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run_server(host="0.0.0.0", port=port, debug=False)
+    app.run_server(host="0.0.0.0", port=port, debug=True)

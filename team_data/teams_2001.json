@@ -5,7 +5,11 @@
         "city": "Pontiac",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.juggernautsteam1.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 5,
@@ -13,7 +17,11 @@
         "city": "Melvindale",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://www.robocards.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 6,
@@ -21,7 +29,11 @@
         "city": "Plymouth",
         "state_prov": "MN",
         "country": "USA",
-        "epa": null
+        "website": "http://www.cogsquad.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 7,
@@ -29,7 +41,11 @@
         "city": "Baltimore",
         "state_prov": "MD",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team007.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 8,
@@ -37,7 +53,11 @@
         "city": "Palo Alto",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.palyrobotics.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 9,
@@ -45,7 +65,11 @@
         "city": "Chicago",
         "state_prov": "IL",
         "country": "USA",
-        "epa": null
+        "website": "http://www.roboriders9.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 11,
@@ -53,7 +77,11 @@
         "city": "Flanders",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://www.mort11.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 19,
@@ -61,7 +89,11 @@
         "city": "Greenwich",
         "state_prov": "CT",
         "country": "USA",
-        "epa": null
+        "website": "http:///www.ghsteam19.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 21,
@@ -69,15 +101,23 @@
         "city": "Titusville",
         "state_prov": "Florida",
         "country": "USA",
-        "epa": null
+        "website": "http://www.combbat21.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 22,
         "nickname": "Double Deuce",
         "city": "Chatsworth",
-        "state_prov": "CA",
+        "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team22.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 25,
@@ -85,7 +125,11 @@
         "city": "North Brunswick",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://www.raiderrobotix.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 27,
@@ -93,7 +137,11 @@
         "city": "Clarkston",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.teamrush27.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 28,
@@ -101,7 +149,11 @@
         "city": "Sag Harbor",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http:///piersonrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 30,
@@ -109,7 +161,11 @@
         "city": "Lincroft",
         "state_prov": "NJ",
         "country": "USA",
-        "epa": null
+        "website": "http://www.hthsfury.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 31,
@@ -117,7 +173,11 @@
         "city": "Jenks",
         "state_prov": "Oklahoma",
         "country": "USA",
-        "epa": null
+        "website": "http://www.thethirtyfirst.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 33,
@@ -125,7 +185,11 @@
         "city": "Bloomfield Hills",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.killerbees33.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 34,
@@ -133,7 +197,11 @@
         "city": "Athens",
         "state_prov": "Alabama",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team34rockets.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 37,
@@ -141,7 +209,11 @@
         "city": "Coral Gables",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 38,
@@ -149,7 +221,11 @@
         "city": "Woodbury",
         "state_prov": "CT",
         "country": "USA",
-        "epa": null
+        "website": "http://www.nonnebots.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 40,
@@ -157,7 +233,11 @@
         "city": "Manchester",
         "state_prov": "NH",
         "country": "USA",
-        "epa": null
+        "website": "http://www.trinityrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 41,
@@ -165,7 +245,11 @@
         "city": "Warren",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team41robotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 42,
@@ -173,7 +257,11 @@
         "city": "Hudson",
         "state_prov": "NH",
         "country": "USA",
-        "epa": null
+        "website": "http://www.mv.com/org/alvirne-first/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 45,
@@ -181,7 +269,11 @@
         "city": "Kokomo",
         "state_prov": "Indiana",
         "country": "USA",
-        "epa": null
+        "website": "http://www.technokats.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 47,
@@ -189,7 +281,11 @@
         "city": "Pontiac",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://www.chiefdelphi.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 48,
@@ -197,7 +293,11 @@
         "city": "Warren",
         "state_prov": "Ohio",
         "country": "USA",
-        "epa": null
+        "website": "http://www.teamelite48.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 49,
@@ -205,7 +305,11 @@
         "city": "Saginaw",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://linux.bvsd.us/website/index.php?subpage_id=149&page_id=41",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 53,
@@ -213,7 +317,11 @@
         "city": "Greenbelt",
         "state_prov": "Maryland",
         "country": "USA",
-        "epa": null
+        "website": "http://erhsroboticsclub.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 56,
@@ -221,7 +329,11 @@
         "city": "Bound Brook",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team56.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 57,
@@ -229,7 +341,11 @@
         "city": "Houston",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "http://www.leopards57.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 58,
@@ -237,7 +353,11 @@
         "city": "South Portland",
         "state_prov": "Maine",
         "country": "USA",
-        "epa": null
+        "website": "http://www.riotcrew.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 59,
@@ -245,7 +365,11 @@
         "city": "Miami",
         "state_prov": "Florida",
         "country": "USA",
-        "epa": null
+        "website": "http://www.ramtech59.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 60,
@@ -253,7 +377,11 @@
         "city": "Kingman",
         "state_prov": "Arizona",
         "country": "USA",
-        "epa": null
+        "website": "http://www.frcteam60.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 61,
@@ -261,7 +389,11 @@
         "city": "Upton",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "http://www.valleytech.k12.ma.us/Robotics/Team61_index.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 63,
@@ -269,7 +401,11 @@
         "city": "Erie",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.mcdowellrobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 64,
@@ -277,7 +413,11 @@
         "city": "Mesa",
         "state_prov": "AZ",
         "country": "USA",
-        "epa": null
+        "website": "http://www.gilamonster.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 65,
@@ -285,7 +425,11 @@
         "city": "Pontiac",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://www.huskiebrigade.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 66,
@@ -293,7 +437,11 @@
         "city": "Ypsilanti",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://ycsrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 67,
@@ -301,7 +449,11 @@
         "city": "Commerce Township",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.hotteam67.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 68,
@@ -309,7 +461,11 @@
         "city": "Ortonville",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://trucktownthunder.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 69,
@@ -317,7 +473,11 @@
         "city": "Quincy",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "http://www.hyperonline.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 70,
@@ -325,7 +485,11 @@
         "city": "Goodrich",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.70moremartians.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 71,
@@ -333,7 +497,11 @@
         "city": "Hammond",
         "state_prov": "Indiana",
         "country": "USA",
-        "epa": null
+        "website": "http://www.teamhammond71.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 73,
@@ -341,7 +509,11 @@
         "city": "Rochester",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.edison73.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 74,
@@ -349,7 +521,11 @@
         "city": "Holland",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.hollandchaos.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 75,
@@ -357,7 +533,11 @@
         "city": "Hillsborough",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://www.roboraiders.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 79,
@@ -365,7 +545,11 @@
         "city": "Oldsmar",
         "state_prov": "Florida",
         "country": "USA",
-        "epa": null
+        "website": "http://www.teamkrunch.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 81,
@@ -373,7 +557,11 @@
         "city": "Freeport",
         "state_prov": "Illinois",
         "country": "USA",
-        "epa": null
+        "website": "http:///www.team81robotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 84,
@@ -381,7 +569,11 @@
         "city": "Towanda",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.chuck84.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 85,
@@ -389,7 +581,11 @@
         "city": "Zeeland",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.bob85.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 86,
@@ -397,7 +593,11 @@
         "city": "Jacksonville",
         "state_prov": "Florida",
         "country": "USA",
-        "epa": null
+        "website": "http://www.teamresistance.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 87,
@@ -405,7 +605,11 @@
         "city": "Mount Holly",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://www.rvr87.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 88,
@@ -413,7 +617,11 @@
         "city": "Bridgewater",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "http://www.tj2.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 89,
@@ -421,7 +629,11 @@
         "city": "PA",
         "state_prov": "USA",
         "country": null,
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 92,
@@ -429,7 +641,11 @@
         "city": "Lincolnshire",
         "state_prov": "IL",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 93,
@@ -437,7 +653,11 @@
         "city": "Appleton",
         "state_prov": "Wisconsin",
         "country": "USA",
-        "epa": null
+        "website": "http://www.nacteam93.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 94,
@@ -445,7 +665,11 @@
         "city": "Southfield",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.Team94.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 95,
@@ -453,7 +677,11 @@
         "city": "White River Junction",
         "state_prov": "Vermont",
         "country": "USA",
-        "epa": null
+        "website": "http://www.frcteam95.org/wp/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 96,
@@ -461,7 +689,11 @@
         "city": "Springfield",
         "state_prov": "MA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team96jester.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 97,
@@ -469,7 +701,11 @@
         "city": "Cambridge",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "https://bionicbeef97.weebly.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 100,
@@ -477,7 +713,11 @@
         "city": "Woodside",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "https://www.team100.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 101,
@@ -485,7 +725,11 @@
         "city": "Chicago",
         "state_prov": "Illinois",
         "country": "USA",
-        "epa": null
+        "website": "http://www.stpatrickrobotics.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 102,
@@ -493,7 +737,11 @@
         "city": "Somerville",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team102.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 103,
@@ -501,7 +749,11 @@
         "city": "Kintnersville",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.cybersonics.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 104,
@@ -509,7 +761,11 @@
         "city": "West Chester",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 105,
@@ -517,7 +773,11 @@
         "city": "CHARLTON",
         "state_prov": "MA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 106,
@@ -525,7 +785,11 @@
         "city": "phila",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 107,
@@ -533,7 +797,11 @@
         "city": "Holland",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "https://team107robotics.weebly.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 108,
@@ -541,7 +809,11 @@
         "city": "Fort Lauderdale",
         "state_prov": "Florida",
         "country": "USA",
-        "epa": null
+        "website": "https://www.sigmacats.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 109,
@@ -549,7 +821,11 @@
         "city": "Libertyville",
         "state_prov": "IL",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 111,
@@ -557,7 +833,11 @@
         "city": "Arlington Heights",
         "state_prov": "Illinois",
         "country": "USA",
-        "epa": null
+        "website": "http://www.wildstang.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 112,
@@ -565,7 +845,11 @@
         "city": "Arlington Heights",
         "state_prov": "Illinois",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 114,
@@ -573,7 +857,11 @@
         "city": "Los Altos",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "https://team114.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 115,
@@ -581,7 +869,11 @@
         "city": "Cupertino",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.mvrt.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 116,
@@ -589,7 +881,11 @@
         "city": "Herndon",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team116.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 117,
@@ -597,7 +893,11 @@
         "city": "Pittsburgh",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "https://www.steeldragons.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 118,
@@ -605,7 +905,11 @@
         "city": "Houston",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "http://www.robonauts.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 121,
@@ -613,7 +917,11 @@
         "city": "Middletown",
         "state_prov": "Rhode Island",
         "country": "USA",
-        "epa": null
+        "website": "http://www.rhodewarrior.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 122,
@@ -621,7 +929,11 @@
         "city": "Hampton",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http:// www.frcteam122.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 123,
@@ -629,7 +941,11 @@
         "city": "Hamtramck",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstinspires.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 124,
@@ -637,7 +953,11 @@
         "city": "Waterford",
         "state_prov": "CT",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 125,
@@ -645,7 +965,11 @@
         "city": "Revere",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "http://www.nutrons.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 126,
@@ -653,7 +977,11 @@
         "city": "Clinton",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "https://team126.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 128,
@@ -661,7 +989,11 @@
         "city": "Columbus",
         "state_prov": "Ohio",
         "country": "USA",
-        "epa": null
+        "website": "http://www.GrandviewFIRST.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 131,
@@ -669,7 +1001,11 @@
         "city": "Manchester",
         "state_prov": "New Hampshire",
         "country": "USA",
-        "epa": null
+        "website": "http://www.chaos131.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 132,
@@ -677,7 +1013,11 @@
         "city": "Wilton Manors",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 133,
@@ -685,7 +1025,11 @@
         "city": "Standish",
         "state_prov": "Maine",
         "country": "USA",
-        "epa": null
+        "website": "http://www.bert133.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 134,
@@ -693,7 +1037,11 @@
         "city": "Pembroke",
         "state_prov": "NH",
         "country": "USA",
-        "epa": null
+        "website": "http://www.134team.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 135,
@@ -701,7 +1049,11 @@
         "city": "Mishawaka",
         "state_prov": "Indiana",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team135.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 136,
@@ -709,7 +1061,11 @@
         "city": "Plainfield",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstinspires.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 140,
@@ -717,7 +1073,11 @@
         "city": "Tyngsboro",
         "state_prov": "MA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.surko.net/first",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 141,
@@ -725,7 +1085,11 @@
         "city": "Holland",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://team141.net/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 144,
@@ -733,7 +1097,11 @@
         "city": "Hamilton",
         "state_prov": "Ohio",
         "country": "USA",
-        "epa": null
+        "website": "http://www.frcteam144.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 145,
@@ -741,7 +1109,11 @@
         "city": "Norwich",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "https://www.trx145.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 147,
@@ -749,7 +1121,11 @@
         "city": "St. Petersburg",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": "http://www.deepthunder.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 148,
@@ -757,7 +1133,11 @@
         "city": "Greenville",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "http://www.robowranglers148.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 151,
@@ -765,7 +1145,11 @@
         "city": "Nashua",
         "state_prov": "New Hampshire",
         "country": "USA",
-        "epa": null
+        "website": "http://www.nashua151.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 153,
@@ -773,7 +1157,11 @@
         "city": "Bridgewater",
         "state_prov": "NJ",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 155,
@@ -781,7 +1169,11 @@
         "city": "Berlin",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://usfirst.berlinwall.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 157,
@@ -789,7 +1181,11 @@
         "city": "Marlborough",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "http://www.aztechs157.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 158,
@@ -797,7 +1193,11 @@
         "city": "Milford",
         "state_prov": "OH",
         "country": "USA",
-        "epa": null
+        "website": "http://cobras158.yi.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 159,
@@ -805,7 +1205,11 @@
         "city": "Fort Collins",
         "state_prov": "Colorado",
         "country": "USA",
-        "epa": null
+        "website": "https://www.alpinerobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 165,
@@ -813,7 +1217,11 @@
         "city": "Annapolis",
         "state_prov": "MD",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 166,
@@ -821,7 +1229,11 @@
         "city": "Merrimack",
         "state_prov": "New Hampshire",
         "country": "USA",
-        "epa": null
+        "website": "http://www.chopshop166.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 168,
@@ -829,7 +1241,11 @@
         "city": "Miami",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": "http:///www.itechmagnet.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 173,
@@ -837,7 +1253,11 @@
         "city": "Tolland",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://ragerobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 174,
@@ -845,7 +1265,11 @@
         "city": "Liverpool",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.snobot.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 175,
@@ -853,7 +1277,11 @@
         "city": "Enfield",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://buzzrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 176,
@@ -861,7 +1289,11 @@
         "city": "Windsor Locks",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "https://www.facebook.com/AcesHigh176/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 177,
@@ -869,7 +1301,11 @@
         "city": "South Windsor",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://www.bobcatrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 178,
@@ -877,7 +1313,11 @@
         "city": "Farmington",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://www.farmingtonrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 179,
@@ -885,7 +1325,11 @@
         "city": "Riviera Beach",
         "state_prov": "Florida",
         "country": "USA",
-        "epa": null
+        "website": "http://www.179swampthing.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 180,
@@ -893,7 +1337,11 @@
         "city": "Stuart",
         "state_prov": "Florida",
         "country": "USA",
-        "epa": null
+        "website": "http://www.spamrobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 181,
@@ -901,7 +1349,11 @@
         "city": "Hartford",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://www.birdsofprey181.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 182,
@@ -909,7 +1361,11 @@
         "city": "Dearborn",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 186,
@@ -917,7 +1373,11 @@
         "city": "Lake Buena Vista",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": "http://www.ghs.osceola.k12.fl.us/FIRST/186Home.htm",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 188,
@@ -925,7 +1385,11 @@
         "city": "Toronto",
         "state_prov": "Ontario",
         "country": "Canada",
-        "epa": null
+        "website": "http://www.team188.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 190,
@@ -933,7 +1397,11 @@
         "city": "Worcester",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "http://users.wpi.edu/~first/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 191,
@@ -941,7 +1409,11 @@
         "city": "Rochester",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.x-cats.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 192,
@@ -949,7 +1421,11 @@
         "city": "Palo Alto",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.gunnrobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 195,
@@ -957,7 +1433,11 @@
         "city": "Southington",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team195.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 201,
@@ -965,7 +1445,11 @@
         "city": "Rochester",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.feds201.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 203,
@@ -973,7 +1457,11 @@
         "city": "Sicklerville",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "https://team203.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 204,
@@ -981,7 +1469,11 @@
         "city": "Voorhees",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team204.tk/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 209,
@@ -989,7 +1481,11 @@
         "city": "North Dighton",
         "state_prov": "MA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 211,
@@ -997,7 +1493,11 @@
         "city": "Rochester",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": "http://www.rcsdk12.org/marshall/index.html ",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 213,
@@ -1005,7 +1505,11 @@
         "city": "Keene",
         "state_prov": "New Hampshire",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstinspires.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 215,
@@ -1013,7 +1517,11 @@
         "city": "El Paso",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 217,
@@ -1021,7 +1529,11 @@
         "city": "Sterling Heights",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.thunderchickens.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 219,
@@ -1029,7 +1541,11 @@
         "city": "Washington",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "https://team219.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 221,
@@ -1037,7 +1553,11 @@
         "city": "Houghton",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 222,
@@ -1045,7 +1565,11 @@
         "city": "Tunkhannock",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://tigertrons.net/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 223,
@@ -1053,7 +1577,11 @@
         "city": "Wanaque",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team223.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 224,
@@ -1061,7 +1589,11 @@
         "city": "Piscataway",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "https://team224.github.io/main/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 225,
@@ -1069,7 +1601,11 @@
         "city": "Seven Valleys",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.techfire225.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 226,
@@ -1077,7 +1613,11 @@
         "city": "Troy",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.hammerhead226.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 228,
@@ -1085,7 +1625,11 @@
         "city": "Meriden",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team228.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 229,
@@ -1093,7 +1637,11 @@
         "city": "Potsdam",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team229robotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 230,
@@ -1101,7 +1649,11 @@
         "city": "Shelton",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://team230.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 231,
@@ -1109,7 +1661,11 @@
         "city": "Houston",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team231.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 232,
@@ -1117,7 +1673,11 @@
         "city": "Napa",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 233,
@@ -1125,7 +1685,11 @@
         "city": "Rockledge",
         "state_prov": "Florida",
         "country": "USA",
-        "epa": null
+        "website": "http://www.thepinkteam.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 234,
@@ -1133,7 +1697,11 @@
         "city": "Indianapolis",
         "state_prov": "Indiana",
         "country": "USA",
-        "epa": null
+        "website": "http://cyberblue234.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 235,
@@ -1141,7 +1709,11 @@
         "city": "Warren",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://team235.netfirms.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 236,
@@ -1149,7 +1721,11 @@
         "city": "Old Lyme",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://www.technoticks236.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 237,
@@ -1157,7 +1733,11 @@
         "city": "Watertown",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://team237.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 240,
@@ -1165,7 +1745,11 @@
         "city": "Newport",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team240.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 241,
@@ -1173,7 +1757,11 @@
         "city": "Derry",
         "state_prov": "NH",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team241.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 245,
@@ -1181,7 +1769,11 @@
         "city": "Rochester Hills",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.adambots.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 246,
@@ -1189,7 +1781,11 @@
         "city": "Boston",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "http://www.bu.edu/bufirst/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 247,
@@ -1197,7 +1793,11 @@
         "city": "Berkley",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "https://berkleyroboticsdab.wixsite.com/dabears247",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 248,
@@ -1205,7 +1805,11 @@
         "city": "Philadelphia",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 249,
@@ -1213,7 +1817,11 @@
         "city": "Detroit",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 250,
@@ -1221,7 +1829,11 @@
         "city": "Colonie",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstinspires.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 253,
@@ -1229,7 +1841,11 @@
         "city": "Millbrae",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "https://millsroboticsteam253.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 254,
@@ -1237,7 +1853,11 @@
         "city": "San Jose",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "https://www.team254.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 255,
@@ -1245,7 +1865,11 @@
         "city": "San Jose",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 256,
@@ -1253,7 +1877,11 @@
         "city": "San Jose",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.wgteam256.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 258,
@@ -1261,7 +1889,11 @@
         "city": "San Jose",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.seadawgs.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 259,
@@ -1269,7 +1901,11 @@
         "city": "Bell",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.bell.k12.ca.us/BellHS/default.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 260,
@@ -1277,7 +1913,11 @@
         "city": "Los Angeles",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 261,
@@ -1285,7 +1925,11 @@
         "city": "Los Angeles",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 263,
@@ -1293,7 +1937,11 @@
         "city": "Ronkonkoma",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.first263.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 264,
@@ -1301,7 +1949,11 @@
         "city": "MI",
         "state_prov": "USA",
         "country": null,
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 267,
@@ -1309,7 +1961,11 @@
         "city": "Parkland",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team267.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 268,
@@ -1317,7 +1973,11 @@
         "city": "Philadelphia",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 269,
@@ -1325,7 +1985,11 @@
         "city": "Oconomowoc",
         "state_prov": "Wisconsin",
         "country": "USA",
-        "epa": null
+        "website": "http://www.cooneyrobotics.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 270,
@@ -1333,7 +1997,11 @@
         "city": "Deer Park",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": "http://www.wix.com/dphsfrc/team-270",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 271,
@@ -1341,7 +2009,11 @@
         "city": "Bay Shore",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www2.bayshoreschools.org/robotics/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 272,
@@ -1349,7 +2021,11 @@
         "city": "Lansdale",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.lcrobotics.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 274,
@@ -1357,7 +2033,11 @@
         "city": "Cleveland",
         "state_prov": "OH",
         "country": "USA",
-        "epa": null
+        "website": "http://jkoporc@neo.rr.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 276,
@@ -1365,7 +2045,11 @@
         "city": "Youngstown",
         "state_prov": "OH",
         "country": "USA",
-        "epa": null
+        "website": "http://frc276.enjin.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 278,
@@ -1373,7 +2057,11 @@
         "city": "Orlando",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 279,
@@ -1381,7 +2069,11 @@
         "city": "Maumee",
         "state_prov": "Ohio",
         "country": "USA",
-        "epa": null
+        "website": "http://www.techfusion-279.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 280,
@@ -1389,7 +2081,11 @@
         "city": "Taylor",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.frctnt280.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 281,
@@ -1397,7 +2093,11 @@
         "city": "Greenville",
         "state_prov": "South Carolina",
         "country": "USA",
-        "epa": null
+        "website": "http://www.entech281.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 282,
@@ -1405,7 +2105,11 @@
         "city": "Winter Park",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 284,
@@ -1413,7 +2117,11 @@
         "city": "Dimock",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": "http:///www.lths.k12.pa.us/robotics/robothome.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 287,
@@ -1421,7 +2129,11 @@
         "city": "Mastic Beach",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.wfsd.k12.ny.us/robotics.asp",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 288,
@@ -1429,7 +2141,11 @@
         "city": "Grandville",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.robodawgs.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 291,
@@ -1437,7 +2153,11 @@
         "city": "Erie",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team291.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 292,
@@ -1445,7 +2165,11 @@
         "city": "Russiaville",
         "state_prov": "Indiana",
         "country": "USA",
-        "epa": null
+        "website": "http://panthertech.western.k12.in.us/index.htm",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 293,
@@ -1453,7 +2177,11 @@
         "city": "Pennington",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://www.293spike.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 294,
@@ -1461,7 +2189,11 @@
         "city": "Redondo Beach",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.bcrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 295,
@@ -1469,7 +2201,11 @@
         "city": "Granite Bay",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "https://Granitebayrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 296,
@@ -1477,7 +2213,11 @@
         "city": "Montreal",
         "state_prov": "Qu\u00e9bec",
         "country": "Canada",
-        "epa": null
+        "website": "http://robotics.loyola.ca",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 298,
@@ -1485,7 +2225,11 @@
         "city": "Pleasanton",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 300,
@@ -1493,7 +2237,11 @@
         "city": "Philadelphia",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 301,
@@ -1501,7 +2249,11 @@
         "city": "Dearborn",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://www.probots.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 302,
@@ -1509,7 +2261,11 @@
         "city": "Lake Orion",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team302.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 303,
@@ -1517,7 +2273,11 @@
         "city": "Bridgewater",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http://team303.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 304,
@@ -1525,7 +2285,11 @@
         "city": "Philadelphia",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team304.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 306,
@@ -1533,7 +2297,11 @@
         "city": "Corry",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.corryrobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 308,
@@ -1541,7 +2309,11 @@
         "city": "Walled Lake",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://walledlakerobotics.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 311,
@@ -1549,7 +2321,11 @@
         "city": "Islip Terrace",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": "http://www.eischools.org/usfirst/index.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 312,
@@ -1557,7 +2333,11 @@
         "city": "St. Petersburg",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": "http://heatwave.cat.pinellas.k12.fl.us",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 313,
@@ -1565,7 +2345,11 @@
         "city": "Westland",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http:///bioniczebras.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 314,
@@ -1573,7 +2357,11 @@
         "city": "Flint",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.bigmo314.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 316,
@@ -1581,7 +2369,11 @@
         "city": "Carneys Point",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "https://www.sjrobotics.com/lunatecs/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 317,
@@ -1589,7 +2381,11 @@
         "city": "Fort Worth",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 319,
@@ -1597,7 +2393,11 @@
         "city": "Alton",
         "state_prov": "New Hampshire",
         "country": "USA",
-        "epa": null
+        "website": "http://www.frc319.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 321,
@@ -1605,7 +2405,11 @@
         "city": "Philadelphia",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.robolancers.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 322,
@@ -1613,7 +2417,11 @@
         "city": "Flint",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "https://www.FIREteam322.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 329,
@@ -1621,7 +2429,11 @@
         "city": "Medford",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team329.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 330,
@@ -1629,7 +2441,11 @@
         "city": "Hermosa Beach",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team330.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 331,
@@ -1637,7 +2453,11 @@
         "city": "New York",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team331.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 333,
@@ -1645,7 +2465,11 @@
         "city": "Brooklyn",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team333.nyc",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 334,
@@ -1653,7 +2477,11 @@
         "city": "Brooklyn",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http:///bthsrobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 337,
@@ -1661,7 +2489,11 @@
         "city": "Whitman",
         "state_prov": "West Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstteam337.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 338,
@@ -1669,7 +2501,11 @@
         "city": "West Jefferson",
         "state_prov": "NC",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 339,
@@ -1677,7 +2513,11 @@
         "city": "Stafford",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.kilroy339.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 340,
@@ -1685,7 +2525,11 @@
         "city": "Churchville",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team340.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 341,
@@ -1693,7 +2537,11 @@
         "city": "Ambler",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team341.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 342,
@@ -1701,7 +2549,11 @@
         "city": "North Charleston",
         "state_prov": "South Carolina",
         "country": "USA",
-        "epa": null
+        "website": "http://www.first342.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 343,
@@ -1709,7 +2561,11 @@
         "city": "Seneca",
         "state_prov": "South Carolina",
         "country": "USA",
-        "epa": null
+        "website": "http://www.metalinmotion.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 345,
@@ -1717,7 +2573,11 @@
         "city": "Norfolk",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 346,
@@ -1725,7 +2585,11 @@
         "city": "Richmond",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.robohawks346.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 348,
@@ -1733,7 +2597,11 @@
         "city": "Norwell",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "http://www.norwell-robotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 349,
@@ -1741,7 +2609,11 @@
         "city": "Bloomfield Hills",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 350,
@@ -1749,7 +2621,11 @@
         "city": "Plaistow",
         "state_prov": "NH",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 351,
@@ -1757,7 +2633,11 @@
         "city": "Green Cove Springs",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 352,
@@ -1765,7 +2645,11 @@
         "city": "Carle Place",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.cps.k12.ny.us/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 353,
@@ -1773,7 +2657,11 @@
         "city": "Plainview",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "https://www.pobots.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 354,
@@ -1781,7 +2669,11 @@
         "city": "Brooklyn",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.ghouse354.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 356,
@@ -1789,7 +2681,11 @@
         "city": "Little Rock",
         "state_prov": "AR",
         "country": "USA",
-        "epa": null
+        "website": "http://theduchy.ualr.edu/first/AmandaIndex.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 357,
@@ -1797,7 +2693,11 @@
         "city": "Drexel Hill",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team357.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 358,
@@ -1805,7 +2705,11 @@
         "city": "Hauppauge",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://team358.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 359,
@@ -1813,7 +2717,11 @@
         "city": "Waialua",
         "state_prov": "Hawaii",
         "country": "USA",
-        "epa": null
+        "website": "http://www.waialuarobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 360,
@@ -1821,7 +2729,11 @@
         "city": "Tacoma",
         "state_prov": "Washington",
         "country": "USA",
-        "epa": null
+        "website": "http://www.frc360.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 361,
@@ -1829,7 +2741,11 @@
         "city": "Farmindale",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 362,
@@ -1837,7 +2753,11 @@
         "city": "Los Angeles",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.archermuses.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 364,
@@ -1845,7 +2765,11 @@
         "city": "Gulfport",
         "state_prov": "Mississippi",
         "country": "USA",
-        "epa": null
+        "website": "http://www.fusion364.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 365,
@@ -1853,7 +2777,11 @@
         "city": "Wilmington",
         "state_prov": "Delaware",
         "country": "USA",
-        "epa": null
+        "website": "http://www.moe365.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 367,
@@ -1861,7 +2789,11 @@
         "city": "Seaford",
         "state_prov": "DE",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 368,
@@ -1869,7 +2801,11 @@
         "city": "Honolulu",
         "state_prov": "Hawaii",
         "country": "USA",
-        "epa": null
+        "website": "http://www.mckinleyrobotics.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 369,
@@ -1877,7 +2813,11 @@
         "city": "Brooklyn",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team369.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 371,
@@ -1885,7 +2825,11 @@
         "city": "Staten Island",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstinspires.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 372,
@@ -1893,7 +2837,11 @@
         "city": "Mukilteo",
         "state_prov": "WA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 373,
@@ -1901,7 +2849,11 @@
         "city": "Locust Valley",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 374,
@@ -1909,7 +2861,11 @@
         "city": "Anchorage",
         "state_prov": "AK",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 375,
@@ -1917,7 +2873,11 @@
         "city": "Staten Island",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team375.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 376,
@@ -1925,7 +2885,11 @@
         "city": "Newark",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 378,
@@ -1933,7 +2897,11 @@
         "city": "Newfane",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.circuitstompers.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 379,
@@ -1941,7 +2909,11 @@
         "city": "Girard",
         "state_prov": "Ohio",
         "country": "USA",
-        "epa": null
+        "website": "http://www.robocats.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 380,
@@ -1949,7 +2921,11 @@
         "city": "Bronx",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": "http://gompershs.ourschools.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 381,
@@ -1957,7 +2933,11 @@
         "city": "Trenton",
         "state_prov": "NJ",
         "country": "USA",
-        "epa": null
+        "website": "http://www.trenton.k12.nj.us/tchs/robotics/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 382,
@@ -1965,7 +2945,11 @@
         "city": "Columbus",
         "state_prov": "OH",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team382.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 383,
@@ -1973,7 +2957,11 @@
         "city": "Porto Alegre",
         "state_prov": "Rio Grande do Sul",
         "country": "Brazil",
-        "epa": null
+        "website": "http://www.team383.org/en/index.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 384,
@@ -1981,7 +2969,11 @@
         "city": "Henrico",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.384sparky.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 386,
@@ -1989,7 +2981,11 @@
         "city": "Melbourne",
         "state_prov": "Florida",
         "country": "USA",
-        "epa": null
+        "website": "http://www.teamvoltage.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 388,
@@ -1997,7 +2993,11 @@
         "city": "Grundy",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://ghs.buc.k12.va.us",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 391,
@@ -2005,7 +3005,11 @@
         "city": "Grand Rapids",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://www.t-rams.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 393,
@@ -2013,7 +3017,11 @@
         "city": "Morristown",
         "state_prov": "IN",
         "country": "USA",
-        "epa": null
+        "website": "http://www.fmj393.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 394,
@@ -2021,7 +3029,11 @@
         "city": "Windsor",
         "state_prov": "CT",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 395,
@@ -2029,7 +3041,11 @@
         "city": "Bronx",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://2train395.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 397,
@@ -2037,7 +3053,11 @@
         "city": "Flint",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstteam397.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 398,
@@ -2045,7 +3065,11 @@
         "city": "Ridgway",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.ridgwayareahighschool.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 399,
@@ -2053,7 +3077,11 @@
         "city": "Lancaster",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team399.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 400,
@@ -2061,7 +3089,11 @@
         "city": "Richmond",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.stmschool.net/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 401,
@@ -2069,7 +3101,11 @@
         "city": "Blacksburg",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team401.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 402,
@@ -2077,7 +3113,11 @@
         "city": "Woodbridge",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 404,
@@ -2085,7 +3125,11 @@
         "city": "Petersburg",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.distantrage.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 405,
@@ -2093,7 +3137,11 @@
         "city": "Richmond",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 406,
@@ -2101,7 +3149,11 @@
         "city": "Detroit",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://www.geocities.com/mumford406",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 407,
@@ -2109,7 +3161,11 @@
         "city": "Detroit",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 408,
@@ -2117,7 +3173,11 @@
         "city": "Pompano Beach",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": "http://www.roboticks408.webs.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 409,
@@ -2125,7 +3185,11 @@
         "city": "San Jose",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 410,
@@ -2133,7 +3197,11 @@
         "city": "Los Angeles",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": "http://mastrobotics.tripod.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 411,
@@ -2141,7 +3209,11 @@
         "city": "Rockhill",
         "state_prov": "SC",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 415,
@@ -2149,7 +3221,11 @@
         "city": "Williamston",
         "state_prov": "SC",
         "country": "USA",
-        "epa": null
+        "website": "http://www.frc415.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 416,
@@ -2157,7 +3233,11 @@
         "city": "Richmond",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.JFKRobot.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 417,
@@ -2165,7 +3245,11 @@
         "city": "Mt. Sinai",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 418,
@@ -2173,7 +3257,11 @@
         "city": "Austin",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "http://www.lasarobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 419,
@@ -2181,7 +3269,11 @@
         "city": "Boston",
         "state_prov": "MA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 421,
@@ -2189,7 +3281,11 @@
         "city": "Bronx",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.geocities.com/enchantedforest/dell/9950/team421/team421.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 422,
@@ -2197,7 +3293,11 @@
         "city": "Richmond",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://mechtechdragons.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 433,
@@ -2205,7 +3305,11 @@
         "city": "Flourtown",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstfirebirds433.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 434,
@@ -2213,7 +3317,11 @@
         "city": "Missouri City",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": "http://www.hightowerrobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 435,
@@ -2221,7 +3329,11 @@
         "city": "Raleigh",
         "state_prov": "North Carolina",
         "country": "USA",
-        "epa": null
+        "website": "http://www.robodogs.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 437,
@@ -2229,7 +3341,11 @@
         "city": "Richardson",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 438,
@@ -2237,7 +3353,11 @@
         "city": "Houston",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 440,
@@ -2245,7 +3365,11 @@
         "city": "Detroit",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://myspace/michigan/robotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 441,
@@ -2253,7 +3377,11 @@
         "city": "Houston",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstinspires.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 442,
@@ -2261,7 +3389,11 @@
         "city": "Huntsville",
         "state_prov": "Alabama",
         "country": "USA",
-        "epa": null
+        "website": "http://redstonerobotics.yolasite.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 443,
@@ -2269,7 +3401,11 @@
         "city": "Denver",
         "state_prov": "CO",
         "country": "USA",
-        "epa": null
+        "website": "http:///www.freelancerobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 444,
@@ -2277,7 +3413,11 @@
         "city": "Philadelphia",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 446,
@@ -2285,7 +3425,11 @@
         "city": "La Porte",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": "http://www.laporte.isd.esc4.net/campuses/lphs/robotics/2002_03/index.htm",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 447,
@@ -2293,7 +3437,11 @@
         "city": "Anderson",
         "state_prov": "Indiana",
         "country": "USA",
-        "epa": null
+        "website": "http://www.teamroboto.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 448,
@@ -2301,7 +3449,11 @@
         "city": "Bloomfield Hills",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://ckrobotics.tk",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 449,
@@ -2309,7 +3461,11 @@
         "city": "Silver Spring",
         "state_prov": "Maryland",
         "country": "USA",
-        "epa": null
+        "website": "https://robot.mbhs.edu/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 451,
@@ -2317,7 +3473,11 @@
         "city": "Maumee",
         "state_prov": "Ohio",
         "country": "USA",
-        "epa": null
+        "website": "http://www.thecatattack.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 453,
@@ -2325,7 +3485,11 @@
         "city": "Clinton Township",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "https://www.rockemsockemrobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 456,
@@ -2333,7 +3497,11 @@
         "city": "Vicksburg",
         "state_prov": "Mississippi",
         "country": "USA",
-        "epa": null
+        "website": "http://www.SiegeRobotics.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 457,
@@ -2341,7 +3509,11 @@
         "city": "San Antonio",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "http:///www.greasemonkeys457.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 459,
@@ -2349,7 +3521,11 @@
         "city": "Gainesville",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 460,
@@ -2357,7 +3533,11 @@
         "city": "Phoenix",
         "state_prov": "AZ",
         "country": "USA",
-        "epa": null
+        "website": "http://robotics.xcp.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 461,
@@ -2365,7 +3545,11 @@
         "city": "West Lafayette",
         "state_prov": "Indiana",
         "country": "USA",
-        "epa": null
+        "website": "http://boilerinvasion.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 462,
@@ -2373,7 +3557,11 @@
         "city": "Jackson",
         "state_prov": "MS",
         "country": "USA",
-        "epa": null
+        "website": "http://www.rambunctiousrams.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 463,
@@ -2381,7 +3569,11 @@
         "city": "San Jose",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 464,
@@ -2389,7 +3581,11 @@
         "city": "Rio Rancho",
         "state_prov": "NM",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 465,
@@ -2397,7 +3593,11 @@
         "city": "Canton",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 466,
@@ -2405,7 +3605,11 @@
         "city": "Philadelphia",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 467,
@@ -2413,7 +3617,11 @@
         "city": "Shrewsbury",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "http://www.shrewsburyrobotics.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 468,
@@ -2421,7 +3629,11 @@
         "city": "Flint",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://team468.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 469,
@@ -2429,7 +3641,11 @@
         "city": "Pontiac",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.lasguerrillas.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 470,
@@ -2437,7 +3653,11 @@
         "city": "Ypsilanti",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://ycsrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 471,
@@ -2445,7 +3665,11 @@
         "city": "Fenton",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://www.fentoncybertigers.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 473,
@@ -2453,7 +3677,11 @@
         "city": "Corvallis",
         "state_prov": "MT",
         "country": "USA",
-        "epa": null
+        "website": "http://www.corvallis.k12.mt.us/high/ClubsAndActivities/robotics/home.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 475,
@@ -2461,7 +3689,11 @@
         "city": "Detroit",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 476,
@@ -2469,7 +3701,11 @@
         "city": "Ponca City",
         "state_prov": "OK",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team476.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 478,
@@ -2477,7 +3713,11 @@
         "city": "Rosemead",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 480,
@@ -2485,7 +3725,11 @@
         "city": "Oakland",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": "http://engineering.lbl.gov/team480/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 481,
@@ -2493,7 +3737,11 @@
         "city": "San Pablo",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.481hitchhikers.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 484,
@@ -2501,7 +3749,11 @@
         "city": "Havertown",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team484.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 486,
@@ -2509,7 +3761,11 @@
         "city": "Wallingford",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team486.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 487,
@@ -2517,7 +3773,11 @@
         "city": "Erdenheim",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.487robotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 492,
@@ -2525,7 +3785,11 @@
         "city": "Bellevue",
         "state_prov": "Washington",
         "country": "USA",
-        "epa": null
+        "website": "http://www.titanrobotics.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 493,
@@ -2533,7 +3797,11 @@
         "city": "ALLIANCE",
         "state_prov": "OH",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 494,
@@ -2541,7 +3809,11 @@
         "city": "Goodrich",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.494themartians.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 495,
@@ -2549,7 +3821,11 @@
         "city": "Williamsburg",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 496,
@@ -2557,7 +3833,11 @@
         "city": "Port Jefferson",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstinspires.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 497,
@@ -2565,7 +3845,11 @@
         "city": "Orange",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.orangerobotics.org/home.htm",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 498,
@@ -2573,7 +3857,11 @@
         "city": "Glendale",
         "state_prov": "Arizona",
         "country": "USA",
-        "epa": null
+        "website": "https://www.team498.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 499,
@@ -2581,7 +3869,11 @@
         "city": "San Antonio",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "http://www.toltechs.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 500,
@@ -2589,7 +3881,11 @@
         "city": "New London",
         "state_prov": "CT",
         "country": "USA",
-        "epa": null
+        "website": "http://www.cgateam500.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 501,
@@ -2597,7 +3893,11 @@
         "city": "Manchester/Goffstown",
         "state_prov": "New Hampshire",
         "country": "USA",
-        "epa": null
+        "website": "http://powerknights.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 502,
@@ -2605,7 +3905,11 @@
         "city": "Rockville Centre",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 503,
@@ -2613,7 +3917,11 @@
         "city": "Novi",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.frogforce503.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 504,
@@ -2621,7 +3929,11 @@
         "city": "Little Silver",
         "state_prov": "NJ",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 505,
@@ -2629,7 +3941,11 @@
         "city": "Yonkers",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 506,
@@ -2637,7 +3953,11 @@
         "city": "South Huntington",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": "http://www.startrobotics.vze.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 507,
@@ -2645,7 +3965,11 @@
         "city": "Greenville",
         "state_prov": "SC",
         "country": "USA",
-        "epa": null
+        "website": "http:///www.carolinaroboteers.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 508,
@@ -2653,7 +3977,11 @@
         "city": "Avon",
         "state_prov": "CT",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 510,
@@ -2661,7 +3989,11 @@
         "city": "Highland Springs",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 512,
@@ -2669,7 +4001,11 @@
         "city": "Hull",
         "state_prov": "MA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 513,
@@ -2677,7 +4013,11 @@
         "city": "Oklahoma City",
         "state_prov": "OK",
         "country": "USA",
-        "epa": null
+        "website": "http://www.renegaderobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 514,
@@ -2685,7 +4025,11 @@
         "city": "Miller Place",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "https://team514.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 515,
@@ -2693,7 +4037,11 @@
         "city": "Detroit",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 517,
@@ -2701,7 +4049,11 @@
         "city": "New Providence",
         "state_prov": "NJ",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 518,
@@ -2709,7 +4061,11 @@
         "city": "Grand Rapids",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 519,
@@ -2717,7 +4073,11 @@
         "city": "Detroit",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://team519.bravehost.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 520,
@@ -2725,7 +4085,11 @@
         "city": "Deer Park",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 521,
@@ -2733,7 +4097,11 @@
         "city": "Waterford",
         "state_prov": "CT",
         "country": "USA",
-        "epa": null
+        "website": "http://www.waterfordschools.org/whsnew/robotics_club/home.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 522,
@@ -2741,7 +4109,11 @@
         "city": "Staten Island",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.robowizards.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 524,
@@ -2749,7 +4121,11 @@
         "city": "Bakersfield",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 525,
@@ -2757,7 +4133,11 @@
         "city": "Cedar Falls",
         "state_prov": "Iowa",
         "country": "USA",
-        "epa": null
+        "website": "http://www.525swartdogs.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 527,
@@ -2765,7 +4145,11 @@
         "city": "Massapequa",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team527.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 528,
@@ -2773,7 +4157,11 @@
         "city": "Lansdale",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.northpennrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 529,
@@ -2781,7 +4169,11 @@
         "city": "Mansfield",
         "state_prov": "MA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.mansfieldrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 533,
@@ -2789,7 +4181,11 @@
         "city": "Lindenhurst",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team533.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 535,
@@ -2797,7 +4193,11 @@
         "city": "Markle",
         "state_prov": "IN",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 536,
@@ -2805,7 +4205,11 @@
         "city": "San Francisco",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 538,
@@ -2813,7 +4217,11 @@
         "city": "Athens",
         "state_prov": "Alabama",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstinspires.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 539,
@@ -2821,7 +4229,11 @@
         "city": "Richmond",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://trinityes.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 540,
@@ -2829,7 +4241,11 @@
         "city": "Henrico",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team540.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 541,
@@ -2837,7 +4253,11 @@
         "city": "Cleveland",
         "state_prov": "OH",
         "country": "USA",
-        "epa": null
+        "website": "http://maxshayes.hostars.com/index.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 545,
@@ -2845,7 +4265,11 @@
         "city": "Levittown",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://itrobotics.virtualave.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 546,
@@ -2853,7 +4277,11 @@
         "city": "Woodbridge",
         "state_prov": "CT",
         "country": "USA",
-        "epa": null
+        "website": "http://www.amityregion5.org/technotics",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 547,
@@ -2861,7 +4289,11 @@
         "city": "Fayetteville",
         "state_prov": "Tennessee",
         "country": "USA",
-        "epa": null
+        "website": "http://mws2609.wixsite.com/team547lchsrobotics",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 548,
@@ -2869,7 +4301,11 @@
         "city": "Northville",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.robostangs.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 549,
@@ -2877,7 +4313,11 @@
         "city": "Leominster",
         "state_prov": "MA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.devildawgs549.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 550,
@@ -2885,7 +4325,11 @@
         "city": "Washington",
         "state_prov": "NJ",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 551,
@@ -2893,7 +4337,11 @@
         "city": "Belvidere",
         "state_prov": "NJ",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 555,
@@ -2901,7 +4349,11 @@
         "city": "Montclair",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "https://www.montclairrobotics.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 557,
@@ -2909,7 +4361,11 @@
         "city": "Detroit",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://www.teamFordFIRST.org/Team557",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 558,
@@ -2917,7 +4373,11 @@
         "city": "New Haven",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://www.elmcityrobosquad.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 560,
@@ -2925,7 +4385,11 @@
         "city": "Detroit",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 561,
@@ -2933,7 +4397,11 @@
         "city": "Phila",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 562,
@@ -2941,7 +4409,11 @@
         "city": "Fitchburg",
         "state_prov": "MA",
         "country": "USA",
-        "epa": null
+        "website": "http://robotics.montytech.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 563,
@@ -2949,7 +4421,11 @@
         "city": "Phila",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": "http:///www.spazbunny.com/robotic",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 564,
@@ -2957,7 +4433,11 @@
         "city": "Middle Island",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.longwoodrobotics.weebly.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 565,
@@ -2965,7 +4445,11 @@
         "city": "Newark",
         "state_prov": "DE",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 566,
@@ -2973,7 +4457,11 @@
         "city": "Centereach",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": "http://www.geocities.com/mcsdrobotics",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 568,
@@ -2981,7 +4469,11 @@
         "city": "Anchorage",
         "state_prov": "Alaska",
         "country": "USA",
-        "epa": null
+        "website": "http://frc568.akfirstrobotics.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 569,
@@ -2989,7 +4481,11 @@
         "city": "Westbury",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.wix.com/team569/frc",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 570,
@@ -2997,7 +4493,11 @@
         "city": "Glen Cove",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": "http://www.cm4.com/catalysts",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 571,
@@ -3005,7 +4505,11 @@
         "city": "Windsor",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team-paragon.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 573,
@@ -3013,7 +4517,11 @@
         "city": "Bloomfield Hills",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://frcteam573.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 574,
@@ -3021,7 +4529,11 @@
         "city": "Bronx",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 575,
@@ -3029,7 +4541,11 @@
         "city": "North Hills",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 576,
@@ -3037,7 +4553,11 @@
         "city": "Los Angeles",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 577,
@@ -3045,7 +4565,11 @@
         "city": "Tujunga",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 578,
@@ -3053,7 +4577,11 @@
         "city": "Fairport",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "https://www.fairportrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 579,
@@ -3061,7 +4589,11 @@
         "city": "Laveen",
         "state_prov": "AZ",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 580,
@@ -3069,7 +4601,11 @@
         "city": "Studio City",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http:///vikingrobotics580.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 581,
@@ -3077,7 +4613,11 @@
         "city": "San Jose",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "https://team581.club",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 582,
@@ -3085,7 +4625,11 @@
         "city": "Jacksonville",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": "http://www.educationalcentral.org/wmrh",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 583,
@@ -3093,7 +4637,11 @@
         "city": "Seattle",
         "state_prov": "WA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 585,
@@ -3101,7 +4649,11 @@
         "city": "Tehachapi",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://firstteam585.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 586,
@@ -3109,7 +4661,11 @@
         "city": "Alhambra",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 587,
@@ -3117,7 +4673,11 @@
         "city": "Hillsborough",
         "state_prov": "North Carolina",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team587.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 588,
@@ -3125,7 +4685,11 @@
         "city": "Jacksonville",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": "http://www.aprtech.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 589,
@@ -3133,7 +4697,11 @@
         "city": "La Crescenta",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.cvrobots.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 590,
@@ -3141,7 +4709,11 @@
         "city": "Choctaw",
         "state_prov": "Mississippi",
         "country": "USA",
-        "epa": null
+        "website": "http://www.choctaw.org/robotics",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 591,
@@ -3149,7 +4721,11 @@
         "city": "Los Angeles",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 592,
@@ -3157,7 +4733,11 @@
         "city": "Sacramento",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 593,
@@ -3165,7 +4745,11 @@
         "city": "Houston",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 594,
@@ -3173,7 +4757,11 @@
         "city": "Flint",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 596,
@@ -3181,7 +4769,11 @@
         "city": "Hopkinton",
         "state_prov": "MA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.hopkinton.k12.ma.us/high/schoollife/robotics/index.htm",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 597,
@@ -3189,7 +4781,11 @@
         "city": "Los Angeles",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team597.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 598,
@@ -3197,7 +4793,11 @@
         "city": "Woodland Hills",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 599,
@@ -3205,7 +4805,11 @@
         "city": "Granada Hills",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.therobodox.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 600,
@@ -3213,7 +4817,11 @@
         "city": "Lynchburg",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": "http://team600.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 601,
@@ -3221,7 +4829,11 @@
         "city": "Hampton Bays",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://frcteam601.weebly.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 602,
@@ -3229,7 +4841,11 @@
         "city": "Leesburg",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 603,
@@ -3237,7 +4853,11 @@
         "city": "Daytona Beach",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 604,
@@ -3245,7 +4865,11 @@
         "city": "San Jose",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://604Robotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 605,
@@ -3253,7 +4877,11 @@
         "city": "Hayward",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.edenrop.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 606,
@@ -3261,7 +4889,11 @@
         "city": "Los Angeles",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.robotics-team606.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 607,
@@ -3269,7 +4901,11 @@
         "city": "Piney Woods",
         "state_prov": "MS",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 608,
@@ -3277,7 +4913,11 @@
         "city": "Atlanta",
         "state_prov": "GA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 609,
@@ -3285,7 +4925,11 @@
         "city": "Santa Rosa",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 611,
@@ -3293,7 +4937,11 @@
         "city": "Mc Lean",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://langleyrobotics.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 612,
@@ -3301,7 +4949,11 @@
         "city": "Chantilly",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://chantillyrobotics.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 613,
@@ -3309,7 +4961,11 @@
         "city": "Somerset",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "http:///www.neowarriors.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 614,
@@ -3317,7 +4973,11 @@
         "city": "Alexandria",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://Team614Robotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 615,
@@ -3325,7 +4985,11 @@
         "city": "Washington",
         "state_prov": "District of Columbia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.firstinspires.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 616,
@@ -3333,7 +4997,11 @@
         "city": "Courtland",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": "http://ircorp.fnsnet.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 617,
@@ -3341,7 +5009,11 @@
         "city": "Highland Springs ",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "https://team617hshs.weebly.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 618,
@@ -3349,7 +5021,11 @@
         "city": "Philadelphia",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 619,
@@ -3357,7 +5033,11 @@
         "city": "Charlottesville",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.CARobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 620,
@@ -3365,7 +5045,11 @@
         "city": "Vienna",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.jmhsrobotics.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 621,
@@ -3373,7 +5057,11 @@
         "city": "Falls Church",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 622,
@@ -3381,7 +5069,11 @@
         "city": "Manassas",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 623,
@@ -3389,7 +5081,11 @@
         "city": "Vienna",
         "state_prov": "Virginia",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team623.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 624,
@@ -3397,7 +5093,11 @@
         "city": "Katy",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team624.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 625,
@@ -3405,7 +5105,11 @@
         "city": "Palmer",
         "state_prov": "AK",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 627,
@@ -3413,7 +5117,11 @@
         "city": "Falls Church",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 628,
@@ -3421,7 +5129,11 @@
         "city": "Fairbanks",
         "state_prov": "AK",
         "country": "USA",
-        "epa": null
+        "website": "http://www.dershin.com/first",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 630,
@@ -3429,7 +5141,11 @@
         "city": "McLean",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 632,
@@ -3437,7 +5153,11 @@
         "city": "Union City",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.geocities.com/jlrobotic/robotic.htm",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 633,
@@ -3445,7 +5165,11 @@
         "city": "Tacoma",
         "state_prov": "WA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 634,
@@ -3453,7 +5177,11 @@
         "city": "Van Nuys",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.lausd.k12.ca.us/vnhs/Tool_Academy/robotics.htm",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 635,
@@ -3461,7 +5189,11 @@
         "city": "Buda",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 636,
@@ -3469,7 +5201,11 @@
         "city": "Waipahu",
         "state_prov": "HI",
         "country": "USA",
-        "epa": null
+        "website": "http://www.waipahuhighrobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 637,
@@ -3477,7 +5213,11 @@
         "city": "Montville Township",
         "state_prov": "NJ",
         "country": "USA",
-        "epa": null
+        "website": "http://www.montville.net/highschool/robotics",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 638,
@@ -3485,7 +5225,11 @@
         "city": "Midlothian",
         "state_prov": "VA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 639,
@@ -3493,7 +5237,11 @@
         "city": "Ithaca",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://team639.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 640,
@@ -3501,7 +5249,11 @@
         "city": "Jamaica",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http:///www.taehs.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 641,
@@ -3509,7 +5261,11 @@
         "city": "Sanborn",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 642,
@@ -3517,7 +5273,11 @@
         "city": "Parkersburg",
         "state_prov": "WV",
         "country": "USA",
-        "epa": null
+        "website": "http://phs.wood.k12.wv.us/robot3/index.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 643,
@@ -3525,7 +5285,11 @@
         "city": "Allentown",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 644,
@@ -3533,7 +5297,11 @@
         "city": "Pearl River",
         "state_prov": "LA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.angelfire.com/droid/teammambo/PRHS.htm",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 645,
@@ -3541,7 +5309,11 @@
         "city": "San Rafael",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 646,
@@ -3549,7 +5321,11 @@
         "city": "West Sayville",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 647,
@@ -3557,7 +5333,11 @@
         "city": "Killeen",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "https://www.killeenisd.org/Schools/templates/basicWithCarousel/basicWithCarousel.cfm?navBarID=7669&cssFileName=blueMedAndWhite.css&campusCode=189",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 648,
@@ -3565,7 +5345,11 @@
         "city": "Moline",
         "state_prov": "Illinois",
         "country": "USA",
-        "epa": null
+        "website": "http://www.qcelite.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 649,
@@ -3573,7 +5357,11 @@
         "city": "Saratoga",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://saratogamset.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 650,
@@ -3581,7 +5369,11 @@
         "city": "Flora",
         "state_prov": "IL",
         "country": "USA",
-        "epa": null
+        "website": "http://www.hella650.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 651,
@@ -3589,7 +5381,11 @@
         "city": "Mar Lin",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.northschuylkill.net/Robotics%20folder/Robotics/index.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 652,
@@ -3597,7 +5393,11 @@
         "city": "Erie",
         "state_prov": "PA",
         "country": "USA",
-        "epa": null
+        "website": "http://wasd.iu5.org/seneca/robotics/index.html",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 653,
@@ -3605,7 +5405,11 @@
         "city": "San Antonio",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "http://www.edisonengineering.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 654,
@@ -3613,7 +5417,11 @@
         "city": "Tallahassee",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": "http://www.maclayrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 655,
@@ -3621,7 +5429,11 @@
         "city": "Brooklyn",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 658,
@@ -3629,7 +5441,11 @@
         "city": "Wyoming",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": "http://www.Team658.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 659,
@@ -3637,7 +5453,11 @@
         "city": "Houston",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 660,
@@ -3645,7 +5465,11 @@
         "city": "Round Rock",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": "http://www.roundrockrobotics.net/index2.htm",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 662,
@@ -3653,7 +5477,11 @@
         "city": "USAF Academy",
         "state_prov": "Colorado",
         "country": "USA",
-        "epa": null
+        "website": "http://www.rockymountainrobotics.weebly.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 663,
@@ -3661,7 +5489,11 @@
         "city": "Whitinsville",
         "state_prov": "Massachusetts",
         "country": "USA",
-        "epa": null
+        "website": "http://team663.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 664,
@@ -3669,7 +5501,11 @@
         "city": "Harvard",
         "state_prov": "IL",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 665,
@@ -3677,7 +5513,11 @@
         "city": "Orlando",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": "http://www.wix.com/oakridgehs/firstteam665",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 667,
@@ -3685,7 +5525,11 @@
         "city": "Los Angeles",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 668,
@@ -3693,7 +5537,11 @@
         "city": "San Jose",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http:///www.apesofwrath668.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 670,
@@ -3701,7 +5549,11 @@
         "city": "Cupertino",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://homesteadrobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 671,
@@ -3709,7 +5561,11 @@
         "city": "San Francisco",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 674,
@@ -3717,7 +5573,11 @@
         "city": "Manchester",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 675,
@@ -3725,7 +5585,11 @@
         "city": "Rohnert Park",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.frc675.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 676,
@@ -3733,7 +5597,11 @@
         "city": "El Paso",
         "state_prov": "TX",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 679,
@@ -3741,7 +5609,11 @@
         "city": "New York",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 681,
@@ -3749,7 +5621,11 @@
         "city": "Chicago",
         "state_prov": "IL",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 684,
@@ -3757,7 +5633,11 @@
         "city": "Sylmar",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 686,
@@ -3765,7 +5645,11 @@
         "city": "Frederick",
         "state_prov": "Maryland",
         "country": "USA",
-        "epa": null
+        "website": "https://sites.google.com/view/firstteam686/about-the-team",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 687,
@@ -3773,7 +5657,11 @@
         "city": "Carson",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.camsrobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 688,
@@ -3781,7 +5669,11 @@
         "city": "Flint",
         "state_prov": "MI",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 690,
@@ -3789,7 +5681,11 @@
         "city": "Northampton",
         "state_prov": "MA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 691,
@@ -3797,7 +5693,11 @@
         "city": "Stevenson Ranch",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "https://www.team691.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 692,
@@ -3805,7 +5705,11 @@
         "city": "Sacramento",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.sfrobotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 694,
@@ -3813,7 +5717,11 @@
         "city": "New York",
         "state_prov": "New York",
         "country": "USA",
-        "epa": null
+        "website": "http://www.stuypulse.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 695,
@@ -3821,7 +5729,11 @@
         "city": "Beachwood",
         "state_prov": "Ohio",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team695.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 696,
@@ -3829,7 +5741,11 @@
         "city": "La Crescenta",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team696.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 697,
@@ -3837,7 +5753,11 @@
         "city": "Los Angeles",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": "http://www.pandarobotics.net",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 698,
@@ -3845,7 +5765,11 @@
         "city": "Chandler",
         "state_prov": "Arizona",
         "country": "USA",
-        "epa": null
+        "website": "http://hhsrobotics698.weebly.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 699,
@@ -3853,7 +5777,11 @@
         "city": "Chatsworth",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 700,
@@ -3861,7 +5789,11 @@
         "city": "Los Angeles",
         "state_prov": "CA",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 701,
@@ -3869,7 +5801,11 @@
         "city": "Fairfield",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.vandenrobotics.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 702,
@@ -3877,7 +5813,11 @@
         "city": "Culver City",
         "state_prov": "California",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team702robotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 703,
@@ -3885,7 +5825,11 @@
         "city": "Saginaw",
         "state_prov": "Michigan",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team703.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 704,
@@ -3893,7 +5837,11 @@
         "city": "Grand Prairie",
         "state_prov": "Texas",
         "country": "USA",
-        "epa": null
+        "website": "http://www.sgprobotics.org",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 706,
@@ -3901,7 +5849,11 @@
         "city": "Hartland",
         "state_prov": "Wisconsin",
         "country": "USA",
-        "epa": null
+        "website": "http://arrowheadrobotics.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 708,
@@ -3909,7 +5861,11 @@
         "city": "Horsham",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "http://www.team708.org/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 709,
@@ -3917,7 +5873,11 @@
         "city": "Bryn Mawr",
         "state_prov": "Pennsylvania",
         "country": "USA",
-        "epa": null
+        "website": "https://agnesirwin709.wordpress.com/",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 710,
@@ -3925,7 +5885,11 @@
         "city": "Fort Lauderdale",
         "state_prov": "FL",
         "country": "USA",
-        "epa": null
+        "website": "http://www.pinecrest.edu",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 711,
@@ -3933,7 +5897,11 @@
         "city": "Brooklyn",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 713,
@@ -3941,7 +5909,11 @@
         "city": "New York City",
         "state_prov": "NY",
         "country": "USA",
-        "epa": null
+        "website": "http://www.ricehighschool.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 714,
@@ -3949,7 +5921,11 @@
         "city": "Newark",
         "state_prov": "New Jersey",
         "country": "USA",
-        "epa": null
+        "website": "https://714panthera.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 715,
@@ -3957,7 +5933,11 @@
         "city": "NY",
         "state_prov": "USA",
         "country": null,
-        "epa": null
+        "website": null,
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     },
     {
         "team_number": 716,
@@ -3965,6 +5945,10 @@
         "city": "Falls Village",
         "state_prov": "Connecticut",
         "country": "USA",
-        "epa": null
+        "website": "http://www.716robotics.com",
+        "epa": null,
+        "auto_epa": null,
+        "teleop_epa": null,
+        "endgame_epa": null
     }
 ]

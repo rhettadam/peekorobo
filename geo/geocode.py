@@ -1,36 +1,44 @@
 import os
-import time
 import json
 import requests
-from geopy.geocoders import Nominatim
-from tqdm import tqdm  
+import time
 from dotenv import load_dotenv
+from tqdm import tqdm
+import concurrent.futures
+from tenacity import retry, stop_never, wait_exponential, retry_if_exception_type
 
+# Load environment variables from .env
 def configure():
     load_dotenv()
 
-TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
+TBA_API_BASE_URL = "https://www.thebluealliance.com/api/v3"
 
+# Retry indefinitely on any exception.
+@retry(stop=stop_never, wait=wait_exponential(multiplier=1, min=0.5, max=5),
+       retry=retry_if_exception_type(Exception))
 def tba_get(endpoint: str):
     headers = {"X-TBA-Auth-Key": os.getenv("TBA_API_KEY")}
-    url = f"{TBA_BASE_URL}/{endpoint}"
-    r = requests.get(url, headers=headers)
-    if r.status_code == 200:
-        return r.json()
-    print(f"Error {r.status_code}: {r.text}")
-    return None
+    url = f"{TBA_API_BASE_URL}/{endpoint}"
+    response = requests.get(url, headers=headers, timeout=10)
+    response.raise_for_status()
+    return response.json()
 
-# Cache for geocoding results to avoid repeated lookups
+# Set up caching for geocoding.
 geo_cache = {}
+from geopy.geocoders import Nominatim
 geolocator = Nominatim(user_agent="precompute_teams_2025_app")
+
+@retry(stop=stop_never, wait=wait_exponential(multiplier=1, min=0.5, max=5),
+       retry=retry_if_exception_type(Exception))
+def geocode_location_retry(address_str):
+    return geolocator.geocode(address_str)
 
 def geocode_location(item):
     """
-    Geocode the location for a given item (team or event) based on its
-    'city', 'state_prov', 'postal_code', and 'country' fields.
-    Returns a tuple (lat, lng) or (None, None) if geocoding fails.
+    Geocode an item (team or event) based on its 'city', 'state_prov',
+    'postal_code', and 'country' fields. Returns (lat, lng) or (None, None).
+    Uses a cache to avoid redundant lookups.
     """
-    # Return early if already geocoded
     if item.get("lat") is not None and item.get("lng") is not None:
         return item["lat"], item["lng"]
 
@@ -38,7 +46,6 @@ def geocode_location(item):
     state = item.get("state_prov", "")
     postal = item.get("postal_code", "")
     country = item.get("country", "")
-
     parts = [p for p in [city, state, postal, country] if p]
     if not parts:
         return None, None
@@ -46,10 +53,10 @@ def geocode_location(item):
     address_str = ", ".join(parts)
     if address_str in geo_cache:
         return geo_cache[address_str]
-
     try:
-        time.sleep(1)  # Delay to be kind to the geocoding service
-        loc = geolocator.geocode(address_str)
+        # Minimal delay to be fast but still polite
+        time.sleep(0.2)
+        loc = geocode_location_retry(address_str)
         if loc:
             lat, lng = loc.latitude, loc.longitude
             geo_cache[address_str] = (lat, lng)
@@ -62,12 +69,44 @@ def geocode_location(item):
         geo_cache[address_str] = (None, None)
         return None, None
 
-def main():
-    # Load environment variables, including TBA_API_KEY
-    configure()
+def process_team(team, year):
+    """
+    Process a single team:
+      - Geocode the team's location.
+      - Fetch the events (competitions) for the team in the given year.
+      - Geocode each event's location.
+      - Return the updated team dictionary.
+    """
+    # Geocode team location.
+    lat, lng = geocode_location(team)
+    team["lat"] = lat
+    team["lng"] = lng
 
+    # Fetch team events.
+    team_key = team.get("key")
+    if team_key:
+        events = tba_get(f"team/{team_key}/events/{year}") or []
+        # Process each event concurrently.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_event = {executor.submit(geocode_location, event): event for event in events}
+            for future in concurrent.futures.as_completed(future_to_event):
+                event = future_to_event[future]
+                try:
+                    event_lat, event_lng = future.result()
+                except Exception as e:
+                    print(f"Error geocoding event for team {team_key}: {e}")
+                    event_lat, event_lng = None, None
+                event["lat"] = event_lat
+                event["lng"] = event_lng
+        team["events"] = events
+    else:
+        team["events"] = []
+    return team
+
+def main():
+    configure()
     year = 2025
-    out_file = "teams_2025.json"
+    out_file = f"teams_{year}.json"
 
     print(f"Precomputing data for year={year}...")
 
@@ -81,36 +120,27 @@ def main():
         all_teams.extend(page_data)
         page_num += 1
 
-    print(f"\nFetched {len(all_teams)} teams total for {year}.")
+    total_teams = len(all_teams)
+    print(f"\nFetched {total_teams} teams total for {year}.")
 
     print("Processing each team's geocoding and event registration...")
-    for team in tqdm(all_teams, desc="Processing teams", unit="team"):
-        # Geocode the team's location
-        lat, lng = geocode_location(team)
-        team["lat"] = lat
-        team["lng"] = lng
-
-        # Fetch the competitions (events) the team is registered for this year
-        team_key = team.get("key")
-        if team_key:
-            events = tba_get(f"team/{team_key}/events/{year}")
-            if events is None:
-                events = []
-            # Geocode each event's location if necessary
-            for event in events:
-                event_lat, event_lng = geocode_location(event)
-                event["lat"] = event_lat
-                event["lng"] = event_lng
-                time.sleep(0.5)  # Small delay between event geocoding requests
-            team["events"] = events
-            time.sleep(0.5)  # Small delay between team event requests
-        else:
-            team["events"] = []
+    processed_teams = []
+    # Process teams concurrently using a ThreadPoolExecutor.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        futures = [executor.submit(process_team, team, year) for team in all_teams]
+        pbar = tqdm(total=len(futures), desc="Processing teams")
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                processed_teams.append(future.result())
+            except Exception as e:
+                print(f"Error processing a team: {e}")
+            pbar.update(1)
+        pbar.close()
 
     with open(out_file, "w", encoding="utf-8") as f:
-        json.dump(all_teams, f, indent=2, ensure_ascii=False)
+        json.dump(processed_teams, f, indent=2, ensure_ascii=False)
 
-    print(f"\nWrote {len(all_teams)} teams to '{out_file}'.")
+    print(f"\nWrote {len(processed_teams)} teams to '{out_file}'.")
     print("Done!")
 
 if __name__ == "__main__":
