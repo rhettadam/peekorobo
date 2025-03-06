@@ -103,7 +103,7 @@ topbar = dbc.Navbar(
                             [
                                 dbc.Input(
                                     id="mobile-search-input",
-                                    placeholder="Team name or # (e.g., 1912)",
+                                    placeholder="Search Teams or Events",
                                     type="text",
                                 ),
                                 dbc.Button(
@@ -134,7 +134,7 @@ topbar = dbc.Navbar(
                                 [
                                     dbc.Input(
                                         id="desktop-search-input",
-                                        placeholder="Team name or # (eg., 1912)",
+                                        placeholder="Search Teams or Events",
                                         type="text",
                                     ),
                                     dbc.Button(
@@ -203,13 +203,7 @@ def toggle_navbar(n_clicks, is_open):
     if n_clicks:
         return not is_open
     return is_open
-
-import os
-import json
-from dash import html
-import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output, State
-
+    
 def flatten_events(data):
     """
     Recursively traverse the data and return a flat list of dictionaries
