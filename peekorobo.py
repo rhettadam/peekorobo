@@ -3,6 +3,7 @@ import dash_bootstrap_components as dbc
 from dash import callback, html, dcc, dash_table
 from dash.dependencies import Input, Output, State
 import plotly.express as px
+import plotly.graph_objects as go
 
 import folium
 from folium.plugins import MarkerCluster
@@ -482,7 +483,7 @@ def calculate_ranks(team_data, selected_team):
             state_rank += 1
 
     return global_rank, country_rank, state_rank
-    
+
 def team_layout(team_number, year):
     if not team_number:
         return dbc.Alert("No team number provided. Please go back and search again.", color="warning")
@@ -501,7 +502,7 @@ def team_layout(team_number, year):
     if not selected_team:
         return dbc.Alert(f"Team {team_number} not found in the data.", color="danger")
 
-    # Calculate Rankings
+    # Calculate Rankings using your existing function
     global_rank, country_rank, state_rank = calculate_ranks(team_data, selected_team)
 
     # Fetch Basic Team Info
@@ -512,7 +513,7 @@ def team_layout(team_number, year):
             color="danger"
         )
 
-    # Overall EPA from stored team data
+    # Overall EPA from stored team data (retained from your original layout)
     epa_value = selected_team.get("epa", None)
     epa_display = f"{epa_value:.2f}" if epa_value is not None else "N/A"
 
@@ -571,7 +572,7 @@ def team_layout(team_number, year):
         )
     )
 
-    rookie_year = years_participated[0]
+    rookie_year = years_participated[0] if years_participated else year or 2024
 
     hof = [2486, 321, 1629, 503, 4613, 1816, 1902, 1311, 2834, 2614, 3132, 987, 597, 27, 1538, 1114, 359, 341, 236, 842, 365, 111, 67, 254, 103, 175, 22, 16, 120, 23, 47, 51, 144, 151, 191, 7]
     wcp = [126,148,144,100,73,71,45,1,48,176,25,232,255,125,279,294,365,66,173,65,111,469,435,494,67,330,503,217,296,522,190,987,177,1114,971,254,973,180,16,1241,1477,610,2848,74,118,1678,1671,5012,2481,120,1086,2767,862,1676,1011,2928,5499,27,2708,4027,2976,3075,3707,4481,1218,1323,5026,4201,1619,3175,6672,4414,4096,609,1690,4522,9432,321]
@@ -674,8 +675,8 @@ def team_layout(team_number, year):
     wins = sum(
         1
         for match in matches
-        if match["winning_alliance"] == "red" and team_key in match["alliances"]["red"]["team_keys"]
-        or match["winning_alliance"] == "blue" and team_key in match["alliances"]["blue"]["team_keys"]
+        if (match["winning_alliance"] == "red" and team_key in match["alliances"]["red"]["team_keys"]) or 
+           (match["winning_alliance"] == "blue" and team_key in match["alliances"]["blue"]["team_keys"])
     ) if matches else 0
     losses = total_matches - wins
     win_loss_ratio = f"{wins}/{losses}" if total_matches > 0 else "N/A"
@@ -719,9 +720,7 @@ def team_layout(team_number, year):
     performance_card = dbc.Card(
         dbc.CardBody(
             [
-                # Title
                 perf,
-                # Ranks row
                 html.Div(
                     dbc.Row(
                         [
@@ -759,7 +758,6 @@ def team_layout(team_number, year):
                         style={"marginBottom": "10px"},
                     ),
                 ),
-                # Match Performance row
                 html.Div(
                     dbc.Row(
                         [
@@ -796,7 +794,6 @@ def team_layout(team_number, year):
                         ],
                     ),
                 ),
-                # New EPA Components Row
                 html.Div(
                     dbc.Row(
                         [
@@ -837,7 +834,123 @@ def team_layout(team_number, year):
         ),
         style={"marginBottom": "15px", "borderRadius": "8px", "boxShadow": "0px 2px 4px rgba(0,0,0,0.1)", "backgroundColor": "#f9f9f9", "padding": "10px"},
     )
-        
+    
+    # --- Rank Over Time Tabs ---
+    # Use years_participated as the range (fallback to current year if not available)
+    if years_participated and isinstance(years_participated, list):
+        team_years = sorted([int(yr) for yr in years_participated])
+    else:
+        team_years = [year or 2024]
+
+    # Helper function: Compute rank history for the team across years.
+    def get_rank_history(team_number, years):
+        history = []
+        for yr in years:
+            file_path = os.path.join("team_data", f"teams_{yr}.json")
+            if not os.path.exists(file_path):
+                continue
+            with open(file_path, "r") as f:
+                yearly_data = json.load(f)
+            selected = next((team for team in yearly_data if team["team_number"] == int(team_number)), None)
+            if not selected:
+                continue
+            grank, crank, srank = calculate_ranks(yearly_data, selected)
+            history.append({
+                "year": yr,
+                "global_rank": grank,
+                "country_rank": crank,
+                "state_rank": srank
+            })
+        return sorted(history, key=lambda x: x["year"])
+
+    rank_history = get_rank_history(team_number, team_years)
+
+    def create_rank_figure(history, title, key):
+        """
+        history: a list of dicts with keys ["year", "global_rank", "country_rank", "state_rank", ...]
+        title: the chart title (e.g., "Global Rank Over Time")
+        key: which rank to plot (e.g., "global_rank", "country_rank", or "state_rank")
+        """
+        years_list = [item["year"] for item in history]
+        ranks = [item[key] for item in history]
+        if not ranks:
+            # If no data, return an empty figure
+            return go.Figure()
+    
+        # 1) Pick a baseline that is numerically bigger than all ranks
+        baseline = max(ranks) + 10
+    
+        # Create the figure
+        fig = go.Figure()
+    
+        # 2) Build up a gradient in multiple layers
+        num_layers = 10  # The number of semi-transparent layers
+        for i in range(num_layers):
+            # factor goes from 0 to 1 across the layers
+            factor = (i + 1) / num_layers
+            # Interpolate each point from baseline down to the actual rank
+            # factor=0 => y=baseline, factor=1 => y=ranks
+            layer_y = [
+                baseline - factor * (baseline - r) 
+                for r in ranks
+            ]
+            # Adjust opacity so it’s strongest near the line
+            alpha = 0.3 * (factor)
+            fillcolor = f"rgba(255,255,0,{alpha})"  # Yellow with varying opacity
+    
+            # For the first layer, use fill='tozeroy' so it starts from baseline.
+            # For subsequent layers, fill='tonexty' to stack each layer on top of the previous one.
+            fillmode = "tozeroy" if i == 0 else "tonexty"
+    
+            fig.add_trace(
+                go.Scatter(
+                    x=years_list,
+                    y=layer_y,
+                    mode="lines",
+                    line=dict(width=0),
+                    fill=fillmode,
+                    fillcolor=fillcolor,
+                    showlegend=False,
+                    hoverinfo="skip"
+                )
+            )
+    
+        # 3) Finally, add the actual rank line on top
+        fig.add_trace(
+            go.Scatter(
+                x=years_list,
+                y=ranks,
+                mode="lines+markers",
+                line=dict(width=2, color="yellow"),
+                marker=dict(size=6),
+                name="Rank",
+                showlegend=False 
+            )
+        )
+    
+        # Because lower rank is better, we reverse the y‐axis
+        fig.update_layout(
+            title=title,
+            xaxis_title="Year",
+            yaxis_title="Rank",
+            yaxis_autorange="reversed",  # So smaller ranks appear at the top
+            template="plotly_white",
+            margin=dict(l=40, r=40, t=40, b=40),
+        )
+    
+        return fig
+
+
+    global_rank_fig = create_rank_figure(rank_history, "Global Rank Over Time", "global_rank")
+    country_rank_fig = create_rank_figure(rank_history, "Country Rank Over Time", "country_rank")
+    state_rank_fig = create_rank_figure(rank_history, "State Rank Over Time", "state_rank")
+
+    rank_tabs = dcc.Tabs([
+        dcc.Tab(label="Global Rank", children=[dcc.Graph(figure=global_rank_fig)]),
+        dcc.Tab(label="Country Rank", children=[dcc.Graph(figure=country_rank_fig)]),
+        dcc.Tab(label="State Rank", children=[dcc.Graph(figure=state_rank_fig)]),
+    ])
+    
     # --- Team Events ---
     if year:
         events = tba_get(f"team/{team_key}/events/{year}")
@@ -968,13 +1081,15 @@ def team_layout(team_number, year):
                 [
                     team_card,
                     performance_card,
+                    rank_tabs,  # Rank Over Time tabs inserted here
                     html.H3("Team Events", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
                     events_table,
                     html.H3("Team Awards", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
                     awards_table,
                     blue_banner_section,
                     html.Br(),
-                    dbc.Button("Go Back", id="btn-go-back", color="secondary", href="/", external_link=True, style={"borderRadius": "5px", "padding": "10px 20px", "marginTop": "20px"}),
+                    dbc.Button("Go Back", id="btn-go-back", color="secondary", href="/", external_link=True, 
+                               style={"borderRadius": "5px", "padding": "10px 20px", "marginTop": "20px"}),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
@@ -984,6 +1099,7 @@ def team_layout(team_number, year):
             footer,
         ]
     )
+
 
 def clean_category_label(raw_label):
     label = raw_label.replace("typed_", "").replace("_", " ").replace("insights","").title()
