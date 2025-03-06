@@ -204,6 +204,29 @@ def toggle_navbar(n_clicks, is_open):
         return not is_open
     return is_open
 
+import os
+import json
+from dash import html
+import dash_bootstrap_components as dbc
+from dash.dependencies import Input, Output, State
+
+def flatten_events(data):
+    """
+    Recursively traverse the data and return a flat list of dictionaries
+    that have an "event_code" key.
+    """
+    flat = []
+    if isinstance(data, dict):
+        if "event_code" in data:
+            flat.append(data)
+        else:
+            for value in data.values():
+                flat.extend(flatten_events(value))
+    elif isinstance(data, list):
+        for item in data:
+            flat.extend(flatten_events(item))
+    return flat
+
 @app.callback(
     [Output("search-preview", "children"), Output("search-preview", "style")],
     Input("desktop-search-input", "value"),
@@ -213,59 +236,106 @@ def update_search_preview(input_value):
         # Hide dropdown when input is empty
         return [], {"display": "none"}
 
-    # Load team data from the 2024 JSON file
-    folder_path = "team_data" 
-    file_path = os.path.join(folder_path, "teams_2024.json")
-    
-    if not os.path.exists(file_path):
-        return [html.Div("Data not found.", style={"color": "#555"})], {"display": "none"}
+    folder_path = "team_data"
+    teams_file = os.path.join(folder_path, "teams_2025.json")
+    events_file = os.path.join(folder_path, "events.json")
 
-    with open(file_path, "r") as f:
-        teams_data = json.load(f)
+    # Load teams data
+    if os.path.exists(teams_file):
+        with open(teams_file, "r") as f:
+            teams_data = json.load(f)
+    else:
+        teams_data = []
+
+    # Load events data
+    if os.path.exists(events_file):
+        with open(events_file, "r") as f:
+            raw_events_data = json.load(f)
+        # If the raw data is a dict and has a top-level "events" key, use that.
+        if isinstance(raw_events_data, dict) and "events" in raw_events_data:
+            raw_events_data = raw_events_data["events"]
+        events_data = flatten_events(raw_events_data)
+    else:
+        events_data = []
 
     input_value = input_value.lower()
-    
-    # Search for both team numbers and nicknames
-    filtered_teams = [
-        team for team in teams_data 
-        if input_value in str(team.get("team_number", "")).lower()
-        or input_value in team.get("nickname", "").lower()
-    ][:20]  # Limit results to the top 20
 
-    # Find closest numeric match if input is a number
+    # --- Filter Teams ---
+    filtered_teams = [
+        t for t in teams_data
+        if input_value in str(t.get("team_number", "")).lower()
+           or input_value in t.get("nickname", "").lower()
+    ][:20]
+
+    # Determine closest team match (for highlighting)
     closest_team_number = None
     closest_team_nickname = None
-
-    if input_value.isdigit():
+    if input_value.isdigit() and filtered_teams:
         input_number = int(input_value)
         closest_team_number = min(
             filtered_teams,
-            key=lambda team: abs(input_number - int(team["team_number"])),
+            key=lambda t: abs(input_number - int(t["team_number"])),
             default=None,
         )
-    else:
-        # Find the closest nickname match using a simple string similarity comparison
+    elif filtered_teams:
         closest_team_nickname = min(
             filtered_teams,
-            key=lambda team: len(set(input_value) & set(team["nickname"].lower())),
+            key=lambda t: len(set(input_value) & set(t["nickname"].lower())),
             default=None,
         )
 
-    # Generate dropdown content
+    # --- Filter Events ---
+    filtered_events = []
+    for e in events_data:
+        event_code = e.get("event_code", "").lower()
+        event_name = e.get("name", "").lower()
+        start_date = e.get("start_date", "")
+        event_year = start_date[:4] if len(start_date) >= 4 else ""
+        # Build a combined "year name" string for partial matching
+        year_name_combo = f"{event_year} {e.get('name','')}".lower()
+
+        # If input matches event_code OR name OR year+name combo, add to filtered
+        if (input_value in event_code
+            or input_value in event_name
+            or input_value in year_name_combo):
+            filtered_events.append(e)
+
+    filtered_events = filtered_events[:20]
+
+    # Determine closest event match (simple character intersection)
+    closest_event = None
+    if filtered_events:
+        closest_event = max(
+            filtered_events,
+            key=lambda e: (
+                len(set(input_value) & set(e.get("event_code", "").lower())) +
+                len(set(input_value) & set(e.get("name", "").lower()))
+            )
+        )
+
     children = []
-    for team in filtered_teams:
-        team_number = team.get("team_number", "Unknown")
-        team_nickname = team.get("nickname", "Unknown")
 
-        # Highlight the closest matching team number or nickname
-        background_color = "white"
-        if (closest_team_number and team_number == closest_team_number["team_number"]) or \
-           (closest_team_nickname and team_nickname == closest_team_nickname["nickname"]):
-            background_color = "#FFDD00"  # Yellow highlight
-
+    # --- Teams Section ---
+    if filtered_teams:
         children.append(
             dbc.Row(
-                [
+                dbc.Col(
+                    html.Div("Teams", style={"fontWeight": "bold", "padding": "5px"}),
+                    width=True,
+                ),
+                style={"backgroundColor": "#f1f1f1"}
+            )
+        )
+        for team in filtered_teams:
+            team_number = team.get("team_number", "Unknown")
+            team_nickname = team.get("nickname", "Unknown")
+            background_color = "white"
+            if (closest_team_number and team_number == closest_team_number["team_number"]) or \
+               (closest_team_nickname and team_nickname == closest_team_nickname["nickname"]):
+                background_color = "#FFDD00"  # Yellow highlight
+
+            children.append(
+                dbc.Row(
                     dbc.Col(
                         html.A(
                             f"{team_number} | {team_nickname}",
@@ -279,13 +349,59 @@ def update_search_preview(input_value):
                         ),
                         width=True,
                     ),
-                ],
-                style={"padding": "5px", "backgroundColor": background_color},
-                key=f"team-{team_number}",
+                    style={"padding": "5px", "backgroundColor": background_color},
+                    key=f"team-{team_number}",
+                )
+            )
+
+    # --- Events Section ---
+    if filtered_events:
+        children.append(
+            dbc.Row(
+                dbc.Col(
+                    html.Div("Events", style={"fontWeight": "bold", "padding": "5px"}),
+                    width=True,
+                ),
+                style={"backgroundColor": "#f1f1f1", "marginTop": "5px"}
             )
         )
+        for event in filtered_events:
+            event_code = event.get("event_code", "Unknown")
+            event_name = event.get("name", "Unknown")
+            start_date = event.get("start_date", "")
+            event_year = start_date[:4] if len(start_date) >= 4 else "Unknown"
+            background_color = "white"
+            if (closest_event
+                and event_code.lower() == closest_event.get("event_code", "").lower()
+                and event_name == closest_event.get("name")):
+                background_color = "#FFDD00"
 
-    # Show dropdown with results
+            # e.g., "lake | 2024 Bayou Regional"
+            display_text = f"{event_code} | {event_year} {event_name}"
+            href_link = f"/event/{event_year}{event_code}"
+            children.append(
+                dbc.Row(
+                    dbc.Col(
+                        html.A(
+                            display_text,
+                            href=href_link,
+                            style={
+                                "lineHeight": "20px",
+                                "textDecoration": "none",
+                                "color": "black",
+                                "cursor": "pointer",
+                            },
+                        ),
+                        width=True,
+                    ),
+                    style={"padding": "5px", "backgroundColor": background_color},
+                    key=f"event-{event_code}",
+                )
+            )
+
+    if not filtered_teams and not filtered_events:
+        children.append(html.Div("No results found.", style={"padding": "5px", "color": "#555"}))
+
     return children, {
         "display": "block",
         "backgroundColor": "white",
