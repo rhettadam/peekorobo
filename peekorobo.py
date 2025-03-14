@@ -2405,9 +2405,9 @@ def get_epa_display(epa, percentiles):
     elif epa >= percentiles["50"]:
         color = "🟠"  # Orange
     elif epa >= percentiles["25"]:
-        color = "🟤"  # Brown
+        color = "🔴"  # Brown
     else:
-        color = "🔴"  # Red
+        color = "🟤"  # Red
 
     return f"{color} {epa:.2f}"
 
@@ -2415,7 +2415,7 @@ def epa_legend_layout():
     return dbc.Alert(
         [
             html.H5("EPA Color Key (Percentile):", className="mb-3", style={"fontWeight": "bold"}),
-            html.Div("🟣  ≥ 99% | 🔵  ≥ 95% | 🟢  ≥ 90% | 🟡  ≥ 75% | 🟠  ≥ 50% | 🟤  ≥ 25% | 🔴  < 25%"),
+            html.Div("🟣  ≥ 99% | 🔵  ≥ 95% | 🟢  ≥ 90% | 🟡  ≥ 75% | 🟠  ≥ 50% | 🔴  ≥ 25% | 🟤  < 25%"),
         ],
         color="light",
         style={
