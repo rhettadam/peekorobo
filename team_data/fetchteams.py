@@ -25,26 +25,16 @@ def tba_get(endpoint):
     return response.json()
 
 def calculate_epa_components(matches, team_key, year):
-    """
-    Calculate overall EPA along with Auto, Teleop, and Endgame components.
-    
-    Assumptions:
-      - Overall contribution = alliance score / 3.
-      - Auto and Endgame contributions are taken from the match's score_breakdown.
-      - Missing breakdown values default to 0.
-      - Teleop EPA = Overall EPA - Auto EPA - Endgame EPA.
-      
-    The endgame score key is chosen based on the year:
-      - For year ≤ 2022: "endgamePoints"
-      - For year == 2023: "endGameChargeStationPoints"
-      - For year ≥ 2024: "endGameTotalStagePoints"
-    """
     if year <= 2022:
         endgame_key = "endgamePoints"
     elif year == 2023:
         endgame_key = "endGameChargeStationPoints"
-    else:
+    elif year == 2024:
         endgame_key = "endGameTotalStagePoints"
+    elif year == 2025:
+        endgame_key = "endGameBargePoints"
+    else:
+        endgame_key = "endgamePoints"
 
     # Sort matches chronologically; if "time" is None, use 0.
     matches = sorted(matches, key=lambda m: m.get("time") or 0)
@@ -116,10 +106,10 @@ def calculate_epa_components(matches, team_key, year):
     teleop_epa = overall_epa - auto_epa - endgame_epa if overall_epa is not None and auto_epa is not None and endgame_epa is not None else None
 
     return {
-        "overall": overall_epa,
-        "auto": auto_epa,
-        "teleop": teleop_epa,
-        "endgame": endgame_epa,
+        "overall": abs(overall_epa),
+        "auto": abs(auto_epa),
+        "teleop": abs(teleop_epa),
+        "endgame": abs(endgame_epa),
     }
 
 def fetch_team_components(team, year):
@@ -146,7 +136,7 @@ def fetch_team_components(team, year):
 
 def fetch_and_store_team_data():
     # Process years 2000 through 2025 (adjust as needed)
-    for year in tqdm(range(2004, 2026), desc="Processing Years"):
+    for year in tqdm(range(2025, 2026), desc="Processing Years"):
         print(f"\nProcessing year {year}...")
         section_count = 0
         combined_teams = []
