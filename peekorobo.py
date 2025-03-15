@@ -370,7 +370,7 @@ def update_search_preview(input_value):
                 and event_name == closest_event.get("name")):
                 background_color = "#FFDD00"
 
-            # e.g., "lake | 2024 Bayou Regional"
+       
             display_text = f"{event_code} | {event_year} {event_name}"
             href_link = f"/event/{event_year}{event_code}"
             children.append(
@@ -487,7 +487,7 @@ home_layout = html.Div([
                                             dbc.Input(
                                                 id="input-year-home",
                                                 type="text",
-                                                placeholder="Year (e.g., 2024) optional",
+                                                placeholder="Year (e.g., 2025) optional",
                                                 className="custom-input-box",
                                                 style={"width": "100%"}
                                             ),
@@ -600,9 +600,9 @@ def team_layout(team_number, year):
 
     team_key = f"frc{team_number}"
     folder_path = "team_data"  # Replace with the correct folder path
-    file_path = os.path.join(folder_path, f"teams_{year or 2024}.json")
+    file_path = os.path.join(folder_path, f"teams_{year or 2025}.json")
     if not os.path.exists(file_path):
-        return dbc.Alert(f"Data for year {year or 2024} not found.", color="danger")
+        return dbc.Alert(f"Data for year {year or 2025} not found.", color="danger")
 
     with open(file_path, "r") as f:
         team_data = json.load(f)
@@ -643,7 +643,7 @@ def team_layout(team_number, year):
     if website and website.startswith("http://"):
         website = "https://" + website[len("http://"):]
     
-    avatar_data = tba_get(f"team/{team_key}/media/2024")
+    avatar_data = tba_get(f"team/{team_key}/media/2025")
     avatar_url = None
     if avatar_data:
         for media in avatar_data:
@@ -682,7 +682,7 @@ def team_layout(team_number, year):
         )
     )
 
-    rookie_year = years_participated[0] if years_participated else year or 2024
+    rookie_year = years_participated[0] if years_participated else year or 2025
 
     hof = [2486, 321, 1629, 503, 4613, 1816, 1902, 1311, 2834, 2614, 3132, 987, 597, 27, 1538, 1114, 359, 341, 236, 842, 365, 111, 67, 254, 103, 175, 22, 16, 120, 23, 47, 51, 144, 151, 191, 7]
     wcp = [126,148,144,100,73,71,45,1,48,176,25,232,255,125,279,294,365,66,173,65,111,469,435,494,67,330,503,217,296,522,190,987,177,1114,971,254,973,180,16,1241,1477,610,2848,74,118,1678,1671,5012,2481,120,1086,2767,862,1676,1011,2928,5499,27,2708,4027,2976,3075,3707,4481,1218,1323,5026,4201,1619,3175,6672,4414,4096,609,1690,4522,9432,321]
@@ -779,7 +779,7 @@ def team_layout(team_number, year):
     if year:
         matches = tba_get(f"team/{team_key}/matches/{year}")
     else:
-        matches = tba_get(f"team/{team_key}/matches/2024")
+        matches = tba_get(f"team/{team_key}/matches/2025")
 
     total_matches = len(matches) if matches else 0
     wins = sum(
@@ -817,7 +817,7 @@ def team_layout(team_number, year):
         )
     else:
         perf = html.H5(
-            "2024 Performance Metrics",
+            "2025 Performance Metrics",
             style={
                 "textAlign": "center",
                 "color": "#444",
@@ -950,7 +950,7 @@ def team_layout(team_number, year):
     if years_participated and isinstance(years_participated, list):
         team_years = sorted([int(yr) for yr in years_participated])
     else:
-        team_years = [year or 2024]
+        team_years = [year or 2025]
 
     # Helper function: Compute rank history for the team across years.
     def get_rank_history(team_number, years):
@@ -1215,7 +1215,7 @@ def clean_category_label(raw_label):
     label = raw_label.replace("typed_", "").replace("_", " ").replace("insights","").title()
     return label
 
-def insights_layout(year=2024, category="typed_leaderboard_blue_banners", notable_category="notables_division_finals_appearances"):
+def insights_layout(year=2025, category="typed_leaderboard_blue_banners", notable_category="notables_division_finals_appearances"):
     # Fetch leaderboard data
     insights_data = tba_get(f"insights/leaderboards/{year}")
     notables_data = tba_get(f"insights/notables/{year}")
@@ -1356,7 +1356,7 @@ def insights_layout(year=2024, category="typed_leaderboard_blue_banners", notabl
 )
 def update_insights(year, category, notable_category):
     if not year:
-        year = 2024
+        year = 2025
     
     # Fetch leaderboard and notables data
     insights_data = tba_get(f"insights/leaderboards/{year}")
@@ -1663,7 +1663,7 @@ def event_layout(event_key):
     if not event_details:
         return dbc.Alert("Event details could not be fetched.", color="danger")
 
-    event_year = parsed_year if parsed_year else event_details.get("year", 2024)
+    event_year = parsed_year if parsed_year else event_details.get("year", 2025)
     epa_data = load_teams_and_compute_epa_ranks(event_year)
 
     # TBA calls
@@ -1874,10 +1874,6 @@ def create_team_card_spotlight(team, epa_data, event_year):
 import re
 
 def parse_event_key(event_key):
-    """
-    If event_key = '2024cc', returns (2024, 'cc').
-    Otherwise returns (None, event_key) as a fallback.
-    """
     m = re.match(r'^(\d{4})(.+)$', event_key)
     if m:
         return int(m.group(1)), m.group(2)
@@ -2371,7 +2367,7 @@ def challenge_details_layout(year):
         ]
     )
 
-def get_team_avatar(team_number, year=2024):
+def get_team_avatar(team_number, year=2025):
     team_key = f"frc{team_number}"
     avatar_data = tba_get(f"team/{team_key}/media/{year}")
     if not avatar_data:
@@ -2489,7 +2485,7 @@ def create_team_card(team, selected_year, avatar_url=None):
     )
 
 
-def teams_layout(default_year=2024):
+def teams_layout(default_year=2025):
     teams_year_dropdown = dcc.Dropdown(
         id="teams-year-dropdown",
         options=[{"label": str(y), "value": y} for y in range(1992, 2026)],
@@ -2828,7 +2824,7 @@ def handle_navigation(
 
     # Load team data
     folder_path = "team_data"
-    selected_year = year_value if year_value else "2024"
+    selected_year = year_value if year_value else "2025"
     file_path = os.path.join(folder_path, f"teams_{selected_year}.json")
 
     if not os.path.exists(file_path):
