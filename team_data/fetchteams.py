@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 import concurrent.futures
 from tenacity import retry, stop_never, wait_exponential, retry_if_exception_type, RetryError
+import statistics
+import math
 
 load_dotenv()
 
@@ -24,10 +26,10 @@ def tba_get(endpoint):
     response.raise_for_status()
     return response.json()
 
+import statistics
+
 def calculate_epa_components(matches, team_key, year):
-    if year <= 2022:
-        endgame_key = "endgamePoints"
-    elif year == 2023:
+    if year == 2023:
         endgame_key = "endGameChargeStationPoints"
     elif year == 2024:
         endgame_key = "endGameTotalStagePoints"
@@ -36,45 +38,64 @@ def calculate_epa_components(matches, team_key, year):
     else:
         endgame_key = "endgamePoints"
 
-    # Sort matches chronologically; if "time" is None, use 0.
+    importance = {
+        "qm": 1.0,
+        "qf": 1.2,
+        "sf": 1.3,
+        "f": 1.4
+    }
+
     matches = sorted(matches, key=lambda m: m.get("time") or 0)
-    overall_epa = None
-    auto_epa = None
-    endgame_epa = None
+
+    overall_epa = auto_epa = teleop_epa = endgame_epa = None
     match_count = 0
+    trend_deltas = []
+    contributions = []
 
     for match in matches:
+        if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
+            continue
+
         match_count += 1
-        # Determine alliance and opponent.
+
         if team_key in match["alliances"]["red"]["team_keys"]:
             alliance = "red"
             opponent_alliance = "blue"
-        elif team_key in match["alliances"]["blue"]["team_keys"]:
+        else:
             alliance = "blue"
             opponent_alliance = "red"
-        else:
-            continue  # Skip matches where the team is not present.
 
-        # Overall contribution: alliance score / 3.
-        actual_overall = match["alliances"][alliance]["score"] / 3
-        opponent_overall = match["alliances"][opponent_alliance]["score"] / 3
+        team_count = len(match["alliances"][alliance].get("team_keys", []))
+        if team_count == 0:
+            continue
 
-        # Get breakdown for this alliance; default missing to empty dict.
         breakdown = (match.get("score_breakdown") or {}).get(alliance, {})
+
         auto_score = breakdown.get("autoPoints", 0)
         endgame_score = breakdown.get(endgame_key, 0)
-        actual_auto = auto_score / 3
-        actual_endgame = endgame_score / 3
+        teleop_score = breakdown.get("teleopPoints", 0)
 
-        # Initialize EPAs on the first match.
+        # Exclude foul points from overall calculation
+        foul_points = breakdown.get("foulPoints", 0)
+
+        actual_auto = auto_score / team_count
+        actual_endgame = endgame_score / team_count
+        actual_teleop = teleop_score / team_count
+        actual_overall = (auto_score + teleop_score + endgame_score - foul_points) / team_count
+
+        opponent_score = match["alliances"][opponent_alliance]["score"] / team_count
+
         if overall_epa is None:
             overall_epa = actual_overall
-        if auto_epa is None:
             auto_epa = actual_auto
-        if endgame_epa is None:
             endgame_epa = actual_endgame
+            teleop_epa = actual_teleop
+            continue
 
-        # Determine update factor K.
+        match_importance = importance.get(match.get("comp_level", "qm"), 1.0)
+        decay = 0.95 ** match_count
+
+        # Dynamic learning rate
         if match_count <= 6:
             K = 0.5
         elif match_count <= 12:
@@ -82,34 +103,42 @@ def calculate_epa_components(matches, team_key, year):
         else:
             K = 0.3
 
-        # Determine margin parameter M for overall EPA update.
+        K *= match_importance
+
+        # Margin factor for opponent strength
         if match_count <= 12:
             M = 0
         elif match_count <= 36:
-            M = (match_count - 12) / (36 - 12)
+            M = (match_count - 12) / 24
         else:
             M = 1
 
-        # Update overall EPA.
-        delta_overall = (K / (1 + M)) * ((actual_overall - overall_epa) - M * (opponent_overall - overall_epa))
+        delta_overall = decay * (K / (1 + M)) * ((actual_overall - overall_epa) - M * (opponent_score - overall_epa))
+        delta_auto = decay * K * (actual_auto - auto_epa)
+        delta_endgame = decay * K * (actual_endgame - endgame_epa)
+        delta_teleop = decay * K * (actual_teleop - teleop_epa)
+
         overall_epa += delta_overall
-
-        # Update Auto EPA.
-        delta_auto = K * (actual_auto - auto_epa)
         auto_epa += delta_auto
-
-        # Update Endgame EPA.
-        delta_endgame = K * (actual_endgame - endgame_epa)
         endgame_epa += delta_endgame
+        teleop_epa += delta_teleop
 
-    # Compute Teleop EPA as the residual.
-    teleop_epa = overall_epa - auto_epa - endgame_epa if overall_epa is not None and auto_epa is not None and endgame_epa is not None else None
+        trend_deltas.append(delta_overall)
+        contributions.append(actual_overall)
+
+    if not match_count:
+        return None
+
+    trend = sum(trend_deltas[-3:]) if len(trend_deltas) >= 3 else sum(trend_deltas)
+    consistency = 1.0 - (statistics.stdev(contributions) / statistics.mean(contributions)) if len(contributions) >= 2 else 1.0
 
     return {
-        "overall": abs(overall_epa),
-        "auto": abs(auto_epa),
-        "teleop": abs(teleop_epa),
-        "endgame": abs(endgame_epa),
+        "overall": round(abs(overall_epa), 2),
+        "auto": round(abs(auto_epa), 2),
+        "teleop": round(abs(teleop_epa), 2),
+        "endgame": round(abs(endgame_epa), 2),
+        "trend": round(trend, 2),
+        "consistency": round(consistency, 2)
     }
 
 def fetch_team_components(team, year):
@@ -136,7 +165,7 @@ def fetch_team_components(team, year):
 
 def fetch_and_store_team_data():
     # Process years 2000 through 2025 (adjust as needed)
-    for year in tqdm(range(2025, 2026), desc="Processing Years"):
+    for year in tqdm(range(2023, 2024), desc="Processing Years"):
         print(f"\nProcessing year {year}...")
         section_count = 0
         combined_teams = []
