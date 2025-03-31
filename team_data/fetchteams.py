@@ -135,6 +135,18 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         # Teleop points (shared)
         teleop_score = breakdown.get("teleopPoints", 0)
         actual_teleop = teleop_score / team_count
+        
+        if breakdown.get("autoBonusAchieved"):
+            # e.g. +5 auto points distributed among the alliance
+            actual_auto += 5 / team_count
+        
+        if breakdown.get("coralBonusAchieved"):
+            # e.g. +5 teleop points (or auto) distributed
+            actual_teleop += 5 / team_count
+        
+        if breakdown.get("bargeBonusAchieved"):
+            # e.g. +5 endgame points distributed
+            actual_endgame += 5 / team_count
 
         foul_points = breakdown.get("foulPoints", 0)
         actual_overall = actual_auto + actual_teleop + actual_endgame
