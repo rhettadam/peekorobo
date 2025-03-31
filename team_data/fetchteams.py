@@ -33,6 +33,38 @@ def load_veteran_teams():
         print("Warning: teams_2024.json not found. All teams will be treated as rookies.")
         return set()
 
+def estimate_consistent_auto(breakdowns, team_count):
+    coral_counts = [b.get("autoCoralCount", 0) for b in breakdowns if b.get("autoCoralCount") is not None]
+    coral_points = [b.get("autoCoralPoints", 0) for b in breakdowns if b.get("autoCoralPoints") is not None]
+    mobility_totals = [b.get("autoMobilityPoints", 0) for b in breakdowns if b.get("autoMobilityPoints") is not None]
+
+    if not coral_counts or not coral_points:
+        return 0
+
+    # Use median to avoid outliers
+    median_coral = statistics.median(coral_counts)
+    median_points = statistics.median(coral_points)
+    median_mobility = statistics.median(mobility_totals)
+
+    coral_contrib = median_points - median_mobility
+    if median_coral == 0:
+        avg_per_coral = 0
+    else:
+        avg_per_coral = coral_contrib / median_coral
+
+    # Map to closest known scoring level
+    if avg_per_coral >= 6.5:
+        level_score = 7
+    elif avg_per_coral >= 5.5:
+        level_score = 6
+    elif avg_per_coral >= 3.5:
+        level_score = 4
+    else:
+        level_score = 3
+
+    estimated_auto = median_mobility + (median_coral / team_count) * level_score
+    return estimated_auto
+
 def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veteran_teams=None):
     if year == 2023:
         endgame_key = "endGameChargeStationPoints"
@@ -56,6 +88,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
     trend_deltas = []
     contributions = []
     teammate_epas = []
+    auto_breakdowns = []
 
     for match in matches:
         if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
@@ -82,12 +115,11 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
                     teammate_epas.append(team_epa_cache[k])
 
         breakdown = (match.get("score_breakdown") or {}).get(alliance, {})
+        auto_breakdowns.append(breakdown)
         index = team_keys.index(team_key) + 1
 
-        # Auto EPA: mobility + coral points
-        mobility_points = 3 if breakdown.get(f"autoLineRobot{index}") == "Yes" else 0
-        auto_coral_points = breakdown.get("autoCoralPoints", 0) / team_count
-        actual_auto = mobility_points + auto_coral_points
+        # Auto EPA from consistent pattern analysis
+        actual_auto = estimate_consistent_auto(auto_breakdowns, team_count)
 
         # Endgame EPA based on individual robot position
         robot_endgame = breakdown.get(f"endGameRobot{index}", "None")
