@@ -630,14 +630,6 @@ def team_layout(team_number, year):
     # Calculate Rankings using your existing function
     global_rank, country_rank, state_rank = calculate_ranks(team_data, selected_team)
 
-    # Fetch Basic Team Info
-    team_info = tba_get(f"team/{team_key}")
-    if not team_info:
-        return dbc.Alert(
-            f"Error: Could not fetch info for team {team_number}. Double-check your input or TBA key.",
-            color="danger"
-        )
-
     # Overall EPA from stored team data (retained from your original layout)
     epa_value = selected_team.get("epa", None)
     epa_display = f"{epa_value:.2f}" if epa_value is not None else "N/A"
