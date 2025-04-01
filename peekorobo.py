@@ -782,28 +782,30 @@ def team_layout(team_number, year):
         },
     )
     
-    # --- Performance Metrics ---
-    if year:
-        matches = tba_get(f"team/{team_key}/matches/{year}")
+     # --- Performance Metrics ---
+    if year in {2023, 2024, 2025}:
+        wins = selected_team.get("wins", 0)
+        losses = selected_team.get("losses", 0)
+        total_matches = wins + losses
+        avg_score = selected_team.get("average_match_score", 0)
     else:
-        matches = tba_get(f"team/{team_key}/matches/2025")
+        matches = tba_get(f"team/{team_key}/matches/{year or 2025}")
+        total_matches = len(matches) if matches else 0
 
-    total_matches = len(matches) if matches else 0
-    wins = sum(
-        1
-        for match in matches
-        if (match["winning_alliance"] == "red" and team_key in match["alliances"]["red"]["team_keys"]) or 
-           (match["winning_alliance"] == "blue" and team_key in match["alliances"]["blue"]["team_keys"])
-    ) if matches else 0
-    losses = total_matches - wins
-    win_loss_ratio = f"{wins}/{losses}" if total_matches > 0 else "N/A"
+        wins = sum(
+            1
+            for match in matches
+            if (match["winning_alliance"] == "red" and team_key in match["alliances"]["red"]["team_keys"]) or 
+               (match["winning_alliance"] == "blue" and team_key in match["alliances"]["blue"]["team_keys"])
+        ) if matches else 0
+        losses = total_matches - wins
 
-    total_score = sum(
-        match["alliances"]["red"]["score"] if team_key in match["alliances"]["red"]["team_keys"]
-        else match["alliances"]["blue"]["score"]
-        for match in matches
-    ) if matches else 0
-    avg_score = total_score / total_matches if total_matches > 0 else 0
+        total_score = sum(
+            match["alliances"]["red"]["score"] if team_key in match["alliances"]["red"]["team_keys"]
+            else match["alliances"]["blue"]["score"]
+            for match in matches
+        ) if matches else 0
+        avg_score = total_score / total_matches if total_matches > 0 else 0
 
     win_loss_ratio = html.Span([
         html.Span(f"{wins}", style={"color": "green", "fontWeight": "bold"}),
@@ -811,28 +813,16 @@ def team_layout(team_number, year):
         html.Span(f"{losses}", style={"color": "red", "fontWeight": "bold"})
     ])
 
-    if year:
-        perf = html.H5(
-            f"{year} Performance Metrics",
-            style={
-                "textAlign": "center",
-                "color": "#444",
-                "fontSize": "1.3rem",
-                "fontWeight": "bold",
-                "marginBottom": "10px",
-            },
-        )
-    else:
-        perf = html.H5(
-            "2025 Performance Metrics",
-            style={
-                "textAlign": "center",
-                "color": "#444",
-                "fontSize": "1.3rem",
-                "fontWeight": "bold",
-                "marginBottom": "10px",
-            },
-        )
+    perf = html.H5(
+        f"{year or 2025} Performance Metrics",
+        style={
+            "textAlign": "center",
+            "color": "#444",
+            "fontSize": "1.3rem",
+            "fontWeight": "bold",
+            "marginBottom": "10px",
+        },
+    )
 
     performance_card = dbc.Card(
         dbc.CardBody(
