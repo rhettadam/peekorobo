@@ -50,22 +50,85 @@ server = app.server
 topbar = dbc.Navbar(
     dbc.Container(
         [
-            # Left: Logo
-            dbc.NavbarBrand(
-                html.Img(
-                    src="/assets/logo.png",
-                    style={
-                        "height": "40px",
-                        "width": "auto",
-                        "marginRight": "10px",
-                    },
-                ),
-                href="/",
-                className="navbar-brand-custom",
+            dbc.Row(
+                [
+                    # LOGO on the left
+                    dbc.Col(
+                        dbc.NavbarBrand(
+                            html.Img(
+                                src="/assets/logo.png",
+                                style={"height": "40px","width": "auto","marginRight": "10px"},
+                            ),
+                            href="/",
+                            className="navbar-brand-custom",
+                        ),
+                        width="auto",
+                        align="center",
+                    ),
+
+                    # MOBILE SEARCH in the middle (only visible on sm)
+                    dbc.Col(
+                        [
+                            dbc.InputGroup(
+                                [
+                                    dbc.Input(
+                                        id="mobile-search-input",
+                                        placeholder="Search",
+                                        type="text",
+                                    ),
+                                    dbc.Button(
+                                        "🔎",
+                                        id="mobile-search-button",
+                                        color="primary",
+                                        style={
+                                            "backgroundColor": "#FFDD00",
+                                            "border": "none",
+                                            "color": "black",
+                                        },
+                                    ),
+                                ],
+                                style={"width": "160px"},  # or any desired width
+                            ),
+                            html.Div(
+                                id="mobile-search-preview",
+                                style={
+                                    "backgroundColor": "white",
+                                    "border": "1px solid #ddd",
+                                    "borderRadius": "8px",
+                                    "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
+                                    "marginTop": "5px",
+                                    "padding": "5px",
+                                    "maxHeight": "200px",
+                                    "overflowY": "auto",
+                                    "overflowX": "hidden",
+                                    "width": "180px",
+                                    "zIndex": "9999",
+                                    "position": "absolute",
+                                    "left": "0",
+                                    "top": "100%",
+                                    "display": "none",
+                                },
+                            ),
+                        ],
+                        width="auto",
+                        align="center",
+                        className="d-md-none",  # hide on md+
+                        style={"position": "relative","textAlign": "center"},
+                    ),
+
+                    # NAV TOGGLER on the right
+                    dbc.Col(
+                        dbc.NavbarToggler(id="navbar-toggler", n_clicks=0),
+                        width="auto",
+                        align="center",
+                        className="d-md-none",  # toggler on mobile only
+                    ),
+                ],
+                className="g-2",  # small horizontal gutter
+                align="center",
+                justify="between",  # pushes left col to start, right col to end
             ),
-            # Toggler for Mobile
-            dbc.NavbarToggler(id="navbar-toggler", n_clicks=0),
-            # Collapsible Section
+
             dbc.Collapse(
                 dbc.Nav(
                     [
@@ -74,50 +137,15 @@ topbar = dbc.Navbar(
                         dbc.NavItem(dbc.NavLink("Events", href="/events", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Insights", href="/insights", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Challenges", href="/challenges", className="custom-navlink")),
-                        # Resources Dropdown
+                        # Example dropdown
                         dbc.DropdownMenu(
                             label="Resources",
                             nav=True,
                             in_navbar=True,
                             children=[
                                 dbc.DropdownMenuItem("Communication", header=True),
-                                dbc.DropdownMenuItem("Chief Delphi", href="https://www.chiefdelphi.com/", target="_blank"),
-                                dbc.DropdownMenuItem("The Blue Alliance", href="https://www.thebluealliance.com/", target="_blank"),
-                                dbc.DropdownMenuItem("FRC Subreddit", href="https://www.reddit.com/r/FRC/", target="_blank"),
-                                dbc.DropdownMenuItem("FRC Discord", href="https://discord.com/invite/frc", target="_blank"),
-                                dbc.DropdownMenuItem(divider=True),
-                                dbc.DropdownMenuItem("Technical Resources", header=True),
-                                dbc.DropdownMenuItem("FIRST Technical Resources", href="https://www.firstinspires.org/resource-library/frc/technical-resources", target="_blank"),
-                                dbc.DropdownMenuItem("FRCDesign", href="https://www.frcdesign.org/learning-course/", target="_blank"),
-                                dbc.DropdownMenuItem("OnShape4FRC", href="https://onshape4frc.com/", target="_blank"),
-                                dbc.DropdownMenuItem(divider=True),
-                                dbc.DropdownMenuItem("Scouting/Statistics", header=True),
-                                dbc.DropdownMenuItem("Statbotics", href="https://www.statbotics.io/", target="_blank"),
-                                dbc.DropdownMenuItem("ScoutRadioz", href="https://scoutradioz.com/", target="_blank"),
-                                dbc.DropdownMenuItem("Peekorobo", href="https://peekorobo-6ec491b9fec0.herokuapp.com/", target="_blank"),
+                                # ...
                             ],
-                        ),
-                        
-                        # Mobile Search Bar (inside collapsible menu)
-                        dbc.InputGroup(
-                            [
-                                dbc.Input(
-                                    id="mobile-search-input",
-                                    placeholder="Search Teams or Events",
-                                    type="text",
-                                ),
-                                dbc.Button(
-                                    "Search",
-                                    id="mobile-search-button",
-                                    color="primary",
-                                    style={
-                                        "backgroundColor": "#FFDD00",
-                                        "border": "none",
-                                        "color": "black",
-                                    },
-                                ),
-                            ],
-                            className="mt-3",
                         ),
                     ],
                     navbar=True,
@@ -126,6 +154,8 @@ topbar = dbc.Navbar(
                 is_open=False,
                 navbar=True,
             ),
+
+            # Desktop Search
             dbc.Row(
                 [
                     dbc.Col(
@@ -138,7 +168,7 @@ topbar = dbc.Navbar(
                                         type="text",
                                     ),
                                     dbc.Button(
-                                        "Search",
+                                        "🔎",
                                         id="desktop-search-button",
                                         color="primary",
                                         style={
@@ -150,35 +180,33 @@ topbar = dbc.Navbar(
                                 ]
                             ),
                             html.Div(
-                                id="search-preview",
+                                id="desktop-search-preview",
                                 style={
-                                    "backgroundColor": "white",  # Solid white background
-                                    "border": "1px solid #ddd",  # Light gray border
-                                    "borderRadius": "8px",  # Rounded corners
-                                    "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",  # Subtle shadow for a floating effect
+                                    "backgroundColor": "white",
+                                    "border": "1px solid #ddd",
+                                    "borderRadius": "8px",
+                                    "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
                                     "marginTop": "5px",
                                     "padding": "5px",
                                     "maxHeight": "200px",
                                     "overflowY": "auto",
                                     "overflowX": "hidden",
-                                    "width": "100%",  # Matches width to input box
-                                    "zIndex": "1050",  # Ensures it's above other elements
+                                    "width": "100%",
+                                    "zIndex": "9999",
                                     "position": "absolute",
-                                    "left": "0",  # Aligns with input
-                                    "top": "100%",  # Positions below input
-                                    "display": "none",  # Hidden by default
+                                    "left": "0",
+                                    "top": "100%",
+                                    "display": "none",
                                 },
                             )
-
                         ],
                         width="auto",
-                        className="desktop-search",
-                        style={"position": "relative"},  # Needed for the preview dropdown
+                        className="desktop-search d-none d-md-block",
+                        style={"position": "relative"},
                     ),
                 ],
                 align="center",
             ),
-
         ],
         fluid=True,
     ),
@@ -194,6 +222,8 @@ topbar = dbc.Navbar(
     },
 )
 
+app.layout = html.Div([topbar])
+
 @app.callback(
     Output("navbar-collapse", "is_open"),
     [Input("navbar-toggler", "n_clicks")],
@@ -203,12 +233,8 @@ def toggle_navbar(n_clicks, is_open):
     if n_clicks:
         return not is_open
     return is_open
-    
+
 def flatten_events(data):
-    """
-    Recursively traverse the data and return a flat list of dictionaries
-    that have an "event_code" key.
-    """
     flat = []
     if isinstance(data, dict):
         if "event_code" in data:
@@ -221,199 +247,188 @@ def flatten_events(data):
             flat.extend(flatten_events(item))
     return flat
 
+# ----- MASTER CALLBACK: 2 inputs -> 4 outputs -----
 @app.callback(
-    [Output("search-preview", "children"), Output("search-preview", "style")],
-    Input("desktop-search-input", "value"),
+    [Output("desktop-search-preview", "children"), Output("desktop-search-preview", "style"),
+     Output("mobile-search-preview", "children"),  Output("mobile-search-preview", "style")],
+    [Input("desktop-search-input", "value"), Input("mobile-search-input", "value")],
 )
-def update_search_preview(input_value):
-    if not input_value:
-        # Hide dropdown when input is empty
-        return [], {"display": "none"}
+def update_search_preview(desktop_value, mobile_value):
+    desktop_value = (desktop_value or "").strip().lower()
+    mobile_value  = (mobile_value  or "").strip().lower()
 
+    # Load your data
     folder_path = "team_data"
     teams_file = os.path.join(folder_path, "teams_2025.json")
     events_file = os.path.join(folder_path, "events.json")
 
-    # Load teams data
     if os.path.exists(teams_file):
         with open(teams_file, "r") as f:
             teams_data = json.load(f)
     else:
         teams_data = []
 
-    # Load events data
     if os.path.exists(events_file):
         with open(events_file, "r") as f:
             raw_events_data = json.load(f)
-        # If the raw data is a dict and has a top-level "events" key, use that.
         if isinstance(raw_events_data, dict) and "events" in raw_events_data:
             raw_events_data = raw_events_data["events"]
         events_data = flatten_events(raw_events_data)
     else:
         events_data = []
 
-    input_value = input_value.lower()
+    def get_children_and_style(val):
+        if not val:
+            return [], {"display": "none"}
 
-    # --- Filter Teams ---
-    filtered_teams = [
-        t for t in teams_data
-        if input_value in str(t.get("team_number", "")).lower()
-           or input_value in t.get("nickname", "").lower()
-    ][:20]
+        # --- Filter Teams ---
+        filtered_teams = [
+            t for t in teams_data
+            if val in str(t.get("team_number", "")).lower()
+               or val in (t.get("nickname", "")).lower()
+        ][:20]
 
-    # Determine closest team match (for highlighting)
-    closest_team_number = None
-    closest_team_nickname = None
-    if input_value.isdigit() and filtered_teams:
-        input_number = int(input_value)
-        closest_team_number = min(
-            filtered_teams,
-            key=lambda t: abs(input_number - int(t["team_number"])),
-            default=None,
-        )
-    elif filtered_teams:
-        closest_team_nickname = min(
-            filtered_teams,
-            key=lambda t: len(set(input_value) & set(t["nickname"].lower())),
-            default=None,
-        )
-
-    # --- Filter Events ---
-    filtered_events = []
-    for e in events_data:
-        event_code = e.get("event_code", "").lower()
-        event_name = e.get("name", "").lower()
-        start_date = e.get("start_date", "")
-        event_year = start_date[:4] if len(start_date) >= 4 else ""
-        # Build a combined "year name" string for partial matching
-        year_name_combo = f"{event_year} {e.get('name','')}".lower()
-
-        # If input matches event_code OR name OR year+name combo, add to filtered
-        if (input_value in event_code
-            or input_value in event_name
-            or input_value in year_name_combo):
-            filtered_events.append(e)
-
-    filtered_events = filtered_events[:20]
-
-    # Determine closest event match (simple character intersection)
-    closest_event = None
-    if filtered_events:
-        closest_event = max(
-            filtered_events,
-            key=lambda e: (
-                len(set(input_value) & set(e.get("event_code", "").lower())) +
-                len(set(input_value) & set(e.get("name", "").lower()))
+        # Determine closest team number or nickname
+        closest_team_number = None
+        closest_team_nickname = None
+        if val.isdigit() and filtered_teams:
+            input_number = int(val)
+            closest_team_number = min(
+                filtered_teams,
+                key=lambda t: abs(input_number - int(t["team_number"])),
+                default=None,
             )
-        )
-
-    children = []
-
-    # --- Teams Section ---
-    if filtered_teams:
-        children.append(
-            dbc.Row(
-                dbc.Col(
-                    html.Div("Teams", style={"fontWeight": "bold", "padding": "5px"}),
-                    width=True,
-                ),
-                style={"backgroundColor": "#f1f1f1"}
+        elif filtered_teams:
+            closest_team_nickname = min(
+                filtered_teams,
+                key=lambda t: len(set(val) & set(t["nickname"].lower())),
+                default=None,
             )
-        )
-        for team in filtered_teams:
-            team_number = team.get("team_number", "Unknown")
-            team_nickname = team.get("nickname", "Unknown")
-            background_color = "white"
-            if (closest_team_number and team_number == closest_team_number["team_number"]) or \
-               (closest_team_nickname and team_nickname == closest_team_nickname["nickname"]):
-                background_color = "#FFDD00"  # Yellow highlight
 
+        # --- Filter Events ---
+        filtered_events = []
+        for e in events_data:
+            event_code = (e.get("event_code") or "").lower()
+            event_name = (e.get("name") or "").lower()
+            start_date = e.get("start_date", "")
+            event_year = start_date[:4] if len(start_date) >= 4 else ""
+            year_name_combo = f"{event_year} {event_name}".lower()
+
+            if (val in event_code) or (val in event_name) or (val in year_name_combo):
+                filtered_events.append(e)
+        filtered_events = filtered_events[:20]
+
+        # Determine closest event
+        closest_event = None
+        if filtered_events:
+            closest_event = max(
+                filtered_events,
+                key=lambda e: (
+                    len(set(val) & set((e.get("event_code") or "").lower()))
+                    + len(set(val) & set((e.get("name") or "").lower()))
+                )
+            )
+
+        children = []
+
+        # Teams section
+        if filtered_teams:
             children.append(
                 dbc.Row(
                     dbc.Col(
+                        html.Div("Teams", style={"fontWeight": "bold", "padding": "5px"}),
+                    ),
+                    style={"backgroundColor": "#f1f1f1"}
+                )
+            )
+            for team in filtered_teams:
+                tn = team.get("team_number", "???")
+                nm = team.get("nickname", "")
+                background_color = "white"
+
+                # highlight if it's the closest match
+                if (closest_team_number and tn == closest_team_number["team_number"]) or \
+                   (closest_team_nickname and nm == closest_team_nickname["nickname"]):
+                    background_color = "#FFDD00"
+
+                row_el = dbc.Row(
+                    dbc.Col(
                         html.A(
-                            f"{team_number} | {team_nickname}",
-                            href=f"/team/{team_number}",
-                            style={
-                                "lineHeight": "20px",
-                                "textDecoration": "none",
-                                "color": "black",
-                                "cursor": "pointer",
-                            },
+                            f"{tn} | {nm}",
+                            href=f"/team/{tn}",
+                            style={"lineHeight": "20px", "textDecoration": "none", "color": "black"},
                         ),
                         width=True,
                     ),
                     style={"padding": "5px", "backgroundColor": background_color},
-                    key=f"team-{team_number}",
                 )
-            )
+                children.append(row_el)
 
-    # --- Events Section ---
-    if filtered_events:
-        children.append(
-            dbc.Row(
-                dbc.Col(
-                    html.Div("Events", style={"fontWeight": "bold", "padding": "5px"}),
-                    width=True,
-                ),
-                style={"backgroundColor": "#f1f1f1", "marginTop": "5px"}
-            )
-        )
-        for event in filtered_events:
-            event_code = event.get("event_code", "Unknown")
-            event_name = event.get("name", "Unknown")
-            start_date = event.get("start_date", "")
-            event_year = start_date[:4] if len(start_date) >= 4 else "Unknown"
-            background_color = "white"
-            if (closest_event
-                and event_code.lower() == closest_event.get("event_code", "").lower()
-                and event_name == closest_event.get("name")):
-                background_color = "#FFDD00"
-
-       
-            display_text = f"{event_code} | {event_year} {event_name}"
-            href_link = f"/event/{event_year}{event_code}"
+        # Events section
+        if filtered_events:
             children.append(
                 dbc.Row(
+                    dbc.Col(
+                        html.Div("Events", style={"fontWeight": "bold", "padding": "5px"}),
+                    ),
+                    style={"backgroundColor": "#f1f1f1","marginTop": "5px"}
+                )
+            )
+            for evt in filtered_events:
+                e_code = evt.get("event_code", "???")
+                e_name = evt.get("name", "")
+                start_date = evt.get("start_date", "")
+                e_year = start_date[:4] if len(start_date) >= 4 else ""
+                background_color = "white"
+
+                if closest_event and (
+                    e_code.lower() == (closest_event.get("event_code") or "").lower()
+                    and e_name == closest_event.get("name")
+                ):
+                    background_color = "#FFDD00"
+
+                display_text = f"{e_code} | {e_year} {e_name}"
+                row_el = dbc.Row(
                     dbc.Col(
                         html.A(
                             display_text,
-                            href=href_link,
-                            style={
-                                "lineHeight": "20px",
-                                "textDecoration": "none",
-                                "color": "black",
-                                "cursor": "pointer",
-                            },
+                            href=f"/event/{e_year}{e_code}",
+                            style={"lineHeight": "20px", "textDecoration": "none", "color": "black"},
                         ),
                         width=True,
                     ),
                     style={"padding": "5px", "backgroundColor": background_color},
-                    key=f"event-{event_code}",
                 )
-            )
+                children.append(row_el)
 
-    if not filtered_teams and not filtered_events:
-        children.append(html.Div("No results found.", style={"padding": "5px", "color": "#555"}))
+        if not filtered_teams and not filtered_events:
+            children.append(html.Div("No results found.", style={"padding": "5px","color": "#555"}))
 
-    return children, {
-        "display": "block",
-        "backgroundColor": "white",
-        "border": "1px solid #ddd",
-        "borderRadius": "8px",
-        "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
-        "marginTop": "5px",
-        "marginLeft": "10px",
-        "padding": "5px",
-        "maxHeight": "200px",
-        "overflowY": "auto",
-        "overflowX": "hidden",
-        "width": "93%",
-        "zIndex": "1050",
-        "position": "absolute",
-        "left": "0",
-        "top": "100%",
-    }
+        style_dict = {
+            "display": "block",
+            "backgroundColor": "white",
+            "border": "1px solid #ddd",
+            "borderRadius": "8px",
+            "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
+            "marginTop": "5px",
+            "padding": "5px",
+            "maxHeight": "200px",
+            "overflowY": "auto",
+            "overflowX": "hidden",
+            "width": "100%",
+            "zIndex": "9999",
+            "position": "absolute",
+            "left": "0",
+            "top": "100%",
+        }
+        return children, style_dict
+
+    # Build the preview for each input
+    desktop_children, desktop_style = get_children_and_style(desktop_value)
+    mobile_children, mobile_style   = get_children_and_style(mobile_value)
+
+    return (desktop_children, desktop_style,
+            mobile_children, mobile_style)
 
 footer = dbc.Container(
     dbc.Row([
@@ -2103,134 +2118,195 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
 
     # ------------------ MATCHES TAB ------------------
     elif active_tab == "matches":
-        all_matches = event_matches or []
+        # 1) Build the dropdown
+        team_filter_options = []
+        if event_teams:
+            for t in event_teams:
+                tnum = t.get("team_number")
+                nickname = t.get("nickname","")
+                label = f"{tnum} - {nickname}" if nickname else str(tnum)
+                team_filter_options.append({"label": label, "value": str(tnum)})
 
-        # Sort matches
-        comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
-        def match_sort_key(m):
-            cl = m.get("comp_level", "")
-            lvl = comp_level_order.get(cl, 99)
-            num = m.get("match_number", 9999)
-            return (lvl, num)
+        # 2) Return the layout: a Div with the dropdown + an empty container
+        return html.Div([
+            html.Div(
+                [
+                    html.Label("Filter by Team:", style={"fontWeight":"bold"}),
+                    dcc.Dropdown(
+                        id="team-filter",
+                        options=team_filter_options,
+                        value=None,
+                        placeholder="Select a team...",
+                        clearable=True
+                    )
+                ],
+                style={"marginBottom":"20px"}
+            ),
+            # An empty container for the final table(s)
+            html.Div(id="matches-container")
+        ])
 
-        all_matches.sort(key=match_sort_key)
-        qual_matches = [m for m in all_matches if m.get("comp_level") == "qm"]
-        playoff_matches = [m for m in all_matches if m.get("comp_level") != "qm"]
-
-        # Make the alliance team numbers clickable
-        def format_teams_markdown(team_list):
-            # e.g. ["frc254","frc111"] -> ["[254](/team/254)","[111](/team/111)"] -> "254, 111"
-            links = []
-            for t in team_list:
-                t_str = t.replace("frc", "")
-                links.append(f"[{t_str}](/team/{t_str})")
-            return ", ".join(links)
-
-        def sum_epa(team_list):
-            total = 0.0
-            for tkey in team_list:
-                t_str = tkey.replace("frc", "")
-                if t_str in epa_data:
-                    val = epa_data[t_str].get("epa", 0) or 0
-                    total += val
-            return total
-
-        def build_match_rows(matches):
-            rows = []
-            for match in matches:
-                red_teams = match["alliances"]["red"].get("team_keys", [])
-                blue_teams = match["alliances"]["blue"].get("team_keys", [])
-                red_score = match["alliances"]["red"].get("score", 0)
-                blue_score = match["alliances"]["blue"].get("score", 0)
-                winner = match.get("winning_alliance", "")
-                match_label = match.get("comp_level", "").upper() + str(match.get("match_number", ""))
-
-                red_sum = sum_epa(red_teams)
-                blue_sum = sum_epa(blue_teams)
-                if (red_sum + blue_sum) > 0:
-                    p_red = red_sum / (red_sum + blue_sum)
-                    p_blue = 1.0 - p_red
-                    pred_str = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
-                else:
-                    pred_str = "N/A"
-
-                video_link = "N/A"
-                for vid in match.get("videos", []):
-                    if vid.get("type") == "youtube":
-                        youtube_id = vid.get("key")
-                        if youtube_id:
-                            video_link = f"[Watch](https://www.youtube.com/watch?v={youtube_id})"
-                            break
-
-                rows.append({
-                    "Video": video_link,  
-                    "Match": match_label,
-                    # team numbers as clickable links
-                    "Red Teams": format_teams_markdown(red_teams),
-                    "Blue Teams": format_teams_markdown(blue_teams),
-                    "Red Score": red_score,
-                    "Blue Score": blue_score,
-                    "Winner": winner.title() if winner else "N/A",
-                    "Prediction": pred_str,
-                })
-            return rows
-
-        qual_data = build_match_rows(qual_matches)
-        playoff_data = build_match_rows(playoff_matches)
-
-        match_columns = [
-            {"name": "Video", "id": "Video", "presentation": "markdown"}, 
-            {"name": "Match", "id": "Match"},
-            # Mark "Red Teams"/"Blue Teams" as "presentation: markdown" to enable clickable links
-            {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
-            {"name": "Blue Teams", "id": "Blue Teams", "presentation": "markdown"},
-            {"name": "Red Score", "id": "Red Score"},
-            {"name": "Blue Score", "id": "Blue Score"},
-            {"name": "Winner", "id": "Winner"},
-            {"name": "Prediction", "id": "Prediction", "presentation": "markdown"},
-        ]
-
-        row_style = [
-            {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "#ffe6e6"},
-            {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
-        ]
-
-        qual_table = [
-            html.H5("Qualification Matches", className="mb-3 mt-3"),
-            dash_table.DataTable(
-                columns=match_columns,
-                data=qual_data,
-                page_size=10,
-                style_table=common_style_table,
-                style_header=common_style_header,
-                style_cell=common_style_cell,
-                style_data_conditional=row_style,
-            )
-        ] if qual_data else [
-            html.H5("Qualification Matches", className="mb-3 mt-3"),
-            dbc.Alert("No qualification matches found.", color="info"),
-        ]
-
-        playoff_table = [
-            html.H5("Playoff Matches", className="mb-3 mt-5"),
-            dash_table.DataTable(
-                columns=match_columns,
-                data=playoff_data,
-                page_size=10,
-                style_table=common_style_table,
-                style_header=common_style_header,
-                style_cell=common_style_cell,
-                style_data_conditional=row_style,
-            )
-        ] if playoff_data else [
-            html.H5("Playoff Matches", className="mb-3 mt-5"),
-            dbc.Alert("No playoff matches found.", color="info"),
-        ]
-
-        return html.Div(qual_table + playoff_table)
-
-    # No recognized tab
+    # If none of the above, fallback
     return dbc.Alert("No data available.", color="warning")
+
+@app.callback(
+    Output("matches-container", "children"),
+    Input("team-filter", "value"),
+    [
+        State("store-event-matches", "data"),
+        State("store-event-epa", "data"),
+    ],
+)
+def update_matches_table(selected_team, event_matches, epa_data):
+    """
+    Called whenever user picks a team in the dropdown.
+    Returns the final Matches tables into 'matches-container'.
+    """
+    event_matches = event_matches or []
+    epa_data = epa_data or {}
+
+    # 1) If user selected a team, filter
+    if selected_team:
+        frc_key = f"frc{selected_team}"
+        event_matches = [
+            m for m in event_matches
+            if frc_key in m["alliances"]["red"]["team_keys"]
+               or frc_key in m["alliances"]["blue"]["team_keys"]
+        ]
+
+    # 2) Sort & separate
+    comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
+    def match_sort_key(m):
+        lvl = comp_level_order.get(m.get("comp_level",""),99)
+        num = m.get("match_number",9999)
+        return (lvl, num)
+
+    event_matches.sort(key=match_sort_key)
+    qual_matches = [m for m in event_matches if m.get("comp_level")=="qm"]
+    playoff_matches = [m for m in event_matches if m.get("comp_level")!="qm"]
+
+    # 3) Utility
+    def format_teams_markdown(team_list):
+        links = []
+        for t in team_list:
+            short = t.replace("frc","")
+            links.append(f"[{short}](/team/{short})")
+        return ", ".join(links)
+
+    def sum_epa(team_list):
+        total = 0.0
+        for x in team_list:
+            s = x.replace("frc","")
+            if s in epa_data:
+                val = epa_data[s].get("epa", 0) or 0
+                total += val
+        return total
+
+    def build_match_rows(matches):
+        rows = []
+        for match in matches:
+            red = match["alliances"]["red"]
+            blu = match["alliances"]["blue"]
+            winner = match.get("winning_alliance","")
+            label = match.get("comp_level","").upper()+str(match.get("match_number",""))
+
+            r_sum = sum_epa(red["team_keys"])
+            b_sum = sum_epa(blu["team_keys"])
+            if (r_sum+b_sum)>0:
+                p_red = r_sum/(r_sum+b_sum)
+                p_blue = 1.0 - p_red
+                pred_str = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
+            else:
+                pred_str = "N/A"
+
+            video_link = "N/A"
+            for vid in match.get("videos",[]):
+                if vid.get("type")=="youtube":
+                    yid = vid["key"]
+                    video_link = f"[Watch](https://www.youtube.com/watch?v={yid})"
+                    break
+
+            rows.append({
+                "Video": video_link,
+                "Match": label,
+                "Red Teams": format_teams_markdown(red["team_keys"]),
+                "Blue Teams": format_teams_markdown(blu["team_keys"]),
+                "Red Score": red.get("score",0),
+                "Blue Score": blu.get("score",0),
+                "Winner": winner.title() if winner else "N/A",
+                "Prediction": pred_str,
+            })
+        return rows
+
+    qual_data = build_match_rows(qual_matches)
+    playoff_data = build_match_rows(playoff_matches)
+
+    match_columns = [
+        {"name":"Video","id":"Video","presentation":"markdown"},
+        {"name":"Match","id":"Match"},
+        {"name":"Red Teams","id":"Red Teams","presentation":"markdown"},
+        {"name":"Blue Teams","id":"Blue Teams","presentation":"markdown"},
+        {"name":"Red Score","id":"Red Score"},
+        {"name":"Blue Score","id":"Blue Score"},
+        {"name":"Winner","id":"Winner"},
+        {"name":"Prediction","id":"Prediction","presentation":"markdown"},
+    ]
+    row_style = [
+        {"if": {"filter_query": '{Winner} = \"Red\"'},  "backgroundColor": "#ffe6e6"},
+        {"if": {"filter_query": '{Winner} = \"Blue\"'}, "backgroundColor": "#e6f0ff"},
+    ]
+
+    # For brevity, define your styling for tables:
+    style_table = {
+        "overflowX": "auto",
+        "border": "1px solid #ddd",
+        "borderRadius": "5px",
+    }
+    style_header = {
+        "backgroundColor": "#F2F2F2",
+        "fontWeight": "bold",
+        "border": "1px solid #ddd",
+        "textAlign": "center",
+    }
+    style_cell = {
+        "textAlign": "center",
+        "border": "1px solid #ddd",
+        "padding": "8px",
+    }
+
+    qual_table = [
+        html.H5("Qualification Matches", className="mb-3 mt-3"),
+        dash_table.DataTable(
+            columns=match_columns,
+            data=qual_data,
+            page_size=10,
+            style_table=style_table,
+            style_header=style_header,
+            style_cell=style_cell,
+            style_data_conditional=row_style,
+        )
+    ] if qual_data else [
+        html.H5("Qualification Matches", className="mb-3 mt-3"),
+        dbc.Alert("No qualification matches found.", color="info"),
+    ]
+
+    playoff_table = [
+        html.H5("Playoff Matches", className="mb-3 mt-5"),
+        dash_table.DataTable(
+            columns=match_columns,
+            data=playoff_data,
+            page_size=10,
+            style_table=style_table,
+            style_header=style_header,
+            style_cell=style_cell,
+            style_data_conditional=row_style,
+        )
+    ] if playoff_data else [
+        html.H5("Playoff Matches", className="mb-3 mt-5"),
+        dbc.Alert("No playoff matches found.", color="info"),
+    ]
+
+    return html.Div(qual_table + playoff_table)
     
 def challenges_layout():
     challenges = []
