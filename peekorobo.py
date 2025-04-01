@@ -87,7 +87,7 @@ topbar = dbc.Navbar(
                                         },
                                     ),
                                 ],
-                                style={"width": "160px"},  # or any desired width
+                                style={"width": "180px"},  # or any desired width
                             ),
                             html.Div(
                                 id="mobile-search-preview",
