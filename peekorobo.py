@@ -11,6 +11,7 @@ from folium.plugins import MarkerCluster
 import requests
 import urllib.parse 
 import os
+import random
 from dotenv import load_dotenv
 import json
 import numpy as np
@@ -19,13 +20,16 @@ import datetime
 from frcgames import frc_games
 from locations import COUNTRIES, STATES
 
-def configure():
-    load_dotenv()
+load_dotenv()
 
 TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
 
+API_KEYS = os.getenv("TBA_API_KEYS").split(',')
+
 def tba_get(endpoint: str):
-    headers = {"X-TBA-Auth-Key": os.getenv("TBA_API_KEY")}
+    # Cycle through keys by selecting one randomly or using a round-robin approach.
+    api_key = random.choice(API_KEYS)
+    headers = {"X-TBA-Auth-Key": api_key}
     url = f"{TBA_BASE_URL}/{endpoint}"
     r = requests.get(url, headers=headers)
     if r.status_code == 200:
