@@ -2,9 +2,6 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import callback, html, dcc, dash_table
 from dash.dependencies import Input, Output, State
-import plotly.express as px
-import plotly.graph_objects as go
-
 import folium
 from folium.plugins import MarkerCluster
 
@@ -13,7 +10,6 @@ import urllib.parse
 import os
 import random
 from dotenv import load_dotenv
-import json
 import numpy as np
 import datetime
 import sqlite3

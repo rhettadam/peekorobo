@@ -3,6 +3,5 @@ requests>=2.31.0
 gunicorn>=23.0.0
 python-dotenv>=0.21.0
 dash-bootstrap-components>=1.6.0
-plotly>=5.24.1
 pandas>=2.2.2
 folium>=0.19.4
