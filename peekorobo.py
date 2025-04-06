@@ -2,9 +2,6 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import callback, html, dcc, dash_table
 from dash.dependencies import Input, Output, State
-import plotly.express as px
-import plotly.graph_objects as go
-
 import folium
 from folium.plugins import MarkerCluster
 
@@ -13,7 +10,6 @@ import urllib.parse
 import os
 import random
 from dotenv import load_dotenv
-import json
 import numpy as np
 import datetime
 import sqlite3
@@ -333,29 +329,24 @@ def toggle_navbar(n_clicks, is_open):
         return not is_open
     return is_open
 
-# ----- MASTER CALLBACK: 2 inputs -> 4 outputs -----
 @app.callback(
     [Output("desktop-search-preview", "children"), Output("desktop-search-preview", "style"),
-     Output("mobile-search-preview", "children"),  Output("mobile-search-preview", "style")],
+     Output("mobile-search-preview", "children"), Output("mobile-search-preview", "style")],
     [Input("desktop-search-input", "value"), Input("mobile-search-input", "value")],
 )
 def update_search_preview(desktop_value, mobile_value):
     desktop_value = (desktop_value or "").strip().lower()
-    mobile_value  = (mobile_value  or "").strip().lower()
+    mobile_value = (mobile_value or "").strip().lower()
 
-        # Collapse TEAM_DATABASE to a flat dict keeping only the most recent year for each team
+    # Collapse TEAM_DATABASE to a flat dict keeping only the most recent year for each team
     latest_teams = {}
-    
-    # Iterate in descending year order to ensure most recent wins
     for year in sorted(TEAM_DATABASE.keys(), reverse=True):
         for team_number, team_data in TEAM_DATABASE[year].items():
             if team_number not in latest_teams:
                 latest_teams[team_number] = team_data
-    
     teams_data = list(latest_teams.values())
 
-    
-    events_data = EVENTS_DATABASE
+    events_data = EVENTS_DATABASE  # flat list of compressed event dicts
 
     def get_children_and_style(val):
         if not val:
@@ -365,10 +356,10 @@ def update_search_preview(desktop_value, mobile_value):
         filtered_teams = [
             t for t in teams_data
             if val in str(t.get("team_number", "")).lower()
-               or val in (t.get("nickname", "")).lower()
+            or val in (t.get("nickname", "")).lower()
         ][:20]
 
-        # Determine closest team number or nickname
+        # Closest team
         closest_team_number = None
         closest_team_nickname = None
         if val.isdigit() and filtered_teams:
@@ -385,12 +376,12 @@ def update_search_preview(desktop_value, mobile_value):
                 default=None,
             )
 
-        # --- Filter Events ---
+        # --- Filter Events (using compressed keys) ---
         filtered_events = []
         for e in events_data:
-            event_code = (e.get("event_code") or "").lower()
-            event_name = (e.get("name") or "").lower()
-            start_date = e.get("start_date", "")
+            event_code = (e.get("cd") or "").lower()
+            event_name = (e.get("n") or "").lower()
+            start_date = e.get("sd", "")
             event_year = start_date[:4] if len(start_date) >= 4 else ""
             year_name_combo = f"{event_year} {event_name}".lower()
 
@@ -398,14 +389,13 @@ def update_search_preview(desktop_value, mobile_value):
                 filtered_events.append(e)
         filtered_events = filtered_events[:20]
 
-        # Determine closest event
         closest_event = None
         if filtered_events:
             closest_event = max(
                 filtered_events,
                 key=lambda e: (
-                    len(set(val) & set((e.get("event_code") or "").lower()))
-                    + len(set(val) & set((e.get("name") or "").lower()))
+                    len(set(val) & set((e.get("cd") or "").lower()))
+                    + len(set(val) & set((e.get("n") or "").lower()))
                 )
             )
 
@@ -425,8 +415,6 @@ def update_search_preview(desktop_value, mobile_value):
                 tn = team.get("team_number", "???")
                 nm = team.get("nickname", "")
                 background_color = "white"
-
-                # highlight if it's the closest match
                 if (closest_team_number and tn == closest_team_number["team_number"]) or \
                    (closest_team_nickname and nm == closest_team_nickname["nickname"]):
                     background_color = "#FFDD00"
@@ -451,19 +439,19 @@ def update_search_preview(desktop_value, mobile_value):
                     dbc.Col(
                         html.Div("Events", style={"fontWeight": "bold", "padding": "5px"}),
                     ),
-                    style={"backgroundColor": "#f1f1f1","marginTop": "5px"}
+                    style={"backgroundColor": "#f1f1f1", "marginTop": "5px"}
                 )
             )
             for evt in filtered_events:
-                event_key = evt.get("key", "???")
-                e_name = evt.get("name", "")
-                start_date = evt.get("start_date", "")
+                event_key = evt.get("k", "???")
+                e_name = evt.get("n", "")
+                start_date = evt.get("sd", "")
                 e_year = start_date[:4] if len(start_date) >= 4 else ""
                 background_color = "white"
-            
-                if closest_event and event_key == closest_event.get("key"):
+
+                if closest_event and event_key == closest_event.get("k"):
                     background_color = "#FFDD00"
-            
+
                 display_text = f"{event_key} | {e_year} {e_name}"
                 row_el = dbc.Row(
                     dbc.Col(
@@ -478,9 +466,8 @@ def update_search_preview(desktop_value, mobile_value):
                 )
                 children.append(row_el)
 
-
         if not filtered_teams and not filtered_events:
-            children.append(html.Div("No results found.", style={"padding": "5px","color": "#555"}))
+            children.append(html.Div("No results found.", style={"padding": "5px", "color": "#555"}))
 
         style_dict = {
             "display": "block",
@@ -501,12 +488,10 @@ def update_search_preview(desktop_value, mobile_value):
         }
         return children, style_dict
 
-    # Build the preview for each input
     desktop_children, desktop_style = get_children_and_style(desktop_value)
-    mobile_children, mobile_style   = get_children_and_style(mobile_value)
+    mobile_children, mobile_style = get_children_and_style(mobile_value)
 
-    return (desktop_children, desktop_style,
-            mobile_children, mobile_style)
+    return desktop_children, desktop_style, mobile_children, mobile_style
 
 footer = dbc.Container(
     dbc.Row([
