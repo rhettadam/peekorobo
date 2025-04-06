@@ -7,22 +7,28 @@ import os
 import concurrent.futures
 from dotenv import load_dotenv
 
+import random
+
 load_dotenv()
 
-TBA_API_BASE_URL = "https://www.thebluealliance.com/api/v3"
-TBA_AUTH_KEY = os.getenv("TBA_API_KEY")
-HEADERS = {"X-TBA-Auth-Key": TBA_AUTH_KEY}
+TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
+
+API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 
 @retry(
     stop=stop_never,
     wait=wait_exponential(multiplier=1, min=0.5, max=5),
     retry=retry_if_exception_type(Exception),
 )
-def tba_get(endpoint):
-    url = f"{TBA_API_BASE_URL}/{endpoint}"
-    response = requests.get(url, headers=HEADERS, timeout=10)
-    response.raise_for_status()
-    return response.json()
+def tba_get(endpoint: str):
+    # Cycle through keys by selecting one randomly or using a round-robin approach.
+    api_key = random.choice(API_KEYS)
+    headers = {"X-TBA-Auth-Key": api_key}
+    url = f"{TBA_BASE_URL}/{endpoint}"
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        return r.json()
+    return None
 
 def load_veteran_teams():
     try:
@@ -34,36 +40,33 @@ def load_veteran_teams():
         return set()
 
 def estimate_consistent_auto(breakdowns, team_count):
-    coral_counts = [b.get("autoCoralCount", 0) for b in breakdowns if b.get("autoCoralCount") is not None]
-    coral_points = [b.get("autoCoralPoints", 0) for b in breakdowns if b.get("autoCoralPoints") is not None]
-    mobility_totals = [b.get("autoMobilityPoints", 0) for b in breakdowns if b.get("autoMobilityPoints") is not None]
-
-    if not coral_counts or not coral_points:
+    if not breakdowns:
         return 0
 
-    # Use median to avoid outliers
-    median_coral = statistics.median(coral_counts)
-    median_points = statistics.median(coral_points)
-    median_mobility = statistics.median(mobility_totals)
+    def score_per_breakdown(b):
+        reef = b.get("autoReef", {})
+        bot = reef.get("tba_botRowCount", 0)
+        mid = reef.get("tba_midRowCount", 0)
+        top = reef.get("tba_topRowCount", 0)
 
-    coral_contrib = median_points - median_mobility
-    if median_coral == 0:
-        avg_per_coral = 0
+        coral_score = bot * 3 + mid * 4 + top * 7
+        mobility = b.get("autoMobilityPoints", 0)
+        bonus = 5 / team_count if b.get("autoBonusAchieved") else 0
+
+        return mobility + coral_score + bonus
+
+    scores = sorted(score_per_breakdown(b) for b in breakdowns)
+
+    if len(scores) >= 4:
+        # Trim top 25% to reduce overestimation
+        cutoff = int(len(scores) * 0.75)
+        trimmed_scores = scores[:cutoff]
+        average = statistics.mean(trimmed_scores)
     else:
-        avg_per_coral = coral_contrib / median_coral
+        average = statistics.median(scores)
 
-    # Map to closest known scoring level
-    if avg_per_coral >= 6.5:
-        level_score = 7
-    elif avg_per_coral >= 5.5:
-        level_score = 6
-    elif avg_per_coral >= 3.5:
-        level_score = 4
-    else:
-        level_score = 3
-
-    estimated_auto = median_mobility + (median_coral / team_count) * level_score
-    return estimated_auto
+    # Optional: cap extremely high values
+    return round(min(average, 30), 2)
 
 def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veteran_teams=None):
 
