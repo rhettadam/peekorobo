@@ -2,6 +2,9 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import callback, html, dcc, dash_table
 from dash.dependencies import Input, Output, State
+import plotly.express as px
+import plotly.graph_objects as go
+
 import folium
 from folium.plugins import MarkerCluster
 
@@ -10,6 +13,7 @@ import urllib.parse
 import os
 import random
 from dotenv import load_dotenv
+import json
 import numpy as np
 import datetime
 import sqlite3
@@ -1185,114 +1189,6 @@ def team_layout(team_number, year):
         ),
         style={"marginBottom": "15px", "borderRadius": "8px", "boxShadow": "0px 2px 4px rgba(0,0,0,0.1)", "backgroundColor": "#f9f9f9", "padding": "10px"},
     )
-    
-    # --- Rank Over Time Tabs ---
-    # Use years_participated as the range (fallback to current year if not available)
-    if years_participated and isinstance(years_participated, list):
-        team_years = sorted([int(yr) for yr in years_participated])
-    else:
-        team_years = [year or 2025]
-
-    def get_rank_history(team_number, years):
-        history = []
-        for yr in years:
-            year_data = TEAM_DATABASE.get(yr)
-            if not year_data:
-                continue
-            selected = year_data.get(int(team_number))
-            if not selected:
-                continue
-            grank, crank, srank = calculate_ranks(list(year_data.values()), selected)
-            history.append({
-                "year": yr,
-                "global_rank": grank,
-                "country_rank": crank,
-                "state_rank": srank
-            })
-        return sorted(history, key=lambda x: x["year"])
-
-    rank_history = get_rank_history(team_number, team_years)
-
-    def create_rank_figure(history, title, key):
-        years_list = [item["year"] for item in history]
-        ranks = [item[key] for item in history]
-        if not ranks:
-            # If no data, return an empty figure
-            return go.Figure()
-    
-        # 1) Pick a baseline that is numerically bigger than all ranks
-        baseline = max(ranks) + 10
-    
-        # Create the figure
-        fig = go.Figure()
-    
-        # 2) Build up a gradient in multiple layers
-        num_layers = 10  # The number of semi-transparent layers
-        for i in range(num_layers):
-            # factor goes from 0 to 1 across the layers
-            factor = (i + 1) / num_layers
-            # Interpolate each point from baseline down to the actual rank
-            # factor=0 => y=baseline, factor=1 => y=ranks
-            layer_y = [
-                baseline - factor * (baseline - r) 
-                for r in ranks
-            ]
-            # Adjust opacity so it’s strongest near the line
-            alpha = 0.3 * (factor)
-            fillcolor = f"rgba(255,255,0,{alpha})"  # Yellow with varying opacity
-    
-            # For the first layer, use fill='tozeroy' so it starts from baseline.
-            # For subsequent layers, fill='tonexty' to stack each layer on top of the previous one.
-            fillmode = "tozeroy" if i == 0 else "tonexty"
-    
-            fig.add_trace(
-                go.Scatter(
-                    x=years_list,
-                    y=layer_y,
-                    mode="lines",
-                    line=dict(width=0),
-                    fill=fillmode,
-                    fillcolor=fillcolor,
-                    showlegend=False,
-                    hoverinfo="skip"
-                )
-            )
-    
-        # 3) Finally, add the actual rank line on top
-        fig.add_trace(
-            go.Scatter(
-                x=years_list,
-                y=ranks,
-                mode="lines+markers",
-                line=dict(width=2, color="yellow"),
-                marker=dict(size=6),
-                name="Rank",
-                showlegend=False 
-            )
-        )
-    
-        # Because lower rank is better, we reverse the y‐axis
-        fig.update_layout(
-            title=title,
-            xaxis_title="Year",
-            yaxis_title="Rank",
-            yaxis_autorange="reversed",  # So smaller ranks appear at the top
-            template="plotly_white",
-            margin=dict(l=40, r=40, t=40, b=40),
-        )
-    
-        return fig
-
-
-    global_rank_fig = create_rank_figure(rank_history, "Global Rank Over Time", "global_rank")
-    country_rank_fig = create_rank_figure(rank_history, "Country Rank Over Time", "country_rank")
-    state_rank_fig = create_rank_figure(rank_history, "State Rank Over Time", "state_rank")
-
-    rank_tabs = dcc.Tabs([
-        dcc.Tab(label="Global Rank", children=[dcc.Graph(figure=global_rank_fig)]),
-        dcc.Tab(label="Country Rank", children=[dcc.Graph(figure=country_rank_fig)]),
-        dcc.Tab(label="State Rank", children=[dcc.Graph(figure=state_rank_fig)]),
-    ])
     
         # --- Team Events from local database ---
     events_data = []
