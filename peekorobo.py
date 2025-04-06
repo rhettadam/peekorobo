@@ -25,7 +25,7 @@ def load_all_team_data():
         """Remove any None or empty string values."""
         return {k: v for k, v in d.items() if v not in (None, "", [], {}, ())}
 
-    # === Load team EPA data ===
+    # === Load team ACE data ===
     team_conn = sqlite3.connect(os.path.join("team_data", "epa_teams.sqlite"))
     team_cursor = team_conn.cursor()
     team_cursor.execute("SELECT * FROM epa_history")
@@ -219,6 +219,7 @@ topbar = dbc.Navbar(
                         dbc.NavItem(dbc.NavLink("Map", href="/map", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Events", href="/events", className="custom-navlink")),
                         dbc.NavItem(dbc.NavLink("Challenges", href="/challenges", className="custom-navlink")),
+                        dbc.NavItem(dbc.NavLink("Blog", href="/blog", className="custom-navlink")),
                         # Resources Dropdown
                         dbc.DropdownMenu(
                             label="Resources",
@@ -633,10 +634,6 @@ home_layout = html.Div([
             style={"height": "78vh"}
         ),
     ], class_name="py-5", style={"backgroundColor": "white"}),
-
-    dbc.Button("Invisible4", id="teams-view-map", style={"display": "none"}),
-    dbc.Button("Invisible5", id="teams-map", style={"display": "none"}),
-    
     footer
 ])
 
@@ -654,7 +651,7 @@ def calculate_ranks(team_data, selected_team):
         if team.get("team_number") == selected_team.get("team_number"):
             continue
 
-        team_epa = team.get("epa", 0) or 0  # Default to 0 if EPA is None
+        team_epa = team.get("epa", 0) or 0  # Default to 0 if ACE is None
         team_country = (team.get("country") or "").lower()
         team_state = (team.get("state_prov") or "").lower()
 
@@ -840,7 +837,7 @@ def team_layout(team_number, year):
     team_number = int(team_number)
     team_key = f"frc{team_number}"
 
-    # Separate handling for performance year (used for EPA/stats) vs. awards/events year
+    # Separate handling for performance year (used for ACE/stats) vs. awards/events year
     is_history = not year or str(year).lower() == "history"
 
     if is_history:
@@ -871,7 +868,7 @@ def team_layout(team_number, year):
     # Calculate Rankings
     global_rank, country_rank, state_rank = calculate_ranks(list(year_data.values()), selected_team)
 
-    # EPA Display
+    # ACE Display
     epa_value = selected_team.get("epa", None)
     epa_display = f"{epa_value:.2f}" if epa_value is not None else "N/A"
 
@@ -1104,7 +1101,7 @@ def team_layout(team_number, year):
                             dbc.Col(
                                 html.Div(
                                     [
-                                        html.P("EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
+                                        html.P("ACE", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
                                         html.P(epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
                                     ],
                                     style={"textAlign": "center"},
@@ -1140,7 +1137,7 @@ def team_layout(team_number, year):
                             dbc.Col(
                                 html.Div(
                                     [
-                                        html.P("Auto EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
+                                        html.P("Auto ACE", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
                                         html.P(auto_epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
                                     ],
                                     style={"textAlign": "center"},
@@ -1150,7 +1147,7 @@ def team_layout(team_number, year):
                             dbc.Col(
                                 html.Div(
                                     [
-                                        html.P("Teleop EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
+                                        html.P("Teleop ACE", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
                                         html.P(teleop_epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
                                     ],
                                     style={"textAlign": "center"},
@@ -1160,7 +1157,7 @@ def team_layout(team_number, year):
                             dbc.Col(
                                 html.Div(
                                     [
-                                        html.P("Endgame EPA", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
+                                        html.P("Endgame ACE", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
                                         html.P(endgame_epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
                                     ],
                                     style={"textAlign": "center"},
@@ -1541,7 +1538,7 @@ def load_teams_and_compute_epa_ranks(year):
 
     epa_values = [team["epa"] for team in teams_data if team.get("epa") is not None]
     if not epa_values:
-        return epa_info  # No EPA values to rank
+        return epa_info  # No ACE values to rank
 
     percentiles = {
         "99": np.percentile(epa_values, 99),
@@ -1694,7 +1691,7 @@ def create_team_card_spotlight(team, epa_data, event_year):
     country = team_data.get("country", "")
     location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
 
-    # EPA info
+    # ACE info
     t_key_str = str(t_num)
     epa_rank = epa_data.get(t_key_str, {}).get("rank", "N/A")
     epa_display = epa_data.get(t_key_str, {}).get("epa_display", "N/A")
@@ -1724,7 +1721,7 @@ def create_team_card_spotlight(team, epa_data, event_year):
             [
                 html.H5(f"#{t_num} | {nickname}", className="card-title mb-3"),
                 html.P(f"Location: {location_str}", className="card-text"),
-                html.P(f"EPA: {epa_display} (Global Rank: {epa_rank})", className="card-text"),
+                html.P(f"ACE: {epa_display} (Global Rank: {epa_rank})", className="card-text"),
                 dbc.Button("View Team", href=team_url, color="warning", className="mt-2"),
             ]
         )
@@ -1803,8 +1800,8 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 "Losses": rank_info.get("l", "N/A"),
                 "Ties": rank_info.get("t", "N/A"),
                 "DQ": rank_info.get("dq", "N/A"),
-                "EPA Rank": epa_rank,
-                "EPA": epa_display,
+                "ACE Rank": epa_rank,
+                "ACE": epa_display,
             })
 
         data_rows.sort(key=lambda r: safe_int(r["Rank"]))
@@ -1816,8 +1813,8 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             {"name": "Losses", "id": "Losses"},
             {"name": "Ties", "id": "Ties"},
             {"name": "DQ", "id": "DQ"},
-            {"name": "EPA Rank", "id": "EPA Rank"},
-            {"name": "EPA", "id": "EPA"},
+            {"name": "ACE Rank", "id": "ACE Rank"},
+            {"name": "ACE", "id": "ACE"},
         ]
 
         return html.Div([
@@ -1843,8 +1840,8 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             data.append({
                 "Team": f"[{tnum_str}](/team/{tnum_str})",
                 "OPR": opr_val,
-                "EPA Rank": epa_rank,
-                "EPA": epa_display,
+                "ACE Rank": epa_rank,
+                "ACE": epa_display,
             })
 
         data.sort(key=lambda x: x["OPR"], reverse=True)
@@ -1855,8 +1852,8 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             {"name": "OPR Rank", "id": "OPR Rank"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
             {"name": "OPR", "id": "OPR"},
-            {"name": "EPA Rank", "id": "EPA Rank"},
-            {"name": "EPA", "id": "EPA"},
+            {"name": "ACE Rank", "id": "ACE Rank"},
+            {"name": "ACE", "id": "ACE"},
         ]
 
         return dash_table.DataTable(
@@ -1892,18 +1889,18 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             loc = ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown"
 
             rows.append({
-                "EPA Rank": epa_rank,
-                "EPA": epa_disp,
+                "ACE Rank": epa_rank,
+                "ACE": epa_disp,
                 "Team Number": f"[{tstr}](/team/{tstr})",
                 "Nickname": t.get("nn", "Unknown"),
                 "Location": loc,
             })
 
-        rows.sort(key=lambda r: safe_int(r["EPA Rank"]))
+        rows.sort(key=lambda r: safe_int(r["ACE Rank"]))
 
         columns = [
-            {"name": "EPA Rank", "id": "EPA Rank"},
-            {"name": "EPA", "id": "EPA"},
+            {"name": "ACE Rank", "id": "ACE Rank"},
+            {"name": "ACE", "id": "ACE"},
             {"name": "Team Number", "id": "Team Number", "presentation": "markdown"},
             {"name": "Nickname", "id": "Nickname"},
             {"name": "Location", "id": "Location"},
@@ -2228,6 +2225,108 @@ def challenge_details_layout(year):
         ]
     )
 
+blog_layout = html.Div([
+    topbar,
+    dbc.Container([
+        html.H2("ACE (Adjusted Contribution Estimate) Algorithm", className="text-center my-4"),
+
+        html.P("The EPA (Estimated Points Added) model attempts to estimate a team's contribution to a match based on detailed scoring breakdowns and long-term trends. ACE (Adjusted Contribution Estimate) extends this by incorporating consistency, alliance context, and statistical reliability.", style={"fontSize": "1.1rem"}),
+
+        html.H4("Core Model", className="mt-4"),
+        html.P("EPA updates are done incrementally after each match. Auto, Teleop, and Endgame contributions are calculated, then EPA is updated using a weighted delta."),
+
+        dbc.Card([
+            dbc.CardHeader("EPA Update"),
+            dbc.CardBody([
+                html.Pre("""
+# Delta calculation with decay and match importance:
+delta = decay * (K / (1 + M)) * ((actual - epa) - M * (opponent_score - epa))
+
+# Update EPA:
+epa += delta
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "#f8f9fa", "padding": "10px"})
+            ])
+        ], className="my-3"),
+
+        html.H4("Decay and Match Weighting"),
+        html.P("EPA uses exponential decay so newer matches matter more. Quals are weighted more than playoffs to reduce alliance bias."),
+
+        dbc.Card([
+            dbc.CardHeader("Decay Formula"),
+            dbc.CardBody([
+                html.Pre("""
+decay = 0.95 ** match_index
+importance = {"qm": 1.2, "qf": 1.0, "sf": 1.0, "f": 1.0}
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "#f8f9fa", "padding": "10px"})
+            ])
+        ], className="my-3"),
+
+        html.H4("EPA Component Breakdown"),
+        html.P("Each team’s total EPA is the sum of their estimated Auto, Teleop, and Endgame contributions. These are computed separately and updated using the same delta mechanism."),
+
+        html.H4("Auto EPA Estimation"),
+        html.P("Auto EPA estimates scoring using reef row counts. To reduce inflation, the algorithm trims the top 25% of scores and caps the result."),
+
+        dbc.Card([
+            dbc.CardHeader("Auto Scoring Logic"),
+            dbc.CardBody([
+                html.Pre("""
+def estimate_consistent_auto(breakdowns, team_count):
+    scores = sorted(score_per_breakdown(b) for b in breakdowns)
+    cutoff = int(len(scores) * 0.75)
+    trimmed = scores[:cutoff]
+    return round(min(statistics.mean(trimmed), 30), 2)
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "#f8f9fa", "padding": "10px"})
+            ])
+        ], className="my-3"),
+
+        html.H4("Statistical Notes on Auto EPA"),
+        html.P("The trimming method approximates a robust mean, reducing influence from occasional hot autos. It’s a simplified Winsorized mean. The cap of 30 points is based on expected maximum scoring in auto under typical match constraints."),
+
+        html.H4("Confidence Weighting (ACE)"),
+        html.P("ACE = EPA × Confidence. Confidence is computed from three components: consistency, rookie bonus, and carry factor."),
+
+        dbc.Card([
+            dbc.CardHeader("ACE Confidence Formula"),
+            dbc.CardBody([
+                html.Pre("""
+consistency = 1 - (stdev / mean)
+rookie_bonus = 1.0 if veteran else 0.6
+carry = min(1.0, team_epa / (avg_teammate_epa + ε))
+confidence = (consistency + rookie_bonus + carry) / 3
+ACE = EPA × confidence
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "#f8f9fa", "padding": "10px"})
+            ])
+        ], className="my-3"),
+
+        html.H4("Consistency"),
+        html.P("This measures how stable a team's match-to-match performance is. Statistically, it's computed as 1 minus the coefficient of variation (CV):"),
+
+        dbc.Card([
+            dbc.CardHeader("Consistency"),
+            dbc.CardBody([
+                html.Pre("""
+consistency = 1 - (statistics.stdev(scores) / statistics.mean(scores))
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "#f8f9fa", "padding": "10px"})
+            ])
+        ], className="my-3"),
+
+        html.H4("Rookie Bonus"),
+        html.P("Veteran teams start with a higher confidence (1.0 vs 0.6) because they’ve historically performed more predictably."),
+
+        html.H4("Carry Factor"),
+        html.P("This measures whether a team is likely benefiting from stronger alliance partners. A team well below its average teammates gets a lower confidence score."),
+
+        html.Hr(),
+        html.P("The full model is continuously evolving and improving. To contribute, test ideas, or file issues, visit the GitHub repository:", className="mt-4"),
+        html.A("https://github.com/rhettadam/peekorobo", href="https://github.com/rhettadam/peekorobo", target="_blank")
+    ], style={"maxWidth": "900px"}, className="py-4 mx-auto"),
+    dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+    dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+    dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+    footer
+])
+
 def get_team_avatar(team_number, year=2025):
     team_key = f"frc{team_number}"
     avatar_data = tba_get(f"team/{team_key}/media/{year}")
@@ -2271,7 +2370,7 @@ def get_epa_display(epa, percentiles):
 def epa_legend_layout():
     return dbc.Alert(
         [
-            html.H5("EPA Color Key (Percentile):", className="mb-3", style={"fontWeight": "bold"}),
+            html.H5("ACE Color Key (Percentile):", className="mb-3", style={"fontWeight": "bold"}),
             html.Div("🟣  ≥ 99% | 🔵  ≥ 95% | 🟢  ≥ 90% | 🟡  ≥ 75% | 🟠  ≥ 50% | 🔴  ≥ 25% | 🟤  < 25%"),
         ],
         color="light",
@@ -2297,7 +2396,7 @@ def create_team_card(team, selected_year, avatar_url=None):
     location_pieces = [p for p in [city, state, country] if p]
     location_str = ", ".join(location_pieces) if location_pieces else "Unknown"
 
-    # EPA and rank from database
+    # ACE and rank from database
     epa = team_data.get("epa")
     rank = team_data.get("global_rank", "N/A")
     epa_str = f"{epa:.2f}" if isinstance(epa, (int, float)) else "N/A"
@@ -2328,7 +2427,7 @@ def create_team_card(team, selected_year, avatar_url=None):
             [
                 html.H5(f"#{team_number} | {nickname}", className="card-title mb-3"),
                 html.P(f"Location: {location_str}", className="card-text"),
-                html.P(f"EPA: {epa_str} (Global Rank: {rank})", className="card-text"),
+                html.P(f"ACE: {epa_str} (Global Rank: {rank})", className="card-text"),
                 dbc.Button("View Team", href=team_url, color="warning", className="mt-2"),
             ]
         )
@@ -2392,13 +2491,13 @@ def teams_layout(default_year=2025):
     teams_table = dash_table.DataTable(
         id="teams-table",
         columns=[
-            {"name": "EPA Rank", "id": "epa_rank"},
+            {"name": "ACE Rank", "id": "epa_rank"},
             {"name": "Team", "id": "team_display", "presentation": "markdown"},
             {"name": "Confidence", "id": "confidence"},
-            {"name": "EPA", "id": "epar"},
-            {"name": "Auto EPA", "id": "auto_epa"},
-            {"name": "Teleop EPA", "id": "teleop_epa"},
-            {"name": "Endgame EPA", "id": "endgame_epa"},
+            {"name": "ACE", "id": "epar"},
+            {"name": "Auto ACE", "id": "auto_epa"},
+            {"name": "Teleop ACE", "id": "teleop_epa"},
+            {"name": "Endgame ACE", "id": "endgame_epa"},
             {"name": "Record", "id": "record"},
         ],
         data=[],
@@ -2433,7 +2532,7 @@ def teams_layout(default_year=2025):
                     html.H4("Top 3 Teams", className="text-center mb-4"),
                     dbc.Row(id="top-teams-container", className="justify-content-center mb-5"),
                     filters_row,
-                    epa_legend_layout(),  # EPA color key
+                    epa_legend_layout(),  # ACE color key
                     dbc.Row(dbc.Col(teams_table, width=12), className="mb-4"),
                 ],
                 style={"padding": "10px", "maxWidth": "1200px", "margin": "0 auto"},
@@ -2464,10 +2563,10 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
     if not teams_data:
         return [], [{"label": "All States", "value": "All"}], []
 
-    # Sort teams by descending overall EPA
+    # Sort teams by descending overall ACE
     teams_data.sort(key=lambda t: t.get("epa") or 0, reverse=True)
 
-    # Collect EPA component values
+    # Collect ACE component values
     extract_valid = lambda key: [t[key] for t in teams_data if t.get(key) is not None]
 
     overall_values = extract_valid("epa")
@@ -2703,6 +2802,9 @@ def display_page(pathname):
     
     if pathname == "/challenges":
         return challenges_layout()
+
+    if pathname == "/blog":
+        return blog_layout
     
     if pathname.startswith("/challenge/"):
         year = pathname.split("/")[-1]
@@ -2716,5 +2818,5 @@ def display_page(pathname):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=True)
 
