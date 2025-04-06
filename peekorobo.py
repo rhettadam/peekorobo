@@ -24,6 +24,11 @@ from locations import COUNTRIES, STATES
 load_dotenv()
 
 def load_all_team_data():
+
+    def compress_dict(d):
+        """Remove any None or empty string values."""
+        return {k: v for k, v in d.items() if v not in (None, "", [], {}, ())}
+
     # === Load team EPA data ===
     team_conn = sqlite3.connect(os.path.join("team_data", "epa_teams.sqlite"))
     team_cursor = team_conn.cursor()
@@ -32,7 +37,7 @@ def load_all_team_data():
     team_data = {}
 
     for row in team_cursor.fetchall():
-        team = dict(zip(team_columns, row))
+        team = compress_dict(dict(zip(team_columns, row)))
         year = team["year"]
         number = team["team_number"]
         team_data.setdefault(year, {})[number] = team
@@ -46,13 +51,12 @@ def load_all_team_data():
     def fetch_all(query):
         event_cursor.execute(query)
         cols = [d[0] for d in event_cursor.description]
-        return [dict(zip(cols, r)) for r in event_cursor.fetchall()]
+        return [compress_dict(dict(zip(cols, r))) for r in event_cursor.fetchall()]
 
     # Events
     events = fetch_all("SELECT * FROM e")
     event_data = {}
     flat_event_list = []
-
     for ev in events:
         year = ev["y"]
         ek = ev["k"]
@@ -2817,4 +2821,5 @@ def display_page(pathname):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run_server(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=False)
+
