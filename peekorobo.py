@@ -2394,11 +2394,12 @@ def teams_layout(default_year=2025):
         columns=[
             {"name": "EPA Rank", "id": "epa_rank"},
             {"name": "Team", "id": "team_display", "presentation": "markdown"},
+            {"name": "Confidence", "id": "confidence"},
             {"name": "EPA", "id": "epar"},
             {"name": "Auto EPA", "id": "auto_epa"},
             {"name": "Teleop EPA", "id": "teleop_epa"},
             {"name": "Endgame EPA", "id": "endgame_epa"},
-            {"name": "Location", "id": "location_display"},
+            {"name": "Record", "id": "record"},
         ],
         data=[],
         page_size=50,
@@ -2523,6 +2524,21 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
         teleop = t.get("teleop_epa")
         endgame = t.get("endgame_epa")
 
+        wins = t.get("wins", 0)
+        losses = t.get("losses", 0)
+        ties = t.get("ties", 0) 
+        dq = t.get("dq", 0)     
+
+        conf = t.get("confidence", 0)
+        
+        # Format record with Markdown and inline styles
+        record = (
+            f"{wins}"
+            f" - {losses}"
+            f" - {ties}"
+            f" - {dq}"
+        )
+
         overall_display = get_epa_display(epa, overall_percentiles)
         auto_display = get_epa_display(auto, auto_percentiles) if auto is not None else "N/A"
         teleop_display = get_epa_display(teleop, teleop_percentiles) if teleop is not None else "N/A"
@@ -2540,11 +2556,13 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
         table_rows.append({
             "epa_rank": rank_str,
             "team_display": f"[{team_num} | {nickname}](/team/{team_num}/{selected_year})",
+            "confidence": conf,
             "epar": overall_display,
             "auto_epa": auto_display,
             "teleop_epa": teleop_display,
             "endgame_epa": endgame_display,
             "location_display": location,
+            "record": record,
         })
 
     # Build featured cards
@@ -2698,5 +2716,5 @@ def display_page(pathname):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=True)
 
