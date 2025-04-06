@@ -25,96 +25,77 @@ load_dotenv()
 
 def load_all_team_data():
     # === Load team EPA data ===
-    team_db_path = os.path.join("team_data", "epa_teams.sqlite")
-    team_conn = sqlite3.connect(team_db_path)
+    team_conn = sqlite3.connect(os.path.join("team_data", "epa_teams.sqlite"))
     team_cursor = team_conn.cursor()
     team_cursor.execute("SELECT * FROM epa_history")
-    team_rows = team_cursor.fetchall()
     team_columns = [desc[0] for desc in team_cursor.description]
-    team_conn.close()
-
     team_data = {}
-    for row in team_rows:
+
+    for row in team_cursor.fetchall():
         team = dict(zip(team_columns, row))
         year = team["year"]
-        team_number = team["team_number"]
-        team_data.setdefault(year, {})[team_number] = team
+        number = team["team_number"]
+        team_data.setdefault(year, {})[number] = team
 
-    # === Load event data ===
-    event_db_path = os.path.join("team_data", "events.sqlite")
-    conn = sqlite3.connect(event_db_path)
-    cur = conn.cursor()
+    team_conn.close()
 
-    def group_by_year_event_key(rows):
-        grouped = {}
-        for row in rows:
-            entry = dict(zip([desc[0] for desc in cur.description], row))
-            year = int(entry["event_key"][:4])
-            event_key = entry["event_key"]
-            grouped.setdefault(year, {}).setdefault(event_key, []).append(entry)
-        return grouped
+    # === Load compressed event data ===
+    event_conn = sqlite3.connect(os.path.join("team_data", "events.sqlite"))
+    event_cursor = event_conn.cursor()
 
-    def group_rankings(rows):
-        grouped = {}
-        for row in rows:
-            entry = dict(zip([desc[0] for desc in cur.description], row))
-            year = int(entry["event_key"][:4])
-            event_key = entry["event_key"]
-            team_key = entry["team_key"]
-            grouped.setdefault(year, {}).setdefault(event_key, {})[team_key] = entry
-        return grouped
+    def fetch_all(query):
+        event_cursor.execute(query)
+        cols = [d[0] for d in event_cursor.description]
+        return [dict(zip(cols, r)) for r in event_cursor.fetchall()]
 
     # Events
-    cur.execute("SELECT * FROM events")
-    event_rows = cur.fetchall()
-    event_columns = [desc[0] for desc in cur.description]
-
+    events = fetch_all("SELECT * FROM e")
     event_data = {}
     flat_event_list = []
-    for row in event_rows:
-        event = dict(zip(event_columns, row))
-        year = event["year"]
-        event_key = event["key"]
-        event_data.setdefault(year, {})[event_key] = event
-        flat_event_list.append(event)
+
+    for ev in events:
+        year = ev["y"]
+        ek = ev["k"]
+        event_data.setdefault(year, {})[ek] = ev
+        flat_event_list.append(ev)
 
     # Event Teams
-    cur.execute("SELECT * FROM event_teams")
-    EVENT_TEAMS = group_by_year_event_key(cur.fetchall())
+    team_entries = fetch_all("SELECT * FROM et")
+    EVENT_TEAMS = {}
+    for t in team_entries:
+        year = int(t["ek"][:4])
+        ek = t["ek"]
+        EVENT_TEAMS.setdefault(year, {}).setdefault(ek, []).append(t)
 
     # Rankings
-    cur.execute("SELECT * FROM event_rankings")
-    EVENT_RANKINGS = group_rankings(cur.fetchall())
+    rank_entries = fetch_all("SELECT * FROM r")
+    EVENT_RANKINGS = {}
+    for r in rank_entries:
+        year = int(r["ek"][:4])
+        ek = r["ek"]
+        tk = r["tk"]
+        EVENT_RANKINGS.setdefault(year, {}).setdefault(ek, {})[tk] = r
 
     # Awards
-    cur.execute("SELECT * FROM event_awards")
-    award_rows = cur.fetchall()
-    award_columns = [desc[0] for desc in cur.description]
-    EVENTS_AWARDS = [dict(zip(award_columns, row)) for row in award_rows]
+    EVENTS_AWARDS = fetch_all("SELECT * FROM a")
 
     # Matches
-    cur.execute("SELECT * FROM event_matches")
-    match_rows = cur.fetchall()
-    match_columns = [desc[0] for desc in cur.description]
-    match_dict = [dict(zip(match_columns, row)) for row in match_rows]
+    match_entries = fetch_all("SELECT * FROM m")
     EVENT_MATCHES = {}
-    for match in match_dict:
-        year = int(match["event_key"][:4])
-        EVENT_MATCHES.setdefault(year, []).append(match)
+    for m in match_entries:
+        year = int(m["ek"][:4])
+        EVENT_MATCHES.setdefault(year, []).append(m)
 
     # OPRs
-    cur.execute("SELECT * FROM event_oprs")
-    opr_rows = cur.fetchall()
-    opr_columns = [desc[0] for desc in cur.description]
-    opr_dict = [dict(zip(opr_columns, row)) for row in opr_rows]
+    opr_entries = fetch_all("SELECT * FROM o")
     EVENT_OPRS = {}
-    for opr in opr_dict:
-        year = int(opr["event_key"][:4])
-        event_key = opr["event_key"]
-        team_key = opr["team_key"]
-        EVENT_OPRS.setdefault(year, {}).setdefault(event_key, {})[team_key] = opr["opr"]
+    for o in opr_entries:
+        year = int(o["ek"][:4])
+        ek = o["ek"]
+        tk = o["tk"]
+        EVENT_OPRS.setdefault(year, {}).setdefault(ek, {})[tk] = o["opr"]
 
-    conn.close()
+    event_conn.close()
 
     return team_data, event_data, flat_event_list, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES, EVENT_OPRS
 
@@ -705,28 +686,28 @@ def calculate_ranks(team_data, selected_team):
 def build_recent_events_section(team_key, team_number, epa_data):
     epa_data = epa_data or {}
     recent_rows = []
+    year = 2025
 
-    # Loop over all 2025 events
-    for event_key, event in EVENT_DATABASE.get(2025, {}).items():
-        event_teams = EVENT_TEAMS.get(2025, {}).get(event_key, [])
-        if not any(t["team_key"] == team_key for t in event_teams):
-            continue  # skip if team not in this event
+    for event_key, event in EVENT_DATABASE.get(year, {}).items():
+        event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
+        if not any(t["tk"] == team_number for t in event_teams):
+            continue
 
-        event_name = event.get("name", "Unknown")
-        city = event.get("city", "")
-        state = event.get("state_prov", "")
-        country = event.get("country", "")
-        loc = ", ".join(filter(None, [city, state, country]))
-        start_date = event.get("start_date", "")
+        event_name = event.get("n", "Unknown")
+        loc = ", ".join(filter(None, [event.get("c", ""), event.get("s", ""), event.get("co", "")]))
+        start_date = event.get("sd", "")
         event_url = f"/event/{event_key}"
 
         # Ranking
-        ranking = EVENT_RANKINGS.get(2025, {}).get(event_key, {}).get(team_key, {})
-        rank_val = ranking.get("rank", "N/A")
+        ranking = EVENT_RANKINGS.get(year, {}).get(event_key, {}).get(team_number, {})
+        rank_val = ranking.get("rk", "N/A")
         total_teams = len(event_teams)
 
         # Awards
-        award_names = [a["award_name"] for a in EVENTS_AWARDS if a["team_key"] == team_key and a["event_key"] == event_key and a["year"] == 2025]
+        award_names = [
+            a["an"] for a in EVENTS_AWARDS
+            if a["tk"] == team_number and a["ek"] == event_key and a["y"] == year
+        ]
         awards_line = html.Div([
             html.Span("Awards: ", style={"fontWeight": "bold"}),
             html.Span(", ".join(award_names))
@@ -747,10 +728,10 @@ def build_recent_events_section(team_key, team_number, epa_data):
             ])
         else:
             rank_str = f"Rank: {rank_val}/{total_teams}"
-        
-        wins = ranking.get("wins", "N/A")
-        losses = ranking.get("losses", "N/A")
-        ties = ranking.get("ties", "N/A")
+
+        wins = ranking.get("w", "N/A")
+        losses = ranking.get("l", "N/A")
+        ties = ranking.get("t", "N/A")
         record = html.Span([
             html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
             html.Span("-", style={"color": "#333"}),
@@ -759,7 +740,6 @@ def build_recent_events_section(team_key, team_number, epa_data):
             html.Span(str(ties), style={"color": "gray", "fontWeight": "bold"})
         ])
 
-        # Event Header Info
         header = html.Div([
             html.A("2025 " + event_name, href=event_url, style={"fontWeight": "bold", "fontSize": "1.1rem"}),
             html.Div(loc),
@@ -767,47 +747,46 @@ def build_recent_events_section(team_key, team_number, epa_data):
             html.Div([
                 html.Span("Record: ", style={"marginRight": "5px"}),
                 record,
-            html.Div(awards_line),
+                html.Div(awards_line),
             ]),
-
         ], style={"marginBottom": "10px"})
 
-        # Match Table
-        matches = [m for m in EVENT_MATCHES.get(2025, []) if m.get("event_key") == event_key]
-        matches = [m for m in matches if team_key in (m.get("red_teams") or "") or team_key in (m.get("blue_teams") or "")]
+        matches = [m for m in EVENT_MATCHES.get(year, []) if m.get("ek") == event_key]
+        matches = [m for m in matches if str(team_number) in (m.get("rt") or "") or str(team_number) in (m.get("bt") or "")]
 
         def build_match_rows(matches):
             rows = []
             comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
-            matches.sort(key=lambda m: (comp_level_order.get(m.get("comp_level", ""), 99), m.get("match_number", 9999)))
-
+            matches.sort(key=lambda m: (comp_level_order.get(m.get("cl", ""), 99), m.get("mn", 9999)))
+        
             def format_team_list(team_str):
-                return ", ".join(f"[{t[3:]}](/team/{t[3:]})" for t in team_str.split(",") if t.startswith("frc"))
+                return ", ".join(f"[{t}](/team/{t})" for t in team_str.split(",") if t.strip().isdigit())
 
             def sum_epa(team_str):
-                return sum(epa_data.get(t[3:], {}).get("epa", 0) for t in team_str.split(",") if t.startswith("frc"))
+                return sum(epa_data.get(t.strip(), {}).get("epa", 0) for t in team_str.split(",") if t.strip().isdigit())
 
+        
             for match in matches:
-                red_str = match.get("red_teams", "")
-                blue_str = match.get("blue_teams", "")
-                red_score = match.get("red_score", 0)
-                blue_score = match.get("blue_score", 0)
-                label = match.get("comp_level", "").upper() + " " + str(match.get("match_number", ""))
-
+                red_str = match.get("rt", "")
+                blue_str = match.get("bt", "")
+                red_score = match.get("rs", 0)
+                blue_score = match.get("bs", 0)
+                label = match.get("cl", "").upper() + " " + str(match.get("mn", ""))
+        
                 red_epa = sum_epa(red_str)
                 blue_epa = sum_epa(blue_str)
-
+        
                 if red_epa + blue_epa > 0:
                     p_red = red_epa / (red_epa + blue_epa)
                     p_blue = 1 - p_red
                     prediction = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
                 else:
                     prediction = "N/A"
-
-                winner = match.get("winning_alliance", "N/A").title()
-                youtube_id = match.get("youtube_video")
+        
+                winner = match.get("wa", "N/A").title()
+                youtube_id = match.get("yt")
                 video_link = f"[Watch](https://youtube.com/watch?v={youtube_id})" if youtube_id else "N/A"
-
+        
                 rows.append({
                     "Video": video_link,
                     "Match": label,
@@ -819,7 +798,9 @@ def build_recent_events_section(team_key, team_number, epa_data):
                     "Prediction": prediction,
                     "rowColor": "#ffe6e6" if winner == "Red" else "#e6f0ff" if winner == "Blue" else "white"
                 })
+        
             return rows
+
 
         match_rows = build_match_rows(matches)
 
@@ -1313,39 +1294,37 @@ def team_layout(team_number, year):
         dcc.Tab(label="State Rank", children=[dcc.Graph(figure=state_rank_fig)]),
     ])
     
-    # --- Team Events from local database ---
+        # --- Team Events from local database ---
     events_data = []
     
-    # Determine whether to filter by year
     year_keys = [year] if year else list(EVENT_DATABASE.keys())
-    
-    # Get all events team participated in for the relevant year(s)
     participated_events = []
+    
     for year_key in year_keys:
         for event_key, event in EVENT_DATABASE.get(year_key, {}).items():
             team_list = EVENT_TEAMS.get(year_key, {}).get(event_key, [])
-            if any(t["team_key"] == team_key for t in team_list):
+            if any(t["tk"] == team_number for t in team_list):  # using team_number now
                 participated_events.append((year_key, event_key, event))
     
-    # Sort by date
-    participated_events.sort(key=lambda tup: tup[2].get("start_date", ""), reverse=True)
+    # Sort events by start date
+    participated_events.sort(key=lambda tup: tup[2].get("sd", ""), reverse=True)
     
     # Map event keys to names
-    event_key_to_name = {ek: e.get("name", "Unknown") for _, ek, e in participated_events}
+    event_key_to_name = {ek: e.get("n", "Unknown") for _, ek, e in participated_events}
     
     # Build event rows
     for year_key, event_key, event in participated_events:
-        event_name = event.get("name", "")
-        location = f"{event.get('city', '')}, {event.get('state_prov', '')}"
-        start_date = event.get("start_date", "")
-        end_date = event.get("end_date", "")
+        event_name = event.get("n", "")
+        location = f"{event.get('c', '')}, {event.get('s', '')}".strip(", ")
+        start_date = event.get("sd", "")
+        end_date = event.get("ed", "")
         event_url = f"https://www.peekorobo.com/event/{event_key}"
     
         # Rank
         rank = None
         rankings = EVENT_RANKINGS.get(year_key, {}).get(event_key, {})
-        if team_key in rankings:
-            rank = rankings[team_key].get("rank")
+        if team_number in rankings:
+            rank = rankings[team_number].get("rk")
             if rank:
                 event_name += f" (Rank: {rank})"
     
@@ -1356,7 +1335,6 @@ def team_layout(team_number, year):
             "end_date": end_date,
         })
     
-    # --- Build DataTable ---
     events_table = dash_table.DataTable(
         columns=[
             {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
@@ -1372,20 +1350,20 @@ def team_layout(team_number, year):
         style_cell_conditional=[{"if": {"column_id": "event_name"}, "textAlign": "center"}],
         style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
     )
-
+    
     # --- Awards Section ---
     team_awards = [
         row for row in EVENTS_AWARDS
-        if row["team_key"] == team_key and (not year or row["year"] == year)
+        if row["tk"] == team_number and (not year or row["y"] == year)
     ]
     
-    team_awards.sort(key=lambda aw: aw["year"], reverse=True)
+    team_awards.sort(key=lambda aw: aw["y"], reverse=True)
     
     awards_data = [
         {
-            "award_name": aw["award_name"],
-            "event_name": event_key_to_name.get(aw["event_key"], "Unknown Event"),
-            "award_year": aw["year"]
+            "award_name": aw["an"],
+            "event_name": event_key_to_name.get(aw["ek"], "Unknown Event"),
+            "award_year": aw["y"]
         }
         for aw in team_awards
     ]
@@ -1404,22 +1382,22 @@ def team_layout(team_number, year):
         style_cell_conditional=[{"if": {"column_id": "award_name"}, "textAlign": "left"}],
         style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
     )
-        
+    
     # --- Blue Banners Section ---
     blue_banner_keywords = ["chairman's", "impact", "woodie flowers", "winner"]
     blue_banners = []
     
     for award in team_awards:
-        name_lower = award["award_name"].lower()
+        name_lower = award["an"].lower()
         if any(keyword in name_lower for keyword in blue_banner_keywords):
-            event_key = award["event_key"]
-            year_str = event_key[:4]  # Extract year from event key
+            event_key = award["ek"]
+            year_str = str(award["y"])
             event = EVENT_DATABASE.get(int(year_str), {}).get(event_key, {})
-            event_name = event.get("name", "Unknown Event")
+            event_name = event.get("n", "Unknown Event")
             full_event_name = f"{year_str} {event_name}"
     
             blue_banners.append({
-                "award_name": award["award_name"],
+                "award_name": award["an"],
                 "event_name": full_event_name,
                 "event_key": event_key
             })
@@ -1463,6 +1441,7 @@ def team_layout(team_number, year):
         ],
         style={"marginBottom": "15px", "borderRadius": "8px", "backgroundColor": "white", "padding": "10px"},
     )
+
     
     return html.Div(
         [
@@ -1570,17 +1549,17 @@ def events_layout(year=2025):
 
 
 def create_event_card(event):
-    event_url = f"https://www.peekorobo.com/event/{event['key']}"
-    location = f"{event.get('city','')}, {event.get('state_prov','')}, {event.get('country','')}"
-    start = event.get('start_date', 'N/A')
-    end = event.get('end_date', 'N/A')
-    event_type = event.get('event_type', 'N/A')
+    event_url = f"https://www.peekorobo.com/event/{event['k']}"
+    location = f"{event.get('c','')}, {event.get('s','')}, {event.get('co','')}"
+    start = event.get('sd', 'N/A')
+    end = event.get('ed', 'N/A')
+    event_type = event.get('et', 'N/A')
 
     return dbc.Card(
         [
             dbc.CardBody(
                 [
-                    html.H5(event["name"], className="card-title mb-3"),
+                    html.H5(event.get("n", "Unknown Event"), className="card-title mb-3"),
                     html.P(location, className="card-text"),
                     html.P(f"Dates: {start} - {end}", className="card-text"),
                     html.P(f"Type: {event_type}", className="card-text"),
@@ -1596,7 +1575,6 @@ def create_event_card(event):
             "margin": "10px"
         }
     )
-
 
 @app.callback(
     [
@@ -1623,25 +1601,25 @@ def update_events_table(selected_year, selected_event_types, selected_week, sear
         filtered = []
         for et in selected_event_types:
             if et == "season":
-                filtered.extend([ev for ev in events_data if ev.get("event_type") not in [99, 100]])
+                filtered.extend([ev for ev in events_data if ev.get("et") not in [99, 100]])
             elif et == "offseason":
-                filtered.extend([ev for ev in events_data if ev.get("event_type") in [99, 100]])
+                filtered.extend([ev for ev in events_data if ev.get("et") in [99, 100]])
             elif et == "regional":
-                filtered.extend([ev for ev in events_data if "Regional" in (ev.get("event_type") or "")])
+                filtered.extend([ev for ev in events_data if "regional" in (ev.get("et") or "").lower()])
             elif et == "district":
-                filtered.extend([ev for ev in events_data if "District" in (ev.get("event_type") or "")])
+                filtered.extend([ev for ev in events_data if "district" in (ev.get("et") or "").lower()])
             elif et == "championship":
-                filtered.extend([ev for ev in events_data if "Championship" in (ev.get("event_type") or "")])
-        events_data = list({ev["key"]: ev for ev in filtered}.values())
+                filtered.extend([ev for ev in events_data if "championship" in (ev.get("et") or "").lower()])
+        events_data = list({ev["k"]: ev for ev in filtered}.values())
 
     if selected_week != "all":
-        events_data = [ev for ev in events_data if ev.get("week") == selected_week]
+        events_data = [ev for ev in events_data if ev.get("w") == selected_week]  # Optional: include week in compressed schema
 
     if search_query:
         q = search_query.lower()
         events_data = [
             ev for ev in events_data
-            if q in ev.get("name", "").lower() or q in ev.get("city", "").lower()
+            if q in ev.get("n", "").lower() or q in ev.get("c", "").lower()
         ]
 
     def parse_date(d):
@@ -1651,8 +1629,8 @@ def update_events_table(selected_year, selected_event_types, selected_week, sear
             return datetime.date(1900, 1, 1)
 
     for ev in events_data:
-        ev["_start_date_obj"] = parse_date(ev.get("start_date", "1900-01-01"))
-        ev["_end_date_obj"] = parse_date(ev.get("end_date", "1900-01-01"))
+        ev["_start_date_obj"] = parse_date(ev.get("sd", "1900-01-01"))
+        ev["_end_date_obj"] = parse_date(ev.get("ed", "1900-01-01"))
     events_data.sort(key=lambda x: x["_start_date_obj"])
 
     today = datetime.date.today()
@@ -1716,15 +1694,15 @@ def event_layout(event_key):
     event_teams = EVENT_TEAMS.get(event_year, {}).get(event_key, [])
     rankings = EVENT_RANKINGS.get(event_year, {}).get(event_key, {})
 
-    # Matches from database (you would have a similar structure as EVENT_MATCHES)
-    event_matches = [m for m in EVENT_MATCHES.get(event_year, []) if m.get("event_key") == event_key]
+    # Compressed match keys
+    event_matches = [m for m in EVENT_MATCHES.get(event_year, []) if m.get("ek") == event_key]
 
-    event_name = event.get("name", "Unknown Event")
-    event_location = f"{event.get('city', '')}, {event.get('state_prov', '')}, {event.get('country', '')}"
-    start_date = event.get("start_date", "N/A")
-    end_date = event.get("end_date", "N/A")
-    event_type = event.get("event_type", "N/A")
-    website = event.get("website", "#")
+    event_name = event.get("n", "Unknown Event")
+    event_location = f"{event.get('c', '')}, {event.get('s', '')}, {event.get('co', '')}"
+    start_date = event.get("sd", "N/A")
+    end_date = event.get("ed", "N/A")
+    event_type = event.get("et", "N/A")
+    website = event.get("w", "#")
 
     # Header card
     header_card = dbc.Card(
@@ -1752,12 +1730,12 @@ def event_layout(event_key):
     # Determine last match and thumbnail
     last_match = None
     if event_matches:
-        final_matches = [m for m in event_matches if m.get("comp_level") == "f"]
+        final_matches = [m for m in event_matches if m.get("cl") == "f"]
         last_match = final_matches[-1] if final_matches else event_matches[-1]
 
     last_match_thumbnail = None
-    if last_match and last_match.get("youtube_video"):
-        video_key = last_match.get("youtube_video")
+    if last_match and last_match.get("yt"):
+        video_key = last_match.get("yt")
         thumbnail_url = f"https://img.youtube.com/vi/{video_key}/hqdefault.jpg"
         last_match_thumbnail = dbc.Card(
             dbc.CardBody(
@@ -1806,9 +1784,8 @@ def event_layout(event_key):
                     dcc.Store(id="store-event-year", data=event_year),
                     dcc.Store(
                         id="store-oprs",
-                        data={ "oprs": EVENT_OPRS.get(event_year, {}).get(event_key, {}) }
+                        data={"oprs": EVENT_OPRS.get(event_year, {}).get(event_key, {})}
                     ),
-
                     html.Div(id="data-display-container"),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
@@ -1822,12 +1799,12 @@ def event_layout(event_key):
 
 def create_team_card_spotlight(team, epa_data, event_year):
     """
-    Build a team spotlight card using database-backed team and EPA info.
-    Avatar is still fetched separately from TBA.
+    Build a team spotlight card using compressed event team data
+    and full-schema TEAM_DATABASE.
     """
     from urllib.parse import quote
 
-    t_num = team.get("team_number")
+    t_num = team.get("tk")  # from compressed team list
     team_data = TEAM_DATABASE.get(event_year, {}).get(t_num, {})
 
     nickname = team_data.get("nickname", "Unknown")
@@ -1837,14 +1814,11 @@ def create_team_card_spotlight(team, epa_data, event_year):
     location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
 
     # EPA info
-    epa_rank = "N/A"
-    epa_display = "N/A"
-    if t_num and str(t_num) in epa_data:
-        info = epa_data[str(t_num)]
-        epa_rank = info.get("rank", "N/A")
-        epa_display = info.get("epa_display", "N/A")
+    t_key_str = str(t_num)
+    epa_rank = epa_data.get(t_key_str, {}).get("rank", "N/A")
+    epa_display = epa_data.get(t_key_str, {}).get("epa_display", "N/A")
 
-    # Avatar stays TBA
+    # Avatar and team link
     avatar_url = get_team_avatar(t_num, event_year)
     team_url = f"/team/{t_num}/{event_year}"
 
@@ -1863,6 +1837,7 @@ def create_team_card_spotlight(team, epa_data, event_year):
                 }
             )
         )
+
     card_elems.append(
         dbc.CardBody(
             [
@@ -1909,7 +1884,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
     if not active_tab:
         return dbc.Alert("Select a data category above.", color="info")
 
-    # Common DataTable styling
+    # === Shared styles ===
     common_style_table = {
         "overflowX": "auto",
         "border": "1px solid #ddd",
@@ -1927,36 +1902,30 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
         "padding": "8px",
     }
 
-    # ------------------ RANKINGS TAB ------------------
+    def safe_int(val):
+        try: return int(val)
+        except: return 999999
+
+    # === Rankings Tab ===
     if active_tab == "rankings":
-    
         data_rows = []
-        for team_key, rank_info in (rankings or {}).items():
-            tnum_str = team_key.replace("frc", "")
-    
-            epa_rank = "N/A"
-            epa_display = "N/A"
-            if tnum_str in epa_data:
-                epa_info = epa_data[tnum_str]
-                epa_rank = epa_info.get("rank", "N/A")
-                epa_display = epa_info.get("epa_display", "N/A")
-    
+        for team_num, rank_info in (rankings or {}).items():
+            tnum_str = str(team_num)
+
+            epa_rank = epa_data.get(tnum_str, {}).get("rank", "N/A")
+            epa_display = epa_data.get(tnum_str, {}).get("epa_display", "N/A")
+
             data_rows.append({
-                "Rank": rank_info.get("rank", "N/A"),
+                "Rank": rank_info.get("rk", "N/A"),
                 "Team": f"[{tnum_str}](/team/{tnum_str})",
-                "Wins": rank_info.get("wins", "N/A"),
-                "Losses": rank_info.get("losses", "N/A"),
-                "Ties": rank_info.get("ties", "N/A"),
+                "Wins": rank_info.get("w", "N/A"),
+                "Losses": rank_info.get("l", "N/A"),
+                "Ties": rank_info.get("t", "N/A"),
                 "DQ": rank_info.get("dq", "N/A"),
                 "EPA Rank": epa_rank,
                 "EPA": epa_display,
             })
-    
-        def safe_int(val):
-            try:
-                return int(val)
-            except:
-                return 999999
+
         data_rows.sort(key=lambda r: safe_int(r["Rank"]))
 
         columns = [
@@ -1969,51 +1938,38 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             {"name": "EPA Rank", "id": "EPA Rank"},
             {"name": "EPA", "id": "EPA"},
         ]
-    
-        rankings_table = dash_table.DataTable(
-            columns=columns,
-            data=data_rows,
-            page_size=10,
-            style_table=common_style_table,
-            style_header=common_style_header,
-            style_cell=common_style_cell,
-        )
-        
+
         return html.Div([
             epa_legend_layout(),
-            rankings_table
+            dash_table.DataTable(
+                columns=columns,
+                data=data_rows,
+                page_size=10,
+                style_table=common_style_table,
+                style_header=common_style_header,
+                style_cell=common_style_cell,
+            )
         ])
 
-    # ------------------ OPRS TAB ------------------
+    # === OPRs Tab ===
     elif active_tab == "oprs":
         data = []
-        # Convert each frcXXXX to a clickable link
-        for team_key, opr_val in (oprs.get("oprs") or {}).items():
-            tnum_str = team_key.replace("frc", "")
-    
-            # Retrieve EPA & Rank from epa_data if available
-            epa_rank = "N/A"
-            epa_display = "N/A"
-            if tnum_str in epa_data:
-                epa_info = epa_data[tnum_str]
-                epa_rank = epa_info.get("rank", "N/A")
-                epa_display = epa_info.get("epa_display", "N/A")
-    
+        for team_num, opr_val in (oprs.get("oprs") or {}).items():
+            tnum_str = str(team_num)
+            epa_rank = epa_data.get(tnum_str, {}).get("rank", "N/A")
+            epa_display = epa_data.get(tnum_str, {}).get("epa_display", "N/A")
+
             data.append({
-                "Team": f"[{tnum_str}](/team/{tnum_str})",  # clickable link
+                "Team": f"[{tnum_str}](/team/{tnum_str})",
                 "OPR": opr_val,
                 "EPA Rank": epa_rank,
                 "EPA": epa_display,
             })
-    
-        # Sort by OPR descending
+
         data.sort(key=lambda x: x["OPR"], reverse=True)
-    
-        # Assign a simple "OPR Rank" (just for display)
         for i, row in enumerate(data):
             row["OPR Rank"] = i + 1
-    
-        # Define the columns, marking "Team" as Markdown
+
         columns = [
             {"name": "OPR Rank", "id": "OPR Rank"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
@@ -2021,7 +1977,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             {"name": "EPA Rank", "id": "EPA Rank"},
             {"name": "EPA", "id": "EPA"},
         ]
-    
+
         return dash_table.DataTable(
             columns=columns,
             data=data,
@@ -2031,49 +1987,34 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             style_cell=common_style_cell,
         )
 
-    # ------------------ TEAMS TAB ------------------
+    # === Teams Tab ===
     elif active_tab == "teams":
-        # 1) Identify top 3 by ascending epa rank:
-        def safe_int(val):
-            try: return int(val)
-            except: return 999999
-
         sorted_teams = sorted(
             event_teams,
-            key=lambda t: safe_int(epa_data.get(str(t.get("team_number")), {}).get("rank", 999999))
+            key=lambda t: safe_int(epa_data.get(str(t.get("tk")), {}).get("rank", 999999))
         )
         top_3 = sorted_teams[:3]
 
-        # 2) Build spotlight cards for top_3
-        spotlight_cards = []
-        for top_team in top_3:
-            card = create_team_card_spotlight(top_team, epa_data, event_year)
-            spotlight_cards.append(dbc.Col(card, width="auto"))
-
+        spotlight_cards = [
+            dbc.Col(create_team_card_spotlight(t, epa_data, event_year), width="auto")
+            for t in top_3
+        ]
         spotlight_layout = dbc.Row(spotlight_cards, className="justify-content-center mb-4")
 
-        # 3) Build the standard table (like before)
         rows = []
         for t in event_teams:
-            t_num = t.get("team_number")
-            t_str = str(t_num) if t_num else "N/A"
-            epa_rank = "N/A"
-            epa_disp = "N/A"
-            if t_num and str(t_num) in epa_data:
-                e_info = epa_data[str(t_num)]
-                epa_rank = e_info["rank"]
-                epa_disp = e_info["epa_display"]
+            tnum = t.get("tk")
+            tstr = str(tnum)
+            epa_rank = epa_data.get(tstr, {}).get("rank", "N/A")
+            epa_disp = epa_data.get(tstr, {}).get("epa_display", "N/A")
 
-            city = t.get("city", "")
-            st = t.get("state_prov", "")
-            ctry = t.get("country", "")
-            loc = ", ".join(filter(None, [city, st, ctry])) or "Unknown"
+            loc = ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown"
 
             rows.append({
                 "EPA Rank": epa_rank,
                 "EPA": epa_disp,
-                "Team Number": f"[{t_str}](/team/{t_str})",
-                "Nickname": t.get("nickname", "Unknown"),
+                "Team Number": f"[{tstr}](/team/{tstr})",
+                "Nickname": t.get("nn", "Unknown"),
                 "Location": loc,
             })
 
@@ -2087,42 +2028,31 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             {"name": "Location", "id": "Location"},
         ]
 
-        teams_table = dash_table.DataTable(
-            columns=columns,
-            data=rows,
-            page_size=10,
-            style_table=common_style_table,
-            style_header=common_style_header,
-            style_cell=common_style_cell,
-        )
-
         return html.Div([
-            html.H4(
-                "Spotlight Teams", 
-                className="text-center mb-4",
-                style={"fontWeight": "bold"}
-            ),
+            html.H4("Spotlight Teams", className="text-center mb-4", style={"fontWeight": "bold"}),
             spotlight_layout,
             epa_legend_layout(),
-            teams_table
+            dash_table.DataTable(
+                columns=columns,
+                data=rows,
+                page_size=10,
+                style_table=common_style_table,
+                style_header=common_style_header,
+                style_cell=common_style_cell,
+            )
         ])
 
-    # ------------------ MATCHES TAB ------------------
+    # === Matches Tab ===
     elif active_tab == "matches":
-        # 1) Build the dropdown
-        team_filter_options = []
-        if event_teams:
-            for t in event_teams:
-                tnum = t.get("team_number")
-                nickname = t.get("nickname","")
-                label = f"{tnum} - {nickname}" if nickname else str(tnum)
-                team_filter_options.append({"label": label, "value": str(tnum)})
+        team_filter_options = [
+            {"label": f"{t['tk']} - {t.get('nn', '')}", "value": str(t["tk"])}
+            for t in event_teams
+        ]
 
-        # 2) Return the layout: a Div with the dropdown + an empty container
         return html.Div([
             html.Div(
                 [
-                    html.Label("Filter by Team:", style={"fontWeight":"bold"}),
+                    html.Label("Filter by Team:", style={"fontWeight": "bold"}),
                     dcc.Dropdown(
                         id="team-filter",
                         options=[{"label": "All Teams", "value": "ALL"}] + team_filter_options,
@@ -2130,13 +2060,11 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                         clearable=False
                     )
                 ],
-                style={"marginBottom":"20px"}
+                style={"marginBottom": "20px"}
             ),
-            # An empty container for the final table(s)
             html.Div(id="matches-container")
         ])
 
-    # If none of the above, fallback
     return dbc.Alert("No data available.", color="warning")
 
 @app.callback(
@@ -2148,78 +2076,65 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
     ],
 )
 def update_matches_table(selected_team, event_matches, epa_data):
-    """
-    Called whenever user picks a team in the dropdown.
-    Returns the final Matches tables into 'matches-container'.
-    """
     event_matches = event_matches or []
     epa_data = epa_data or {}
 
-    # 1) If user selected a team, filter
+    # 1) Filter by team number
     if selected_team and selected_team != "ALL":
-        frc_key = f"frc{selected_team}"
         event_matches = [
             m for m in event_matches
-            if frc_key in (m.get("red_teams", "") + "," + m.get("blue_teams", ""))
+            if selected_team in (m.get("rt", "") + "," + m.get("bt", ""))
         ]
 
-    # 2) Sort & separate
+    # 2) Sort and separate by comp level
     comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
+
     def match_sort_key(m):
-        lvl = comp_level_order.get(m.get("comp_level",""),99)
-        num = m.get("match_number",9999)
+        lvl = comp_level_order.get(m.get("cl", ""), 99)
+        num = m.get("mn", 9999)
         return (lvl, num)
 
     event_matches.sort(key=match_sort_key)
-    qual_matches = [m for m in event_matches if m.get("comp_level")=="qm"]
-    playoff_matches = [m for m in event_matches if m.get("comp_level")!="qm"]
+    qual_matches = [m for m in event_matches if m.get("cl") == "qm"]
+    playoff_matches = [m for m in event_matches if m.get("cl") != "qm"]
 
-    # 3) Utility
-    def format_teams_markdown(team_list):
-        links = []
-        for t in team_list:
-            short = t.replace("frc","")
-            links.append(f"[{short}](/team/{short})")
-        return ", ".join(links)
+    # 3) Utility functions
+    def format_teams_markdown(team_list_str):
+        return ", ".join(f"[{t}](/team/{t})" for t in team_list_str.split(",") if t.strip().isdigit())
 
-    def sum_epa(team_list):
-        total = 0.0
-        for x in team_list:
-            s = x.replace("frc","")
-            if s in epa_data:
-                val = epa_data[s].get("epa", 0) or 0
-                total += val
-        return total
+    def sum_epa(team_list_str):
+        return sum(
+            epa_data.get(t.strip(), {}).get("epa", 0)
+            for t in team_list_str.split(",") if t.strip().isdigit()
+        )
 
     def build_match_rows(matches):
         rows = []
         for match in matches:
-            red_keys = match.get("red_teams", "").split(",")
-            blue_keys = match.get("blue_teams", "").split(",")
-            red_score = match.get("red_score", 0)
-            blue_score = match.get("blue_score", 0)
-            winner = match.get("winning_alliance", "")
-            label = match.get("comp_level", "").upper() + str(match.get("match_number", ""))
-    
-            r_sum = sum_epa(red_keys)
-            b_sum = sum_epa(blue_keys)
+            red_str = match.get("rt", "")
+            blue_str = match.get("bt", "")
+            red_score = match.get("rs", 0)
+            blue_score = match.get("bs", 0)
+            winner = match.get("wa", "")
+            label = match.get("cl", "").upper() + str(match.get("mn", ""))
+
+            r_sum = sum_epa(red_str)
+            b_sum = sum_epa(blue_str)
             if (r_sum + b_sum) > 0:
                 p_red = r_sum / (r_sum + b_sum)
                 p_blue = 1.0 - p_red
                 pred_str = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
             else:
                 pred_str = "N/A"
-    
-            video_link = "N/A"
-            yid = match.get("youtube_video")
-            if yid:
-                video_link = f"[Watch](https://www.youtube.com/watch?v={yid})"
-    
+
+            yid = match.get("yt")
+            video_link = f"[Watch](https://www.youtube.com/watch?v={yid})" if yid else "N/A"
+
             rows.append({
                 "Video": video_link,
                 "Match": label,
-                "Red Teams": format_teams_markdown(red_keys),
-                "Blue Teams": format_teams_markdown(blue_keys),
+                "Red Teams": format_teams_markdown(red_str),
+                "Blue Teams": format_teams_markdown(blue_str),
                 "Red Score": red_score,
                 "Blue Score": blue_score,
                 "Winner": winner.title() if winner else "N/A",
@@ -2231,21 +2146,21 @@ def update_matches_table(selected_team, event_matches, epa_data):
     playoff_data = build_match_rows(playoff_matches)
 
     match_columns = [
-        {"name":"Video","id":"Video","presentation":"markdown"},
-        {"name":"Match","id":"Match"},
-        {"name":"Red Teams","id":"Red Teams","presentation":"markdown"},
-        {"name":"Blue Teams","id":"Blue Teams","presentation":"markdown"},
-        {"name":"Red Score","id":"Red Score"},
-        {"name":"Blue Score","id":"Blue Score"},
-        {"name":"Winner","id":"Winner"},
-        {"name":"Prediction","id":"Prediction","presentation":"markdown"},
-    ]
-    row_style = [
-        {"if": {"filter_query": '{Winner} = \"Red\"'},  "backgroundColor": "#ffe6e6"},
-        {"if": {"filter_query": '{Winner} = \"Blue\"'}, "backgroundColor": "#e6f0ff"},
+        {"name": "Video", "id": "Video", "presentation": "markdown"},
+        {"name": "Match", "id": "Match"},
+        {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
+        {"name": "Blue Teams", "id": "Blue Teams", "presentation": "markdown"},
+        {"name": "Red Score", "id": "Red Score"},
+        {"name": "Blue Score", "id": "Blue Score"},
+        {"name": "Winner", "id": "Winner"},
+        {"name": "Prediction", "id": "Prediction", "presentation": "markdown"},
     ]
 
-    # For brevity, define your styling for tables:
+    row_style = [
+        {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "#ffe6e6"},
+        {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
+    ]
+
     style_table = {
         "overflowX": "auto",
         "border": "1px solid #ddd",
