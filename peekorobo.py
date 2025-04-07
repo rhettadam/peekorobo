@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 import numpy as np
 import datetime
 import sqlite3
+import json
+from collections import defaultdict
 
 from frcgames import frc_games
 from locations import COUNTRIES, STATES
@@ -908,7 +910,13 @@ def team_layout(team_number, year):
                 avatar_url = media["direct_url"]
                 break
     
-    years_participated = tba_get(f"team/{team_key}/years_participated")
+        # Get all years this team appears in, sorted
+    years_participated = sorted([
+        y for y in TEAM_DATABASE
+        if team_number in TEAM_DATABASE[y]
+    ])
+    
+    # Build clickable year links
     years_links = [
         html.A(
             str(yr),
@@ -921,12 +929,12 @@ def team_layout(team_number, year):
         )
         for yr in years_participated
     ] if years_participated else ["N/A"]
-
-    # Add "ALL" button linking to team profile without year
+    
+    # Add "History" button (same as before)
     years_links.append(
         html.A(
             "History",
-            href=f"/team/{team_number}",  # No year specified
+            href=f"/team/{team_number}",
             style={
                 "marginLeft": "0px",
                 "color": "#007BFF",
@@ -935,35 +943,71 @@ def team_layout(team_number, year):
             },
         )
     )
-
-    rookie_year = years_participated[0] if years_participated else year or 2025
-
-    hof = [2486, 321, 1629, 503, 4613, 1816, 1902, 1311, 2834, 2614, 3132, 987, 597, 27, 1538, 1114, 359, 341, 236, 842, 365, 111, 67, 254, 103, 175, 22, 16, 120, 23, 47, 51, 144, 151, 191, 7]
-    wcp = [126,148,144,100,73,71,45,1,48,176,25,232,255,125,279,294,365,66,173,65,111,469,435,494,67,330,503,217,296,522,190,987,177,1114,971,254,973,180,16,1241,1477,610,2848,74,118,1678,1671,5012,2481,120,1086,2767,862,1676,1011,2928,5499,27,2708,4027,2976,3075,3707,4481,1218,1323,5026,4201,1619,3175,6672,4414,4096,609,1690,4522,9432,321]
-
-    is_hof_team = int(team_number) in hof
-    is_wcp_team = int(team_number) in wcp
     
-    hof_badge = (
-        html.Div(
-            [
-                html.Span("🏆", style={"fontSize": "1.5rem"}),
-                html.Span(" Hall of Fame", style={"color": "gold", "fontSize": "1.2rem", "fontWeight": "bold", "marginLeft": "5px"})
-            ],
-            style={"display": "flex", "alignItems": "center", "marginBottom": "8px"}
-        )
-        if is_hof_team else None
-    )
-    wcp_badge = (
-        html.Div(
-            [
-                html.Span("🌎", style={"fontSize": "1.5rem"}),
-                html.Span(" World Champions", style={"color": "blue", "fontSize": "1.2rem", "fontWeight": "bold", "marginLeft": "5px"})
-            ],
-            style={"display": "flex", "alignItems": "center", "marginBottom": "8px"}
-        )
-        if is_wcp_team else None
-    )
+    # Estimate rookie year just like before
+    rookie_year = years_participated[0] if years_participated else year or 2025
+    
+    with open("team_data/notables_by_year.json", "r") as f:
+        NOTABLES_DB = json.load(f)
+    
+    INCLUDED_CATEGORIES = {
+        "notables_hall_of_fame": "Hall of Fame",
+        "notables_world_champions": "World Champions",
+    }
+    
+    def get_team_notables_grouped(team_number):
+        team_key = f"frc{team_number}"
+        category_data = defaultdict(lambda: {"years": [], "video": None})
+    
+        for year, categories in NOTABLES_DB.items():
+            for category, entries in categories.items():
+                if category in INCLUDED_CATEGORIES:
+                    for entry in entries:
+                        if entry["team"] == team_key:
+                            category_data[category]["years"].append(int(year))
+                            if category == "notables_hall_of_fame" and "video" in entry:
+                                category_data[category]["video"] = entry["video"]
+        return category_data
+    
+    def generate_notable_badges(team_number):
+        grouped = get_team_notables_grouped(team_number)
+        badge_elements = []
+    
+        for category, info in sorted(grouped.items()):
+            display_name = INCLUDED_CATEGORIES[category]
+            year_list = ", ".join(str(y) for y in sorted(set(info["years"])))
+            children = [
+                html.Span("🏆", style={"fontSize": "1.2rem"}),
+                html.Span(
+                    f" {display_name} ({year_list})",
+                    style={
+                        "color": "#333",
+                        "fontSize": "1.2rem",
+                        "fontWeight": "bold",
+                        "marginLeft": "5px"
+                    }
+                ),
+            ]
+    
+            # Add video link if available (Hall of Fame only)
+            if category == "notables_hall_of_fame" and info.get("video"):
+                children.append(
+                    html.A("Video", href=info["video"], target="_blank", style={
+                        "marginLeft": "8px",
+                        "fontSize": "1.1rem",
+                        "textDecoration": "underline",
+                        "color": "#007BFF",
+                        "fontWeight": "normal"
+                    })
+                )
+    
+            badge_elements.append(
+                html.Div(children, style={"display": "flex", "alignItems": "center", "marginBottom": "8px"})
+            )
+    
+        return badge_elements
+
+    badges = generate_notable_badges(team_number)
     
     # Team Info Card
     team_card = dbc.Card(
@@ -974,8 +1018,7 @@ def team_layout(team_number, year):
                         dbc.Col(
                             [
                                 html.H2(f"Team {team_number}: {nickname}", style={"color": "#333", "fontWeight": "bold"}),
-                                hof_badge if is_hof_team else None,
-                                wcp_badge if is_wcp_team else None,
+                                *badges,
                                 html.P([html.I(className="bi bi-geo-alt-fill"), f"📍 {city}, {state}, {country}"]),
                                 html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
                                         html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "none"})]),
