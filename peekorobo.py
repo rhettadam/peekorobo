@@ -2328,22 +2328,15 @@ consistency = 1 - (statistics.stdev(scores) / statistics.mean(scores))
 ])
 
 def get_team_avatar(team_number, year=2025):
-    team_key = f"frc{team_number}"
-    avatar_data = tba_get(f"team/{team_key}/media/{year}")
-    if not avatar_data:
-        return None
-    
-    # Try to find a base64 Avatar first
-    for media in avatar_data:
-        if media.get("type") == "avatar" and media.get("details", {}).get("base64Image"):
-            return f"data:image/png;base64,{media['details']['base64Image']}"
-    
-    # Otherwise, fallback to direct_url if preferred or "avatar" isn't found
-    for media in avatar_data:
-        if media.get("preferred") and media.get("direct_url"):
-            return media["direct_url"]
+    """
+    Returns the relative URL path to a team's avatar image if it exists,
+    otherwise returns the path to a stock avatar.
+    """
+    avatar_path = f"assets/avatars/{team_number}.png"
+    if os.path.exists(avatar_path):
+        return f"/assets/avatars/{team_number}.png?v=1"
+    return "/assets/avatars/stock.png"
 
-    return None
 
 def get_epa_display(epa, percentiles):
 
@@ -2457,7 +2450,7 @@ def teams_layout(default_year=2025):
 
     country_dropdown = dcc.Dropdown(
         id="country-dropdown",
-        options=COUNTRIES,  # e.g. [{"label": "All", "value": "All"}, {"label": "USA", "value": "USA"}, ...]
+        options=COUNTRIES,
         value="All",
         clearable=False,
         placeholder="Select Country",
@@ -2524,19 +2517,34 @@ def teams_layout(default_year=2025):
         ],
     )
 
+    avatar_gallery = html.Div(
+        id="avatar-gallery",
+        className="d-flex flex-wrap justify-content-center",
+        style={"gap": "5px", "padding": "1rem"}
+    )
+
+    tabs = dbc.Tabs([
+        dbc.Tab(label="Teams Table", tab_id="table-tab"),
+        dbc.Tab(label="Avatars", tab_id="avatars-tab"),
+    ], id="teams-tabs", active_tab="table-tab", className="mb-3")
+
+    content = html.Div(id="teams-tab-content", children=[
+        html.Div(id="teams-table-container", children=[teams_table]),
+        html.Div(id="avatar-gallery", className="d-flex flex-wrap justify-content-center", style={"gap": "5px", "padding": "1rem", "display": "none"})
+    ])
+
+
     return html.Div(
         [
             topbar,
-            dbc.Container(
-                [
-                    html.H4("Top 3 Teams", className="text-center mb-4"),
-                    dbc.Row(id="top-teams-container", className="justify-content-center mb-5"),
-                    filters_row,
-                    epa_legend_layout(),  # ACE color key
-                    dbc.Row(dbc.Col(teams_table, width=12), className="mb-4"),
-                ],
-                style={"padding": "10px", "maxWidth": "1200px", "margin": "0 auto"},
-            ),
+            dbc.Container([
+                html.H4("Top 3 Teams", className="text-center mb-4"),
+                dbc.Row(id="top-teams-container", className="justify-content-center mb-5"),
+                filters_row,
+                epa_legend_layout(),
+                tabs,
+                content,
+            ], style={"padding": "10px", "maxWidth": "1200px", "margin": "0 auto"}),
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
@@ -2549,58 +2557,31 @@ def teams_layout(default_year=2025):
         Output("teams-table", "data"),
         Output("state-dropdown", "options"),
         Output("top-teams-container", "children"),
+        Output("teams-table-container", "style"),
+        Output("avatar-gallery", "children"),
+        Output("avatar-gallery", "style"),
     ],
     [
         Input("teams-year-dropdown", "value"),
         Input("country-dropdown", "value"),
         Input("state-dropdown", "value"),
         Input("search-bar", "value"),
+        Input("teams-tabs", "active_tab"),
     ],
 )
-def load_teams(selected_year, selected_country, selected_state, search_query):
-    teams_data = list(TEAM_DATABASE.get(selected_year, {}).values())
+def load_teams(selected_year, selected_country, selected_state, search_query, active_tab):
+    from functools import lru_cache
+
+    @lru_cache(maxsize=1)
+    def get_cached_team_data(year):
+        return list(TEAM_DATABASE.get(year, {}).values())
+
+    teams_data = get_cached_team_data(selected_year)
 
     if not teams_data:
-        return [], [{"label": "All States", "value": "All"}], []
+        return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}
 
-    # Sort teams by descending overall ACE
-    teams_data.sort(key=lambda t: t.get("epa") or 0, reverse=True)
-
-    # Collect ACE component values
-    extract_valid = lambda key: [t[key] for t in teams_data if t.get(key) is not None]
-
-    overall_values = extract_valid("epa")
-    auto_values = extract_valid("auto_epa")
-    teleop_values = extract_valid("teleop_epa")
-    endgame_values = extract_valid("endgame_epa")
-
-    compute_percentiles = lambda values: {
-        "99": np.percentile(values, 99),
-        "95": np.percentile(values, 95),
-        "90": np.percentile(values, 90),
-        "75": np.percentile(values, 75),
-        "50": np.percentile(values, 50),
-        "25": np.percentile(values, 25),
-    } if values else {"99": 0, "95": 0, "90": 0, "75": 0, "50": 0, "25": 0}
-
-    overall_percentiles = compute_percentiles(overall_values)
-    auto_percentiles = compute_percentiles(auto_values)
-    teleop_percentiles = compute_percentiles(teleop_values)
-    endgame_percentiles = compute_percentiles(endgame_values)
-
-    # Assign global ranks
-    for idx, t in enumerate(teams_data):
-        t["global_rank"] = idx + 1
-
-    # Build State dropdown options
-    if selected_country and selected_country in STATES:
-        state_options = [{"label": "All States", "value": "All"}] + [
-            {"label": s["label"], "value": s["value"]} for s in STATES[selected_country] if isinstance(s, dict)
-        ]
-    else:
-        state_options = [{"label": "All States", "value": "All"}]
-
-    # Apply filters
+    # Apply filters early to reduce work
     if selected_country and selected_country != "All":
         teams_data = [t for t in teams_data if t.get("country", "").lower() == selected_country.lower()]
     if selected_state and selected_state != "All":
@@ -2609,72 +2590,80 @@ def load_teams(selected_year, selected_country, selected_state, search_query):
         q = search_query.lower()
         teams_data = [
             t for t in teams_data
-            if (q in str(t.get("team_number", "")).lower())
-               or (q in t.get("nickname", "").lower())
-               or (q in t.get("city", "").lower())
+            if q in str(t.get("team_number", "")).lower()
+            or q in t.get("nickname", "").lower()
+            or q in t.get("city", "").lower()
         ]
 
-    # Build table rows
+    # Sort by EPA after filtering
+    teams_data.sort(key=lambda t: t.get("epa") or 0, reverse=True)
+
+    # Pre-compute percentile cutoffs
+    def compute_percentiles(values):
+        return {p: np.percentile(values, int(p)) for p in ["99", "95", "90", "75", "50", "25"]} if values else {p: 0 for p in ["99", "95", "90", "75", "50", "25"]}
+
+    extract_valid = lambda key: [t[key] for t in teams_data if t.get(key) is not None]
+    overall_percentiles = compute_percentiles(extract_valid("epa"))
+    auto_percentiles = compute_percentiles(extract_valid("auto_epa"))
+    teleop_percentiles = compute_percentiles(extract_valid("teleop_epa"))
+    endgame_percentiles = compute_percentiles(extract_valid("endgame_epa"))
+
+    # Assign global ranks
+    for idx, t in enumerate(teams_data):
+        t["global_rank"] = idx + 1
+
+    # State dropdown options
+    state_options = [{"label": "All States", "value": "All"}]
+    if selected_country and selected_country in STATES:
+        state_options += [
+            {"label": s["label"], "value": s["value"]}
+            for s in STATES[selected_country] if isinstance(s, dict)
+        ]
+
+    # Table rows
     table_rows = []
     for t in teams_data:
         rank = t.get("global_rank", "N/A")
-        epa = t.get("epa")
-        auto = t.get("auto_epa")
-        teleop = t.get("teleop_epa")
-        endgame = t.get("endgame_epa")
-
-        wins = t.get("wins", 0)
-        losses = t.get("losses", 0)
-        ties = t.get("ties", 0) 
-        dq = t.get("dq", 0)     
-
-        conf = t.get("confidence", 0)
-        
-        # Format record with Markdown and inline styles
-        record = (
-            f"{wins}"
-            f" - {losses}"
-            f" - {ties}"
-            f" - {dq}"
-        )
-
-        overall_display = get_epa_display(epa, overall_percentiles)
-        auto_display = get_epa_display(auto, auto_percentiles) if auto is not None else "N/A"
-        teleop_display = get_epa_display(teleop, teleop_percentiles) if teleop is not None else "N/A"
-        endgame_display = get_epa_display(endgame, endgame_percentiles) if endgame is not None else "N/A"
-
         team_num = t.get("team_number")
-        nickname = t.get("nickname", "Unknown")
-        city = t.get("city", "")
-        state = t.get("state_prov", "")
-        country = t.get("country", "")
-        location = ", ".join(filter(None, [city, state, country])) or "Unknown"
-
-        rank_str = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, rank)
-
+        record = f"{t.get('wins', 0)} - {t.get('losses', 0)} - {t.get('ties', 0)} - {t.get('dq', 0)}"
         table_rows.append({
-            "epa_rank": rank_str,
-            "team_display": f"[{team_num} | {nickname}](/team/{team_num}/{selected_year})",
-            "confidence": conf,
-            "epar": overall_display,
-            "auto_epa": auto_display,
-            "teleop_epa": teleop_display,
-            "endgame_epa": endgame_display,
-            "location_display": location,
+            "epa_rank": {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, rank),
+            "team_display": f"[{team_num} | {t.get('nickname', 'Unknown')}](/team/{team_num}/{selected_year})",
+            "confidence": t.get("confidence", 0),
+            "epar": get_epa_display(t.get("epa"), overall_percentiles),
+            "auto_epa": get_epa_display(t.get("auto_epa"), auto_percentiles),
+            "teleop_epa": get_epa_display(t.get("teleop_epa"), teleop_percentiles),
+            "endgame_epa": get_epa_display(t.get("endgame_epa"), endgame_percentiles),
+            "location_display": ", ".join(filter(None, [t.get("city", ""), t.get("state_prov", ""), t.get("country", "")])),
             "record": record,
         })
 
-    # Build featured cards
-    featured_cards = []
-    for top_team in teams_data[:3]:
-        t_num = top_team.get("team_number")
-        if t_num is not None:
-            avatar_url = get_team_avatar(t_num, selected_year)
-            featured_cards.append(create_team_card(top_team, selected_year, avatar_url=avatar_url))
-    top_teams_layout = dbc.Row([dbc.Col(card, width="auto") for card in featured_cards],
-                               className="justify-content-center")
+    # Top cards
+    top_teams_layout = dbc.Row([
+        dbc.Col(create_team_card(t, selected_year, get_team_avatar(t.get("team_number"), selected_year)), width="auto")
+        for t in teams_data[:3] if t.get("team_number")
+    ], className="justify-content-center")
 
-    return table_rows, state_options, top_teams_layout
+    # Tabs
+    if active_tab == "avatars-tab":
+        table_style, avatar_style = {"display": "none"}, {"display": "flex"}
+        avatars = []
+        for t in teams_data:
+            team_number = t.get("team_number")
+            if isinstance(team_number, int):
+                path = f"assets/avatars/{team_number}.png"
+                avatars.append(html.A(
+                    html.Img(
+                        src=f"/assets/avatars/{team_number}.png?v=1" if os.path.exists(path) else "/assets/avatars/stock.png",
+                        title=str(team_number),
+                        style={"width": "64px", "height": "64px", "objectFit": "contain", "imageRendering": "pixelated", "border": "1px solid #ccc"},
+                    ),
+                    href=f"/team/{team_number}/{selected_year}",
+                    style={"display": "inline-block"}
+                ))
+        return table_rows, state_options, top_teams_layout, table_style, avatars, avatar_style
+
+    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}
 
 def teams_map_layout():
     # Generate and get the map file path
@@ -2818,5 +2807,5 @@ def display_page(pathname):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=True)
 
