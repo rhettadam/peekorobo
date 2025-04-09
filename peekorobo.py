@@ -242,7 +242,7 @@ topbar = dbc.Navbar(
                                 dbc.DropdownMenuItem("Scouting/Statistics", header=True),
                                 dbc.DropdownMenuItem("Statbotics", href="https://www.statbotics.io/", target="_blank"),
                                 dbc.DropdownMenuItem("ScoutRadioz", href="https://scoutradioz.com/", target="_blank"),
-                                dbc.DropdownMenuItem("Peekorobo", href="https://peekorobo-6ec491b9fec0.herokuapp.com/", target="_blank"),
+                                dbc.DropdownMenuItem("Peekorobo", href="https://www.peekorobo.com/", target="_blank"),
                             ],
                         ),
                     ],
@@ -671,10 +671,10 @@ def calculate_ranks(team_data, selected_team):
 
     return global_rank, country_rank, state_rank
 
-def build_recent_events_section(team_key, team_number, epa_data):
+def build_recent_events_section(team_key, team_number, epa_data, performance_year):
     epa_data = epa_data or {}
     recent_rows = []
-    year = 2025
+    year = performance_year 
 
     for event_key, event in EVENT_DATABASE.get(year, {}).items():
         event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
@@ -729,7 +729,7 @@ def build_recent_events_section(team_key, team_number, epa_data):
         ])
 
         header = html.Div([
-            html.A("2025 " + event_name, href=event_url, style={"fontWeight": "bold", "fontSize": "1.1rem"}),
+            html.A(str(year) + " " + event_name, href=event_url, style={"fontWeight": "bold", "fontSize": "1.1rem"}),
             html.Div(loc),
             html.Div(rank_str),
             html.Div([
@@ -1087,7 +1087,7 @@ def team_layout(team_number, year):
     ])
 
     perf = html.H5(
-        f"{year or 2025} Performance Metrics",
+        f"{performance_year} Performance Metrics",
         style={
             "textAlign": "center",
             "color": "#444",
@@ -1372,7 +1372,7 @@ def team_layout(team_number, year):
                     team_card,
                     performance_card,
                     html.Hr(),
-                    build_recent_events_section(team_key, team_number, epa_data),
+                    build_recent_events_section(team_key, team_number, epa_data, performance_year),
                     html.H3("Events", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
                     events_table,
                     html.H3("Awards", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
@@ -2507,6 +2507,21 @@ def teams_layout(default_year=2025):
         placeholder="Select State/Province",
     )
 
+    sort_dropdown = dcc.Dropdown(
+    id="sort-by-dropdown",
+    options=[
+        {"label": "Total ACE", "value": "epa"},
+        {"label": "Auto ACE", "value": "auto_epa"},
+        {"label": "Teleop ACE", "value": "teleop_epa"},
+        {"label": "Endgame ACE", "value": "endgame_epa"},
+    ],
+    value="epa",
+    clearable=False,
+    placeholder="ACE",
+    style={"width": "180px"}
+)
+
+
     search_input = dbc.Input(
         id="search-bar",
         placeholder="Search",
@@ -2520,6 +2535,7 @@ def teams_layout(default_year=2025):
             dbc.Col(country_dropdown, xs=6, sm=4, md=2),
             dbc.Col(state_dropdown, xs=6, sm=4, md=2),
             dbc.Col(search_input, xs=6, sm=4, md=3),
+            dbc.Col(sort_dropdown, xs=6, sm=4, md=2),
         ],
         className="mb-4 justify-content-center",
     )
@@ -2529,6 +2545,7 @@ def teams_layout(default_year=2025):
         columns=[
             {"name": "ACE Rank", "id": "epa_rank"},
             {"name": "Team", "id": "team_display", "presentation": "markdown"},
+            {"name": "Trend", "id": "trend"},
             {"name": "Confidence", "id": "confidence"},
             {"name": "ACE", "id": "epar"},
             {"name": "Auto ACE", "id": "auto_epa"},
@@ -2610,9 +2627,10 @@ def teams_layout(default_year=2025):
         Input("state-dropdown", "value"),
         Input("search-bar", "value"),
         Input("teams-tabs", "active_tab"),
+        Input("sort-by-dropdown", "value"),
     ],
 )
-def load_teams(selected_year, selected_country, selected_state, search_query, active_tab):
+def load_teams(selected_year, selected_country, selected_state, search_query, active_tab, sort_by):
     from functools import lru_cache
 
     @lru_cache(maxsize=1)
@@ -2624,7 +2642,6 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
     if not teams_data:
         return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}
 
-    # Apply filters early to reduce work
     if selected_country and selected_country != "All":
         teams_data = [t for t in teams_data if t.get("country", "").lower() == selected_country.lower()]
     if selected_state and selected_state != "All":
@@ -2638,10 +2655,15 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
             or q in t.get("city", "").lower()
         ]
 
-    # Sort by EPA after filtering
-    teams_data.sort(key=lambda t: t.get("epa") or 0, reverse=True)
+    if sort_by == "auto_epa":
+        teams_data.sort(key=lambda t: t.get("auto_epa") or 0, reverse=True)
+    elif sort_by == "teleop_epa":
+        teams_data.sort(key=lambda t: t.get("teleop_epa") or 0, reverse=True)
+    elif sort_by == "endgame_epa":
+        teams_data.sort(key=lambda t: t.get("endgame_epa") or 0, reverse=True)
+    else:
+        teams_data.sort(key=lambda t: t.get("epa") or 0, reverse=True)
 
-    # Pre-compute percentile cutoffs
     def compute_percentiles(values):
         return {p: np.percentile(values, int(p)) for p in ["99", "95", "90", "75", "50", "25"]} if values else {p: 0 for p in ["99", "95", "90", "75", "50", "25"]}
 
@@ -2651,11 +2673,9 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
     teleop_percentiles = compute_percentiles(extract_valid("teleop_epa"))
     endgame_percentiles = compute_percentiles(extract_valid("endgame_epa"))
 
-    # Assign global ranks
     for idx, t in enumerate(teams_data):
         t["global_rank"] = idx + 1
 
-    # State dropdown options
     state_options = [{"label": "All States", "value": "All"}]
     if selected_country and selected_country in STATES:
         state_options += [
@@ -2663,7 +2683,6 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
             for s in STATES[selected_country] if isinstance(s, dict)
         ]
 
-    # Table rows
     table_rows = []
     for t in teams_data:
         rank = t.get("global_rank", "N/A")
@@ -2673,6 +2692,7 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
             "epa_rank": {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, rank),
             "team_display": f"[{team_num} | {t.get('nickname', 'Unknown')}](/team/{team_num}/{selected_year})",
             "confidence": t.get("confidence", 0),
+            "trend": t.get("trend", 0),
             "epar": get_epa_display(t.get("epa"), overall_percentiles),
             "auto_epa": get_epa_display(t.get("auto_epa"), auto_percentiles),
             "teleop_epa": get_epa_display(t.get("teleop_epa"), teleop_percentiles),
@@ -2681,13 +2701,11 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
             "record": record,
         })
 
-    # Top cards
     top_teams_layout = dbc.Row([
         dbc.Col(create_team_card(t, selected_year, get_team_avatar(t.get("team_number"), selected_year)), width="auto")
         for t in teams_data[:3] if t.get("team_number")
     ], className="justify-content-center")
 
-    # Tabs
     if active_tab == "avatars-tab":
         table_style, avatar_style = {"display": "none"}, {"display": "flex"}
         avatars = []
