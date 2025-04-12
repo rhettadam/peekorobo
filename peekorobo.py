@@ -8,21 +8,6 @@ from callbacks.navcb import toggle_navbar, update_search_preview, handle_navigat
 from callbacks.eventcb import update_display
 from callbacks.teamscb import load_teams
 
-import psutil
-import os
-import threading
-import time
-
-def log_memory_usage(interval=5):
-    pid = os.getpid()
-    process = psutil.Process(pid)
-    while True:
-        mem_mb = process.memory_info().rss / 1024**2  # Resident Set Size in MB
-        print(f"[Memory] {mem_mb:.2f} MB used")
-        time.sleep(interval)
-
-threading.Thread(target=log_memory_usage, daemon=True).start()
-
 app = dash.Dash(
     __name__,
     meta_tags=[
