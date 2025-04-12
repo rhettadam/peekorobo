@@ -6,23 +6,28 @@ import requests
 import os
 import concurrent.futures
 from dotenv import load_dotenv
+import random
 
 load_dotenv()
 
-TBA_API_BASE_URL = "https://www.thebluealliance.com/api/v3"
-TBA_AUTH_KEY = os.getenv("TBA_API_KEY")
-HEADERS = {"X-TBA-Auth-Key": TBA_AUTH_KEY}
+TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
+
+API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 
 @retry(
     stop=stop_never,
     wait=wait_exponential(multiplier=1, min=0.5, max=5),
     retry=retry_if_exception_type(Exception),
 )
-def tba_get(endpoint):
-    url = f"{TBA_API_BASE_URL}/{endpoint}"
-    response = requests.get(url, headers=HEADERS, timeout=10)
-    response.raise_for_status()
-    return response.json()
+def tba_get(endpoint: str):
+    # Cycle through keys by selecting one randomly or using a round-robin approach.
+    api_key = random.choice(API_KEYS)
+    headers = {"X-TBA-Auth-Key": api_key}
+    url = f"{TBA_BASE_URL}/{endpoint}"
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        return r.json()
+    return None
 
 def load_veteran_teams():
     try:
@@ -34,20 +39,64 @@ def load_veteran_teams():
         return set()
 
 def estimate_consistent_auto(breakdowns, team_count):
-    leave_points = [b.get("autoLeavePoints", 0) for b in breakdowns if b.get("autoLeavePoints") is not None]
-    speaker_counts = [b.get("autoSpeakerNoteCount", 0) for b in breakdowns if b.get("autoSpeakerNoteCount") is not None]
-
-    if not leave_points and not speaker_counts:
+    if not breakdowns:
         return 0
 
-    # Use medians to reduce noise from outliers
-    median_leave = statistics.median(leave_points) if leave_points else 0
-    median_speaker = statistics.median(speaker_counts) if speaker_counts else 0
+    def score_per_breakdown(b):
+        # Determine how many speaker notes were scored total
+        speaker_notes = b.get("autoSpeakerNoteCount", 0)
+        amp_notes = b.get("autoAmpNoteCount", 0)
+        leave_pts = b.get("autoLeavePoints", 0)
 
-    # 2 points per leave, 5 points per note scored
-    estimated_auto = median_leave + (median_speaker * 5 / team_count)
+        # Try to weight the estimate based on the likelihood that the team is carrying
+        avg_speaker_per_team = speaker_notes / team_count if team_count else 0
+        speaker_ratio = (speaker_notes + 1e-6) / (avg_speaker_per_team + 1e-6) if avg_speaker_per_team else 1
 
-    return estimated_auto
+        # Cap ratio so we don't overinflate
+        speaker_ratio = min(speaker_ratio, 3.0)
+
+        # Estimate as if the team did the majority of the notes in this match
+        est_speaker = speaker_ratio * 5
+        est_amp = (amp_notes / team_count) * 2
+        est_leave = leave_pts / team_count  
+
+        coop_bonus = 3 / team_count if b.get("coopertitionBonusAchieved") else 0
+
+        return est_speaker + est_amp + est_leave + coop_bonus
+
+    scores = sorted(score_per_breakdown(b) for b in breakdowns)
+
+    if len(scores) >= 4:
+        cutoff = int(len(scores) * 0.75)
+        trimmed_scores = scores[:cutoff]
+        average = statistics.mean(trimmed_scores)
+    else:
+        average = statistics.median(scores)
+
+    return round(min(average, 40), 2)  # bump cap slightly for high auto teams
+
+def estimate_consistent_teleop(breakdowns, team_count):
+    if not breakdowns:
+        return 0
+
+    def score_per_breakdown(b):
+        amp_notes = b.get("teleopAmpNoteCount", 0)
+        speaker_notes = b.get("teleopSpeakerNoteCount", 0)
+        amplified_notes = b.get("amplifiedSpeakerNoteCount", 0)
+
+        # Estimate team contribution based on note type and rarity of amplification
+        base_score = (
+            (amp_notes * 1) +
+            (speaker_notes * 2) +
+            (amplified_notes * 3)  # amplification usually means team is strong
+        )
+
+        per_team_score = base_score / team_count if team_count else base_score
+        return per_team_score * 1.1  # Apply small boost for higher impact scoring
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    trimmed = statistics.median_high(scores) if len(scores) < 4 else statistics.mean(sorted(scores)[:int(0.75 * len(scores))])
+    return round(min(trimmed, 50), 2)  # reasonable cap
 
 def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veteran_teams=None):
     import statistics
@@ -59,6 +108,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
     overall_epa = auto_epa = teleop_epa = endgame_epa = None
     trend_deltas, contributions, teammate_epas = [], [], []
     total_score = wins = losses = 0
+    auto_breakdowns = []
 
     for match in matches:
         if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
@@ -85,23 +135,17 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
             losses += 1
 
         breakdown = (match.get("score_breakdown") or {}).get(alliance, {})
+        auto_breakdowns.append(breakdown)
 
-        index = team_keys.index(team_key) + 1
+        actual_auto = estimate_consistent_auto(auto_breakdowns, team_count)
 
-        # === AUTO CALCULATION (2024) ===
-        leave_pts = 2 * sum(1 for i in range(1, 4) if breakdown.get(f"autoLineRobot{i}") == "Yes")
-        auto_notes = breakdown.get("autoSpeakerNoteCount", 0)
-        actual_auto = leave_pts + (auto_notes * 5) / team_count
-
-        # === TELEOP CALCULATION (2024) ===
-        teleop_score = breakdown.get("teleopTotalNotePoints", 0)
-        actual_teleop = teleop_score / team_count
+        actual_teleop = estimate_consistent_teleop(auto_breakdowns, team_count)
 
         # === ENDGAME CALCULATION (2024) ===
         actual_endgame = 0
         trap_keys = ["trapStageLeft", "trapCenterStage", "trapStageRight"]
         trap_flags = [breakdown.get(k) for k in trap_keys]
-        trap_bonus_given = [False, False, False]  # ensure no trap double-counts
+        trap_bonus_given = [False, False, False]
 
         for i in range(1, 4):
             status = breakdown.get(f"endGameRobot{i}", "None")
@@ -119,10 +163,10 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         opponent_score = match["alliances"][opponent]["score"] / team_count
 
         if overall_epa is None:
-            overall_epa = actual_overall
-            auto_epa = actual_auto
-            endgame_epa = actual_endgame
+            auto_epa = estimate_consistent_auto(auto_breakdowns, team_count)
             teleop_epa = actual_teleop
+            endgame_epa = actual_endgame
+            overall_epa = auto_epa + teleop_epa + endgame_epa
             continue
 
         match_importance = importance.get(match.get("comp_level", "qm"), 1.0)

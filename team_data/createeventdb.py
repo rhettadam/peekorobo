@@ -18,14 +18,14 @@ def tba_get(endpoint: str):
     return r.json()
 
 # Connect to SQLite and enable compression features
-conn = sqlite3.connect("frc_events_1992_2025.db")
+conn = sqlite3.connect("events.sqlite")
 conn.execute("PRAGMA journal_mode=WAL")
 conn.execute("PRAGMA synchronous=OFF")
 conn.execute("PRAGMA temp_store=MEMORY")
 conn.execute("PRAGMA page_size=4096")
 c = conn.cursor()
 
-# Tables with shorter column names and compressed schema
+# Create optimized schema if not exists
 c.executescript("""
 CREATE TABLE IF NOT EXISTS e (
     k TEXT PRIMARY KEY,
@@ -61,98 +61,110 @@ CREATE TABLE IF NOT EXISTS a (
 """)
 conn.commit()
 
-for year in range(1992, 2026):
+year = 2025
+
+# Delete all 2025 data before rebuilding
+print("🧹 Deleting existing 2025 data...")
+c.execute("DELETE FROM e WHERE y = ?", (year,))
+c.execute("DELETE FROM et WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
+c.execute("DELETE FROM r WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
+c.execute("DELETE FROM o WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
+c.execute("DELETE FROM m WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
+c.execute("DELETE FROM a WHERE y = ?", (year,))
+conn.commit()
+
+try:
+    events = tba_get(f"events/{year}")
+except Exception as e:
+    print(f"❌ Failed to load events for {year}: {e}")
+    conn.close()
+    exit()
+
+def fetch(event):
+    key = event["key"]
+    data = {
+        "event": (
+            key, event.get("name"), year,
+            event.get("start_date"), event.get("end_date"),
+            event.get("event_type_string"), event.get("city"),
+            event.get("state_prov"), event.get("country"),
+            event.get("website")
+        ),
+        "teams": [], "rankings": [], "oprs": [], "matches": [], "awards": []
+    }
+
     try:
-        events = tba_get(f"events/{year}")
-    except Exception as e:
-        print(f"❌ Failed to load events for {year}: {e}")
-        continue
+        teams = tba_get(f"event/{key}/teams")
+        for t in teams:
+            t_num = t.get("team_number")
+            data["teams"].append((key, t_num, t.get("nickname"),
+                                  t.get("city"), t.get("state_prov"), t.get("country")))
+    except:
+        pass
 
-    def fetch(event):
-        key = event["key"]
-        data = {
-            "event": (
-                key, event.get("name"), year,
-                event.get("start_date"), event.get("end_date"),
-                event.get("event_type_string"), event.get("city"),
-                event.get("state_prov"), event.get("country"),
-                event.get("website")
-            ),
-            "teams": [], "rankings": [], "oprs": [], "matches": [], "awards": []
-        }
+    try:
+        ranks = tba_get(f"event/{key}/rankings")
+        for r in ranks.get("rankings", []):
+            record = r.get("record", {})
+            t_num = int(r.get("team_key", "frc0")[3:])
+            data["rankings"].append((key, t_num, r.get("rank"),
+                                     record.get("wins"), record.get("losses"),
+                                     record.get("ties"), r.get("dq")))
+    except:
+        pass
 
+    try:
+        oprs = tba_get(f"event/{key}/oprs").get("oprs", {})
+        for t_key, opr in oprs.items():
+            t_num = int(t_key[3:])
+            data["oprs"].append((key, t_num, opr))
+    except:
+        pass
+
+    try:
+        matches = tba_get(f"event/{key}/matches")
+        for m in matches:
+            data["matches"].append((
+                m["key"], key, m["comp_level"], m["match_number"],
+                m["set_number"],
+                ",".join(str(int(t[3:])) for t in m["alliances"]["red"]["team_keys"]),
+                ",".join(str(int(t[3:])) for t in m["alliances"]["blue"]["team_keys"]),
+                m["alliances"]["red"]["score"], m["alliances"]["blue"]["score"],
+                m.get("winning_alliance"),
+                next((v["key"] for v in m.get("videos", []) if v["type"] == "youtube"), None)
+            ))
+    except:
+        pass
+
+    try:
+        awards = tba_get(f"event/{key}/awards")
+        for aw in awards:
+            for r in aw.get("recipient_list", []):
+                if r.get("team_key"):
+                    t_num = int(r["team_key"][3:])
+                    data["awards"].append((key, t_num, aw.get("name"), year))
+    except:
+        pass
+
+    return data
+
+all_data = []
+with ThreadPoolExecutor(max_workers=10) as executor:
+    futures = [executor.submit(fetch, ev) for ev in events]
+    for f in tqdm(as_completed(futures), total=len(events), desc=f"Updating {year}"):
         try:
-            teams = tba_get(f"event/{key}/teams")
-            for t in teams:
-                t_num = t.get("team_number")
-                data["teams"].append((key, t_num, t.get("nickname"),
-                                      t.get("city"), t.get("state_prov"), t.get("country")))
-        except:
-            pass
+            all_data.append(f.result())
+        except Exception as e:
+            print(f"❌ Error processing: {e}")
 
-        try:
-            ranks = tba_get(f"event/{key}/rankings")
-            for r in ranks.get("rankings", []):
-                record = r.get("record", {})
-                t_num = int(r.get("team_key", "frc0")[3:])
-                data["rankings"].append((key, t_num, r.get("rank"),
-                                         record.get("wins"), record.get("losses"),
-                                         record.get("ties"), r.get("dq")))
-        except:
-            pass
-
-        try:
-            oprs = tba_get(f"event/{key}/oprs").get("oprs", {})
-            for t_key, opr in oprs.items():
-                t_num = int(t_key[3:])
-                data["oprs"].append((key, t_num, opr))
-        except:
-            pass
-
-        try:
-            matches = tba_get(f"event/{key}/matches")
-            for m in matches:
-                data["matches"].append((
-                    m["key"], key, m["comp_level"], m["match_number"],
-                    m["set_number"],
-                    ",".join(str(int(t[3:])) for t in m["alliances"]["red"]["team_keys"]),
-                    ",".join(str(int(t[3:])) for t in m["alliances"]["blue"]["team_keys"]),
-                    m["alliances"]["red"]["score"], m["alliances"]["blue"]["score"],
-                    m.get("winning_alliance"),
-                    next((v["key"] for v in m.get("videos", []) if v["type"] == "youtube"), None)
-                ))
-        except:
-            pass
-
-        try:
-            awards = tba_get(f"event/{key}/awards")
-            for aw in awards:
-                for r in aw.get("recipient_list", []):
-                    if r.get("team_key"):
-                        t_num = int(r["team_key"][3:])
-                        data["awards"].append((key, t_num, aw.get("name"), year))
-        except:
-            pass
-
-        return data
-
-    all_data = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(fetch, ev) for ev in events]
-        for f in tqdm(as_completed(futures), total=len(events), desc=f"Processing {year}"):
-            try:
-                all_data.append(f.result())
-            except Exception as e:
-                print(f"❌ Error processing: {e}")
-
-    for d in all_data:
-        c.execute("INSERT OR REPLACE INTO e VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d["event"])
-        c.executemany("INSERT OR REPLACE INTO et VALUES (?, ?, ?, ?, ?, ?)", d["teams"])
-        c.executemany("INSERT INTO r VALUES (?, ?, ?, ?, ?, ?, ?)", d["rankings"])
-        c.executemany("INSERT INTO o VALUES (?, ?, ?)", d["oprs"])
-        c.executemany("INSERT OR REPLACE INTO m VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d["matches"])
-        c.executemany("INSERT INTO a VALUES (?, ?, ?, ?)", d["awards"])
-    conn.commit()
+for d in all_data:
+    c.execute("INSERT OR REPLACE INTO e VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d["event"])
+    c.executemany("INSERT OR REPLACE INTO et VALUES (?, ?, ?, ?, ?, ?)", d["teams"])
+    c.executemany("INSERT INTO r VALUES (?, ?, ?, ?, ?, ?, ?)", d["rankings"])
+    c.executemany("INSERT INTO o VALUES (?, ?, ?)", d["oprs"])
+    c.executemany("INSERT OR REPLACE INTO m VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d["matches"])
+    c.executemany("INSERT INTO a VALUES (?, ?, ?, ?)", d["awards"])
+conn.commit()
 
 conn.close()
-print("\n✅ Done! Optimized SQLite DB created: frc_events_1992_2025.db")
+print("\n✅ 2025 events rebuilt and database saved: events.sqlite")

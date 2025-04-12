@@ -71,10 +71,10 @@ def estimate_consistent_auto(breakdowns, team_count):
 def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veteran_teams=None):
 
     importance = {
-        "qm": 1.2,
-        "qf": 1.0,
-        "sf": 1.0,
-        "f": 1.0
+        "qm": 1.4,
+        "qf": 1,
+        "sf": 1,
+        "f": 1,
     }
 
     matches = sorted(matches, key=lambda m: m.get("time") or 0)
@@ -159,7 +159,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
             actual_endgame += 5 / team_count
 
         foul_points = breakdown.get("foulPoints", 0)
-        actual_overall = actual_auto + actual_teleop + actual_endgame
+        actual_overall = actual_auto + actual_teleop + actual_endgame - foul_points
 
         opponent_score = match["alliances"][opponent_alliance]["score"] / team_count
 

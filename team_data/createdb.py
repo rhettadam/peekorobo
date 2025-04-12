@@ -1,14 +1,14 @@
 import sqlite3
 import json
 import os
-import glob
+import random
 
 # Database setup
 db_filename = "epa_teams.sqlite"
 conn = sqlite3.connect(db_filename)
 cur = conn.cursor()
 
-# Create table
+# Create table (only creates if it doesn't exist)
 cur.execute("""
 CREATE TABLE IF NOT EXISTS epa_history (
     year INTEGER,
@@ -32,55 +32,49 @@ CREATE TABLE IF NOT EXISTS epa_history (
     PRIMARY KEY (year, team_number)
 )
 """)
-
-# Commit table creation
 conn.commit()
 
-# === Load data from JSON files ===
-json_files = sorted(glob.glob("teams_*.json"))  # Matches teams_1992.json to teams_2025.json
+# === Load ONLY 2025 data ===
+file_path = "teams_2025.json"
 
-for file_path in json_files:
-    try:
-        year = int(os.path.basename(file_path).split("_")[1].split(".")[0])
-    except Exception as e:
-        print(f"Skipping file {file_path}: {e}")
-        continue
-
-    print(f"Inserting data from {file_path}...")
+if not os.path.exists(file_path):
+    print(f"File {file_path} not found. Exiting.")
+else:
+    print(f"Updating data from {file_path}...")
 
     with open(file_path, "r") as f:
         teams = json.load(f)
 
-        for team in teams:
-            cur.execute("""
-            INSERT OR REPLACE INTO epa_history (
-                year, team_number, nickname, city, state_prov, country, website,
-                normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                consistency, trend, average_match_score, wins, losses
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                year,
-                team.get("team_number"),
-                team.get("nickname"),
-                team.get("city"),
-                team.get("state_prov"),
-                team.get("country"),
-                team.get("website"),
-                team.get("normal_epa"),
-                team.get("epa"),
-                team.get("confidence"),
-                team.get("auto_epa"),
-                team.get("teleop_epa"),
-                team.get("endgame_epa"),
-                team.get("consistency"),
-                team.get("trend"),
-                team.get("average_match_score"),
-                team.get("wins"),
-                team.get("losses")
-            ))
+    year = 2025
+    for team in teams:
+        cur.execute("""
+        INSERT OR REPLACE INTO epa_history (
+            year, team_number, nickname, city, state_prov, country, website,
+            normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+            consistency, trend, average_match_score, wins, losses
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            year,
+            team.get("team_number"),
+            team.get("nickname"),
+            team.get("city"),
+            team.get("state_prov"),
+            team.get("country"),
+            team.get("website"),
+            team.get("normal_epa"),
+            team.get("epa"),
+            team.get("confidence"),
+            team.get("auto_epa"),
+            team.get("teleop_epa"),
+            team.get("endgame_epa"),
+            team.get("consistency"),
+            team.get("trend"),
+            team.get("average_match_score"),
+            team.get("wins"),
+            team.get("losses")
+        ))
 
-# Finalize
-conn.commit()
+    conn.commit()
+    print("2025 data updated successfully.")
+
 conn.close()
-
-print("SQLite database created: epa_teams.sqlite")

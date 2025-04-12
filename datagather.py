@@ -1,3 +1,481 @@
+from dotenv import load_dotenv
+import sqlite3
+import os
+import random
+import requests
+
+load_dotenv()
+
+TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
+
+API_KEYS = os.getenv("TBA_API_KEYS").split(',')
+
+def tba_get(endpoint: str):
+    # Cycle through keys by selecting one randomly or using a round-robin approach.
+    api_key = random.choice(API_KEYS)
+    headers = {"X-TBA-Auth-Key": api_key}
+    url = f"{TBA_BASE_URL}/{endpoint}"
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        return r.json()
+    return None
+
+def load_data(load_teams=True, load_events=True, load_event_teams=True, load_rankings=True, load_awards=True, load_matches=True, load_oprs=True):
+    def compress_dict(d):
+        return {k: v for k, v in d.items() if v not in (None, "", [], {}, ())}
+
+    team_data = {}
+    if load_teams:
+        team_conn = sqlite3.connect(os.path.join("team_data", "epa_teams.sqlite"))
+        team_cursor = team_conn.cursor()
+        team_cursor.execute("SELECT * FROM epa_history")
+        team_columns = [desc[0] for desc in team_cursor.description]
+        for row in team_cursor.fetchall():
+            team = compress_dict(dict(zip(team_columns, row)))
+            year = team["year"]
+            number = team["team_number"]
+            team_data.setdefault(year, {})[number] = team
+        team_conn.close()
+
+    event_data = {}
+    flat_event_list = []
+    EVENT_TEAMS = {}
+    EVENT_RANKINGS = {}
+    EVENTS_AWARDS = []
+    EVENT_MATCHES = {}
+    EVENT_OPRS = {}
+
+    if any([load_events, load_event_teams, load_rankings, load_awards, load_matches, load_oprs]):
+        event_conn = sqlite3.connect(os.path.join("team_data", "events.sqlite"))
+        event_cursor = event_conn.cursor()
+
+        def fetch_all(query):
+            event_cursor.execute(query)
+            cols = [d[0] for d in event_cursor.description]
+            return [compress_dict(dict(zip(cols, r))) for r in event_cursor.fetchall()]
+
+        if load_events:
+            events = fetch_all("SELECT * FROM e")
+            for ev in events:
+                year = ev["y"]
+                ek = ev["k"]
+                event_data.setdefault(year, {})[ek] = ev
+                flat_event_list.append(ev)
+
+        if load_event_teams:
+            team_entries = fetch_all("SELECT * FROM et")
+            for t in team_entries:
+                year = int(t["ek"][:4])
+                ek = t["ek"]
+                EVENT_TEAMS.setdefault(year, {}).setdefault(ek, []).append(t)
+
+        if load_rankings:
+            rank_entries = fetch_all("SELECT * FROM r")
+            for r in rank_entries:
+                year = int(r["ek"][:4])
+                ek = r["ek"]
+                tk = r["tk"]
+                EVENT_RANKINGS.setdefault(year, {}).setdefault(ek, {})[tk] = r
+
+        if load_awards:
+            EVENTS_AWARDS = fetch_all("SELECT * FROM a")
+
+        if load_matches:
+            match_entries = fetch_all("SELECT * FROM m")
+            for m in match_entries:
+                year = int(m["ek"][:4])
+                EVENT_MATCHES.setdefault(year, []).append(m)
+
+        if load_oprs:
+            opr_entries = fetch_all("SELECT * FROM o")
+            for o in opr_entries:
+                year = int(o["ek"][:4])
+                ek = o["ek"]
+                tk = o["tk"]
+                EVENT_OPRS.setdefault(year, {}).setdefault(ek, {})[tk] = o["opr"]
+
+        event_conn.close()
+
+    return {
+        "team_data": team_data if load_teams else None,
+        "event_data": event_data if load_events else None,
+        "flat_event_list": flat_event_list if load_events else None,
+        "event_teams": EVENT_TEAMS if load_event_teams else None,
+        "event_rankings": EVENT_RANKINGS if load_rankings else None,
+        "event_awards": EVENTS_AWARDS if load_awards else None,
+        "event_matches": EVENT_MATCHES if load_matches else None,
+        "event_oprs": EVENT_OPRS if load_oprs else None,
+    }
+
+def get_team_avatar(team_number, year=2025):
+    """
+    Returns the relative URL path to a team's avatar image if it exists,
+    otherwise returns the path to a stock avatar.
+    """
+    avatar_path = f"assets/avatars/{team_number}.png"
+    if os.path.exists(avatar_path):
+        return f"/assets/avatars/{team_number}.png?v=1"
+    return "/assets/avatars/stock.png"
+
+# locations.py
+
+COUNTRIES = [
+    {"label": "All Countries", "value": "All"},
+    {"label": "USA", "value": "USA"},
+    {"label": "Canada", "value": "Canada"},
+    {"label": "Mexico", "value": "Mexico"},
+    {"label": "Australia", "value": "Australia"},
+    {"label": "China", "value": "China"},
+    {"label": "India", "value": "India"},
+    {"label": "Israel", "value": "Israel"},
+    {"label": "Brazil", "value": "Brazil"},
+    {"label": "Türkiye", "value": "Türkiye"},
+    {"label": "Chinese Taipei", "value": "Chinese Taipei"},
+    {"label": "Argentina", "value": "Argentina"},
+    {"label": "Azerbaijan", "value": "Azerbaijan"},
+    {"label": "Belize", "value": "Belize"},
+    {"label": "Bulgaria", "value": "Bulgaria"},
+    {"label": "Colombia", "value": "Colombia"},
+    {"label": "Croatia", "value": "Croatia"},
+    {"label": "Czech Republic", "value": "Czech Republic"},
+    {"label": "Dominican Republic", "value": "Dominican Republic"},
+    {"label": "France", "value": "France"},
+    {"label": "Greece", "value": "Greece"},
+    {"label": "Hungary", "value": "Hungary"},
+    {"label": "Japan", "value": "Japan"},
+    {"label": "Netherlands", "value": "Netherlands"},
+    {"label": "Panama", "value": "Panama"},
+    {"label": "Philippines", "value": "Philippines"},
+    {"label": "Poland", "value": "Poland"},
+    {"label": "Singapore", "value": "Singapore"},
+    {"label": "South Africa", "value": "South Africa"},
+    {"label": "Switzerland", "value": "Switzerland"},
+    {"label": "United Kingdom", "value": "United Kingdom"},
+]
+
+STATES = {
+    "USA": [
+        {"label": "Alabama", "value": "Alabama"},
+        {"label": "Alaska", "value": "Alaska"},
+        {"label": "Arizona", "value": "Arizona"},
+        {"label": "Arkansas", "value": "Arkansas"},
+        {"label": "California", "value": "California"},
+        {"label": "Colorado", "value": "Colorado"},
+        {"label": "Connecticut", "value": "Connecticut"},
+        {"label": "Delaware", "value": "Delaware"},
+        {"label": "Florida", "value": "Florida"},
+        {"label": "Georgia", "value": "Georgia"},
+        {"label": "Hawaii", "value": "Hawaii"},
+        {"label": "Idaho", "value": "Idaho"},
+        {"label": "Illinois", "value": "Illinois"},
+        {"label": "Indiana", "value": "Indiana"},
+        {"label": "Iowa", "value": "Iowa"},
+        {"label": "Kansas", "value": "Kansas"},
+        {"label": "Kentucky", "value": "Kentucky"},
+        {"label": "Louisiana", "value": "Louisiana"},
+        {"label": "Maine", "value": "Maine"},
+        {"label": "Maryland", "value": "Maryland"},
+        {"label": "Massachusetts", "value": "Massachusetts"},
+        {"label": "Michigan", "value": "Michigan"},
+        {"label": "Minnesota", "value": "Minnesota"},
+        {"label": "Mississippi", "value": "Mississippi"},
+        {"label": "Missouri", "value": "Missouri"},
+        {"label": "Montana", "value": "Montana"},
+        {"label": "Nebraska", "value": "Nebraska"},
+        {"label": "Nevada", "value": "Nevada"},
+        {"label": "New Hampshire", "value": "New Hampshire"},
+        {"label": "New Jersey", "value": "New Jersey"},
+        {"label": "New Mexico", "value": "New Mexico"},
+        {"label": "New York", "value": "New York"},
+        {"label": "North Carolina", "value": "North Carolina"},
+        {"label": "North Dakota", "value": "North Dakota"},
+        {"label": "Ohio", "value": "Ohio"},
+        {"label": "Oklahoma", "value": "Oklahoma"},
+        {"label": "Oregon", "value": "Oregon"},
+        {"label": "Pennsylvania", "value": "Pennsylvania"},
+        {"label": "Rhode Island", "value": "Rhode Island"},
+        {"label": "South Carolina", "value": "South Carolina"},
+        {"label": "South Dakota", "value": "South Dakota"},
+        {"label": "Tennessee", "value": "Tennessee"},
+        {"label": "Texas", "value": "Texas"},
+        {"label": "Utah", "value": "Utah"},
+        {"label": "Vermont", "value": "Vermont"},
+        {"label": "Virginia", "value": "Virginia"},
+        {"label": "Washington", "value": "Washington"},
+        {"label": "West Virginia", "value": "West Virginia"},
+        {"label": "Wisconsin", "value": "Wisconsin"},
+        {"label": "Wyoming", "value": "Wyoming"},
+    ],
+    "Canada": [
+        {"label": "Alberta", "value": "Alberta"},
+        {"label": "British Columbia", "value": "British Columbia"},
+        {"label": "Manitoba", "value": "Manitoba"},
+        {"label": "New Brunswick", "value": "New Brunswick"},
+        {"label": "Newfoundland and Labrador", "value": "Newfoundland and Labrador"},
+        {"label": "Nova Scotia", "value": "Nova Scotia"},
+        {"label": "Ontario", "value": "Ontario"},
+        {"label": "Prince Edward Island", "value": "Prince Edward Island"},
+        {"label": "Quebec", "value": "Quebec"},
+        {"label": "Saskatchewan", "value": "Saskatchewan"},
+    ],
+    "Mexico": [
+        {"label": "Aguascalientes", "value": "Aguascalientes"},
+        {"label": "Baja California", "value": "Baja California"},
+        {"label": "Chihuahua", "value": "Chihuahua"},
+        {"label": "Coahuila", "value": "Coahuila"},
+        {"label": "Jalisco", "value": "Jalisco"},
+        {"label": "Mexico City", "value": "Mexico City"},
+        {"label": "Nuevo León", "value": "Nuevo León"},
+        {"label": "Puebla", "value": "Puebla"},
+        {"label": "Querétaro", "value": "Querétaro"},
+        {"label": "Yucatán", "value": "Yucatán"},
+    ],
+    "Australia": [
+        {"label": "New South Wales", "value": "New South Wales"},
+        {"label": "Queensland", "value": "Queensland"},
+        {"label": "South Australia", "value": "South Australia"},
+        {"label": "Tasmania", "value": "Tasmania"},
+        {"label": "Victoria", "value": "Victoria"},
+        {"label": "Western Australia", "value": "Western Australia"},
+    ],
+    "India": [
+        {"label": "Delhi", "value": "Delhi"},
+        {"label": "Karnataka", "value": "Karnataka"},
+        {"label": "Maharashtra", "value": "Maharashtra"},
+        {"label": "Tamil Nadu", "value": "Tamil Nadu"},
+        {"label": "Uttar Pradesh", "value": "Uttar Pradesh"},
+    ],
+}
+
+STATES.update({
+    "Israel": [
+        {"label": "Central District", "value": "Central District"},
+        {"label": "Haifa District", "value": "Haifa District"},
+        {"label": "Jerusalem District", "value": "Jerusalem District"},
+        {"label": "Northern District", "value": "Northern District"},
+        {"label": "Southern District", "value": "Southern District"},
+        {"label": "Tel Aviv District", "value": "Tel Aviv District"},
+    ],
+    "Türkiye": [
+        {"label": "Adana", "value": "Adana"},
+        {"label": "Ankara", "value": "Ankara"},
+        {"label": "Antalya", "value": "Antalya"},
+        {"label": "Bursa", "value": "Bursa"},
+        {"label": "Istanbul", "value": "Istanbul"},
+        {"label": "Izmir", "value": "Izmir"},
+        {"label": "Konya", "value": "Konya"},
+        {"label": "Gaziantep", "value": "Gaziantep"},
+        {"label": "Mersin", "value": "Mersin"},
+        {"label": "Kayseri", "value": "Kayseri"},
+        {"label": "Eskisehir", "value": "Eskisehir"},
+    ],
+    "Brazil": [
+        {"label": "Acre", "value": "Acre"},
+        {"label": "Alagoas", "value": "Alagoas"},
+        {"label": "Amapá", "value": "Amapá"},
+        {"label": "Amazonas", "value": "Amazonas"},
+        {"label": "Bahia", "value": "Bahia"},
+        {"label": "Ceará", "value": "Ceará"},
+        {"label": "Distrito Federal", "value": "Distrito Federal"},
+        {"label": "Espírito Santo", "value": "Espírito Santo"},
+        {"label": "Goiás", "value": "Goiás"},
+        {"label": "Maranhão", "value": "Maranhão"},
+        {"label": "Mato Grosso", "value": "Mato Grosso"},
+        {"label": "Mato Grosso do Sul", "value": "Mato Grosso do Sul"},
+        {"label": "Minas Gerais", "value": "Minas Gerais"},
+        {"label": "Pará", "value": "Pará"},
+        {"label": "Paraíba", "value": "Paraíba"},
+        {"label": "Paraná", "value": "Paraná"},
+        {"label": "Pernambuco", "value": "Pernambuco"},
+        {"label": "Piauí", "value": "Piauí"},
+        {"label": "Rio de Janeiro", "value": "Rio de Janeiro"},
+        {"label": "Rio Grande do Norte", "value": "Rio Grande do Norte"},
+        {"label": "Rio Grande do Sul", "value": "Rio Grande do Sul"},
+        {"label": "Rondônia", "value": "Rondônia"},
+        {"label": "Roraima", "value": "Roraima"},
+        {"label": "Santa Catarina", "value": "Santa Catarina"},
+        {"label": "São Paulo", "value": "São Paulo"},
+        {"label": "Sergipe", "value": "Sergipe"},
+        {"label": "Tocantins", "value": "Tocantins"},
+    ],
+    "China": [
+        {"label": "Anhui", "value": "Anhui"},
+        {"label": "Beijing", "value": "Beijing"},
+        {"label": "Chongqing", "value": "Chongqing"},
+        {"label": "Fujian", "value": "Fujian"},
+        {"label": "Gansu", "value": "Gansu"},
+        {"label": "Guangdong", "value": "Guangdong"},
+        {"label": "Guangxi", "value": "Guangxi"},
+        {"label": "Guizhou", "value": "Guizhou"},
+        {"label": "Hainan", "value": "Hainan"},
+        {"label": "Hebei", "value": "Hebei"},
+        {"label": "Heilongjiang", "value": "Heilongjiang"},
+        {"label": "Henan", "value": "Henan"},
+        {"label": "Hubei", "value": "Hubei"},
+        {"label": "Hunan", "value": "Hunan"},
+        {"label": "Inner Mongolia", "value": "Inner Mongolia"},
+        {"label": "Jiangsu", "value": "Jiangsu"},
+        {"label": "Jiangxi", "value": "Jiangxi"},
+        {"label": "Jilin", "value": "Jilin"},
+        {"label": "Liaoning", "value": "Liaoning"},
+        {"label": "Ningxia", "value": "Ningxia"},
+        {"label": "Qinghai", "value": "Qinghai"},
+        {"label": "Shaanxi", "value": "Shaanxi"},
+        {"label": "Shandong", "value": "Shandong"},
+        {"label": "Shanghai", "value": "Shanghai"},
+        {"label": "Shanxi", "value": "Shanxi"},
+        {"label": "Sichuan", "value": "Sichuan"},
+        {"label": "Tianjin", "value": "Tianjin"},
+        {"label": "Tibet", "value": "Tibet"},
+        {"label": "Xinjiang", "value": "Xinjiang"},
+        {"label": "Yunnan", "value": "Yunnan"},
+        {"label": "Zhejiang", "value": "Zhejiang"},
+    ],
+    "Chinese Taipei": [
+        {"label": "Taipei", "value": "Taipei"},
+        {"label": "New Taipei", "value": "New Taipei"},
+        {"label": "Taichung", "value": "Taichung"},
+        {"label": "Tainan", "value": "Tainan"},
+        {"label": "Kaohsiung", "value": "Kaohsiung"},
+        {"label": "Hsinchu", "value": "Hsinchu"},
+        {"label": "Keelung", "value": "Keelung"},
+        {"label": "Taoyuan", "value": "Taoyuan"},
+        {"label": "Chiayi", "value": "Chiayi"},
+    ],
+})
+STATES.update({
+    "Argentina": [
+        {"label": "Buenos Aires", "value": "Buenos Aires"},
+        {"label": "Córdoba", "value": "Córdoba"},
+        {"label": "Santa Fe", "value": "Santa Fe"},
+        {"label": "Mendoza", "value": "Mendoza"},
+        {"label": "Tucumán", "value": "Tucumán"},
+    ],
+    "Azerbaijan": [
+        {"label": "Baku", "value": "Baku"},
+        {"label": "Ganja", "value": "Ganja"},
+        {"label": "Sumqayit", "value": "Sumqayit"},
+        {"label": "Mingachevir", "value": "Mingachevir"},
+    ],
+    "Belize": [
+        {"label": "Belize District", "value": "Belize District"},
+        {"label": "Cayo", "value": "Cayo"},
+        {"label": "Orange Walk", "value": "Orange Walk"},
+        {"label": "Stann Creek", "value": "Stann Creek"},
+        {"label": "Toledo", "value": "Toledo"},
+    ],
+    "Brazil": [
+        {"label": "São Paulo", "value": "São Paulo"},
+        {"label": "Rio de Janeiro", "value": "Rio de Janeiro"},
+        {"label": "Minas Gerais", "value": "Minas Gerais"},
+        {"label": "Bahia", "value": "Bahia"},
+        {"label": "Paraná", "value": "Paraná"},
+    ],
+    "Bulgaria": [
+        {"label": "Sofia", "value": "Sofia"},
+        {"label": "Plovdiv", "value": "Plovdiv"},
+        {"label": "Varna", "value": "Varna"},
+        {"label": "Burgas", "value": "Burgas"},
+        {"label": "Ruse", "value": "Ruse"},
+    ],
+    "Colombia": [
+        {"label": "Bogotá", "value": "Bogotá"},
+        {"label": "Antioquia", "value": "Antioquia"},
+        {"label": "Valle del Cauca", "value": "Valle del Cauca"},
+        {"label": "Atlántico", "value": "Atlántico"},
+        {"label": "Santander", "value": "Santander"},
+    ],
+    "Croatia": [
+        {"label": "Zagreb", "value": "Zagreb"},
+        {"label": "Split-Dalmatia", "value": "Split-Dalmatia"},
+        {"label": "Istria", "value": "Istria"},
+        {"label": "Dubrovnik-Neretva", "value": "Dubrovnik-Neretva"},
+    ],
+    "Czech Republic": [
+        {"label": "Prague", "value": "Prague"},
+        {"label": "South Moravian", "value": "South Moravian"},
+        {"label": "Central Bohemian", "value": "Central Bohemian"},
+        {"label": "Moravian-Silesian", "value": "Moravian-Silesian"},
+    ],
+    "Dominican Republic": [
+        {"label": "Santo Domingo", "value": "Santo Domingo"},
+        {"label": "Santiago", "value": "Santiago"},
+        {"label": "La Vega", "value": "La Vega"},
+        {"label": "Puerto Plata", "value": "Puerto Plata"},
+    ],
+    "France": [
+        {"label": "Île-de-France", "value": "Île-de-France"},
+        {"label": "Provence-Alpes-Côte d'Azur", "value": "Provence-Alpes-Côte d'Azur"},
+        {"label": "Auvergne-Rhône-Alpes", "value": "Auvergne-Rhône-Alpes"},
+        {"label": "Occitanie", "value": "Occitanie"},
+        {"label": "Nouvelle-Aquitaine", "value": "Nouvelle-Aquitaine"},
+    ],
+    "Greece": [
+        {"label": "Attica", "value": "Attica"},
+        {"label": "Central Macedonia", "value": "Central Macedonia"},
+        {"label": "Crete", "value": "Crete"},
+        {"label": "Western Greece", "value": "Western Greece"},
+    ],
+    "Hungary": [
+        {"label": "Budapest", "value": "Budapest"},
+        {"label": "Pest", "value": "Pest"},
+        {"label": "Győr-Moson-Sopron", "value": "Győr-Moson-Sopron"},
+        {"label": "Hajdú-Bihar", "value": "Hajdú-Bihar"},
+    ],
+    "Japan": [
+        {"label": "Tokyo", "value": "Tokyo"},
+        {"label": "Osaka", "value": "Osaka"},
+        {"label": "Kyoto", "value": "Kyoto"},
+        {"label": "Hokkaido", "value": "Hokkaido"},
+        {"label": "Fukuoka", "value": "Fukuoka"},
+    ],
+    "Netherlands": [
+        {"label": "North Holland", "value": "North Holland"},
+        {"label": "South Holland", "value": "South Holland"},
+        {"label": "Utrecht", "value": "Utrecht"},
+        {"label": "Gelderland", "value": "Gelderland"},
+    ],
+    "Panama": [
+        {"label": "Panamá", "value": "Panamá"},
+        {"label": "Colón", "value": "Colón"},
+        {"label": "Chiriquí", "value": "Chiriquí"},
+        {"label": "Veraguas", "value": "Veraguas"},
+    ],
+    "Philippines": [
+        {"label": "Metro Manila", "value": "Metro Manila"},
+        {"label": "Central Luzon", "value": "Central Luzon"},
+        {"label": "Calabarzon", "value": "Calabarzon"},
+        {"label": "Davao Region", "value": "Davao Region"},
+        {"label": "Western Visayas", "value": "Western Visayas"},
+    ],
+    "Poland": [
+        {"label": "Mazovia", "value": "Mazovia"},
+        {"label": "Silesia", "value": "Silesia"},
+        {"label": "Lesser Poland", "value": "Lesser Poland"},
+        {"label": "Greater Poland", "value": "Greater Poland"},
+    ],
+    "Singapore": [],
+    "South Africa": [
+        {"label": "Gauteng", "value": "Gauteng"},
+        {"label": "Western Cape", "value": "Western Cape"},
+        {"label": "KwaZulu-Natal", "value": "KwaZulu-Natal"},
+        {"label": "Eastern Cape", "value": "Eastern Cape"},
+        {"label": "Free State", "value": "Free State"},
+    ],
+    "Switzerland": [
+        {"label": "Zurich", "value": "Zurich"},
+        {"label": "Bern", "value": "Bern"},
+        {"label": "Vaud", "value": "Vaud"},
+        {"label": "Geneva", "value": "Geneva"},
+    ],
+    "United Kingdom": [
+        {"label": "England", "value": "England"},
+        {"label": "Scotland", "value": "Scotland"},
+        {"label": "Wales", "value": "Wales"},
+        {"label": "Northern Ireland", "value": "Northern Ireland"},
+    ],
+})
+
 frc_games = {
         2025: {"name": "Reefscape", 
                "video": "https://www.youtube.com/watch?v=YWbxcjlY9JY", 

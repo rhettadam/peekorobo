@@ -6,23 +6,28 @@ from tenacity import retry, stop_never, wait_exponential, retry_if_exception_typ
 import requests
 import concurrent.futures
 from dotenv import load_dotenv
+import random
 
 load_dotenv()
 
-TBA_API_BASE_URL = "https://www.thebluealliance.com/api/v3"
-TBA_AUTH_KEY = os.getenv("TBA_API_KEY")
-HEADERS = {"X-TBA-Auth-Key": TBA_AUTH_KEY}
+TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
+
+API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 
 @retry(
     stop=stop_never,
     wait=wait_exponential(multiplier=1, min=0.5, max=5),
     retry=retry_if_exception_type(Exception),
 )
-def tba_get(endpoint):
-    url = f"{TBA_API_BASE_URL}/{endpoint}"
-    response = requests.get(url, headers=HEADERS, timeout=10)
-    response.raise_for_status()
-    return response.json()
+def tba_get(endpoint: str):
+    # Cycle through keys by selecting one randomly or using a round-robin approach.
+    api_key = random.choice(API_KEYS)
+    headers = {"X-TBA-Auth-Key": api_key}
+    url = f"{TBA_BASE_URL}/{endpoint}"
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        return r.json()
+    return None
 
 def calculate_epa_components(matches, team_key):
     total_matches = 0
