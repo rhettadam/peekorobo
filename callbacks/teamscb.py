@@ -1,25 +1,14 @@
 from dash import callback, Output, Input, State
 from dash import dash_table
 from layouts.teams import get_epa_display
+from layouts.teams import create_team_card
 from datagather import get_team_avatar, load_data, COUNTRIES, STATES
 import numpy as np
 import dash_bootstrap_components as dbc
 from dash import html
 import os
 
-from layouts.teams import create_team_card
-
-data = load_data(
-    load_teams=True,
-    load_events=False,
-    load_event_teams=False,
-    load_rankings=False,
-    load_awards=False,
-    load_matches=False,
-    load_oprs=False,
-)
-
-TEAM_DATABASE = data.get("team_data", {})
+from layouts.teams import load_team_data
 
 @callback(
     [
@@ -40,13 +29,7 @@ TEAM_DATABASE = data.get("team_data", {})
     ],
 )
 def load_teams(selected_year, selected_country, selected_state, search_query, active_tab, sort_by):
-    from functools import lru_cache
-
-    @lru_cache(maxsize=1)
-    def get_cached_team_data(year):
-        return list(TEAM_DATABASE.get(year, {}).values())
-
-    teams_data = get_cached_team_data(selected_year)
+    teams_data = load_team_data(selected_year)
 
     if not teams_data:
         return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}

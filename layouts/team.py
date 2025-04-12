@@ -5,25 +5,7 @@ import json
 from collections import defaultdict
 from layouts.topbar import topbar, footer
 
-data = load_data(
-    load_teams=True,
-    load_events=True,
-    load_event_teams=True,
-    load_rankings=True,
-    load_awards=True,
-    load_matches=True,
-    load_oprs=True,
-)
-
-# Mimic legacy unpacking
-TEAM_DATABASE = data.get("team_data", {})
-EVENT_DATABASE = data.get("event_data", {})
-EVENTS_DATABASE = data.get("flat_event_list", [])
-EVENT_TEAMS = data.get("event_teams", {})
-EVENT_RANKINGS = data.get("event_rankings", {})
-EVENT_AWARDS = data.get("event_awards", [])
-EVENT_MATCHES = data.get("event_matches", {})
-EVENT_OPRS = data.get("event_oprs", {})
+from data_store import TEAM_DATABASE, EVENT_DATABASE, EVENTS_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES, EVENT_OPRS
 
 def calculate_ranks(team_data, selected_team):
     global_rank = 1

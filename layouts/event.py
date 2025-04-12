@@ -1,31 +1,14 @@
 from layouts.topbar import topbar, footer
 import re
 import numpy as np
+import datetime
 from layouts.epalegend import epa_legend_layout, get_epa_display
 import dash_bootstrap_components as dbc
 from dash import html, dcc
 from dash import dash_table
 from datagather import tba_get, get_team_avatar, load_data
 
-data = load_data(
-    load_teams=True,
-    load_events=True,
-    load_event_teams=True,
-    load_rankings=True,
-    load_awards=True,
-    load_matches=True,
-    load_oprs=True,
-)
-
-# Mimic legacy unpacking
-TEAM_DATABASE = data.get("team_data", {})
-EVENT_DATABASE = data.get("event_data", {})
-EVENTS_DATABASE = data.get("flat_event_list", [])
-EVENT_TEAMS = data.get("event_teams", {})
-EVENT_RANKINGS = data.get("event_rankings", {})
-EVENT_AWARDS = data.get("event_awards", [])
-EVENT_MATCHES = data.get("event_matches", {})
-EVENT_OPRS = data.get("event_oprs", {})
+from data_store import TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_MATCHES, EVENT_OPRS
 
 def create_team_card_spotlight(team, epa_data, event_year):
     """

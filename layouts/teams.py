@@ -4,42 +4,28 @@ from dash import dcc, dash_table, html
 import dash_bootstrap_components as dbc
 from datagather import load_data, COUNTRIES, STATES
 
-data = load_data(
-    load_teams=True,
-    load_events=True,
-    load_event_teams=True,
-    load_rankings=True,
-    load_awards=True,
-    load_matches=True,
-    load_oprs=True,
-)
+from data_store import TEAM_DATABASE
 
-# Mimic legacy unpacking
-TEAM_DATABASE = data.get("team_data", {})
-EVENT_DATABASE = data.get("event_data", {})
-EVENTS_DATABASE = data.get("flat_event_list", [])
-EVENT_TEAMS = data.get("event_teams", {})
-EVENT_RANKINGS = data.get("event_rankings", {})
-EVENT_AWARDS = data.get("event_awards", [])
-EVENT_MATCHES = data.get("event_matches", {})
-EVENT_OPRS = data.get("event_oprs", {})
+team_cache = {}
+
+def load_team_data(year):
+    if year not in team_cache:
+        team_cache[year] = list(TEAM_DATABASE.get(year, {}).values())
+    return team_cache[year]
 
 def create_team_card(team, selected_year, avatar_url=None):
     team_number = team.get("team_number", "N/A")
 
-    # Pull team data from database
-    team_data = TEAM_DATABASE.get(selected_year, {}).get(team_number, {})
-
-    nickname = team_data.get("nickname", "Unknown")
-    city = team_data.get("city", "")
-    state = team_data.get("state_prov", "")
-    country = team_data.get("country", "")
+    nickname = team.get("nickname", "Unknown")
+    city = team.get("city", "")
+    state = team.get("state_prov", "")
+    country = team.get("country", "")
 
     location_pieces = [p for p in [city, state, country] if p]
     location_str = ", ".join(location_pieces) if location_pieces else "Unknown"
 
     # ACE and rank from database
-    epa = team_data.get("epa")
+    epa = team.get("epa")
     rank = team.get("global_rank", "N/A")
 
     rank_display = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, rank)

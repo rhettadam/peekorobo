@@ -3,19 +3,7 @@ from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 from datagather import load_data
 
-data = load_data(
-    load_teams=True,
-    load_events=True,
-    load_event_teams=False,
-    load_rankings=False,
-    load_awards=False,
-    load_matches=False,
-    load_oprs=False,
-)
-
-# Mimic legacy unpacking
-TEAM_DATABASE = data.get("team_data", {})
-EVENTS_DATABASE = data.get("flat_event_list", [])
+from data_store import TEAM_DATABASE, EVENTS_DATABASE
 
 team_data = TEAM_DATABASE
 

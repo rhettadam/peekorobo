@@ -7,26 +7,6 @@ from layouts.event import create_team_card_spotlight
 
 from datagather import load_data, tba_get
 
-data = load_data(
-    load_teams=True,
-    load_events=True,
-    load_event_teams=True,
-    load_rankings=True,
-    load_awards=True,
-    load_matches=True,
-    load_oprs=True,
-)
-
-# Mimic legacy unpacking
-TEAM_DATABASE = data.get("team_data", {})
-EVENT_DATABASE = data.get("event_data", {})
-EVENTS_DATABASE = data.get("flat_event_list", [])
-EVENT_TEAMS = data.get("event_teams", {})
-EVENT_RANKINGS = data.get("event_rankings", {})
-EVENT_AWARDS = data.get("event_awards", [])
-EVENT_MATCHES = data.get("event_matches", {})
-EVENT_OPRS = data.get("event_oprs", {})
-
 @callback(
     Output("data-display-container", "children"),
     Input("event-data-tabs", "active_tab"),
@@ -38,6 +18,7 @@ EVENT_OPRS = data.get("event_oprs", {})
     State("store-event-year", "data"), 
 )
 def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matches, event_year):
+    from data_store import EVENT_TEAMS, EVENT_MATCHES
     if not active_tab:
         return dbc.Alert("Select a data category above.", color="info")
 
