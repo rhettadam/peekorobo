@@ -4,8 +4,7 @@ import dash_bootstrap_components as dbc
 import json
 from collections import defaultdict
 from layouts.topbar import topbar, footer
-
-from data_store import TEAM_DATABASE, EVENT_DATABASE, EVENTS_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES, EVENT_OPRS
+from data_store import TEAM_DATABASE
 
 def calculate_ranks(team_data, selected_team):
     global_rank = 1
@@ -17,7 +16,7 @@ def calculate_ranks(team_data, selected_team):
     selected_country = (selected_team.get("country") or "").lower()
     selected_state = (selected_team.get("state_prov") or "").lower()
 
-    for team in team_data:
+    for team in team_data.values():
         if team.get("team_number") == selected_team.get("team_number"):
             continue
 
@@ -39,12 +38,24 @@ def calculate_ranks(team_data, selected_team):
 
     return global_rank, country_rank, state_rank
 
-def build_recent_events_section(team_key, team_number, epa_data, performance_year):
+def build_recent_events_section(team_key, team_number, epa_data, performance_year, is_history, data):
+
+    data = data
+
+    event_data_by_year = data.get("event_data", {})
+    EVENT_TEAMS = data.get("event_teams", {})
+    EVENT_RANKINGS = data.get("event_rankings", {})
+    EVENT_AWARDS = data.get("event_awards", [])
+    EVENT_MATCHES = data.get("event_matches", {})
+
+    selected_year_data = TEAM_DATABASE.get(performance_year, {})
+    selected_team = selected_year_data.get(team_number)
+    
     epa_data = epa_data or {}
     recent_rows = []
     year = performance_year 
 
-    for event_key, event in EVENT_DATABASE.get(year, {}).items():
+    for event_key, event in event_data_by_year.get(year, {}).items():
         event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
         if not any(t["tk"] == team_number for t in event_teams):
             continue
@@ -210,33 +221,40 @@ def team_layout(team_number, year):
     # Separate handling for performance year (used for ACE/stats) vs. awards/events year
     is_history = not year or str(year).lower() == "history"
 
-    if is_history:
-        year = None
-        # fallback year to use for metrics (default to 2025 or latest available)
-        performance_year = 2025
-        available_years = sorted(TEAM_DATABASE.keys(), reverse=True)
-        for y in available_years:
-            if team_number in TEAM_DATABASE[y]:
-                performance_year = y
-                break
-    else:
+    if not is_history:
         try:
             year = int(year)
             performance_year = year
         except ValueError:
             return dbc.Alert("Invalid year provided.", color="danger")
+    else:
+        year = None
+        performance_year = 2025
 
-    # Now safely use performance_year for stats lookups
-    year_data = TEAM_DATABASE.get(performance_year)
-    if not year_data:
-        return dbc.Alert(f"Data for year {performance_year} not found.", color="danger")
+    data = load_data(
+        load_teams=False,
+        load_events=True,
+        load_event_teams=True,
+        load_rankings=True,
+        load_awards=True,
+        load_matches=True,
+        load_oprs=False,
+        years=None if is_history else [performance_year]
+    )
+    
+    event_data_by_year = data.get("event_data", {})
+    EVENT_TEAMS = data.get("event_teams", {})
+    EVENT_RANKINGS = data.get("event_rankings", {})
+    EVENT_AWARDS = data.get("event_awards", [])
 
-    selected_team = year_data.get(team_number)
+    selected_year_data = TEAM_DATABASE.get(performance_year, {})
+    selected_team = selected_year_data.get(team_number)
+
     if not selected_team:
         return dbc.Alert(f"Team {team_number} not found in the data for {performance_year}.", color="danger")
 
     # Calculate Rankings
-    global_rank, country_rank, state_rank = calculate_ranks(list(year_data.values()), selected_team)
+    global_rank, country_rank, state_rank = calculate_ranks(selected_year_data, selected_team)
 
     # ACE Display
     epa_value = selected_team.get("epa", None)
@@ -256,7 +274,7 @@ def team_layout(team_number, year):
             "teleop_epa": data.get("teleop_epa", 0),
             "endgame_epa": data.get("endgame_epa", 0),
         }
-        for team_num, data in year_data.items()
+        for team_num, data in selected_year_data.items()
     }
 
     nickname = selected_team.get("nickname", "Unknown")
@@ -577,11 +595,11 @@ def team_layout(team_number, year):
         # --- Team Events from local database ---
     events_data = []
     
-    year_keys = [year] if year else list(EVENT_DATABASE.keys())
+    year_keys = [year] if year else list(event_data_by_year.keys())
     participated_events = []
     
     for year_key in year_keys:
-        for event_key, event in EVENT_DATABASE.get(year_key, {}).items():
+        for event_key, event in event_data_by_year.get(year_key, {}).items():
             team_list = EVENT_TEAMS.get(year_key, {}).get(event_key, [])
             if any(t["tk"] == team_number for t in team_list):  # using team_number now
                 participated_events.append((year_key, event_key, event))
@@ -672,7 +690,7 @@ def team_layout(team_number, year):
         if any(keyword in name_lower for keyword in blue_banner_keywords):
             event_key = award["ek"]
             year_str = str(award["y"])
-            event = EVENT_DATABASE.get(int(year_str), {}).get(event_key, {})
+            event = event_data_by_year.get(int(year_str), {}).get(event_key, {})
             event_name = event.get("n", "Unknown Event")
             full_event_name = f"{year_str} {event_name}"
     
@@ -731,7 +749,7 @@ def team_layout(team_number, year):
                     team_card,
                     performance_card,
                     html.Hr(),
-                    build_recent_events_section(team_key, team_number, epa_data, performance_year),
+                    build_recent_events_section(team_key, team_number, epa_data, performance_year, is_history, data),
                     html.H3("Events", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
                     events_table,
                     html.H3("Awards", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),

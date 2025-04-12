@@ -5,8 +5,6 @@ import dash_bootstrap_components as dbc
 from layouts.epalegend import epa_legend_layout
 from layouts.event import create_team_card_spotlight
 
-from datagather import load_data, tba_get
-
 @callback(
     Output("data-display-container", "children"),
     Input("event-data-tabs", "active_tab"),
@@ -18,7 +16,6 @@ from datagather import load_data, tba_get
     State("store-event-year", "data"), 
 )
 def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matches, event_year):
-    from data_store import EVENT_TEAMS, EVENT_MATCHES
     if not active_tab:
         return dbc.Alert("Select a data category above.", color="info")
 

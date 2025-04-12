@@ -20,7 +20,17 @@ def tba_get(endpoint: str):
         return r.json()
     return None
 
-def load_data(load_teams=True, load_events=True, load_event_teams=True, load_rankings=True, load_awards=True, load_matches=True, load_oprs=True):
+
+def load_data(
+    load_teams=True,
+    load_events=True,
+    load_event_teams=True,
+    load_rankings=True,
+    load_awards=True,
+    load_matches=True,
+    load_oprs=True,
+    years=None
+):
     def compress_dict(d):
         return {k: v for k, v in d.items() if v not in (None, "", [], {}, ())}
 
@@ -33,8 +43,9 @@ def load_data(load_teams=True, load_events=True, load_event_teams=True, load_ran
         for row in team_cursor.fetchall():
             team = compress_dict(dict(zip(team_columns, row)))
             year = team["year"]
-            number = team["team_number"]
-            team_data.setdefault(year, {})[number] = team
+            if years is None or year in years:
+                number = team["team_number"]
+                team_data.setdefault(year, {})[number] = team
         team_conn.close()
 
     event_data = {}
@@ -58,41 +69,50 @@ def load_data(load_teams=True, load_events=True, load_event_teams=True, load_ran
             events = fetch_all("SELECT * FROM e")
             for ev in events:
                 year = ev["y"]
-                ek = ev["k"]
-                event_data.setdefault(year, {})[ek] = ev
-                flat_event_list.append(ev)
+                if years is None or year in years:
+                    ek = ev["k"]
+                    event_data.setdefault(year, {})[ek] = ev
+                    flat_event_list.append(ev)
 
         if load_event_teams:
             team_entries = fetch_all("SELECT * FROM et")
             for t in team_entries:
                 year = int(t["ek"][:4])
-                ek = t["ek"]
-                EVENT_TEAMS.setdefault(year, {}).setdefault(ek, []).append(t)
+                if years is None or year in years:
+                    ek = t["ek"]
+                    EVENT_TEAMS.setdefault(year, {}).setdefault(ek, []).append(t)
 
         if load_rankings:
             rank_entries = fetch_all("SELECT * FROM r")
             for r in rank_entries:
                 year = int(r["ek"][:4])
-                ek = r["ek"]
-                tk = r["tk"]
-                EVENT_RANKINGS.setdefault(year, {}).setdefault(ek, {})[tk] = r
+                if years is None or year in years:
+                    ek = r["ek"]
+                    tk = r["tk"]
+                    EVENT_RANKINGS.setdefault(year, {}).setdefault(ek, {})[tk] = r
 
         if load_awards:
-            EVENTS_AWARDS = fetch_all("SELECT * FROM a")
+            award_entries = fetch_all("SELECT * FROM a")
+            if years is not None:
+                EVENTS_AWARDS = [a for a in award_entries if a.get("y") in years]
+            else:
+                EVENTS_AWARDS = award_entries
 
         if load_matches:
             match_entries = fetch_all("SELECT * FROM m")
             for m in match_entries:
                 year = int(m["ek"][:4])
-                EVENT_MATCHES.setdefault(year, []).append(m)
+                if years is None or year in years:
+                    EVENT_MATCHES.setdefault(year, []).append(m)
 
         if load_oprs:
             opr_entries = fetch_all("SELECT * FROM o")
             for o in opr_entries:
                 year = int(o["ek"][:4])
-                ek = o["ek"]
-                tk = o["tk"]
-                EVENT_OPRS.setdefault(year, {}).setdefault(ek, {})[tk] = o["opr"]
+                if years is None or year in years:
+                    ek = o["ek"]
+                    tk = o["tk"]
+                    EVENT_OPRS.setdefault(year, {}).setdefault(ek, {})[tk] = o["opr"]
 
         event_conn.close()
 

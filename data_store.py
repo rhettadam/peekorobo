@@ -4,11 +4,11 @@ from datagather import load_data
 data = load_data(
     load_teams=True,
     load_events=True,
-    load_event_teams=True,
-    load_rankings=True,
-    load_awards=True,
-    load_matches=True,
-    load_oprs=True,
+    load_event_teams=False,
+    load_rankings=False,
+    load_awards=False,
+    load_matches=False,
+    load_oprs=False,
 )
 
 TEAM_DATABASE = data.get("team_data", {})

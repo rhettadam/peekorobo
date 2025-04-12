@@ -1,7 +1,6 @@
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 from layouts.topbar import topbar, footer
-from datagather import load_data
 import datetime
 
 from data_store import EVENT_DATABASE
