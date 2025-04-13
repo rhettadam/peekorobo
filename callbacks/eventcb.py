@@ -1,7 +1,7 @@
 from dash import callback, Input, Output, State, html, dcc
 from dash import dash_table
 import dash_bootstrap_components as dbc
-
+import math
 from layouts.epalegend import epa_legend_layout
 from layouts.event import create_team_card_spotlight
 
@@ -40,6 +40,11 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
     def safe_int(val):
         try: return int(val)
         except: return 999999
+
+    def safe_opr(val):
+        if isinstance(val, (int, float)) and not math.isnan(val) and not math.isinf(val):
+            return round(val, 2)
+        return "N/A"
 
     # === Rankings Tab ===
     if active_tab == "rankings":
@@ -96,7 +101,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
 
             data.append({
                 "Team": f"[{tnum_str}](/team/{tnum_str})",
-                "OPR": opr_val,
+                "OPR": safe_opr(opr_val),
                 "ACE Rank": epa_rank,
                 "ACE": epa_display,
             })

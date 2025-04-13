@@ -3,8 +3,7 @@ from dash import html,dash_table
 import dash_bootstrap_components as dbc
 import json
 from collections import defaultdict
-from layouts.topbar import topbar, footer
-from data_store import TEAM_DATABASE
+from layouts.topbar import topbar, footer    
 
 def calculate_ranks(team_data, selected_team):
     global_rank = 1
@@ -38,16 +37,8 @@ def calculate_ranks(team_data, selected_team):
 
     return global_rank, country_rank, state_rank
 
-def build_recent_events_section(team_key, team_number, epa_data, performance_year, is_history, data):
-
-    data = data
-
-    event_data_by_year = data.get("event_data", {})
-    EVENT_TEAMS = data.get("event_teams", {})
-    EVENT_RANKINGS = data.get("event_rankings", {})
-    EVENT_AWARDS = data.get("event_awards", [])
-    EVENT_MATCHES = data.get("event_matches", {})
-
+def build_recent_events_section(team_key, team_number, epa_data, performance_year, is_history):
+    from data_store import TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_RANKINGS, EVENT_AWARDS    
     selected_year_data = TEAM_DATABASE.get(performance_year, {})
     selected_team = selected_year_data.get(team_number)
     
@@ -55,7 +46,7 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
     recent_rows = []
     year = performance_year 
 
-    for event_key, event in event_data_by_year.get(year, {}).items():
+    for event_key, event in EVENT_DATABASE.get(year, {}).items():
         event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
         if not any(t["tk"] == team_number for t in event_teams):
             continue
@@ -212,6 +203,7 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
     ])
 
 def team_layout(team_number, year):
+    from data_store import TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_RANKINGS, EVENT_AWARDS    
     if not team_number:
         return dbc.Alert("No team number provided. Please go back and search again.", color="warning")
 
@@ -230,22 +222,6 @@ def team_layout(team_number, year):
     else:
         year = None
         performance_year = 2025
-
-    data = load_data(
-        load_teams=False,
-        load_events=True,
-        load_event_teams=True,
-        load_rankings=True,
-        load_awards=True,
-        load_matches=True,
-        load_oprs=False,
-        years=None if is_history else [performance_year]
-    )
-    
-    event_data_by_year = data.get("event_data", {})
-    EVENT_TEAMS = data.get("event_teams", {})
-    EVENT_RANKINGS = data.get("event_rankings", {})
-    EVENT_AWARDS = data.get("event_awards", [])
 
     selected_year_data = TEAM_DATABASE.get(performance_year, {})
     selected_team = selected_year_data.get(team_number)
@@ -595,11 +571,11 @@ def team_layout(team_number, year):
         # --- Team Events from local database ---
     events_data = []
     
-    year_keys = [year] if year else list(event_data_by_year.keys())
+    year_keys = [year] if year else TEAM_DATABASE.keys()
     participated_events = []
     
     for year_key in year_keys:
-        for event_key, event in event_data_by_year.get(year_key, {}).items():
+        for event_key, event in EVENT_DATABASE.get(year_key, {}).items():
             team_list = EVENT_TEAMS.get(year_key, {}).get(event_key, [])
             if any(t["tk"] == team_number for t in team_list):  # using team_number now
                 participated_events.append((year_key, event_key, event))
@@ -690,7 +666,7 @@ def team_layout(team_number, year):
         if any(keyword in name_lower for keyword in blue_banner_keywords):
             event_key = award["ek"]
             year_str = str(award["y"])
-            event = event_data_by_year.get(int(year_str), {}).get(event_key, {})
+            event = TEAM_DATABASE.get(int(year_str), {}).get(event_key, {})
             event_name = event.get("n", "Unknown Event")
             full_event_name = f"{year_str} {event_name}"
     
@@ -749,7 +725,7 @@ def team_layout(team_number, year):
                     team_card,
                     performance_card,
                     html.Hr(),
-                    build_recent_events_section(team_key, team_number, epa_data, performance_year, is_history, data),
+                    build_recent_events_section(team_key, team_number, epa_data, performance_year, is_history),
                     html.H3("Events", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
                     events_table,
                     html.H3("Awards", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),

@@ -7,8 +7,9 @@ import dash_bootstrap_components as dbc
 from dash import html, dcc
 from dash import dash_table
 from datagather import tba_get, get_team_avatar,load_data
+from datetime import datetime, timedelta
 
-from data_store import TEAM_DATABASE
+from data_store import TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_OPRS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_OPRS
 
 def create_team_card_spotlight(team, epa_data, event_year):
     """
@@ -62,69 +63,6 @@ def parse_event_key(event_key):
         return int(m.group(1)), m.group(2)
     return None, event_key
     
-def is_recent_event(start_date_str, end_date_str):
-    try:
-        today = datetime.today().date()
-        start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-        end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-        return (start <= today <= end + timedelta(days=2))
-    except Exception:
-        return False
-
-def fetch_event_data(event_key):
-    year, _ = parse_event_key(event_key)
-    event = tba_get(f"event/{event_key}")
-    teams = tba_get(f"event/{event_key}/teams")
-
-    rankings_raw = tba_get(f"event/{event_key}/rankings")
-    rankings = {
-        int(r["team_key"][3:]): {
-            "rk": r.get("rank"),
-            "w": r.get("record", {}).get("wins"),
-            "l": r.get("record", {}).get("losses"),
-            "t": r.get("record", {}).get("ties"),
-            "dq": r.get("dq", 0),
-        }
-        for r in rankings_raw.get("rankings", [])
-    } if rankings_raw else {}
-
-    matches_raw = tba_get(f"event/{event_key}/matches") or []
-    compressed_matches = [
-        {
-            "k": m["key"],
-            "ek": event_key,
-            "cl": m.get("comp_level"),
-            "mn": m.get("match_number"),
-            "sn": m.get("set_number"),
-            "rt": ",".join(str(int(t[3:])) for t in m["alliances"]["red"]["team_keys"]),
-            "bt": ",".join(str(int(t[3:])) for t in m["alliances"]["blue"]["team_keys"]),
-            "rs": m["alliances"]["red"]["score"],
-            "bs": m["alliances"]["blue"]["score"],
-            "wa": m.get("winning_alliance"),
-            "yt": next((v["key"] for v in m.get("videos", []) if v["type"] == "youtube"), None)
-        }
-        for m in matches_raw
-    ]
-
-    oprs_raw = tba_get(f"event/{event_key}/oprs") or {}
-    oprs = {"oprs": {int(k[3:]): v for k, v in oprs_raw.get("oprs", {}).items()}}
-
-    compressed_teams = [
-        {
-            "tk": t["team_number"],
-            "nn": t.get("nickname"),
-            "c": t.get("city"),
-            "s": t.get("state_prov"),
-            "co": t.get("country"),
-        }
-        for t in teams or []
-    ]
-
-    return event, compressed_teams, rankings, compressed_matches, oprs
-
-def fetch_event_data_fallback(event_key):
-    return fetch_event_data(event_key)
-
 def load_teams_and_compute_epa_ranks(year):
     epa_info = {}
 
@@ -165,19 +103,7 @@ def event_layout(event_key):
     parsed_year, _ = parse_event_key(event_key)
     event_year = parsed_year
 
-    # Load only the relevant year's data
-    data = load_data(
-        load_teams=False,
-        load_events=True,
-        load_event_teams=True,
-        load_rankings=True,
-        load_awards=False,
-        load_matches=True,
-        load_oprs=True,
-        years=[event_year],
-    )
-
-    event = data["event_data"].get(event_year, {}).get(event_key)
+    event = EVENT_DATABASE.get(event_year, {}).get(event_key)
     if not event:
         return dbc.Alert("Event details could not be found.", color="danger")
 
@@ -188,16 +114,14 @@ def event_layout(event_key):
     event_type = event.get("et", "N/A")
     website = event.get("w", "#")
 
-    should_fallback = is_recent_event(start_date, end_date)
+    event_teams = EVENT_TEAMS.get(event_year, {}).get(event_key, [])
+    rankings = EVENT_RANKINGS.get(event_year, {}).get(event_key, {})
+    event_matches = [m for m in EVENT_MATCHES.get(event_year, []) if m.get("ek") == event_key]
+    oprs = EVENT_OPRS.get(event_year, {}).get(event_key, {})
 
-    event_teams = data.get("event_teams", {}).get(event_year, {}).get(event_key, [])
-    rankings = data.get("event_rankings", {}).get(event_year, {}).get(event_key, {})
-    event_matches = [m for m in data.get("event_matches", {}).get(event_year, []) if m.get("ek") == event_key]
-    oprs = data.get("event_oprs", {}).get(event_year, {}).get(event_key, {})
+    if not (rankings and event_matches and oprs):
+        print(f"⚠️ Warning: Missing cached data for {event_key}. Some tabs may be incomplete.")
 
-    if should_fallback or not (rankings and event_matches and oprs):
-        print(f"🔄 Fetching live data for {event_key}...")
-        event, event_teams, rankings, event_matches, oprs = fetch_event_data_fallback(event_key)
 
     # Recompute EPA ranks
     epa_data = load_teams_and_compute_epa_ranks(event_year)

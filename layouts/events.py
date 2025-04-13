@@ -3,9 +3,10 @@ import dash_bootstrap_components as dbc
 from layouts.topbar import topbar, footer
 import datetime
 
-from data_store import EVENT_DATABASE
+
 
 def create_event_card(event):
+    from data_store import EVENT_DATABASE
     event_url = f"https://www.peekorobo.com/event/{event['k']}"
     location = f"{event.get('c','')}, {event.get('s','')}, {event.get('co','')}"
     start = event.get('sd', 'N/A')
@@ -34,6 +35,7 @@ def create_event_card(event):
     )
 
 def events_layout(year=2025):
+    from data_store import EVENT_DATABASE
     today = datetime.date.today()
     events_data = list(EVENT_DATABASE.get(year, {}).values())
 

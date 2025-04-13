@@ -4,9 +4,9 @@ from dash import callback, html, dcc
 from dash.dependencies import Input, Output, State
 import os
 
-from callbacks.navcb import toggle_navbar, update_search_preview, handle_navigation
-from callbacks.eventcb import update_display
-from callbacks.teamscb import load_teams
+import callbacks.navcb
+import callbacks.eventcb
+import callbacks.teamscb
 
 app = dash.Dash(
     __name__,
@@ -26,6 +26,18 @@ app.layout = html.Div([
     dcc.Location(id="url", refresh=False),
     html.Div(id="page-content")
 ])
+
+import psutil
+import threading
+import time
+
+def print_memory_usage():
+    while True:
+        mem_mb = psutil.Process(os.getpid()).memory_info().rss / (1024 ** 2)
+        print(f"💾 Memory Usage: {mem_mb:.1f} MB")
+        time.sleep(1)
+
+threading.Thread(target=print_memory_usage, daemon=True).start()
 
 @app.callback(
     Output("page-content", "children"),
@@ -79,5 +91,5 @@ def display_page(pathname):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=True)
 
