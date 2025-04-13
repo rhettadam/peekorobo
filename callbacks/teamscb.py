@@ -54,7 +54,13 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
     elif sort_by == "endgame_epa":
         teams_data.sort(key=lambda t: t.get("endgame_epa") or 0, reverse=True)
     else:
-        teams_data.sort(key=lambda t: t.get("epa") or 0, reverse=True)
+        def weighted_epa(t):
+            auto = t.get("auto_epa") or 0
+            teleop = t.get("teleop_epa") or 0
+            endgame = t.get("endgame_epa") or 0
+            return 0.4 * auto + 0.5 * teleop + 0.1 * endgame  # tweak weights as desired
+
+        teams_data.sort(key=weighted_epa, reverse=True)
 
     def compute_percentiles(values):
         return {p: np.percentile(values, int(p)) for p in ["99", "95", "90", "75", "50", "25"]} if values else {p: 0 for p in ["99", "95", "90", "75", "50", "25"]}

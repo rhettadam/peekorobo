@@ -10,8 +10,20 @@ def calculate_ranks(team_data, selected_team):
     country_rank = 1
     state_rank = 1
 
-    # Extract selected team's information
-    selected_epa = selected_team.get("epa", 0) or 0  # Ensure selected_epa is a number
+    # Define your preferred weights
+    WEIGHTS = {
+        "auto_epa": 0.4,
+        "teleop_epa": 0.5,
+        "endgame_epa": 0.1,
+    }
+
+    # Compute selected team weighted EPA
+    selected_epa = (
+        (selected_team.get("auto_epa") or 0) * WEIGHTS["auto_epa"] +
+        (selected_team.get("teleop_epa") or 0) * WEIGHTS["teleop_epa"] +
+        (selected_team.get("endgame_epa") or 0) * WEIGHTS["endgame_epa"]
+    )
+
     selected_country = (selected_team.get("country") or "").lower()
     selected_state = (selected_team.get("state_prov") or "").lower()
 
@@ -19,21 +31,21 @@ def calculate_ranks(team_data, selected_team):
         if team.get("team_number") == selected_team.get("team_number"):
             continue
 
-        team_epa = team.get("epa", 0) or 0  # Default to 0 if ACE is None
+        team_epa = (
+            (team.get("auto_epa") or 0) * WEIGHTS["auto_epa"] +
+            (team.get("teleop_epa") or 0) * WEIGHTS["teleop_epa"] +
+            (team.get("endgame_epa") or 0) * WEIGHTS["endgame_epa"]
+        )
+
         team_country = (team.get("country") or "").lower()
         team_state = (team.get("state_prov") or "").lower()
 
-        # Global Rank
         if team_epa > selected_epa:
             global_rank += 1
-
-        # Country Rank
-        if team_country == selected_country and team_epa > selected_epa:
-            country_rank += 1
-
-        # State Rank
-        if team_state == selected_state and team_epa > selected_epa:
-            state_rank += 1
+            if team_country == selected_country:
+                country_rank += 1
+            if team_state == selected_state:
+                state_rank += 1
 
     return global_rank, country_rank, state_rank
 
