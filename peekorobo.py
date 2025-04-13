@@ -27,18 +27,6 @@ app.layout = html.Div([
     html.Div(id="page-content")
 ])
 
-import psutil
-import threading
-import time
-
-def print_memory_usage():
-    while True:
-        mem_mb = psutil.Process(os.getpid()).memory_info().rss / (1024 ** 2)
-        print(f"💾 Memory Usage: {mem_mb:.1f} MB")
-        time.sleep(1)
-
-threading.Thread(target=print_memory_usage, daemon=True).start()
-
 @app.callback(
     Output("page-content", "children"),
     Input("url", "pathname")
