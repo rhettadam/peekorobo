@@ -6,6 +6,7 @@ import os
 
 import callbacks.navcb
 import callbacks.eventcb
+import callbacks.eventscb
 import callbacks.teamscb
 
 app = dash.Dash(
