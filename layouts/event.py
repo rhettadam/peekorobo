@@ -11,6 +11,39 @@ from datetime import datetime, timedelta
 
 from data_store import TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_OPRS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_OPRS
 
+def fetch_event_data_if_needed(event_key, year, rankings, oprs, matches):
+    if year != 2025 or not event_key:
+        return rankings, oprs, matches
+
+    # Fetch Rankings if missing
+    if not rankings:
+        rankings_response = tba_get(f"event/{event_key}/rankings")
+        if rankings_response and "rankings" in rankings_response:
+            rankings = {
+                r["team_key"].replace("frc", ""): {
+                    "rk": r["rank"],
+                    "w": r["record"]["wins"],
+                    "l": r["record"]["losses"],
+                    "t": r["record"]["ties"],
+                    "dq": r["dq"],
+                }
+                for r in rankings_response["rankings"]
+            }
+
+    # Fetch OPRs if missing
+    if not oprs or "oprs" not in oprs or not oprs["oprs"]:
+        oprs_response = tba_get(f"event/{event_key}/oprs")
+        if oprs_response:
+            oprs = oprs_response
+
+    # Fetch Matches if missing
+    if not matches:
+        matches_response = tba_get(f"event/{event_key}/matches/simple")
+        if matches_response:
+            matches = matches_response
+
+    return rankings, oprs, matches
+
 def create_team_card_spotlight(team, epa_data, event_year):
     """
     Build a team spotlight card using compressed event team data

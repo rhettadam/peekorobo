@@ -1,9 +1,11 @@
 from dash import callback, Input, Output, State, html, dcc
 from dash import dash_table
+from datagather import tba_get
 import dash_bootstrap_components as dbc
 import math
 from layouts.epalegend import epa_legend_layout
-from layouts.event import create_team_card_spotlight
+from layouts.event import create_team_card_spotlight, fetch_event_data_if_needed, parse_event_key
+
 
 @callback(
     Output("data-display-container", "children"),
@@ -18,6 +20,17 @@ from layouts.event import create_team_card_spotlight
 def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matches, event_year):
     if not active_tab:
         return dbc.Alert("Select a data category above.", color="info")
+
+    event_key = None
+    if event_teams and isinstance(event_teams, list):
+        for t in event_teams:
+            if "ek" in t:
+                event_key = t["ek"]
+                break
+
+    rankings, oprs, event_matches = fetch_event_data_if_needed(
+        event_key, event_year, rankings, oprs, event_matches
+    )
 
     # === Shared styles ===
     common_style_table = {
