@@ -1,4 +1,4 @@
-name: Auto Update FRC Data + Deploy
+name: Auto Update Data + Deploy
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write  # Needed to push commits
+  contents: write
 
 jobs:
   update:
@@ -36,27 +36,33 @@ jobs:
         python team_data/createeventdb.py
         python team_data/createdb.py
 
-    - name: Commit and push updated databases
+    - name: Force commit and push updated databases
       env:
         GH_PAT: ${{ secrets.GH_PAT }}
       run: |
         git config user.name github-actions
         git config user.email github-actions@github.com
 
-        # Debug ignored status
-        git check-ignore -v team_data/*.sqlite || true
+        # Save generated files temporarily
+        mkdir -p tmp_sqlite
+        cp -f team_data/events.sqlite tmp_sqlite/events.sqlite
+        cp -f team_data/epa_teams.sqlite tmp_sqlite/epa_teams.sqlite
 
-        # Force Git to stop ignoring if it was cached internally
+        # Clear any Git index ignore/cache
         git update-index --assume-unchanged --no-assume-unchanged team_data/*.sqlite || true
 
-        # Fully reset ignore state
+        # Remove any previous index references
         git rm --cached team_data/events.sqlite team_data/epa_teams.sqlite || true
 
-        # Stage them for commit
-        git add team_data/events.sqlite team_data/epa_teams.sqlite || true
+        # Restore the actual files after rm
+        mv tmp_sqlite/events.sqlite team_data/events.sqlite
+        mv tmp_sqlite/epa_teams.sqlite team_data/epa_teams.sqlite
 
-        # Commit and push
-        git commit --allow-empty -m "Auto-update databases" || echo "No changes to commit"
+        # Stage them and commit
+        git add team_data/events.sqlite team_data/epa_teams.sqlite || true
+        git commit --allow-empty -m "Force auto-update of databases"
+
+        # Force push
         git push --force https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git main
 
     - name: Push to Heroku
