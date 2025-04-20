@@ -13,12 +13,6 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Manually install GitHub CLI
-      run: |
-        curl -LO https://github.com/cli/cli/releases/latest/download/gh_$(curl -s https://api.github.com/repos/cli/cli/releases/latest | grep -Po '"tag_name": "v\K[0-9.]+')_linux_amd64.deb
-        sudo dpkg -i gh_*_linux_amd64.deb
-        rm gh_*_linux_amd64.deb
-
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -36,7 +30,7 @@ jobs:
         python team_data/createeventdb.py
         python team_data/createdb.py
 
-    - name: Commit and push updated databases using GH CLI
+    - name: Force push updated databases using GH_PAT
       env:
         GH_PAT: ${{ secrets.GH_PAT }}
       run: |
@@ -46,7 +40,10 @@ jobs:
         git add team_data/events.sqlite team_data/epa_teams.sqlite || true
         git commit -m "Auto-update databases" || echo "No changes to commit"
 
-        echo "${GH_PAT}" | gh auth login --with-token
+        # Force overwrite the origin remote to use your token
+        git remote remove origin || true
+        git remote add origin https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git
+
         git push origin main
 
     - name: Push to Heroku
