@@ -5,13 +5,18 @@ on:
     - cron: '*/30 * * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write  # critical for committing/pushing code
+
 jobs:
   update:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
+    - name: Checkout repository using GH_PAT
       uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GH_PAT }}  # ensures commits use your PAT, not github-actions[bot]
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -30,7 +35,7 @@ jobs:
         python team_data/createeventdb.py
         python team_data/createdb.py
 
-    - name: Force push updated databases using GH_PAT
+    - name: Commit and push updated databases
       env:
         GH_PAT: ${{ secrets.GH_PAT }}
       run: |
@@ -40,11 +45,7 @@ jobs:
         git add team_data/events.sqlite team_data/epa_teams.sqlite || true
         git commit -m "Auto-update databases" || echo "No changes to commit"
 
-        # Force overwrite the origin remote to use your token
-        git remote remove origin || true
-        git remote add origin https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git
-
-        git push origin main
+        git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git main
 
     - name: Push to Heroku
       env:
