@@ -20,112 +20,85 @@ def tba_get(endpoint: str):
         return r.json()
     return None
 
+def load_data():
 
-def load_data(
-    load_teams=True,
-    load_events=True,
-    load_event_teams=True,
-    load_rankings=True,
-    load_awards=True,
-    load_matches=True,
-    load_oprs=True,
-    years=None
-):
     def compress_dict(d):
+        """Remove any None or empty string values."""
         return {k: v for k, v in d.items() if v not in (None, "", [], {}, ())}
 
+    # === Load team ACE data ===
+    team_conn = sqlite3.connect(os.path.join("team_data", "epa_teams.sqlite"))
+    team_cursor = team_conn.cursor()
+    team_cursor.execute("SELECT * FROM epa_history")
+    team_columns = [desc[0] for desc in team_cursor.description]
     team_data = {}
-    if load_teams:
-        team_conn = sqlite3.connect(os.path.join("team_data", "epa_teams.sqlite"))
-        team_cursor = team_conn.cursor()
-        team_cursor.execute("SELECT * FROM epa_history")
-        team_columns = [desc[0] for desc in team_cursor.description]
-        for row in team_cursor.fetchall():
-            team = compress_dict(dict(zip(team_columns, row)))
-            year = team["year"]
-            if years is None or year in years:
-                number = team["team_number"]
-                team_data.setdefault(year, {})[number] = team
-        team_conn.close()
 
+    for row in team_cursor.fetchall():
+        team = compress_dict(dict(zip(team_columns, row)))
+        year = team["year"]
+        number = team["team_number"]
+        team_data.setdefault(year, {})[number] = team
+
+    team_conn.close()
+
+    # === Load compressed event data ===
+    event_conn = sqlite3.connect(os.path.join("team_data", "events.sqlite"))
+    event_cursor = event_conn.cursor()
+
+    def fetch_all(query):
+        event_cursor.execute(query)
+        cols = [d[0] for d in event_cursor.description]
+        return [compress_dict(dict(zip(cols, r))) for r in event_cursor.fetchall()]
+
+    # Events
+    events = fetch_all("SELECT * FROM e")
     event_data = {}
     flat_event_list = []
+    for ev in events:
+        year = ev["y"]
+        ek = ev["k"]
+        event_data.setdefault(year, {})[ek] = ev
+        flat_event_list.append(ev)
+
+    # Event Teams
+    team_entries = fetch_all("SELECT * FROM et")
     EVENT_TEAMS = {}
+    for t in team_entries:
+        year = int(t["ek"][:4])
+        ek = t["ek"]
+        EVENT_TEAMS.setdefault(year, {}).setdefault(ek, []).append(t)
+
+    # Rankings
+    rank_entries = fetch_all("SELECT * FROM r")
     EVENT_RANKINGS = {}
-    EVENTS_AWARDS = []
+    for r in rank_entries:
+        year = int(r["ek"][:4])
+        ek = r["ek"]
+        tk = r["tk"]
+        EVENT_RANKINGS.setdefault(year, {}).setdefault(ek, {})[tk] = r
+
+    # Awards
+    EVENTS_AWARDS = fetch_all("SELECT * FROM a")
+
+    # Matches
+    match_entries = fetch_all("SELECT * FROM m")
     EVENT_MATCHES = {}
+    for m in match_entries:
+        year = int(m["ek"][:4])
+        EVENT_MATCHES.setdefault(year, []).append(m)
+
+    # OPRs
+    opr_entries = fetch_all("SELECT * FROM o")
     EVENT_OPRS = {}
+    for o in opr_entries:
+        year = int(o["ek"][:4])
+        ek = o["ek"]
+        tk = o["tk"]
+        EVENT_OPRS.setdefault(year, {}).setdefault(ek, {})[tk] = o["opr"]
 
-    if any([load_events, load_event_teams, load_rankings, load_awards, load_matches, load_oprs]):
-        event_conn = sqlite3.connect(os.path.join("team_data", "events.sqlite"))
-        event_cursor = event_conn.cursor()
+    event_conn.close()
 
-        def fetch_all(query):
-            event_cursor.execute(query)
-            cols = [d[0] for d in event_cursor.description]
-            return [compress_dict(dict(zip(cols, r))) for r in event_cursor.fetchall()]
-
-        if load_events:
-            events = fetch_all("SELECT * FROM e")
-            for ev in events:
-                year = ev["y"]
-                if years is None or year in years:
-                    ek = ev["k"]
-                    event_data.setdefault(year, {})[ek] = ev
-                    flat_event_list.append(ev)
-
-        if load_event_teams:
-            team_entries = fetch_all("SELECT * FROM et")
-            for t in team_entries:
-                year = int(t["ek"][:4])
-                if years is None or year in years:
-                    ek = t["ek"]
-                    EVENT_TEAMS.setdefault(year, {}).setdefault(ek, []).append(t)
-
-        if load_rankings:
-            rank_entries = fetch_all("SELECT * FROM r")
-            for r in rank_entries:
-                year = int(r["ek"][:4])
-                if years is None or year in years:
-                    ek = r["ek"]
-                    tk = r["tk"]
-                    EVENT_RANKINGS.setdefault(year, {}).setdefault(ek, {})[tk] = r
-
-        if load_awards:
-            award_entries = fetch_all("SELECT * FROM a")
-            if years is not None:
-                EVENTS_AWARDS = [a for a in award_entries if a.get("y") in years]
-            else:
-                EVENTS_AWARDS = award_entries
-
-        if load_matches:
-            match_entries = fetch_all("SELECT * FROM m")
-            for m in match_entries:
-                year = int(m["ek"][:4])
-                if years is None or year in years:
-                    EVENT_MATCHES.setdefault(year, []).append(m)
-
-        if load_oprs:
-            opr_entries = fetch_all("SELECT * FROM o")
-            for o in opr_entries:
-                year = int(o["ek"][:4])
-                if years is None or year in years:
-                    ek = o["ek"]
-                    tk = o["tk"]
-                    EVENT_OPRS.setdefault(year, {}).setdefault(ek, {})[tk] = o["opr"]
-
-        event_conn.close()
-
-    return {
-        "team_data": team_data if load_teams else None,
-        "event_data": event_data if load_events else None,
-        "flat_event_list": flat_event_list if load_events else None,
-        "event_teams": EVENT_TEAMS if load_event_teams else None,
-        "event_rankings": EVENT_RANKINGS if load_rankings else None,
-        "event_awards": EVENTS_AWARDS if load_awards else None,
-        "event_matches": EVENT_MATCHES if load_matches else None,
-        "event_oprs": EVENT_OPRS if load_oprs else None,
-    }
+    return team_data, event_data, flat_event_list, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES, EVENT_OPRS
 
 def get_team_avatar(team_number, year=2025):
     """
@@ -136,6 +109,38 @@ def get_team_avatar(team_number, year=2025):
     if os.path.exists(avatar_path):
         return f"/assets/avatars/{team_number}.png?v=1"
     return "/assets/avatars/stock.png"
+
+def calculate_ranks(team_data, selected_team):
+    global_rank = 1
+    country_rank = 1
+    state_rank = 1
+
+    # Extract selected team's information
+    selected_epa = selected_team.get("epa", 0) or 0  # Ensure selected_epa is a number
+    selected_country = (selected_team.get("country") or "").lower()
+    selected_state = (selected_team.get("state_prov") or "").lower()
+
+    for team in team_data:
+        if team.get("team_number") == selected_team.get("team_number"):
+            continue
+
+        team_epa = team.get("epa", 0) or 0  # Default to 0 if ACE is None
+        team_country = (team.get("country") or "").lower()
+        team_state = (team.get("state_prov") or "").lower()
+
+        # Global Rank
+        if team_epa > selected_epa:
+            global_rank += 1
+
+        # Country Rank
+        if team_country == selected_country and team_epa > selected_epa:
+            country_rank += 1
+
+        # State Rank
+        if team_state == selected_state and team_epa > selected_epa:
+            state_rank += 1
+
+    return global_rank, country_rank, state_rank
 
 # locations.py
 
