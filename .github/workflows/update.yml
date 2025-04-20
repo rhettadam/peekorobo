@@ -30,12 +30,12 @@ jobs:
         python team_data/createeventdb.py
         python team_data/createdb.py
 
-    - name: DEBUG: Show token and config
+    - name: DEBUG: Show remote and GH_PAT use
       env:
         GH_PAT: ${{ secrets.GH_PAT }}
       run: |
-        echo "🔑 GH_PAT is set: $([[ -n \"$GH_PAT\" ]] && echo YES || echo NO)"
         echo "🔧 GitHub repo: ${{ github.repository }}"
+        echo "GH_PAT is set (not empty): ${GH_PAT:-MISSING}"
         git remote -v
         git config --list
 
