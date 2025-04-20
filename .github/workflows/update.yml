@@ -13,12 +13,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Install GitHub CLI
+    - name: Manually install GitHub CLI
       run: |
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-key C99B11DEB97541F0
-        sudo apt-add-repository https://cli.github.com/packages
-        sudo apt-get update
-        sudo apt-get install gh -y
+        curl -LO https://github.com/cli/cli/releases/latest/download/gh_$(curl -s https://api.github.com/repos/cli/cli/releases/latest | grep -Po '"tag_name": "v\K[0-9.]+')_linux_amd64.deb
+        sudo dpkg -i gh_*_linux_amd64.deb
+        rm gh_*_linux_amd64.deb
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -37,7 +36,7 @@ jobs:
         python team_data/createeventdb.py
         python team_data/createdb.py
 
-    - name: Commit and push updated databases (via GH CLI)
+    - name: Commit and push updated databases using GH CLI
       env:
         GH_PAT: ${{ secrets.GH_PAT }}
       run: |
