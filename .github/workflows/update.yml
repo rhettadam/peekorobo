@@ -30,6 +30,14 @@ jobs:
         python team_data/createeventdb.py
         python team_data/createdb.py
 
+    - name: DEBUG: Show token prefix, remote, and config
+      env:
+        GH_PAT: ${{ secrets.GH_PAT }}
+      run: |
+        echo "Token prefix: ${GH_PAT:0:8}********"
+        git remote -v
+        git config --list
+
     - name: Commit and push updated databases
       env:
         GH_PAT: ${{ secrets.GH_PAT }}
