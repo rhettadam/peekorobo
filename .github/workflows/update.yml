@@ -56,7 +56,7 @@ jobs:
         git add team_data/events.sqlite team_data/epa_teams.sqlite || true
 
         # Commit and push
-        git commit -m "Auto-update databases" || echo "No changes to commit"
+        git commit --allow-empty -m "Auto-update databases" || echo "No changes to commit"
         git push --force https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git main
 
     - name: Push to Heroku
