@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write  # Needed to push commits
 
 jobs:
   update:
@@ -43,8 +43,19 @@ jobs:
         git config user.name github-actions
         git config user.email github-actions@github.com
 
-        git status
+        # Debug ignored status
+        git check-ignore -v team_data/*.sqlite || true
+
+        # Force Git to stop ignoring if it was cached internally
+        git update-index --assume-unchanged --no-assume-unchanged team_data/*.sqlite || true
+
+        # Fully reset ignore state
+        git rm --cached team_data/events.sqlite team_data/epa_teams.sqlite || true
+
+        # Stage them for commit
         git add team_data/events.sqlite team_data/epa_teams.sqlite || true
+
+        # Commit and push
         git commit -m "Auto-update databases" || echo "No changes to commit"
         git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git main
 
