@@ -1,0 +1,50 @@
+name: Auto Update FRC Data + Deploy
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r team_data/requirements.txt
+
+    - name: Run update scripts
+      env:
+        TBA_API_KEYS: ${{ secrets.TBA_API_KEYS }}
+      run: |
+        python team_data/createeventdb.py
+        python team_data/createdb.py
+
+    - name: Commit and push updated databases
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git add team_data/events.sqlite team_data/epa_teams.sqlite || true
+        git commit -m "Auto-update databases" || echo "No changes to commit"
+        git push
+
+    - name: Push to Heroku
+      env:
+        HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        HEROKU_EMAIL: ${{ secrets.HEROKU_EMAIL }}
+        HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+      run: |
+        curl https://cli-assets.heroku.com/install.sh | sh
+        echo "machine api.heroku.com\n  login $HEROKU_EMAIL\n  password $HEROKU_API_KEY\nmachine git.heroku.com\n  login $HEROKU_EMAIL\n  password $HEROKU_API_KEY" > ~/.netrc
+        heroku git:remote -a $HEROKU_APP_NAME
+        git push heroku main
