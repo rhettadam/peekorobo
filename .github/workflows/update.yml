@@ -43,22 +43,7 @@ jobs:
         git config user.name github-actions
         git config user.email github-actions@github.com
 
-        # Save generated files temporarily
-        mkdir -p tmp_sqlite
-        cp -f team_data/events.sqlite tmp_sqlite/events.sqlite
-        cp -f team_data/epa_teams.sqlite tmp_sqlite/epa_teams.sqlite
-
-        # Clear any Git index ignore/cache
-        git update-index --assume-unchanged --no-assume-unchanged team_data/*.sqlite || true
-
-        # Remove any previous index references
-        git rm --cached team_data/events.sqlite team_data/epa_teams.sqlite || true
-
-        # Restore the actual files after rm
-        mv tmp_sqlite/events.sqlite team_data/events.sqlite
-        mv tmp_sqlite/epa_teams.sqlite team_data/epa_teams.sqlite
-
-        # Stage them and commit
+        # Stage and commit
         git add team_data/events.sqlite team_data/epa_teams.sqlite || true
         git commit --allow-empty -m "Force auto-update of databases"
 
