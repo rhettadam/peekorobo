@@ -11360,9 +11360,427 @@
     ]
   },
   "2025": {
-    "notables_division_finals_appearances": [],
-    "notables_world_champions": [],
-    "notables_hall_of_fame": [],
+    "notables_division_finals_appearances": [
+      {
+        "team": "frc8044",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc2481",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc3940",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc4788",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc4391",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc2231",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc2338",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc2106",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc1771",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc3276",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc3478",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc166",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc3663",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc1706",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc862",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc3539",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc2056",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc4613",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc6995",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc494",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc179",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc4655",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc3173",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc78",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc4946",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc180",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc16",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc498",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc8214",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc971",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc4476",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc9785",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc1768",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc2767",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc2877",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc4145",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc2200",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc3339",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc1153",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc2491",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc1690",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc4414",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc2073",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc5166",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc6800",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc2930",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc2054",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc686",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc118",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc5895",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc324",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc957",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc5940",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc254",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc1318",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc1477",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc1323",
+        "context": [
+          "2025new"
+        ]
+      },
+      {
+        "team": "frc2910",
+        "context": [
+          "2025new"
+        ]
+      },
+      {
+        "team": "frc4272",
+        "context": [
+          "2025new"
+        ]
+      },
+      {
+        "team": "frc5026",
+        "context": [
+          "2025new"
+        ]
+      },
+      {
+        "team": "frc422",
+        "context": [
+          "2025new"
+        ]
+      },
+      {
+        "team": "frc868",
+        "context": [
+          "2025new"
+        ]
+      },
+      {
+        "team": "frc3847",
+        "context": [
+          "2025new"
+        ]
+      },
+      {
+        "team": "frc5535",
+        "context": [
+          "2025new"
+        ]
+      }
+    ],
+    "notables_world_champions": [
+      {
+        "team": "frc1323",
+        "context": [
+          "2025cmptx"
+        ]
+      },
+      {
+        "team": "frc2910",
+        "context": [
+          "2025cmptx"
+        ]
+      },
+      {
+        "team": "frc4272",
+        "context": [
+          "2025cmptx"
+        ]
+      },
+      {
+        "team": "frc5026",
+        "context": [
+          "2025cmptx"
+        ]
+      }
+    ],
+    "notables_hall_of_fame": [
+      {
+        "team": "frc5985",
+        "context": [
+          "2025cmptx"
+        ],
+        "video": "https://www.youtube.com/watch?v=953oyAvYmM0"
+      }
+    ],
     "notables_dcmp_winner": [
       {
         "team": "frc422",
@@ -11587,7 +12005,249 @@
         ]
       }
     ],
-    "notables_cmp_finals_appearances": [],
-    "notables_division_winners": []
+    "notables_cmp_finals_appearances": [
+      {
+        "team": "frc1323",
+        "context": [
+          "2025cmptx"
+        ]
+      },
+      {
+        "team": "frc2910",
+        "context": [
+          "2025cmptx"
+        ]
+      },
+      {
+        "team": "frc4272",
+        "context": [
+          "2025cmptx"
+        ]
+      },
+      {
+        "team": "frc5026",
+        "context": [
+          "2025cmptx"
+        ]
+      },
+      {
+        "team": "frc1690",
+        "context": [
+          "2025cmptx"
+        ]
+      },
+      {
+        "team": "frc4414",
+        "context": [
+          "2025cmptx"
+        ]
+      },
+      {
+        "team": "frc2073",
+        "context": [
+          "2025cmptx"
+        ]
+      },
+      {
+        "team": "frc5166",
+        "context": [
+          "2025cmptx"
+        ]
+      }
+    ],
+    "notables_division_winners": [
+      {
+        "team": "frc8044",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc2481",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc3940",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc4788",
+        "context": [
+          "2025arc"
+        ]
+      },
+      {
+        "team": "frc1771",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc3276",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc3478",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc166",
+        "context": [
+          "2025cur"
+        ]
+      },
+      {
+        "team": "frc2056",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc4613",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc6995",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc494",
+        "context": [
+          "2025dal"
+        ]
+      },
+      {
+        "team": "frc4946",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc180",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc16",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc498",
+        "context": [
+          "2025gal"
+        ]
+      },
+      {
+        "team": "frc1768",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc2767",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc2877",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc4145",
+        "context": [
+          "2025hop"
+        ]
+      },
+      {
+        "team": "frc1690",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc4414",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc2073",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc5166",
+        "context": [
+          "2025joh"
+        ]
+      },
+      {
+        "team": "frc118",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc5895",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc324",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc957",
+        "context": [
+          "2025mil"
+        ]
+      },
+      {
+        "team": "frc1323",
+        "context": [
+          "2025new"
+        ]
+      },
+      {
+        "team": "frc2910",
+        "context": [
+          "2025new"
+        ]
+      },
+      {
+        "team": "frc4272",
+        "context": [
+          "2025new"
+        ]
+      },
+      {
+        "team": "frc5026",
+        "context": [
+          "2025new"
+        ]
+      }
+    ]
   }
 }

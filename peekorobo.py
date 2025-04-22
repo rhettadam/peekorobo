@@ -8,6 +8,8 @@ import numpy as np
 import datetime
 import sqlite3
 import json
+from statistics import mean, pstdev
+import math
 
 from datagather import frc_games, COUNTRIES, STATES, tba_get, load_data, get_team_avatar, calculate_ranks
 
@@ -627,22 +629,60 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                 red_score = match.get("rs", 0)
                 blue_score = match.get("bs", 0)
                 label = match.get("cl", "").upper() + " " + str(match.get("mn", ""))
-        
-                red_epa = sum_epa(red_str)
-                blue_epa = sum_epa(blue_str)
-        
-                if red_epa + blue_epa > 0:
-                    p_red = red_epa / (red_epa + blue_epa)
-                    p_blue = 1 - p_red
-                    prediction = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
+                
+                def get_team_epa_info(t_key):
+                    t_data = epa_data.get(t_key.strip(), {})
+                    return {
+                        "epa": t_data.get("epa", 0),
+                        "confidence": t_data.get("confidence", 0),
+                        "consistency": t_data.get("consistency", 0)
+                    }
+                
+                # Gather info for all teams
+                red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
+                blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
+                
+                if red_team_info and blue_team_info:
+                    # Compute average EPA
+                    red_epas = [t["epa"] for t in red_team_info]
+                    blue_epas = [t["epa"] for t in blue_team_info]
+                
+                    red_avg = mean(red_epas)
+                    blue_avg = mean(blue_epas)
+                
+                    # Compute average confidence (0 to 1)
+                    red_conf = mean([t["confidence"] for t in red_team_info]) / 100
+                    blue_conf = mean([t["confidence"] for t in blue_team_info]) / 100
+                
+                    # Compute average consistency (0 to 1)
+                    red_cons = mean([t["consistency"] for t in red_team_info])
+                    blue_cons = mean([t["consistency"] for t in blue_team_info])
+                
+                    # Apply penalties/bonuses
+                    def effective_epa(avg, conf, cons):
+                        return avg * (1 + 0.25 * conf + 0.15 * cons)
+                
+                    red_eff = effective_epa(red_avg, red_conf, red_cons)
+                    blue_eff = effective_epa(blue_avg, blue_conf, blue_cons)
+                
+                    # Final probability via logistic
+                    diff = red_eff - blue_eff
+                    p_red = 1 / (1 + math.exp(-0.25 * diff))
+                
+                    is_red = str(team_number) in red_str
+                    team_prob = p_red if is_red else 1 - p_red
+                
+                    prediction = f"{team_prob:.0%}"
+                    prediction_percent = round(team_prob * 100)
                 else:
                     prediction = "N/A"
+                    prediction_percent = None
         
                 winner = match.get("wa", "N/A").title()
                 youtube_id = match.get("yt")
                 video_link = f"[Watch](https://youtube.com/watch?v={youtube_id})" if youtube_id else "N/A"
         
-                rows.append({
+                row = {
                     "Video": video_link,
                     "Match": label,
                     "Red Teams": format_team_list(red_str),
@@ -651,11 +691,21 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                     "Blue Score": blue_score,
                     "Winner": winner,
                     "Prediction": prediction,
-                    "rowColor": "#ffe6e6" if winner == "Red" else "#e6f0ff" if winner == "Blue" else "white"
-                })
-        
-            return rows
+                    "Prediction %": prediction_percent,
+                    "rowColor": "#ffe6e6" if winner == "Red" else "#e6f0ff" if winner == "Blue" else "white",
+                }
 
+                # Identify alliance and add underline flag
+                if str(team_number) in red_str:
+                    row["team_alliance"] = "Red"
+                elif str(team_number) in blue_str:
+                    row["team_alliance"] = "Blue"
+                else:
+                    row["team_alliance"] = None
+
+                rows.append(row)
+
+            return rows
 
         match_rows = build_match_rows(matches)
 
@@ -668,7 +718,7 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                 {"name": "Red Score", "id": "Red Score"},
                 {"name": "Blue Score", "id": "Blue Score"},
                 {"name": "Winner", "id": "Winner"},
-                {"name": "Prediction", "id": "Prediction", "presentation": "markdown"},
+                {"name": "Prediction", "id": "Prediction"},
             ],
             data=match_rows,
             page_size=10,
@@ -683,7 +733,33 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                 {
                     "if": {"filter_query": '{Winner} = "Blue"'},
                     "backgroundColor": "#e6f0ff"
-                }
+                },
+                {
+                    "if": {"filter_query": "{Prediction %} > 50", "column_id": "Prediction"},
+                    "backgroundColor": "#d4edda",
+                    "color": "black",
+                    "fontWeight": "bold",
+                },
+                {
+                    "if": {"filter_query": "{Prediction %} < 50", "column_id": "Prediction"},
+                    "backgroundColor": "#f8d7da",
+                    "color": "black",
+                    "fontWeight": "bold",
+                },
+                {
+                    "if": {"filter_query": "{Prediction %} = 50", "column_id": "Prediction"},
+                    "backgroundColor": "#ededd4",
+                    "color": "black",
+                    "fontWeight": "bold",
+                },
+                {
+                    "if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Score"},
+                    "borderBottom": "1px solid black"
+                },
+                {
+                    "if": {"filter_query": '{team_alliance} = "Blue"', "column_id": "Blue Score"},
+                    "borderBottom": "1px solid black"
+                },
             ]
         )
 
@@ -1437,41 +1513,53 @@ def update_events_table(selected_year, selected_event_types, selected_week, sear
 
     return upcoming_layout, ongoing_layout, all_event_cards
 
-def load_teams_and_compute_epa_ranks(year):
+def load_teams_and_compute_epa_ranks(year, use_weighted_ace=False):
     epa_info = {}
 
     year_data = TEAM_DATABASE.get(year)
     if not year_data:
-        return epa_info  # Return empty if no data
+        return [], {}
 
     teams_data = list(year_data.values())
 
-    teams_data = sorted(teams_data, key=lambda x: x.get("epa", 0) or 0, reverse=True)
+    for team in teams_data:
+        auto = team.get("auto_epa") or 0
+        teleop = team.get("teleop_epa") or 0
+        endgame = team.get("endgame_epa") or 0
+        confidence = team.get("confidence", 0)
+        epa = team.get("epa", 0) or 0  # <- already includes confidence
 
-    epa_values = [team["epa"] for team in teams_data if team.get("epa") is not None]
-    if not epa_values:
-        return epa_info  # No ACE values to rank
+        # For display: this is the "Total ACE"
+        team["display_ace"] = epa
 
-    percentiles = {
-        "99": np.percentile(epa_values, 99),
-        "95": np.percentile(epa_values, 95),
-        "90": np.percentile(epa_values, 90),
-        "75": np.percentile(epa_values, 75),
-        "50": np.percentile(epa_values, 50),
-        "25": np.percentile(epa_values, 25),
-    }
+        # For ranking: weight components AND factor in confidence
+        weighted_contribution = confidence * (
+            0.4 * auto +
+            0.3 * teleop +
+            0.2 * endgame
+        )
+
+        # Choose sorting strategy
+        team["sort_metric"] = weighted_contribution if use_weighted_ace else epa
+
+    # Sort by the chosen ranking metric
+    teams_data = sorted(teams_data, key=lambda x: x.get("sort_metric", 0), reverse=True)
+
+    # Compute percentiles for display using `display_ace` only
+    values = [team.get("display_ace") for team in teams_data if team.get("display_ace") is not None]
+    percentiles = {p: np.percentile(values, int(p)) for p in ["99", "95", "90", "75", "50", "25"]} if values else {p: 0 for p in ["99", "95", "90", "75", "50", "25"]}
 
     for idx, team in enumerate(teams_data):
-        team_number = team["team_number"]
-        epa_val = team.get("epa")
+        team_number = str(team["team_number"])
+        ace = team["display_ace"]
         rank = idx + 1
-        epa_info[str(team_number)] = {
-            "epa": epa_val,
+        epa_info[team_number] = {
+            "epa": ace,
             "rank": rank,
-            "epa_display": get_epa_display(epa_val, percentiles),
+            "epa_display": get_epa_display(ace, percentiles),
         }
 
-    return epa_info
+    return teams_data, epa_info
 
 def event_layout(event_key):
     parsed_year, _ = parse_event_key(event_key)
@@ -1479,7 +1567,7 @@ def event_layout(event_key):
     if not event:
         return dbc.Alert("Event details could not be found.", color="danger")
 
-    epa_data = load_teams_and_compute_epa_ranks(parsed_year)
+    _, epa_data = load_teams_and_compute_epa_ranks(parsed_year, use_weighted_ace=True)
     event_year = parsed_year
     event_teams = EVENT_TEAMS.get(event_year, {}).get(event_key, [])
     rankings = EVENT_RANKINGS.get(event_year, {}).get(event_key, {})
@@ -1646,12 +1734,9 @@ def create_team_card_spotlight(team, epa_data, event_year):
         },
     )
 
-import re
-
 def parse_event_key(event_key):
-    m = re.match(r'^(\d{4})(.+)$', event_key)
-    if m:
-        return int(m.group(1)), m.group(2)
+    if len(event_key) >= 5 and event_key[:4].isdigit():
+        return int(event_key[:4]), event_key[4:]
     return None, event_key
 
 @app.callback(
@@ -1694,14 +1779,20 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
     if active_tab == "rankings":
         data_rows = []
         for team_num, rank_info in (rankings or {}).items():
-            tnum_str = str(team_num)
+            tstr = str(team_num)
 
-            epa_rank = epa_data.get(tnum_str, {}).get("rank", "N/A")
-            epa_display = epa_data.get(tnum_str, {}).get("epa_display", "N/A")
+            epa_rank = epa_data.get(tstr, {}).get("rank", "N/A")
+            epa_display = epa_data.get(tstr, {}).get("epa_display", "N/A")
+
+            try:
+                team_data = TEAM_DATABASE.get(event_year, {}).get(int(team_num), {})
+            except Exception as e:
+                team_data = {}
+            nickname = team_data.get("nickname", "Unknown")
 
             data_rows.append({
                 "Rank": rank_info.get("rk", "N/A"),
-                "Team": f"[{tnum_str}](/team/{tnum_str})",
+                "Team": f"[{tstr} | {nickname}](/team/{tstr})",
                 "Wins": rank_info.get("w", "N/A"),
                 "Losses": rank_info.get("l", "N/A"),
                 "Ties": rank_info.get("t", "N/A"),
@@ -1738,22 +1829,26 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
     # === OPRs Tab ===
     elif active_tab == "oprs":
         data = []
+        year_teams = TEAM_DATABASE.get(event_year, {})
+    
         for team_num, opr_val in (oprs.get("oprs") or {}).items():
             tnum_str = str(team_num)
+            team_data = year_teams.get(int(team_num), {})
+            nickname = team_data.get("nickname", "Unknown")
             epa_rank = epa_data.get(tnum_str, {}).get("rank", "N/A")
             epa_display = epa_data.get(tnum_str, {}).get("epa_display", "N/A")
-
+    
             data.append({
-                "Team": f"[{tnum_str}](/team/{tnum_str})",
+                "Team": f"[{tnum_str} | {nickname}](/team/{tnum_str})",
                 "OPR": opr_val,
                 "ACE Rank": epa_rank,
                 "ACE": epa_display,
             })
-
+    
         data.sort(key=lambda x: x["OPR"], reverse=True)
         for i, row in enumerate(data):
             row["OPR Rank"] = i + 1
-
+    
         columns = [
             {"name": "OPR Rank", "id": "OPR Rank"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
@@ -1761,7 +1856,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             {"name": "ACE Rank", "id": "ACE Rank"},
             {"name": "ACE", "id": "ACE"},
         ]
-
+    
         return dash_table.DataTable(
             columns=columns,
             data=data,
@@ -1773,9 +1868,23 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
 
     # === Teams Tab ===
     elif active_tab == "teams":
+        year_teams = TEAM_DATABASE.get(event_year, {})
+        full_teams = [year_teams.get(t.get("tk")) for t in event_teams if year_teams.get(t.get("tk"))]
+
+        def compute_percentiles(values):
+            return {p: np.percentile(values, int(p)) for p in ["99", "95", "90", "75", "50", "25"]} if values else {p: 0 for p in ["99", "95", "90", "75", "50", "25"]}
+
+        extract_valid = lambda key: [t[key] for t in full_teams if key in t and t[key] is not None]
+
+        overall_percentiles = compute_percentiles(extract_valid("epa"))
+        auto_percentiles = compute_percentiles(extract_valid("auto_epa"))
+        teleop_percentiles = compute_percentiles(extract_valid("teleop_epa"))
+        endgame_percentiles = compute_percentiles(extract_valid("endgame_epa"))
+
+        # Sort by global ACE rank
         sorted_teams = sorted(
             event_teams,
-            key=lambda t: safe_int(epa_data.get(str(t.get("tk")), {}).get("rank", 999999))
+            key=lambda t: safe_int(epa_data.get(str(t.get("tk")), {}).get("rank")),
         )
         top_3 = sorted_teams[:3]
 
@@ -1789,26 +1898,29 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
         for t in event_teams:
             tnum = t.get("tk")
             tstr = str(tnum)
+            full_data = year_teams.get(tnum, {})
             epa_rank = epa_data.get(tstr, {}).get("rank", "N/A")
             epa_disp = epa_data.get(tstr, {}).get("epa_display", "N/A")
-
-            loc = ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown"
 
             rows.append({
                 "ACE Rank": epa_rank,
                 "ACE": epa_disp,
-                "Team Number": f"[{tstr}](/team/{tstr})",
-                "Nickname": t.get("nn", "Unknown"),
-                "Location": loc,
+                "Auto ACE": get_epa_display(full_data.get("auto_epa"), auto_percentiles),
+                "Teleop ACE": get_epa_display(full_data.get("teleop_epa"), teleop_percentiles),
+                "Endgame ACE": get_epa_display(full_data.get("endgame_epa"), endgame_percentiles),
+                "Team": f"[{tstr} | {t.get('nn', 'Unknown')}](/team/{tstr})",
+                "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
 
         rows.sort(key=lambda r: safe_int(r["ACE Rank"]))
 
         columns = [
             {"name": "ACE Rank", "id": "ACE Rank"},
+            {"name": "Team", "id": "Team", "presentation": "markdown"},
             {"name": "ACE", "id": "ACE"},
-            {"name": "Team Number", "id": "Team Number", "presentation": "markdown"},
-            {"name": "Nickname", "id": "Nickname"},
+            {"name": "Auto ACE", "id": "Auto ACE"},
+            {"name": "Teleop ACE", "id": "Teleop ACE"},
+            {"name": "Endgame ACE", "id": "Endgame ACE"},
             {"name": "Location", "id": "Location"},
         ]
 
@@ -1825,6 +1937,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 style_cell=common_style_cell,
             )
         ])
+
 
     # === Matches Tab ===
     elif active_tab == "matches":
@@ -1886,12 +1999,22 @@ def update_matches_table(selected_team, event_matches, epa_data):
     def format_teams_markdown(team_list_str):
         return ", ".join(f"[{t}](/team/{t})" for t in team_list_str.split(",") if t.strip().isdigit())
 
-    def sum_epa(team_list_str):
-        return sum(
-            epa_data.get(t.strip(), {}).get("epa", 0)
-            for t in team_list_str.split(",") if t.strip().isdigit()
-        )
+    def get_team_epa_info(t_key):
+        info = epa_data.get(t_key.strip(), {})
+        return {
+            "epa": info.get("epa", 0),
+            "confidence": info.get("confidence", 0) / 100,  # normalize to 0–1
+            "consistency": info.get("consistency", 0),      # already normalized
+        }
 
+    def effective_epa(team_infos):
+        if not team_infos:
+            return 0
+        avg_epa = mean([t["epa"] for t in team_infos])
+        avg_conf = mean([t["confidence"] for t in team_infos])
+        avg_cons = mean([t["consistency"] for t in team_infos])
+        return avg_epa * (1 + 0.25 * avg_conf + 0.15 * avg_cons)
+    
     def build_match_rows(matches):
         rows = []
         for match in matches:
@@ -1901,12 +2024,17 @@ def update_matches_table(selected_team, event_matches, epa_data):
             blue_score = match.get("bs", 0)
             winner = match.get("wa", "")
             label = match.get("cl", "").upper() + str(match.get("mn", ""))
-
-            r_sum = sum_epa(red_str)
-            b_sum = sum_epa(blue_str)
-            if (r_sum + b_sum) > 0:
-                p_red = r_sum / (r_sum + b_sum)
-                p_blue = 1.0 - p_red
+    
+            red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
+            blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
+    
+            red_eff = effective_epa(red_team_info)
+            blue_eff = effective_epa(blue_team_info)
+    
+            if red_eff + blue_eff > 0:
+                diff = red_eff - blue_eff
+                p_red = 1 / (1 + math.exp(-0.25 * diff))
+                p_blue = 1 - p_red
                 pred_str = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
             else:
                 pred_str = "N/A"
@@ -2269,69 +2397,45 @@ def epa_legend_layout():
             "fontSize": "0.9rem",
         },
     )
+    
+def create_team_card(team, year, avatar_url, epa_ranks):
+    team_number = str(team.get("team_number"))
+    epa_data = epa_ranks.get(team_number, {})
 
-def create_team_card(team, selected_year, avatar_url=None):
-    team_number = team.get("team_number", "N/A")
+    nickname = team.get("nickname", "Unknown")
+    location = ", ".join(filter(None, [team.get("city", ""), team.get("state_prov", ""), team.get("country", "")]))
+    epa_display = epa_data.get("epa_display", "N/A")
+    rank = epa_data.get("rank", "N/A")
 
-    # Pull team data from database
-    team_data = TEAM_DATABASE.get(selected_year, {}).get(team_number, {})
-
-    nickname = team_data.get("nickname", "Unknown")
-    city = team_data.get("city", "")
-    state = team_data.get("state_prov", "")
-    country = team_data.get("country", "")
-
-    location_pieces = [p for p in [city, state, country] if p]
-    location_str = ", ".join(location_pieces) if location_pieces else "Unknown"
-
-    # ACE and rank from database
-    epa = team_data.get("epa")
-    rank = team_data.get("global_rank", "N/A")
-    epa_str = f"{epa:.2f}" if isinstance(epa, (int, float)) else "N/A"
-
-    # URL to team details
-    team_url = f"/team/{team_number}/{selected_year}"
-
-    card_body = []
-
-    # Add avatar if available
-    if avatar_url:
-        card_body.append(
+    return dbc.Card(
+        [
             dbc.CardImg(
                 src=avatar_url,
                 top=True,
                 style={
-                    "width": "100%",
-                    "height": "150px",
                     "objectFit": "contain",
-                    "backgroundColor": "#fff",
-                    "padding": "5px"
+                    "height": "150px",
+                    "padding": "0.5rem",
+                    "backgroundColor": "#fff"
                 }
-            )
-        )
-
-    card_body.append(
-        dbc.CardBody(
-            [
-                html.H5(f"#{team_number} | {nickname}", className="card-title mb-3"),
-                html.P(f"Location: {location_str}", className="card-text"),
-                html.P(f"ACE: {epa_str} (Global Rank: {rank})", className="card-text"),
-                dbc.Button("View Team", href=team_url, color="warning", className="mt-2"),
-            ]
-        )
-    )
-
-    return dbc.Card(
-        card_body,
+            ),
+            dbc.CardBody([
+                html.H5(f"#{team_number} | {nickname}", className="card-title", style={"fontSize": "1.1rem"}),
+                html.P(f"Location: {location}", className="card-text", style={"fontSize": "0.9rem"}),
+                html.P(f"ACE: {epa_display} (Global Rank: {rank})", className="card-text", style={"fontSize": "0.9rem"}),
+                dbc.Button("View Team", href=f"/team/{team_number}/{year}", color="warning", className="mt-auto"),
+            ], style={"display": "flex", "flexDirection": "column", "flexGrow": "1"})
+        ],
         className="m-2 shadow",
         style={
             "width": "18rem",
-            "height": "26rem",
+            "height": "22rem",  # 🔒 consistent height
             "display": "flex",
             "flexDirection": "column",
             "justifyContent": "start",
             "alignItems": "stretch",
-        },
+            "borderRadius": "10px"
+        }
     )
 
 def teams_layout(default_year=2025):
@@ -2450,7 +2554,6 @@ def teams_layout(default_year=2025):
         [
             topbar,
             dbc.Container([
-                html.H4("Top 3 Teams", className="text-center mb-4"),
                 dbc.Row(id="top-teams-container", className="justify-content-center mb-5"),
                 filters_row,
                 epa_legend_layout(),
@@ -2483,21 +2586,19 @@ def teams_layout(default_year=2025):
     ],
 )
 def load_teams(selected_year, selected_country, selected_state, search_query, active_tab, sort_by):
-    from functools import lru_cache
+  
+    use_weighted = sort_by not in {"auto_epa", "teleop_epa", "endgame_epa"}
+    all_teams, epa_ranks = load_teams_and_compute_epa_ranks(selected_year, use_weighted_ace=use_weighted)
 
-    @lru_cache(maxsize=1)
-    def get_cached_team_data(year):
-        return list(TEAM_DATABASE.get(year, {}).values())
-
-    teams_data = get_cached_team_data(selected_year)
+    teams_data = all_teams.copy()
 
     if not teams_data:
         return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}
 
     if selected_country and selected_country != "All":
-        teams_data = [t for t in teams_data if t.get("country", "").lower() == selected_country.lower()]
+        teams_data = [t for t in teams_data if (t.get("country") or "").lower() == selected_country.lower()]
     if selected_state and selected_state != "All":
-        teams_data = [t for t in teams_data if t.get("state_prov", "").lower() == selected_state.lower()]
+        teams_data = [t for t in teams_data if (t.get("state_prov") or "").lower() == selected_state.lower()]
     if search_query:
         q = search_query.lower()
         teams_data = [
@@ -2514,7 +2615,7 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
     elif sort_by == "endgame_epa":
         teams_data.sort(key=lambda t: t.get("endgame_epa") or 0, reverse=True)
     else:
-        teams_data.sort(key=lambda t: t.get("epa") or 0, reverse=True)
+        teams_data.sort(key=lambda t: t.get("weighted_ace") or 0, reverse=True)
 
     def compute_percentiles(values):
         return {p: np.percentile(values, int(p)) for p in ["99", "95", "90", "75", "50", "25"]} if values else {p: 0 for p in ["99", "95", "90", "75", "50", "25"]}
@@ -2525,9 +2626,6 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
     teleop_percentiles = compute_percentiles(extract_valid("teleop_epa"))
     endgame_percentiles = compute_percentiles(extract_valid("endgame_epa"))
 
-    for idx, t in enumerate(teams_data):
-        t["global_rank"] = idx + 1
-
     state_options = [{"label": "All States", "value": "All"}]
     if selected_country and selected_country in STATES:
         state_options += [
@@ -2537,7 +2635,8 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
 
     table_rows = []
     for t in teams_data:
-        rank = t.get("global_rank", "N/A")
+        team_str = str(t.get("team_number"))
+        rank = epa_ranks.get(team_str, {}).get("rank", "N/A")
         team_num = t.get("team_number")
         record = f"{t.get('wins', 0)} - {t.get('losses', 0)} - {t.get('ties', 0)} - {t.get('dq', 0)}"
         table_rows.append({
@@ -2554,9 +2653,18 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
         })
 
     top_teams_layout = dbc.Row([
-        dbc.Col(create_team_card(t, selected_year, get_team_avatar(t.get("team_number"), selected_year)), width="auto")
+        dbc.Col(
+            create_team_card(
+                t,
+                selected_year,
+                get_team_avatar(t.get("team_number"), selected_year),
+                epa_ranks  # ✅ new argument
+            ),
+            width="auto"
+        )
         for t in teams_data[:3] if t.get("team_number")
     ], className="justify-content-center")
+
 
     if active_tab == "avatars-tab":
         table_style, avatar_style = {"display": "none"}, {"display": "flex"}
@@ -2619,8 +2727,8 @@ def teams_map_layout():
     prevent_initial_call=True,
 )
 def handle_navigation(
-    home_click, home_submit, home_year_submit, desktop_click, desktop_submit, 
-    mobile_click, mobile_submit, home_team_value, home_year_value, 
+    home_click, home_submit, home_year_submit, desktop_click, desktop_submit,
+    mobile_click, mobile_submit, home_team_value, home_year_value,
     desktop_search_value, mobile_search_value
 ):
     ctx = dash.callback_context
@@ -2629,7 +2737,6 @@ def handle_navigation(
 
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
-    # Determine which input was triggered
     if trigger_id in ["btn-search-home", "input-team-home", "input-year-home"]:
         search_value = home_team_value
         year_value = home_year_value
@@ -2646,29 +2753,50 @@ def handle_navigation(
         return dash.no_update
 
     search_value = search_value.strip().lower()
-
     selected_year = int(year_value) if year_value and year_value.isdigit() else 2025
     year_data = TEAM_DATABASE.get(selected_year)
 
-    if not year_data:
-        return "/"
+    # --- TEAM SEARCH ---
+    if year_data:
+        matching_team = next(
+            (
+                team for team in year_data.values()
+                if str(team.get("team_number", "")).lower() == search_value
+                or search_value in (team.get("nickname", "") or "").lower()
+            ),
+            None
+        )
 
-    # Search for the team by number or name
-    search_value_lower = search_value.lower()
-    matching_team = next(
-        (
-            team for team in year_data.values()
-            if str(team.get("team_number", "")).lower() == search_value_lower
-            or search_value_lower in team.get("nickname", "").lower()
-        ),
-        None
-    )
+        if matching_team:
+            team_number = matching_team.get("team_number", "")
+            return f"/team/{team_number}/{selected_year}"
 
-    if matching_team:
-        team_number = matching_team.get("team_number", "")
-        if year_value and year_value.isdigit():
-            return f"/team/{team_number}/{year_value}"
-        return f"/team/{team_number}"
+    # --- EVENT SEARCH ---
+    matching_events = []
+    for event in EVENTS_DATABASE:
+        event_key = event.get("k", "").lower()
+        event_name = (event.get("n", "") or "").lower()
+        event_code = (event.get("cd", "") or "").lower()
+        event_year = (event.get("sd", "") or "")[:4]
+
+        if (
+            search_value in event_key
+            or search_value in event_name
+            or search_value in event_code
+            or search_value in f"{event_year} {event_name}".lower()
+        ):
+            matching_events.append(event)
+
+    if matching_events:
+        # pick the "closest" match — most character overlap
+        best_event = max(
+            matching_events,
+            key=lambda e: (
+                len(set(search_value) & set((e.get("cd") or "").lower())) +
+                len(set(search_value) & set((e.get("n") or "").lower()))
+            )
+        )
+        return f"/event/{best_event['k']}"
 
     return "/"
 
