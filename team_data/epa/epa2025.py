@@ -39,18 +39,48 @@ def load_veteran_teams():
         print("Warning: teams_2024.json not found. All teams will be treated as rookies.")
         return set()
 
+def get_past_epa_percentile_range(team_key, years=(2023, 2024), history_dir="team_data"):
+    epa_values = []
+
+    for year in years:
+        file_path = os.path.join(history_dir, f"teams_{year}.json")
+        if not os.path.exists(file_path):
+            continue
+        try:
+            with open(file_path, "r") as f:
+                year_data = json.load(f)
+            for team in year_data:
+                if team.get("team_number") and f"frc{team['team_number']}" == team_key:
+                    epa = team.get("epa")
+                    if epa is not None:
+                        epa_values.append(epa)
+        except Exception as e:
+            print(f"Error reading {file_path} for {team_key}: {e}")
+            continue
+
+    if len(epa_values) < 2:
+        return 1.0  # Not enough data, assume high uncertainty (i.e., low confidence boost)
+
+    percentile_range = max(epa_values) - min(epa_values)
+    if percentile_range == 0:
+        return 1.0  # Perfect stability
+    mean_epa = statistics.mean(epa_values)
+    stability = max(0.0, min(1.0, 1.0 - (percentile_range / (mean_epa + 1e-6))))
+    return stability
+
 def estimate_consistent_auto(breakdowns, team_count):
     if not breakdowns:
         return 0
 
     def score_per_breakdown(b):
         reef = b.get("autoReef", {})
+        trough = reef.get("trough", 0)
         bot = reef.get("tba_botRowCount", 0)
         mid = reef.get("tba_midRowCount", 0)
         top = reef.get("tba_topRowCount", 0)
 
-        coral_score = bot * 3 + mid * 4 + top * 7
-        mobility = b.get("autoMobilityPoints", 0)
+        coral_score = trough * 3 + bot * 4 + mid * 6 + top * 7
+        mobility = b.get("autoMobilityPoints", 0) / team_count
         bonus = 5 / team_count if b.get("autoBonusAchieved") else 0
 
         return mobility + coral_score + bonus
@@ -66,7 +96,38 @@ def estimate_consistent_auto(breakdowns, team_count):
         average = statistics.median(scores)
 
     # Optional: cap extremely high values
-    return round(min(average, 30), 2)
+    return round(min(average, 40), 2)
+
+def estimate_consistent_teleop(breakdowns, team_count):
+    if not breakdowns:
+        return 0
+
+    def score_per_breakdown(b):
+        reef = b.get("teleopReef", {})
+        trough = reef.get("trough", 0)
+        bot = reef.get("tba_botRowCount", 0)
+        mid = reef.get("tba_midRowCount", 0)
+        top = reef.get("tba_topRowCount", 0)
+
+        barge = b.get("netAlgaeCount", 0) * 4
+        processor = b.get("netAlgaeCount", 0) * 6
+
+        coral_score = trough * 2 + bot * 3 + mid * 4 + top * 5  
+        algae_score = barge + processor
+        bonus = 5 / team_count if b.get("coralBonusAchieved") else 0
+
+        return coral_score + algae_score + bonus
+
+    scores = sorted(score_per_breakdown(b) for b in breakdowns)
+
+    if len(scores) >= 4:
+        cutoff = int(len(scores) * 0.75)
+        trimmed_scores = scores[:cutoff]
+        average = statistics.mean(trimmed_scores)
+    else:
+        average = statistics.median(scores)
+
+    return round(min(average, 80), 2)  # Adjust max cap based on observed teleop values
 
 def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veteran_teams=None):
 
@@ -84,6 +145,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
     contributions = []
     teammate_epas = []
     auto_breakdowns = []
+    teleop_breakdowns = []
 
     # Variables for new match stats
     total_score = 0
@@ -129,6 +191,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
 
         breakdown = (match.get("score_breakdown") or {}).get(alliance, {})
         auto_breakdowns.append(breakdown)
+        teleop_breakdowns.append(breakdown)
         index = team_keys.index(team_key) + 1
 
         # Auto EPA from consistent pattern analysis
@@ -145,9 +208,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         else:
             actual_endgame = 0
 
-        # Teleop points (shared)
-        teleop_score = breakdown.get("teleopPoints", 0)
-        actual_teleop = teleop_score / team_count
+        actual_teleop = estimate_consistent_teleop(teleop_breakdowns, team_count)
         
         if breakdown.get("autoBonusAchieved"):
             actual_auto += 5 / team_count
@@ -158,8 +219,8 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         if breakdown.get("bargeBonusAchieved"):
             actual_endgame += 5 / team_count
 
-        foul_points = breakdown.get("foulPoints", 0)
-        actual_overall = actual_auto + actual_teleop + actual_endgame - foul_points
+        #foul_points = breakdown.get("foulPoints", 0)
+        actual_overall = actual_auto + actual_teleop + actual_endgame
 
         opponent_score = match["alliances"][opponent_alliance]["score"] / team_count
 
@@ -208,11 +269,15 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
     trend = sum(trend_deltas[-3:]) if len(trend_deltas) >= 3 else sum(trend_deltas)
     consistency = 1.0 - (statistics.stdev(contributions) / statistics.mean(contributions)) if len(contributions) >= 2 else 1.0
 
-    rookie_score = 1.0 if (veteran_teams and team_key in veteran_teams) else 0.6
+    is_veteran = veteran_teams and team_key in veteran_teams
+    rookie_score = 1.0 if is_veteran else 0.6
+    percentile_score = get_past_epa_percentile_range(team_key) if is_veteran else 0.5
+
     teammate_avg_epa = statistics.mean(teammate_epas) if teammate_epas else overall_epa
     carry_score = min(1.0, overall_epa / (teammate_avg_epa + 1e-6))
 
-    confidence = max(0.0, min(1.0, (consistency + rookie_score + carry_score) / 3))
+    confidence = max(0.0, min(1.0, (consistency + rookie_score + carry_score + percentile_score) / 4))
+
     actual_epa = overall_epa * confidence
 
     average_match_score = total_score / match_count if match_count else 0
@@ -298,9 +363,13 @@ def fetch_and_store_team_data():
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(fetch_epa_for_cache, team) for team in all_teams]
             for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Initial EPA Pass"):
-                result = future.result()
-                if result:
-                    team_epa_cache[result[0]] = result[1]
+                try:
+                    result = future.result(timeout=30)
+                    if result:
+                        team_epa_cache[result[0]] = result[1]
+                except Exception as e:
+                    print(f"Initial EPA error for a team: {e}")
+            executor.shutdown(wait=True)  # optional but explicit
 
         combined_teams = []
 
@@ -310,9 +379,13 @@ def fetch_and_store_team_data():
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(fetch_team_for_final, team) for team in all_teams]
             for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Final EPA Pass"):
-                result = future.result()
-                if result:
-                    combined_teams.append(result)
+                try:
+                    result = future.result(timeout=30)
+                    if result:
+                        combined_teams.append(result)
+                except Exception as e:
+                    print(f"Final EPA error for a team: {e}")
+            executor.shutdown(wait=True)  # optional but explicit
 
         output_file = f"teams_{year}.json"
         with open(output_file, "w") as f:
