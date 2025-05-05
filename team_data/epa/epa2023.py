@@ -60,7 +60,7 @@ def calculate_epa_for_all_events(matches, team_key, year, team_epa_cache, vetera
 
     return overall, event_results
 
-def get_past_epa_percentile_range(team_key, years=(2020,2022), history_dir="team_data"):
+def get_past_epa_percentile_range(team_key, years=(2022), history_dir="team_data"):
     epa_values = []
 
     for year in years:
@@ -295,7 +295,7 @@ def fetch_team_components(team, year, team_epa_cache=None, veteran_teams=None):
     }
 
 def fetch_and_store_team_data():
-    for year in tqdm(range(2022, 2023), desc="Processing Years"):
+    for year in tqdm(range(2023, 2024), desc="Processing Years"):
         print(f"\nProcessing year {year}...")
         section_count = 0
         all_teams = []
