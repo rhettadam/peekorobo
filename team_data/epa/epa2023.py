@@ -38,6 +38,28 @@ def load_veteran_teams():
         print("Warning: teams_2022.json not found. All teams will be treated as rookies.")
         return set()
 
+def split_matches_by_event(matches):
+    events = {}
+    for match in matches:
+        key = match.get("event_key")
+        if key not in events:
+            events[key] = []
+        events[key].append(match)
+    return events
+
+def calculate_epa_for_all_events(matches, team_key, year, team_epa_cache, veteran_teams):
+    event_match_dict = split_matches_by_event(matches)
+    event_results = {}
+
+    # Compute event-specific EPA using only matches from that event
+    for event_key, event_matches in event_match_dict.items():
+        event_results[event_key] = calculate_epa_components(event_matches, team_key, year, team_epa_cache, veteran_teams)
+
+    # Compute overall EPA using all matches (unchanged logic)
+    overall = calculate_epa_components(matches, team_key, year, team_epa_cache, veteran_teams)
+
+    return overall, event_results
+
 def estimate_consistent_auto(breakdowns, team_count):
     leave_points = []
     scored_rows = {"B": 3, "M": 4, "T": 6}
@@ -210,10 +232,16 @@ def fetch_team_components(team, year, team_epa_cache=None, veteran_teams=None):
     team_key = team["key"]
     try:
         matches = tba_get(f"team/{team_key}/matches/{year}")
-        components = calculate_epa_components(matches, team_key, year, team_epa_cache, veteran_teams) if matches else None
+        if matches:
+            overall, event_breakdowns = calculate_epa_for_all_events(matches, team_key, year, team_epa_cache, veteran_teams)
+        else:
+            overall = None
+            event_breakdowns = {}
     except Exception as e:
         print(f"Failed to fetch matches for team {team_key}: {e}")
-        components = None
+        overall = None
+        event_breakdowns = {}
+
     return {
         "team_number": team.get("team_number"),
         "nickname": team.get("nickname"),
@@ -221,17 +249,18 @@ def fetch_team_components(team, year, team_epa_cache=None, veteran_teams=None):
         "state_prov": team.get("state_prov"),
         "country": team.get("country"),
         "website": team.get("website", "N/A"),
-        "normal_epa": components["overall"] if components else None,
-        "epa": components["actual_epa"] if components else None,
-        "confidence": components["confidence"] if components else None,
-        "auto_epa": components["auto"] if components else None,
-        "teleop_epa": components["teleop"] if components else None,
-        "endgame_epa": components["endgame"] if components else None,
-        "consistency": components["consistency"] if components else None,
-        "trend": components["trend"] if components else None,
-        "average_match_score": components["average_match_score"] if components else None,
-        "wins": components["wins"] if components else None,
-        "losses": components["losses"] if components else None,
+        "normal_epa": overall["overall"] if overall else None,
+        "epa": overall["actual_epa"] if overall else None,
+        "confidence": overall["confidence"] if overall else None,
+        "auto_epa": overall["auto"] if overall else None,
+        "teleop_epa": overall["teleop"] if overall else None,
+        "endgame_epa": overall["endgame"] if overall else None,
+        "consistency": overall["consistency"] if overall else None,
+        "trend": overall["trend"] if overall else None,
+        "average_match_score": overall["average_match_score"] if overall else None,
+        "wins": overall["wins"] if overall else None,
+        "losses": overall["losses"] if overall else None,
+        "event_breakdowns": event_breakdowns,
     }
 
 def fetch_and_store_team_data():
