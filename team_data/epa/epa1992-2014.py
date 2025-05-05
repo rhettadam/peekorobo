@@ -36,10 +36,6 @@ def calculate_epa_components(matches, team_key):
     losses = 0
     contributions = []
 
-    auto_scores = []
-    teleop_scores = []
-    endgame_scores = []
-
     for match in matches:
         alliances = match.get("alliances", {})
         red = alliances.get("red", {})
@@ -59,23 +55,10 @@ def calculate_epa_components(matches, team_key):
         total_score += alliance_score
         contributions.append(alliance_score)
 
-        # Wins / Losses
         if match.get("winning_alliance") == alliance:
             wins += 1
         elif match.get("winning_alliance") == opponent:
             losses += 1
-
-        # Score breakdowns are rare pre-2015, but check anyway
-        breakdown = match.get("score_breakdown", {})
-        if breakdown:
-            alliance_breakdown = breakdown.get(alliance, {})
-            auto = alliance_breakdown.get("autoPoints", 0)
-            teleop = alliance_breakdown.get("teleopPoints", 0)
-            endgame = alliance_breakdown.get("endgamePoints", 0)
-
-            auto_scores.append(auto)
-            teleop_scores.append(teleop)
-            endgame_scores.append(endgame)
 
     if total_matches == 0:
         return None
@@ -85,18 +68,15 @@ def calculate_epa_components(matches, team_key):
     if len(contributions) >= 2 and statistics.mean(contributions) > 0:
         consistency = 1.0 - (statistics.stdev(contributions) / statistics.mean(contributions))
 
-    def safe_avg(lst):
-        return round(statistics.mean(lst), 2) if lst else None
-
     return {
         "average_match_score": round(avg_score, 2),
         "wins": wins,
         "losses": losses,
         "consistency": round(consistency, 2),
         "epa": round(avg_score, 2),
-        "auto_epa": safe_avg(auto_scores),
-        "teleop_epa": safe_avg(teleop_scores),
-        "endgame_epa": safe_avg(endgame_scores),
+        "auto_epa": None,
+        "teleop_epa": None,
+        "endgame_epa": None,
     }
 
 def fetch_team_data(team, year, veteran_teams):
