@@ -38,58 +38,6 @@ def load_veteran_teams():
         print("Warning: teams_2023.json not found. All teams will be treated as rookies.")
         return set()
 
-def split_matches_by_event(matches):
-    events = {}
-    for match in matches:
-        key = match.get("event_key")
-        if key not in events:
-            events[key] = []
-        events[key].append(match)
-    return events
-
-def calculate_epa_for_all_events(matches, team_key, year, team_epa_cache, veteran_teams):
-    event_match_dict = split_matches_by_event(matches)
-    event_results = {}
-
-    # Compute event-specific EPA using only matches from that event
-    for event_key, event_matches in event_match_dict.items():
-        event_results[event_key] = calculate_epa_components(event_matches, team_key, year, team_epa_cache, veteran_teams)
-
-    # Compute overall EPA using all matches (unchanged logic)
-    overall = calculate_epa_components(matches, team_key, year, team_epa_cache, veteran_teams)
-
-    return overall, event_results
-
-
-def get_past_epa_percentile_range(team_key, years=(2022, 2023), history_dir="team_data"):
-    epa_values = []
-
-    for year in years:
-        file_path = os.path.join(history_dir, f"teams_{year}.json")
-        if not os.path.exists(file_path):
-            continue
-        try:
-            with open(file_path, "r") as f:
-                year_data = json.load(f)
-            for team in year_data:
-                if team.get("team_number") and f"frc{team['team_number']}" == team_key:
-                    epa = team.get("epa")
-                    if epa is not None:
-                        epa_values.append(epa)
-        except Exception as e:
-            print(f"Error reading {file_path} for {team_key}: {e}")
-            continue
-
-    if len(epa_values) < 2:
-        return 1.0  # Not enough data, assume high uncertainty (i.e., low confidence boost)
-
-    percentile_range = max(epa_values) - min(epa_values)
-    if percentile_range == 0:
-        return 1.0  # Perfect stability
-    mean_epa = statistics.mean(epa_values)
-    stability = max(0.0, min(1.0, 1.0 - (percentile_range / (mean_epa + 1e-6))))
-    return stability
-
 def estimate_consistent_auto(breakdowns, team_count):
     if not breakdowns:
         return 0
@@ -140,7 +88,7 @@ def estimate_consistent_teleop(breakdowns, team_count):
         base_score = (
             (amp_notes * 1) +
             (speaker_notes * 2) +
-            (amplified_notes * 3)  # amplification usually means team is strong
+            (amplified_notes * 5) 
         )
 
         per_team_score = base_score / team_count if team_count else base_score
@@ -254,10 +202,9 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
     consistency = 1.0 - (statistics.stdev(contributions) / statistics.mean(contributions)) if len(contributions) >= 2 else 1.0
     is_veteran = veteran_teams and team_key in veteran_teams
     rookie_score = 1.0 if is_veteran else 0.6
-    percentile_score = get_past_epa_percentile_range(team_key) if is_veteran else 0.5
     teammate_avg_epa = statistics.mean(teammate_epas) if teammate_epas else overall_epa
     carry_score = min(1.0, overall_epa / (teammate_avg_epa + 1e-6))
-    confidence = max(0.0, min(1.0, (consistency + rookie_score + carry_score + percentile_score) / 4))
+    confidence = max(0.0, min(1.0, (consistency + rookie_score + carry_score / 3)))
     actual_epa = overall_epa * confidence
     average_match_score = total_score / match_count if match_count else 0
 
@@ -279,15 +226,10 @@ def fetch_team_components(team, year, team_epa_cache=None, veteran_teams=None):
     team_key = team["key"]
     try:
         matches = tba_get(f"team/{team_key}/matches/{year}")
-        if matches:
-            overall, event_breakdowns = calculate_epa_for_all_events(matches, team_key, year, team_epa_cache, veteran_teams)
-        else:
-            overall = None
-            event_breakdowns = {}
+        components = calculate_epa_components(matches, team_key, year, team_epa_cache, veteran_teams) if matches else None
     except Exception as e:
         print(f"Failed to fetch matches for team {team_key}: {e}")
-        overall = None
-        event_breakdowns = {}
+        components = None
 
     return {
         "team_number": team.get("team_number"),
@@ -296,18 +238,17 @@ def fetch_team_components(team, year, team_epa_cache=None, veteran_teams=None):
         "state_prov": team.get("state_prov"),
         "country": team.get("country"),
         "website": team.get("website", "N/A"),
-        "normal_epa": overall["overall"] if overall else None,
-        "epa": overall["actual_epa"] if overall else None,
-        "confidence": overall["confidence"] if overall else None,
-        "auto_epa": overall["auto"] if overall else None,
-        "teleop_epa": overall["teleop"] if overall else None,
-        "endgame_epa": overall["endgame"] if overall else None,
-        "consistency": overall["consistency"] if overall else None,
-        "trend": overall["trend"] if overall else None,
-        "average_match_score": overall["average_match_score"] if overall else None,
-        "wins": overall["wins"] if overall else None,
-        "losses": overall["losses"] if overall else None,
-        "event_breakdowns": event_breakdowns,
+        "normal_epa": components["overall"] if components else None,
+        "epa": components["actual_epa"] if components else None,
+        "confidence": components["confidence"] if components else None,
+        "auto_epa": components["auto"] if components else None,
+        "teleop_epa": components["teleop"] if components else None,
+        "endgame_epa": components["endgame"] if components else None,
+        "consistency": components["consistency"] if components else None,
+        "trend": components["trend"] if components else None,
+        "average_match_score": components["average_match_score"] if components else None,
+        "wins": components["wins"] if components else None,
+        "losses": components["losses"] if components else None,
     }
 
 def fetch_and_store_team_data():
