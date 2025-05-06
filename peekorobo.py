@@ -1,7 +1,9 @@
 import dash
 import dash_bootstrap_components as dbc
-from dash import callback, html, dcc, dash_table
+from dash import callback, html, dcc, dash_table, ctx, ALL, MATCH
 from dash.dependencies import Input, Output, State
+from dash.exceptions import PreventUpdate
+
 from flask import session
 from auth import register_user, verify_user, is_secure_password
 
@@ -144,8 +146,14 @@ def get_username(user_id):
 
 def user_layout():
     user_id = session.get("user_id")
+    
     if not user_id:
-        return dcc.Location(href="/login", id="force-login-redirect")
+        return html.Div([
+            dcc.Store(id="user-session", data={}),
+            dcc.Location(href="/login", id="force-login-redirect")
+        ])
+
+    dcc.Store(id="user-session", data={"user_id": user_id}),
 
     conn = sqlite3.connect("user_data.sqlite")
     cursor = conn.cursor()
@@ -169,15 +177,22 @@ def user_layout():
 
     conn.close()
 
-    def card(title, body_elements):
+    store_data = dash.callback_context.states.get("favorites-store.data", {"deleted": []})
+    deleted_items = set(tuple(i) for i in store_data.get("deleted", []))
+
+    team_keys = [k for k in team_keys if ("team", k) not in deleted_items]
+    event_keys = [k for k in event_keys if ("event", k) not in deleted_items]
+
+    def card(title, body_elements, delete_button=None):
         return dbc.Card(
             dbc.CardBody([
-                html.H5(title, className="card-title", style={"fontWeight": "bold"}),
+                html.Div([
+                    html.H5(title, className="card-title", style={"fontWeight": "bold", "display": "inline-block"}),
+                    delete_button if delete_button else None
+                ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"}),
                 html.Hr(),
                 *body_elements
             ]),
-            className="mb-4 shadow-sm",
-            style={"borderRadius": "10px", "backgroundColor": "#fcfcfc"}
         )
 
     team_cards = []
@@ -233,6 +248,8 @@ def user_layout():
                 html.Div(f"Global Rank: {global_rank}", style={"color": "#007BFF"}),
             ], style={"marginTop": "10px", "fontSize": "0.95rem"})
 
+        delete_btn = html.Button("🗑️", id={"type": "delete-favorite", "item_type": "team", "key": team_key}, className="btn btn-sm btn-danger")
+
         team_cards.append(card(
             f"⭐ {team_number} | {team_data.get('nickname', '')}",
             [
@@ -242,7 +259,8 @@ def user_layout():
                 html.A("View Team Page", href=f"/team/{team_key}"),
                 html.Hr(),
                 build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025)
-            ]
+            ],
+            delete_button=delete_btn
         ))
 
     event_cards = []
@@ -266,16 +284,21 @@ def user_layout():
             ]
             match_rows = build_recent_events_section("", 0, epa_data, 2025).children[-1].children if match_rows else [html.P("No recent matches.")]
 
+        delete_btn = html.Button("🗑️", id={"type": "delete-favorite", "item_type": "event", "key": event_key}, className="btn btn-sm btn-danger")
+
         event_cards.append(card(
             f"⭐ Event {event_key}",
             [
                 html.A("View Event Page", href=f"/event/{event_key}"),
                 html.Br(), html.Br(),
-                html.Div(match_rows)
-            ]
+                build_recent_matches_section(event_key, year, epa_data)
+            ],
+            delete_button=delete_btn
         ))
 
     return html.Div([
+        dcc.Store(id="favorites-store", data={"deleted": []}),
+        dcc.Store(id="user-session", data={"user_id": user_id}),  
         topbar,
         dcc.Location(id="login-redirect", refresh=True),
         dbc.Container([
@@ -298,6 +321,40 @@ def user_layout():
         dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
         footer
     ])
+
+from dash import ctx, callback, Input, Output, State, ALL, no_update
+
+@callback(
+    Output("favorites-store", "data"),
+    Input({"type": "delete-favorite", "item_type": ALL, "key": ALL}, "n_clicks"),
+    State("favorites-store", "data"),
+    State("user-session", "data"),
+    prevent_initial_call=True
+)
+def remove_favorite(n_clicks, store_data, session_data):
+    if not ctx.triggered_id or not session_data:
+        return no_update
+
+    triggered = ctx.triggered_id  # This will be a dict with item_type and key
+    item_type = triggered["item_type"]
+    item_key = triggered["key"]
+    user_id = session_data.get("user_id")
+
+    # Delete from database
+    conn = sqlite3.connect("user_data.sqlite")
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM saved_items WHERE user_id = ? AND item_type = ? AND item_key = ?",
+        (user_id, item_type, item_key)
+    )
+    conn.commit()
+    conn.close()
+
+    # Update store to reflect deletion
+    store_data = store_data or {"deleted": []}
+    deleted = set(tuple(i) for i in store_data.get("deleted", []))
+    deleted.add((item_type, item_key))
+    return {"deleted": list(deleted)}
     
 @app.callback(
     Output("login-message", "children"),
@@ -1143,6 +1200,89 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
         html.Div(recent_rows)
     ])
 
+def build_recent_matches_section(event_key, year, epa_data):
+    matches = [m for m in EVENT_MATCHES.get(year, []) if m.get("ek") == event_key]
+    if not matches:
+        return html.P("No matches available for this event.")
+
+    def effective_epa(team_infos):
+        if not team_infos:
+            return 0
+        return mean(t["epa"] for t in team_infos if t)
+
+    def predict_win_probability(red_info, blue_info):
+        red_eff = effective_epa(red_info)
+        blue_eff = effective_epa(blue_info)
+        total_reliability = mean([t["confidence"] for t in red_info + blue_info if t]) or 0.5
+        if red_eff + blue_eff == 0:
+            return 0.5, 0.5
+        diff = red_eff - blue_eff
+        scale = 0.1 * (1 - total_reliability)
+        p_red = 1 / (1 + math.exp(-scale * diff))
+        return p_red, 1 - p_red
+
+    def get_team_info(t_key):
+        return {
+            "epa": epa_data.get(t_key, {}).get("epa", 0),
+            "confidence": epa_data.get(t_key, {}).get("confidence", 0),
+            "consistency": epa_data.get(t_key, {}).get("consistency", 0),
+        }
+
+    def format_team_links(team_str):
+        return ", ".join(f"[{t}](/team/{t})" for t in team_str.split(",") if t.strip().isdigit())
+
+    def build_rows():
+        comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
+        sorted_matches = sorted(matches, key=lambda m: (comp_level_order.get(m.get("cl", ""), 99), m.get("mn", 9999)))
+        rows = []
+        for m in sorted_matches:
+            red_str = m.get("rt", "")
+            blue_str = m.get("bt", "")
+            red_teams = [get_team_info(t.strip()) for t in red_str.split(",")]
+            blue_teams = [get_team_info(t.strip()) for t in blue_str.split(",")]
+
+            p_red, p_blue = predict_win_probability(red_teams, blue_teams)
+            prediction = f"{max(p_red, p_blue):.0%}"
+            prediction_percent = round(max(p_red, p_blue) * 100)
+
+            row = {
+                "Video": f"[Watch](https://youtube.com/watch?v={m['yt']})" if m.get("yt") else "N/A",
+                "Match": f"{m.get('cl', '').upper()} {m.get('mn', '')}",
+                "Red Teams": format_team_links(red_str),
+                "Blue Teams": format_team_links(blue_str),
+                "Red Score": m.get("rs", 0),
+                "Blue Score": m.get("bs", 0),
+                "Winner": m.get("wa", "N/A").title(),
+                "Prediction": prediction,
+                "Prediction %": prediction_percent,
+            }
+            rows.append(row)
+        return rows
+
+    table = dash_table.DataTable(
+        columns=[
+            {"name": "Video", "id": "Video", "presentation": "markdown"},
+            {"name": "Match", "id": "Match"},
+            {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
+            {"name": "Blue Teams", "id": "Blue Teams", "presentation": "markdown"},
+            {"name": "Red Score", "id": "Red Score"},
+            {"name": "Blue Score", "id": "Blue Score"},
+            {"name": "Winner", "id": "Winner"},
+            {"name": "Prediction", "id": "Prediction"},
+        ],
+        data=build_rows(),
+        page_size=10,
+        style_table={"overflowX": "auto", "border": "1px solid #ccc", "borderRadius": "5px"},
+        style_header={"backgroundColor": "#f9f9f9", "fontWeight": "bold"},
+        style_cell={"textAlign": "center", "padding": "6px"},
+    )
+
+    return html.Div([
+        html.H5("Recent Matches", style={"marginTop": "10px", "marginBottom": "5px"}),
+        table
+    ])
+
+
 def team_layout(team_number, year):
 
     user_id = session.get("user_id")
@@ -1791,12 +1931,28 @@ def events_layout(year=2025):
     week_dropdown = dcc.Dropdown(
         id="week-dropdown",
         options=(
-            [{"label": "All", "value": "all"}] +
-            [{"label": f"Week {i+1}", "value": i} for i in range(0, 9)]
+            [{"label": "All Wks", "value": "all"}] +
+            [{"label": f"Wk {i+1}", "value": i} for i in range(0, 6)]
         ),
-        value="all",
         placeholder="Week",
+        value="all",
         clearable=False,
+    )
+    district_dropdown = dcc.Dropdown(
+        id="district-dropdown",
+        options=[],
+        placeholder="District",
+        value="all",
+        clearable=False,
+    )
+    sort_toggle = dcc.RadioItems(
+        id="sort-mode-toggle",
+        options=[
+            {"label": "Sort by Time", "value": "time"},
+            {"label": "Sort A–Z", "value": "alpha"},
+        ],
+        value="time",
+        labelStyle={"display": "inline-block", "margin-right": "15px"},
     )
     search_input = dbc.Input(
         id="search-input",
@@ -1804,27 +1960,40 @@ def events_layout(year=2025):
         type="text",
     )
 
-    filters_row = dbc.Row(
+    filters_row = html.Div(
         [
-            dbc.Col(year_dropdown, xs=6, sm=3, md=2),
-            dbc.Col(event_type_dropdown, xs=6, sm=3, md=2),
-            dbc.Col(week_dropdown, xs=6, sm=3, md=2),
-            dbc.Col(search_input, xs=6, sm=3, md=2),
+            html.Div(year_dropdown, style={"flex": "0 0 60px", "minWidth": "60px"}),
+            html.Div(event_type_dropdown, style={"flex": "1 1 150px", "minWidth": "140px"}),
+            html.Div(week_dropdown, style={"flex": "0 0 80px", "minWidth": "80px"}),
+            html.Div(district_dropdown, style={"flex": "1 1 120px", "minWidth": "120px"}),
+            html.Div(sort_toggle, style={"flex": "1 1 175px", "minWidth": "175px"}),
+            html.Div(search_input, style={"flex": "2 1 130px", "minWidth": "130px"}),
         ],
-        className="mb-4 justify-content-center",
-        style={"gap": "10px"},
+        style={
+            "display": "flex",
+            "flexWrap": "wrap",
+            "justifyContent": "center",
+            "gap": "12px",
+            "rowGap": "16px",
+            "margin": "0 auto",
+            "maxWidth": "1000px"
+        }
     )
 
     return html.Div(
         [
             topbar,
+            dcc.Store(id="event-favorites-store", storage_type="session"),
+            dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
                 [
                     html.H3("Upcoming Events", className="mb-4 mt-4 text-center"),
                     dbc.Row(id="upcoming-events-container", className="justify-content-center"),
 
-                    html.H3("Ongoing Events", className="mb-4 mt-4 text-center"),
-                    dbc.Row(id="ongoing-events-container", className="justify-content-center"),
+                    html.Div(
+                        id="ongoing-events-wrapper",
+                        children=[],
+                    ),
 
                     html.H3("All Events", className="mb-4 mt-4 text-center"),
                     filters_row,
@@ -1842,13 +2011,13 @@ def events_layout(year=2025):
         ]
     )
 
-
-def create_event_card(event):
-    event_url = f"https://www.peekorobo.com/event/{event['k']}"
+def create_event_card(event, favorited=False):
+    event_key = event["k"]
+    event_url = f"https://www.peekorobo.com/event/{event_key}"
     location = f"{event.get('c','')}, {event.get('s','')}, {event.get('co','')}"
-    start = event.get('sd', 'N/A')
-    end = event.get('ed', 'N/A')
-    event_type = event.get('et', 'N/A')
+    start = event.get("sd", "N/A")
+    end = event.get("ed", "N/A")
+    event_type = event.get("et", "N/A")
 
     return dbc.Card(
         [
@@ -1859,38 +2028,151 @@ def create_event_card(event):
                     html.P(f"Dates: {start} - {end}", className="card-text"),
                     html.P(f"Type: {event_type}", className="card-text"),
                     dbc.Button("View Details", href=event_url, target="_blank",
-                               color="warning", className="mt-2"),
+                               color="warning", className="mt-2 me-2"),
+                    dbc.Button(
+                        "★" if favorited else "☆",
+                        id={"type": "favorite-event-btn", "key": event_key},
+                        n_clicks=0,
+                        color="link",
+                        className="mt-2 p-0",
+                        style={
+                            "fontSize": "1.5rem",
+                            "lineHeight": "1",
+                            "border": "none",
+                            "boxShadow": "none",
+                            "background": "none",
+                            "textDecoration": "none"  # <-- removes underline
+                        }
+                    )
+
                 ]
             )
         ],
         className="mb-4 shadow",
-        style={
-            "width": "18rem",
-            "height": "20rem",
-            "margin": "10px"
-        }
+        style={"width": "18rem", "height": "22rem", "margin": "10px"},
     )
 
 @app.callback(
     [
+        Output("favorite-event-alert", "children"),
+        Output("favorite-event-alert", "is_open"),
+        Output("event-favorites-store", "data"),
+    ],
+    Input({"type": "favorite-event-btn", "key": ALL}, "n_clicks"),
+    State({"type": "favorite-event-btn", "key": ALL}, "id"),
+    State("event-favorites-store", "data"),
+    prevent_initial_call=True,
+)
+def toggle_favorite_event(n_clicks_list, id_list, store_data):
+    from flask import session
+    import sqlite3
+
+    if "user_id" not in session:
+        return dash.no_update, False, dash.no_update
+
+    triggered = ctx.triggered_id
+    if not triggered or "key" not in triggered:
+        return dash.no_update, False, dash.no_update
+
+    index = next((i for i, id_ in enumerate(id_list) if id_["key"] == triggered["key"]), None)
+    if index is None or n_clicks_list[index] is None or n_clicks_list[index] == 0:
+        return dash.no_update, False, dash.no_update
+
+    user_id = session["user_id"]
+    event_key = triggered["key"]
+    store_data = store_data or []
+
+    conn = sqlite3.connect("user_data.sqlite")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id FROM saved_items
+        WHERE user_id = ? AND item_type = 'event' AND item_key = ?
+    """, (user_id, event_key))
+    existing = cursor.fetchone()
+
+    if existing:
+        cursor.execute("""
+            DELETE FROM saved_items
+            WHERE user_id = ? AND item_type = 'event' AND item_key = ?
+        """, (user_id, event_key))
+        conn.commit()
+        conn.close()
+        new_store = [k for k in store_data if k != event_key]
+        return "Event removed from favorites.", True, new_store
+    else:
+        cursor.execute("""
+            INSERT INTO saved_items (user_id, item_type, item_key)
+            VALUES (?, 'event', ?)
+        """, (user_id, event_key))
+        conn.commit()
+        conn.close()
+        return "Event added to favorites.", True, store_data + [event_key]
+
+WEEK_RANGES = [
+    (datetime.date(2025, 2, 26), datetime.date(2025, 3, 2)),  # Week 1
+    (datetime.date(2025, 3, 5),  datetime.date(2025, 3, 9)),   # Week 2
+    (datetime.date(2025, 3, 12), datetime.date(2025, 3, 17)),  # Week 3
+    (datetime.date(2025, 3, 19), datetime.date(2025, 3, 23)),  # Week 4
+    (datetime.date(2025, 3, 25), datetime.date(2025, 3, 30)),  # Week 5
+    (datetime.date(2025, 4, 2),  datetime.date(2025, 4, 6)),   # Week 6
+]
+
+def get_week_number(start_date):
+    for i, (start, end) in enumerate(WEEK_RANGES):
+        if start <= start_date <= end:
+            return i
+    return None
+
+
+@app.callback(
+    [
         Output("upcoming-events-container", "children"),
-        Output("ongoing-events-container", "children"),
+        Output("ongoing-events-wrapper", "children"),
         Output("all-events-container", "children"),
+        Output("district-dropdown", "options"),
     ],
     [
         Input("year-dropdown", "value"),
         Input("event-type-dropdown", "value"),
         Input("week-dropdown", "value"),
         Input("search-input", "value"),
+        Input("district-dropdown", "value"),
+        Input("sort-mode-toggle", "value"),
+        Input("event-favorites-store", "data"),
     ],
 )
-def update_events_table(selected_year, selected_event_types, selected_week, search_query):
+def update_events_table(selected_year, selected_event_types, selected_week, search_query, selected_district, sort_mode, store_data):
+    user_favorites = set(store_data or [])
+
     events_data = list(EVENT_DATABASE.get(selected_year, {}).values())
     if not events_data:
-        return [], [], []
+        return [], [], [], []
 
     if not isinstance(selected_event_types, list):
         selected_event_types = [selected_event_types]
+
+    def extract_district_key(event_name):
+        parts = event_name.split()
+        if "District" in parts:
+            idx = parts.index("District")
+            return parts[idx - 1] if idx > 0 else None
+        return None
+
+    district_keys = sorted(set(
+        extract_district_key(ev["n"]) for ev in events_data
+        if "District" in ev.get("n", "")
+    ))
+
+    district_options = [{"label": "All", "value": "all"}] + [
+        {"label": dk, "value": dk} for dk in district_keys if dk
+    ]
+
+    if selected_district and selected_district != "all":
+        events_data = [
+            ev for ev in events_data
+            if extract_district_key(ev.get("n", "")) == selected_district
+        ]
 
     if "all" not in selected_event_types:
         filtered = []
@@ -1907,16 +2189,6 @@ def update_events_table(selected_year, selected_event_types, selected_week, sear
                 filtered.extend([ev for ev in events_data if "championship" in (ev.get("et") or "").lower()])
         events_data = list({ev["k"]: ev for ev in filtered}.values())
 
-    if selected_week != "all":
-        events_data = [ev for ev in events_data if ev.get("w") == selected_week]  # Optional: include week in compressed schema
-
-    if search_query:
-        q = search_query.lower()
-        events_data = [
-            ev for ev in events_data
-            if q in ev.get("n", "").lower() or q in ev.get("c", "").lower()
-        ]
-
     def parse_date(d):
         try:
             return datetime.datetime.strptime(d, "%Y-%m-%d").date()
@@ -1926,21 +2198,41 @@ def update_events_table(selected_year, selected_event_types, selected_week, sear
     for ev in events_data:
         ev["_start_date_obj"] = parse_date(ev.get("sd", "1900-01-01"))
         ev["_end_date_obj"] = parse_date(ev.get("ed", "1900-01-01"))
-    events_data.sort(key=lambda x: x["_start_date_obj"])
+        ev["w"] = get_week_number(ev["_start_date_obj"])
+
+    if selected_week != "all":
+        events_data = [ev for ev in events_data if ev.get("w") == selected_week]
+
+    if search_query:
+        q = search_query.lower()
+        events_data = [
+            ev for ev in events_data
+            if q in ev.get("n", "").lower() or q in ev.get("c", "").lower()
+        ]
+
+    if sort_mode == "time":
+        events_data.sort(key=lambda x: x["_start_date_obj"])
+    elif sort_mode == "alpha":
+        events_data.sort(key=lambda x: x.get("n", "").lower())
 
     today = datetime.date.today()
     upcoming = [ev for ev in events_data if ev["_start_date_obj"] > today]
     ongoing = [ev for ev in events_data if ev["_start_date_obj"] <= today <= ev["_end_date_obj"]]
 
-    up_cards = [dbc.Col(create_event_card(ev), width="auto") for ev in upcoming[:5]]
+    if ongoing:
+        ongoing_layout = html.Div([
+            html.H3("Ongoing Events", className="mb-4 mt-4 text-center"),
+            dbc.Row([dbc.Col(create_event_card(ev, favorited=(ev["k"] in user_favorites)), width="auto") for ev in ongoing], className="justify-content-center"),
+        ])
+    else:
+        ongoing_layout = html.Div()
+
+    up_cards = [dbc.Col(create_event_card(ev, favorited=(ev["k"] in user_favorites)), width="auto") for ev in upcoming[:5]]
     upcoming_layout = dbc.Row(up_cards, className="justify-content-center")
 
-    ongoing_cards = [dbc.Col(create_event_card(ev), width="auto") for ev in ongoing]
-    ongoing_layout = dbc.Row(ongoing_cards, className="justify-content-center")
+    all_event_cards = [create_event_card(ev, favorited=(ev["k"] in user_favorites)) for ev in events_data]
 
-    all_event_cards = [create_event_card(ev) for ev in events_data]
-
-    return upcoming_layout, ongoing_layout, all_event_cards
+    return upcoming_layout, ongoing_layout, all_event_cards, district_options
 
 def load_teams_and_compute_epa_ranks(year, use_weighted_ace=False):
     epa_info = {}
@@ -2001,26 +2293,50 @@ def event_layout(event_key):
 
     # Header card
     header_card = dbc.Card(
-        dbc.CardBody([
-            html.H2(f"{event_name} ({event_year})", className="card-title mb-3", style={"fontWeight": "bold"}),
-            html.P(f"Location: {event_location}", className="card-text"),
-            html.P(f"Dates: {start_date} - {end_date}", className="card-text"),
-            html.P(f"Type: {event_type}", className="card-text"),
+        html.Div([
             dbc.Button(
-                "Visit Event Website",
-                href=website,
-                external_link=True,
-                className="mt-3",
+                id="favorite-event-btn",
+                children="★",  # will be toggled dynamically
+                color="link",
+                className="p-0",
+                n_clicks=0,
                 style={
-                    "backgroundColor": "#FFCC00",
-                    "borderColor": "#FFCC00",
-                    "color": "black",
-                },
-            )
-        ]),
+                    "position": "absolute",
+                    "top": "12px",
+                    "right": "16px",
+                    "fontSize": "2.2rem",
+                    "lineHeight": "1",
+                    "border": "none",
+                    "boxShadow": "none",
+                    "background": "none",
+                    "color": "#ffc107",  # golden star
+                    "zIndex": "10",
+                    "textDecoration": "none",
+                    "cursor": "pointer"
+                }
+            ),
+            dbc.CardBody([
+                html.H2(f"{event_name} ({event_year})", className="card-title mb-3", style={"fontWeight": "bold"}),
+                html.P(f"Location: {event_location}", className="card-text"),
+                html.P(f"Dates: {start_date} - {end_date}", className="card-text"),
+                html.P(f"Type: {event_type}", className="card-text"),
+                dbc.Button(
+                    "Visit Event Website",
+                    href=website,
+                    external_link=True,
+                    className="mt-3",
+                    style={
+                        "backgroundColor": "#FFCC00",
+                        "borderColor": "#FFCC00",
+                        "color": "black",
+                    },
+                )
+            ])
+        ], style={"position": "relative"}),
         className="mb-4 shadow-sm flex-fill",
         style={"borderRadius": "10px"}
     )
+
 
     # Determine last match and thumbnail
     last_match = None
@@ -2067,7 +2383,10 @@ def event_layout(event_key):
 
     return html.Div(
         [
+            dcc.Store(id="user-session"),  # Holds user_id from session
             topbar,
+            dcc.Store(id="event-favorites-store", storage_type="session"),
+            dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
                 [
                     header_layout,
@@ -2155,6 +2474,67 @@ def parse_event_key(event_key):
     if len(event_key) >= 5 and event_key[:4].isdigit():
         return int(event_key[:4]), event_key[4:]
     return None, event_key
+
+@callback(
+    Output("event-favorites-store", "data", allow_duplicate=True),
+    Output("favorite-event-alert", "children", allow_duplicate=True),
+    Output("favorite-event-alert", "is_open", allow_duplicate=True),
+    Input("url", "pathname"),
+    Input("favorite-event-btn", "n_clicks"),
+    State("event-favorites-store", "data"),
+    prevent_initial_call=True
+)
+def handle_event_favorite(pathname, n_clicks, store_data):
+    from flask import session
+    import sqlite3
+
+    if "user_id" not in session:
+        raise PreventUpdate
+
+    user_id = session["user_id"]
+    event_key = pathname.strip("/").split("/")[-1]
+    store_data = store_data or []
+
+    # Case: user clicked star
+    if ctx.triggered_id == "favorite-event-btn":
+        conn = sqlite3.connect("user_data.sqlite")
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM saved_items WHERE user_id = ? AND item_type = 'event' AND item_key = ?", (user_id, event_key))
+        existing = cursor.fetchone()
+
+        if existing:
+            cursor.execute("DELETE FROM saved_items WHERE user_id = ? AND item_type = 'event' AND item_key = ?", (user_id, event_key))
+            conn.commit()
+            conn.close()
+            new_store = [k for k in store_data if k != event_key]
+            return new_store, "Removed from favorites", True
+        else:
+            cursor.execute("INSERT INTO saved_items (user_id, item_type, item_key) VALUES (?, 'event', ?)", (user_id, event_key))
+            conn.commit()
+            conn.close()
+            return store_data + [event_key], "Added to favorites", True
+
+    # Case: just loading the page (preload from DB)
+    if ctx.triggered_id == "url":
+        conn = sqlite3.connect("user_data.sqlite")
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM saved_items WHERE user_id = ? AND item_type = 'event' AND item_key = ?", (user_id, event_key))
+        favorited = cursor.fetchone()
+        conn.close()
+        return ([event_key] if favorited else []), dash.no_update, dash.no_update
+
+    raise PreventUpdate
+
+@callback(
+    Output("favorite-event-btn", "children"),
+    Input("event-favorites-store", "data"),
+    State("url", "pathname")
+)
+def update_button_icon(favorites, pathname):
+    event_key = pathname.strip("/").split("/")[-1]
+    if favorites and event_key in favorites:
+        return "★"
+    return "☆"
 
 @app.callback(
     Output("data-display-container", "children"),
