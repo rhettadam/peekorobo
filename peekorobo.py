@@ -1,6 +1,6 @@
 import dash
 import dash_bootstrap_components as dbc
-from dash import callback, html, dcc, dash_table, ctx, ALL, MATCH
+from dash import callback, html, dcc, dash_table, ctx, ALL, MATCH, no_update
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 
@@ -322,7 +322,57 @@ def user_layout():
         footer
     ])
 
-from dash import ctx, callback, Input, Output, State, ALL, no_update
+def admin_layout():
+    conn = sqlite3.connect("user_data.sqlite")
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, username FROM users")
+    users = cursor.fetchall()
+
+    cursor.execute("SELECT user_id, item_type, item_key FROM saved_items")
+    favorites = cursor.fetchall()
+
+    conn.close()
+
+    user_table = dash_table.DataTable(
+        columns=[
+            {"name": "User ID", "id": "id"},
+            {"name": "Username", "id": "username"},
+        ],
+        data=[{"id": uid, "username": uname} for uid, uname in users],
+        style_table={"overflowX": "auto"},
+        style_cell={"textAlign": "left"},
+    )
+
+    favorites_table = dash_table.DataTable(
+        columns=[
+            {"name": "User ID", "id": "user_id"},
+            {"name": "Item Type", "id": "item_type"},
+            {"name": "Item Key", "id": "item_key"},
+        ],
+        data=[
+            {"user_id": u, "item_type": t, "item_key": k}
+            for u, t, k in favorites
+        ],
+        style_table={"overflowX": "auto"},
+        style_cell={"textAlign": "left"},
+    )
+
+    return html.Div([
+        topbar,
+        dbc.Container([
+            html.H2("Admin Dashboard", className="mt-4 mb-4"),
+            html.H4("Registered Users"),
+            user_table,
+            html.Hr(),
+            html.H4("Favorites"),
+            favorites_table
+        ], style={"paddingBottom": "40px"}),
+        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+        footer
+    ])
 
 @callback(
     Output("favorites-store", "data"),
@@ -366,7 +416,6 @@ def remove_favorite(n_clicks, store_data, session_data):
     prevent_initial_call=True
 )
 def handle_login(login_clicks, register_clicks, username, password):
-
     ctx = dash.callback_context
 
     if not ctx.triggered or not username or not password:
@@ -379,7 +428,8 @@ def handle_login(login_clicks, register_clicks, username, password):
         if valid:
             session["user_id"] = user_id
             session["username"] = username
-            return f"✅ Welcome, {username}!", "/user"
+            redirect_url = "/admin" if username == "admin" else "/user"
+            return f"✅ Welcome, {username}!", redirect_url
         else:
             return "❌ Invalid username or password.", dash.no_update
 
@@ -394,10 +444,10 @@ def handle_login(login_clicks, register_clicks, username, password):
             conn.close()
             session["user_id"] = user_id
             session["username"] = username.strip()
-            return f"✅ Welcome, {username.strip()}!", "/user"
+            redirect_url = "/admin" if username.strip() == "admin" else "/user"
+            return f"✅ Welcome, {username.strip()}!", redirect_url
         else:
             return message, dash.no_update
-
 
 topbar = dbc.Navbar(
     dbc.Container(
@@ -3792,6 +3842,9 @@ def display_page(pathname):
 
     if pathname == "/user":
         return user_layout()
+
+    if pathname == "/admin":
+        return admin_layout()
     
     if pathname.startswith("/challenge/"):
         year = pathname.split("/")[-1]
