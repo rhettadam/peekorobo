@@ -72,7 +72,6 @@ def login_layout():
                 , width=12),
             )
         ], class_name="py-5", style={"backgroundColor": "white"}),
-        universal_profile_icon_or_toast(),
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
         dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
@@ -286,7 +285,7 @@ def handle_login(login_clicks, register_clicks, username, password):
         if valid:
             session["user_id"] = user_id
             session["username"] = username
-            return f"✅ Welcome, {username}!", "/profile"
+            return f"✅ Welcome, {username}!", "/user"
         else:
             return "❌ Invalid username or password.", dash.no_update
 
@@ -848,8 +847,9 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
 
     for event_key, event in EVENT_DATABASE.get(year, {}).items():
         event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
-        if not any(t["tk"] == team_number for t in event_teams):
+        if not any(int(t["tk"]) == team_number for t in event_teams if "tk" in t):
             continue
+
 
         event_name = event.get("n", "Unknown")
         loc = ", ".join(filter(None, [event.get("c", ""), event.get("s", ""), event.get("co", "")]))
@@ -2888,7 +2888,7 @@ def teams_layout(default_year=2025):
         ],
         value="teleop_epa",
         clearable=False,
-        style={"width": "100px"}
+        style={"width": "130px"}
     )
 
     y_axis_dropdown = dcc.Dropdown(
@@ -2904,7 +2904,7 @@ def teams_layout(default_year=2025):
         ],
         value="auto+endgame",
         clearable=False,
-        style={"width": "100px"}
+        style={"width": "130px"}
     )
 
     axis_dropdowns = html.Div(
@@ -2917,7 +2917,7 @@ def teams_layout(default_year=2025):
                 dbc.Col(y_axis_dropdown, width=3),
             ], className="align-items-center")
         ],
-        style={"display": "none", "marginBottom": "15px"}
+        style={"display": "none", "marginBottom": "5px", "marginTop": "0px"}
     )
 
     search_input = dbc.Input(
