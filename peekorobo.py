@@ -188,23 +188,60 @@ def user_layout():
             continue
 
         team_data = TEAM_DATABASE.get(2025, {}).get(team_number)
+        year_data = TEAM_DATABASE.get(2025, {})
         epa_data = {
-            str(t): {
-                "epa": d.get("epa", 0),
-                "confidence": d.get("confidence", 0),
-                "consistency": d.get("consistency", 0)
+            str(team_num): {
+                "epa": data.get("epa", 0),
+                "confidence": data.get("confidence", 0),
+                "consistency": data.get("consistency", 0)
             }
-            for t, d in TEAM_DATABASE.get(2025, {}).items()
+            for team_num, data in year_data.items()
         }
 
+        if team_data:
+            epa = team_data.get("epa", 0)
+            teleop = team_data.get("teleop_epa", 0)
+            auto = team_data.get("auto_epa", 0)
+            endgame = team_data.get("endgame_epa", 0)
+            wins = team_data.get("wins", 0)
+            losses = team_data.get("losses", 0)
+            country = (team_data.get("country") or "").lower()
+            state = (team_data.get("state_prov") or "").lower()
+
+            global_rank = 1
+            country_rank = 1
+            state_rank = 1
+            for other in TEAM_DATABASE.get(2025, {}).values():
+                if (other.get("epa", 0) or 0) > epa:
+                    global_rank += 1
+                    if (other.get("country") or "").lower() == country:
+                        country_rank += 1
+                    if (other.get("state_prov") or "").lower() == state:
+                        state_rank += 1
+
+            metrics = html.Div([
+                html.Div(f"ACE: {epa:.2f}", style={"fontWeight": "bold", "color": "#17A2B8"}),
+                html.Div(f"Auto ACE: {auto:.2f}", style={"fontWeight": "bold", "color": "#17A2B8"}),
+                html.Div(f"Teleop ACE: {teleop:.2f}", style={"fontWeight": "bold", "color": "#17A2B8"}),
+                html.Div(f"Endgame ACE: {endgame:.2f}", style={"fontWeight": "bold", "color": "#17A2B8"}),
+                html.Div([
+                    html.Span("Record: "),
+                    html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
+                    html.Span(" / "),
+                    html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
+                ]),
+                html.Div(f"Global Rank: {global_rank}", style={"color": "#007BFF"}),
+            ], style={"marginTop": "10px", "fontSize": "0.95rem"})
+
         team_cards.append(card(
-            f"⭐ Team {team_key}",
+            f"⭐ {team_number} | {team_data.get('nickname', '')}",
             [
                 html.Img(src=get_team_avatar(team_key), style={"height": "80px", "borderRadius": "50%"}),
+                metrics,
                 html.Br(),
                 html.A("View Team Page", href=f"/team/{team_key}"),
-                html.Br(), html.Br(),
-                build_recent_events_section(f"frc{team_key}", team_key, epa_data, 2025)
+                html.Hr(),
+                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025)
             ]
         ))
 
