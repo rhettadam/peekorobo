@@ -9,7 +9,11 @@ import datetime
 import sqlite3
 import json
 from statistics import mean, pstdev
+import statistics
 import math
+import pandas as pd
+
+import plotly.graph_objects as go
 
 from datagather import frc_games, COUNTRIES, STATES, tba_get, load_data, get_team_avatar, calculate_ranks
 
@@ -545,6 +549,31 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
     recent_rows = []
     year = performance_year 
 
+    def effective_epa(team_infos):
+        if not team_infos:
+            return 0
+    
+        weighted_epas = []
+        for t in team_infos:
+            epa = t["epa"]
+            weighted_epas.append(epa)
+    
+        return mean(weighted_epas)
+
+    def predict_win_probability(red_info, blue_info):
+        red_eff = effective_epa(red_info)
+        blue_eff = effective_epa(blue_info)
+        total_reliability = mean([t["confidence"] for t in red_info + blue_info])  # 0–1
+            
+        if red_eff + blue_eff == 0:
+            return 0.5, 0.5  # Unknowns cancel out
+            
+        diff = red_eff - blue_eff
+        scale = 0.1 * (1 - total_reliability)  # dynamic scaling: more uncertainty → softer sigmoid
+        p_red = 1 / (1 + math.exp(-scale * diff))
+        return p_red, 1 - p_red
+
+
     for event_key, event in EVENT_DATABASE.get(year, {}).items():
         event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
         if not any(t["tk"] == team_number for t in event_teams):
@@ -643,35 +672,9 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
                 
                 if red_team_info and blue_team_info:
-                    # Compute average EPA
-                    red_epas = [t["epa"] for t in red_team_info]
-                    blue_epas = [t["epa"] for t in blue_team_info]
-                
-                    red_avg = mean(red_epas)
-                    blue_avg = mean(blue_epas)
-                
-                    # Compute average confidence (0 to 1)
-                    red_conf = mean([t["confidence"] for t in red_team_info]) / 100
-                    blue_conf = mean([t["confidence"] for t in blue_team_info]) / 100
-                
-                    # Compute average consistency (0 to 1)
-                    red_cons = mean([t["consistency"] for t in red_team_info])
-                    blue_cons = mean([t["consistency"] for t in blue_team_info])
-                
-                    # Apply penalties/bonuses
-                    def effective_epa(avg, conf, cons):
-                        return avg * (1 + 0.25 * conf + 0.15 * cons)
-                
-                    red_eff = effective_epa(red_avg, red_conf, red_cons)
-                    blue_eff = effective_epa(blue_avg, blue_conf, blue_cons)
-                
-                    # Final probability via logistic
-                    diff = red_eff - blue_eff
-                    p_red = 1 / (1 + math.exp(-0.25 * diff))
-                
+                    p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
                     is_red = str(team_number) in red_str
-                    team_prob = p_red if is_red else 1 - p_red
-                
+                    team_prob = p_red if is_red else p_blue
                     prediction = f"{team_prob:.0%}"
                     prediction_percent = round(team_prob * 100)
                 else:
@@ -734,24 +737,80 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                     "if": {"filter_query": '{Winner} = "Blue"'},
                     "backgroundColor": "#e6f0ff"
                 },
+                # Neutral zone (around 50%)
                 {
-                    "if": {"filter_query": "{Prediction %} > 50", "column_id": "Prediction"},
-                    "backgroundColor": "#d4edda",
-                    "color": "black",
-                    "fontWeight": "bold",
-                },
-                {
-                    "if": {"filter_query": "{Prediction %} < 50", "column_id": "Prediction"},
-                    "backgroundColor": "#f8d7da",
-                    "color": "black",
-                    "fontWeight": "bold",
-                },
-                {
-                    "if": {"filter_query": "{Prediction %} = 50", "column_id": "Prediction"},
+                    "if": {
+                        "filter_query": "{Prediction %} >= 45 && {Prediction %} <= 55",
+                        "column_id": "Prediction"
+                    },
                     "backgroundColor": "#ededd4",
                     "color": "black",
                     "fontWeight": "bold",
                 },
+                # Increasing confidence GREEN (light to dark)
+                {
+                    "if": {"filter_query": "{Prediction %} > 55 && {Prediction %} <= 65", "column_id": "Prediction"},
+                    "backgroundColor": "#d4edda",  # light green
+                    "color": "black",
+                    "fontWeight": "bold",
+                },
+                {
+                    "if": {"filter_query": "{Prediction %} > 65 && {Prediction %} <= 75", "column_id": "Prediction"},
+                    "backgroundColor": "#b6dfc1",
+                    "color": "black",
+                    "fontWeight": "bold",
+                },
+                {
+                    "if": {"filter_query": "{Prediction %} > 75 && {Prediction %} <= 85", "column_id": "Prediction"},
+                    "backgroundColor": "#8fd4a8",
+                    "color": "black",
+                    "fontWeight": "bold",
+                },
+                {
+                    "if": {"filter_query": "{Prediction %} > 85 && {Prediction %} <= 95", "column_id": "Prediction"},
+                    "backgroundColor": "#68c990",
+                    "color": "white",
+                    "fontWeight": "bold",
+                },
+                {
+                    "if": {"filter_query": "{Prediction %} > 95", "column_id": "Prediction"},
+                    "backgroundColor": "#41be77",  # dark green
+                    "color": "white",
+                    "fontWeight": "bold",
+                },
+                
+                # Increasing confidence RED (light to dark)
+                {
+                    "if": {"filter_query": "{Prediction %} < 45 && {Prediction %} >= 35", "column_id": "Prediction"},
+                    "backgroundColor": "#f8d7da",  # light red
+                    "color": "black",
+                    "fontWeight": "bold",
+                },
+                {
+                    "if": {"filter_query": "{Prediction %} < 35 && {Prediction %} >= 25", "column_id": "Prediction"},
+                    "backgroundColor": "#f1bfc2",
+                    "color": "black",
+                    "fontWeight": "bold",
+                },
+                {
+                    "if": {"filter_query": "{Prediction %} < 25 && {Prediction %} >= 15", "column_id": "Prediction"},
+                    "backgroundColor": "#eaa7aa",
+                    "color": "black",
+                    "fontWeight": "bold",
+                },
+                {
+                    "if": {"filter_query": "{Prediction %} < 15 && {Prediction %} >= 5", "column_id": "Prediction"},
+                    "backgroundColor": "#e39091",
+                    "color": "white",
+                    "fontWeight": "bold",
+                },
+                {
+                    "if": {"filter_query": "{Prediction %} < 5", "column_id": "Prediction"},
+                    "backgroundColor": "#dc7878",  # dark red
+                    "color": "white",
+                    "fontWeight": "bold",
+                },
+
                 {
                     "if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Score"},
                     "borderBottom": "1px solid black"
@@ -1523,24 +1582,12 @@ def load_teams_and_compute_epa_ranks(year, use_weighted_ace=False):
     teams_data = list(year_data.values())
 
     for team in teams_data:
-        auto = team.get("auto_epa") or 0
-        teleop = team.get("teleop_epa") or 0
-        endgame = team.get("endgame_epa") or 0
-        confidence = team.get("confidence", 0)
         epa = team.get("epa", 0) or 0  # <- already includes confidence
 
         # For display: this is the "Total ACE"
         team["display_ace"] = epa
-
-        # For ranking: weight components AND factor in confidence
-        weighted_contribution = confidence * (
-            0.4 * auto +
-            0.3 * teleop +
-            0.2 * endgame
-        )
-
         # Choose sorting strategy
-        team["sort_metric"] = weighted_contribution if use_weighted_ace else epa
+        team["sort_metric"] = epa
 
     # Sort by the chosen ranking metric
     teams_data = sorted(teams_data, key=lambda x: x.get("sort_metric", 0), reverse=True)
@@ -2010,10 +2057,31 @@ def update_matches_table(selected_team, event_matches, epa_data):
     def effective_epa(team_infos):
         if not team_infos:
             return 0
-        avg_epa = mean([t["epa"] for t in team_infos])
-        avg_conf = mean([t["confidence"] for t in team_infos])
-        avg_cons = mean([t["consistency"] for t in team_infos])
-        return avg_epa * (1 + 0.25 * avg_conf + 0.15 * avg_cons)
+    
+        weighted_epas = []
+        for t in team_infos:
+            epa = t["epa"]
+            conf = t["confidence"]  # 0–1
+            cons = t["consistency"]  # 0–1
+            reliability = 0.5 * conf + 0.5 * cons  # weighted average of trustworthiness
+            weight = 0.5 + 0.5 * reliability  # shrink range: 0.5 (unreliable) to 1.0 (reliable)
+            weighted_epas.append(epa * weight)
+    
+        return mean(weighted_epas)
+
+    def predict_win_probability(red_info, blue_info):
+        red_eff = effective_epa(red_info)
+        blue_eff = effective_epa(blue_info)
+        total_reliability = mean([t["confidence"] for t in red_info + blue_info])  # 0–1
+            
+        if red_eff + blue_eff == 0:
+            return 0.5, 0.5  # Unknowns cancel out
+            
+        diff = red_eff - blue_eff
+        scale = 0.25 + 0.3 * (1 - total_reliability)  # dynamic scaling: more uncertainty → softer sigmoid
+        p_red = 1 / (1 + math.exp(-scale * diff))
+        return p_red, 1 - p_red
+
     
     def build_match_rows(matches):
         rows = []
@@ -2027,17 +2095,14 @@ def update_matches_table(selected_team, event_matches, epa_data):
     
             red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
             blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
+
     
-            red_eff = effective_epa(red_team_info)
-            blue_eff = effective_epa(blue_team_info)
-    
-            if red_eff + blue_eff > 0:
-                diff = red_eff - blue_eff
-                p_red = 1 / (1 + math.exp(-0.25 * diff))
-                p_blue = 1 - p_red
-                pred_str = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
-            else:
+            p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
+            if p_red == 0.5 and p_blue == 0.5:
                 pred_str = "N/A"
+            else:
+                pred_str = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
+
 
             yid = match.get("yt")
             video_link = f"[Watch](https://www.youtube.com/watch?v={yid})" if yid else "N/A"
@@ -2464,19 +2529,63 @@ def teams_layout(default_year=2025):
     )
 
     sort_dropdown = dcc.Dropdown(
-    id="sort-by-dropdown",
-    options=[
-        {"label": "Total ACE", "value": "epa"},
-        {"label": "Auto ACE", "value": "auto_epa"},
-        {"label": "Teleop ACE", "value": "teleop_epa"},
-        {"label": "Endgame ACE", "value": "endgame_epa"},
-    ],
-    value="epa",
-    clearable=False,
-    placeholder="ACE",
-    style={"width": "180px"}
-)
+        id="sort-by-dropdown",
+        options=[
+            {"label": "Total ACE", "value": "epa"},
+            {"label": "Auto ACE", "value": "auto_epa"},
+            {"label": "Teleop ACE", "value": "teleop_epa"},
+            {"label": "Endgame ACE", "value": "endgame_epa"},
+        ],
+        value="epa",
+        clearable=False,
+        placeholder="ACE",
+        style={"width": "180px"}
+    )
 
+    x_axis_dropdown = dcc.Dropdown(
+        id="x-axis-dropdown",
+        options=[
+            {"label": "Teleop", "value": "teleop_epa"},
+            {"label": "Auto", "value": "auto_epa"},
+            {"label": "Endgame", "value": "endgame_epa"},
+            {"label": "Auto+Teleop", "value": "auto+teleop"},
+            {"label": "Auto+Endgame", "value": "auto+endgame"},
+            {"label": "Teleop+Endgame", "value": "teleop+endgame"},
+            {"label": "Total", "value": "epa"},
+        ],
+        value="teleop_epa",
+        clearable=False,
+        style={"width": "100px"}
+    )
+
+    y_axis_dropdown = dcc.Dropdown(
+        id="y-axis-dropdown",
+        options=[
+            {"label": "Teleop", "value": "teleop_epa"},
+            {"label": "Auto", "value": "auto_epa"},
+            {"label": "Endgame", "value": "endgame_epa"},
+            {"label": "Auto+Teleop", "value": "auto+teleop"},
+            {"label": "Auto+Endgame", "value": "auto+endgame"},
+            {"label": "Teleop+Endgame", "value": "teleop+endgame"},
+            {"label": "Total", "value": "epa"},
+        ],
+        value="auto+endgame",
+        clearable=False,
+        style={"width": "100px"}
+    )
+
+    axis_dropdowns = html.Div(
+        id="axis-dropdown-container",
+        children=[
+            dbc.Row([
+                dbc.Col(html.Label("X Axis:"), width="auto"),
+                dbc.Col(x_axis_dropdown, width=3),
+                dbc.Col(html.Label("Y Axis:"), width="auto"),
+                dbc.Col(y_axis_dropdown, width=3),
+            ], className="align-items-center")
+        ],
+        style={"display": "none", "marginBottom": "15px"}
+    )
 
     search_input = dbc.Input(
         id="search-bar",
@@ -2542,13 +2651,14 @@ def teams_layout(default_year=2025):
     tabs = dbc.Tabs([
         dbc.Tab(label="Teams Table", tab_id="table-tab"),
         dbc.Tab(label="Avatars", tab_id="avatars-tab"),
+        dbc.Tab(label="Bubble Map", tab_id="bubble-map-tab"),
     ], id="teams-tabs", active_tab="table-tab", className="mb-3")
 
     content = html.Div(id="teams-tab-content", children=[
         html.Div(id="teams-table-container", children=[teams_table]),
-        html.Div(id="avatar-gallery", className="d-flex flex-wrap justify-content-center", style={"gap": "5px", "padding": "1rem", "display": "none"})
+        html.Div(id="avatar-gallery", className="d-flex flex-wrap justify-content-center", style={"gap": "5px", "padding": "1rem", "display": "none"}),
+        dcc.Graph(id="bubble-map", style={"display": "none", "height": "700px"})
     ])
-
 
     return html.Div(
         [
@@ -2556,6 +2666,7 @@ def teams_layout(default_year=2025):
             dbc.Container([
                 dbc.Row(id="top-teams-container", className="justify-content-center mb-5"),
                 filters_row,
+                axis_dropdowns,
                 epa_legend_layout(),
                 tabs,
                 content,
@@ -2575,6 +2686,8 @@ def teams_layout(default_year=2025):
         Output("teams-table-container", "style"),
         Output("avatar-gallery", "children"),
         Output("avatar-gallery", "style"),
+        Output("bubble-map", "figure"),
+        Output("bubble-map", "style"),
     ],
     [
         Input("teams-year-dropdown", "value"),
@@ -2583,12 +2696,13 @@ def teams_layout(default_year=2025):
         Input("search-bar", "value"),
         Input("teams-tabs", "active_tab"),
         Input("sort-by-dropdown", "value"),
+        Input("x-axis-dropdown", "value"),
+        Input("y-axis-dropdown", "value"),
     ],
 )
-def load_teams(selected_year, selected_country, selected_state, search_query, active_tab, sort_by):
+def load_teams(selected_year, selected_country, selected_state, search_query, active_tab, sort_by, x_axis, y_axis):
   
-    use_weighted = sort_by not in {"auto_epa", "teleop_epa", "endgame_epa"}
-    all_teams, epa_ranks = load_teams_and_compute_epa_ranks(selected_year, use_weighted_ace=use_weighted)
+    all_teams, epa_ranks = load_teams_and_compute_epa_ranks(selected_year)
 
     teams_data = all_teams.copy()
 
@@ -2633,6 +2747,21 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
             for s in STATES[selected_country] if isinstance(s, dict)
         ]
 
+    def get_axis_value(team, axis):
+        auto = team.get("auto_epa") or 0
+        teleop = team.get("teleop_epa") or 0
+        endgame = team.get("endgame_epa") or 0
+        total = team.get("epa") or 0
+        return {
+            "auto_epa": auto,
+            "teleop_epa": teleop,
+            "endgame_epa": endgame,
+            "auto+teleop": auto + teleop,
+            "auto+endgame": auto + endgame,
+            "teleop+endgame": teleop + endgame,
+            "epa": total,
+        }.get(axis, 0)
+
     table_rows = []
     for t in teams_data:
         team_str = str(t.get("team_number"))
@@ -2652,22 +2781,23 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
             "record": record,
         })
 
+    dcc.Location(id="teams-url", refresh=False),
+
     top_teams_layout = dbc.Row([
         dbc.Col(
             create_team_card(
                 t,
                 selected_year,
                 get_team_avatar(t.get("team_number"), selected_year),
-                epa_ranks  # ✅ new argument
+                epa_ranks  # new argument
             ),
             width="auto"
         )
         for t in teams_data[:3] if t.get("team_number")
     ], className="justify-content-center")
-
-
+    
     if active_tab == "avatars-tab":
-        table_style, avatar_style = {"display": "none"}, {"display": "flex"}
+        table_style, avatar_style, map_style = {"display": "none"}, {"display": "flex"}, {"display": "none"}
         avatars = []
         for t in teams_data:
             team_number = t.get("team_number")
@@ -2682,9 +2812,79 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
                     href=f"/team/{team_number}/{selected_year}",
                     style={"display": "inline-block"}
                 ))
-        return table_rows, state_options, top_teams_layout, table_style, avatars, avatar_style
+        return table_rows, state_options, top_teams_layout, table_style, avatars, avatar_style, go.Figure(), map_style
 
-    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}
+    elif active_tab == "bubble-map-tab":
+        chart_data = []
+        for t in teams_data:
+            x_val = get_axis_value(t, x_axis)
+            y_val = get_axis_value(t, y_axis)
+            if x_val is not None and y_val is not None:
+                chart_data.append({
+                    "x": x_val,
+                    "y": y_val,
+                    "epa": t.get("epa") or 0,
+                    "team": f"{t.get('team_number')} - {t.get('nickname', '')}",
+                    "team_number": str(t.get("team_number")),
+                })
+
+        df = pd.DataFrame(chart_data)
+        df["label"] = ""
+        if not df.empty:
+            top_10 = df.sort_values(by="epa", ascending=False).head(10)
+            df.loc[top_10.index, "label"] = df.loc[top_10.index, "team"]
+
+        q = (search_query or "").lower().strip()
+        df["is_match"] = df["team"].str.lower().str.contains(q) if q else False
+        df["hover"] = df.apply(lambda r: f"<b>{r['team']}</b><br>X: {r['x']:.2f}<br>Y: {r['y']:.2f}", axis=1)
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df.loc[~df["is_match"], "x"],
+            y=df.loc[~df["is_match"], "y"],
+            mode="markers+text",
+            marker=dict(size=6, color="rgba(30, 136, 229, 0.3)", line=dict(width=0)),
+            text=df.loc[~df["is_match"], "label"],
+            textfont=dict(size=9, color="black"),
+            textposition="top center",
+            hovertext=df.loc[~df["is_match"], "hover"],
+            hoverinfo="text",
+        ))
+        fig.add_trace(go.Scatter(
+            x=df.loc[df["is_match"], "x"],
+            y=df.loc[df["is_match"], "y"],
+            mode="markers+text",
+            marker=dict(size=8, color="rgba(255,0,0,0.6)", line=dict(width=2, color="black")),
+            text=df.loc[df["is_match"], "label"],
+            textfont=dict(size=10, color="darkred"),
+            textposition="top center",
+            hovertext=df.loc[df["is_match"], "hover"],
+            hoverinfo="text",
+        ))
+
+        fig.update_layout(
+            title="EPA Breakdown Bubble Chart",
+            xaxis_title=x_axis.replace("_epa", " ACE").replace("epa", "Total EPA").replace("+", " + "),
+            yaxis_title=y_axis.replace("_epa", " ACE").replace("epa", "Total EPA").replace("+", " + "),
+            margin=dict(l=40, r=40, t=40, b=40),
+            plot_bgcolor="white",
+            showlegend=False,
+        )
+        return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}
+        
+    # Default to table tab
+    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}
+
+
+@callback(
+    Output("axis-dropdown-container", "style"),
+    Input("teams-tabs", "active_tab")
+)
+def toggle_axis_dropdowns(active_tab):
+    if active_tab == "bubble-map-tab":
+        return {"display": "block", "marginBottom": "15px"}
+    return {"display": "none"}
+
 
 def teams_map_layout():
     # Generate and get the map file path

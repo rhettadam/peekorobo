@@ -215,6 +215,8 @@ def generate_and_store_epa(year=2025):
     print(f"Inserting into database ({len(combined)} teams)...")
     conn = sqlite3.connect("epa_teams.sqlite")
     cur = conn.cursor()
+    
+    # Create main EPA history table
     cur.execute("""
     CREATE TABLE IF NOT EXISTS epa_history (
         year INTEGER,
@@ -235,16 +237,65 @@ def generate_and_store_epa(year=2025):
         average_match_score REAL,
         wins INTEGER,
         losses INTEGER,
+        schedule_score REAL,
         PRIMARY KEY (year, team_number)
     )""")
 
+    # Create event-specific EPA table
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS event_epa (
+        year INTEGER,
+        team_number INTEGER,
+        event_key TEXT,
+        event_name TEXT,
+        event_type TEXT,
+        event_week INTEGER,
+        normal_epa REAL,
+        epa REAL,
+        confidence REAL,
+        auto_epa REAL,
+        teleop_epa REAL,
+        endgame_epa REAL,
+        consistency REAL,
+        trend REAL,
+        average_match_score REAL,
+        wins INTEGER,
+        losses INTEGER,
+        schedule_score REAL,
+        matches_played INTEGER,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (year, team_number, event_key)
+    )""")
+
+    # Create event progression table
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS epa_progression (
+        year INTEGER,
+        team_number INTEGER,
+        event_key TEXT,
+        match_key TEXT,
+        match_number INTEGER,
+        comp_level TEXT,
+        alliance TEXT,
+        normal_epa REAL,
+        epa REAL,
+        auto_epa REAL,
+        teleop_epa REAL,
+        endgame_epa REAL,
+        confidence REAL,
+        schedule_score REAL,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (year, team_number, match_key)
+    )""")
+
+    # Insert into main EPA history
     for team in combined:
         cur.execute("""
         INSERT OR REPLACE INTO epa_history (
             year, team_number, nickname, city, state_prov, country, website,
             normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-            consistency, trend, average_match_score, wins, losses
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            consistency, trend, average_match_score, wins, losses, schedule_score
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             year,
             team.get("team_number"),
@@ -263,8 +314,67 @@ def generate_and_store_epa(year=2025):
             team.get("trend"),
             team.get("average_match_score"),
             team.get("wins"),
-            team.get("losses")
+            team.get("losses"),
+            team.get("schedule_score")
         ))
+
+        # Insert event-specific EPA data
+        if "event_epas" in team:
+            for event_data in team["event_epas"]:
+                cur.execute("""
+                INSERT OR REPLACE INTO event_epa (
+                    year, team_number, event_key, event_name, event_type, event_week,
+                    normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+                    consistency, trend, average_match_score, wins, losses, schedule_score,
+                    matches_played
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    year,
+                    team.get("team_number"),
+                    event_data.get("event_key"),
+                    event_data.get("event_name"),
+                    event_data.get("event_type"),
+                    event_data.get("event_week"),
+                    event_data.get("normal_epa"),
+                    event_data.get("epa"),
+                    event_data.get("confidence"),
+                    event_data.get("auto_epa"),
+                    event_data.get("teleop_epa"),
+                    event_data.get("endgame_epa"),
+                    event_data.get("consistency"),
+                    event_data.get("trend"),
+                    event_data.get("average_match_score"),
+                    event_data.get("wins"),
+                    event_data.get("losses"),
+                    event_data.get("schedule_score"),
+                    event_data.get("matches_played")
+                ))
+
+        # Insert EPA progression data
+        if "progression" in team:
+            for prog_data in team["progression"]:
+                cur.execute("""
+                INSERT OR REPLACE INTO epa_progression (
+                    year, team_number, event_key, match_key, match_number, comp_level,
+                    alliance, normal_epa, epa, auto_epa, teleop_epa, endgame_epa,
+                    confidence, schedule_score
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    year,
+                    team.get("team_number"),
+                    prog_data.get("event_key"),
+                    prog_data.get("match_key"),
+                    prog_data.get("match_number"),
+                    prog_data.get("comp_level"),
+                    prog_data.get("alliance"),
+                    prog_data.get("normal_epa"),
+                    prog_data.get("epa"),
+                    prog_data.get("auto_epa"),
+                    prog_data.get("teleop_epa"),
+                    prog_data.get("endgame_epa"),
+                    prog_data.get("confidence"),
+                    prog_data.get("schedule_score")
+                ))
 
     conn.commit()
     conn.close()
