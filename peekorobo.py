@@ -2,6 +2,8 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import callback, html, dcc, dash_table
 from dash.dependencies import Input, Output, State
+from flask import session
+from auth import register_user, verify_user
 
 import os
 import numpy as np
@@ -32,8 +34,266 @@ app = dash.Dash(
 )
 
 server = app.server
+server.secret_key = "my-dev-secret-key-123"
+
 
 # -------------- LAYOUTS --------------
+
+def login_layout():
+    # Optional redirect if logged in
+    if "user_id" in session:
+        return dcc.Location(href="/user", id="redirect-to-profile")
+
+    return html.Div([
+        topbar,
+        dcc.Location(id="login-redirect", refresh=True),
+        dbc.Container(fluid=True, children=[
+            dbc.Row(
+                dbc.Col(
+                    html.Div([
+                        html.Img(
+                            src="/assets/dozer.gif",
+                            style={"width": "100%", "maxWidth": "400px", "marginBottom": "30px"},
+                            className="dozer-image"
+                        ),
+                        html.H3("Login or Register", style={"textAlign": "center", "marginBottom": "20px", "color": "#333"}),
+                        dbc.Input(id="username", type="text", placeholder="Username", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1rem"}),
+                        dbc.Input(id="password", type="password", placeholder="Password", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1.5rem"}),
+                        dbc.Row([
+                            dbc.Col(dbc.Button("Login", id="login-btn", style={
+                                "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%"
+                            }), width=6),
+                            dbc.Col(dbc.Button("Register", id="register-btn", style={
+                                "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%"
+                            }), width=6),
+                        ], justify="center", style={"maxWidth": "400px", "margin": "auto"}),
+                        html.Div(id="login-message", style={"textAlign": "center", "marginTop": "1rem", "color": "#333", "fontWeight": "bold"}),
+                    ], style={"textAlign": "center", "paddingTop": "50px"})
+                , width=12),
+            )
+        ], class_name="py-5", style={"backgroundColor": "white"}),
+        universal_profile_icon_or_toast(),
+        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+        footer
+    ])
+
+def universal_profile_icon_or_toast():
+    if "user_id" in session:
+        return html.A(
+            html.Img(
+                src="/assets/avatars/star.png",
+                style={
+                    "position": "fixed",
+                    "bottom": "20px",
+                    "right": "20px",
+                    "height": "60px",
+                    "cursor": "pointer",
+                    "zIndex": 9999
+                }
+            ),
+            href="/user"
+        )
+    else:
+        return dbc.Toast(
+            [
+                html.Strong("New here?", className="me-auto"),
+                html.Div("Create an account or log in to save favorite teams & events."),
+                dbc.Row([
+                    dbc.Col(
+                        dbc.Button("Login", href="/login", size="sm", color="secondary", className="mt-2", style={
+                            "width": "100%",
+                            "backgroundColor": "#ddd",
+                            "color": "#000",
+                            "border": "1px solid #999"
+                        }),
+                        width=6
+                    ),
+                    dbc.Col(
+                        dbc.Button("Register", href="/login", size="sm", color="warning", className="mt-2", style={
+                            "width": "100%",
+                            "backgroundColor": "#ffdd00ff",
+                            "color": "#000",
+                            "border": "1px solid #999"
+                        }),
+                        width=6
+                    )
+                ], className="mt-1")
+            ],
+            id="register-popup",
+            header="Join Peekorobo",
+            is_open=True,
+            dismissable=True,
+            icon="warning",
+            style={
+                "position": "fixed",
+                "bottom": 20,
+                "right": 20,
+                "width": 300,
+                "zIndex": 9999
+            },
+        )
+
+def get_username(user_id):
+    conn = sqlite3.connect("user_data.sqlite")
+    cursor = conn.cursor()
+    cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0].title() if row else f"USER {user_id}"
+
+def user_layout():
+    user_id = session.get("user_id")
+    if not user_id:
+        return dcc.Location(href="/login", id="force-login-redirect")
+
+    conn = sqlite3.connect("user_data.sqlite")
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT username, avatar_key FROM users WHERE id = ?", (user_id,))
+        user_row = cursor.fetchone()
+        username = user_row[0] if user_row else f"USER {user_id}"
+        avatar_key = user_row[1] if user_row and user_row[1] else "stock"
+    except sqlite3.OperationalError:
+        cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+        user_row = cursor.fetchone()
+        username = user_row[0] if user_row else f"USER {user_id}"
+        avatar_key = "stock"
+
+    cursor.execute("SELECT item_key FROM saved_items WHERE user_id = ? AND item_type = 'team'", (user_id,))
+    team_keys = [r[0] for r in cursor.fetchall()]
+
+    cursor.execute("SELECT item_key FROM saved_items WHERE user_id = ? AND item_type = 'event'", (user_id,))
+    event_keys = [r[0] for r in cursor.fetchall()]
+
+    conn.close()
+
+    def card(title, body_elements):
+        return dbc.Card(
+            dbc.CardBody([
+                html.H5(title, className="card-title", style={"fontWeight": "bold"}),
+                html.Hr(),
+                *body_elements
+            ]),
+            className="mb-4 shadow-sm",
+            style={"borderRadius": "10px", "backgroundColor": "#fcfcfc"}
+        )
+
+    team_cards = []
+    for team_key in team_keys:
+        try:
+            team_number = int(team_key)
+        except:
+            continue
+
+        team_data = TEAM_DATABASE.get(2025, {}).get(team_number)
+        epa_data = {
+            str(t): {
+                "epa": d.get("epa", 0),
+                "confidence": d.get("confidence", 0),
+                "consistency": d.get("consistency", 0)
+            }
+            for t, d in TEAM_DATABASE.get(2025, {}).items()
+        }
+
+        team_cards.append(card(
+            f"⭐ Team {team_key}",
+            [
+                html.Img(src=get_team_avatar(team_key), style={"height": "80px", "borderRadius": "50%"}),
+                html.Br(),
+                html.A("View Team Page", href=f"/team/{team_key}"),
+                html.Br(), html.Br(),
+                build_recent_events_section(f"frc{team_key}", team_key, epa_data, 2025)
+            ]
+        ))
+
+    event_cards = []
+    for event_key in event_keys:
+        year = 2025
+        matches = [m for m in EVENT_MATCHES.get(year, []) if m.get("ek") == event_key]
+        epa_data = {
+            str(t): {
+                "epa": d.get("epa", 0),
+                "confidence": d.get("confidence", 0),
+                "consistency": d.get("consistency", 0)
+            }
+            for t, d in TEAM_DATABASE.get(2025, {}).items()
+        }
+
+        match_rows = []
+        if matches:
+            match_rows = [
+                m for m in matches
+                if any(t.strip().isdigit() for t in (m.get("rt", "") + "," + m.get("bt", "")).split(","))
+            ]
+            match_rows = build_recent_events_section("", 0, epa_data, 2025).children[-1].children if match_rows else [html.P("No recent matches.")]
+
+        event_cards.append(card(
+            f"⭐ Event {event_key}",
+            [
+                html.A("View Event Page", href=f"/event/{event_key}"),
+                html.Br(), html.Br(),
+                html.Div(match_rows)
+            ]
+        ))
+
+    return html.Div([
+        topbar,
+        dcc.Location(id="login-redirect", refresh=True),
+        dbc.Container([
+            dbc.Card(
+                dbc.CardBody([
+                    html.H2(f"Welcome, {username}!", style={"textAlign": "center", "marginTop": "1rem", "color": "#333"}),
+                ]),
+                className="mb-4 shadow-sm",
+                style={"borderRadius": "10px", "backgroundColor": "#fff8dc"}
+            ),
+
+            html.H3("Favorited Teams", className="mb-3"),
+            *team_cards,
+            html.Hr(),
+            html.H3("Favorited Events", className="mb-3"),
+            *event_cards,
+        ], style={"padding": "20px", "maxWidth": "1000px"}),
+        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+        footer
+    ])
+    
+@app.callback(
+    Output("login-message", "children"),
+    Output("login-redirect", "href"),
+    Input("login-btn", "n_clicks"),
+    Input("register-btn", "n_clicks"),
+    State("username", "value"),
+    State("password", "value"),
+    prevent_initial_call=True
+)
+def handle_login(login_clicks, register_clicks, username, password):
+
+    ctx = dash.callback_context
+
+    if not ctx.triggered or not username or not password:
+        return "Please enter both username and password.", dash.no_update
+
+    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    if button_id == "login-btn":
+        valid, user_id = verify_user(username, password)
+        if valid:
+            session["user_id"] = user_id
+            session["username"] = username
+            return f"✅ Welcome, {username}!", "/profile"
+        else:
+            return "❌ Invalid username or password.", dash.no_update
+
+    elif button_id == "register-btn":
+        success, message = register_user(username, password)
+        return f"✅ {message}" if success else f"❌ {message}", dash.no_update
+
 topbar = dbc.Navbar(
     dbc.Container(
         [
@@ -518,7 +778,7 @@ home_layout = html.Div([
                                     html.Img(
                                         src="/assets/dozer.gif",
                                         style={
-                                            "width": "100%",  
+                                            "width": "100%",
                                             "maxWidth": "600px",
                                             "display": "block",
                                             "margin": "auto"
@@ -835,6 +1095,24 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
     ])
 
 def team_layout(team_number, year):
+
+    user_id = session.get("user_id")
+    is_logged_in = bool(user_id)
+    
+    favorite_button = dbc.Button(
+        "⭐ Favorite Team",
+        id="favorite-team-btn",
+        href="/login" if not is_logged_in else None,
+        color="warning",
+        style={
+            "marginTop": "10px",
+            "backgroundColor": "#fffff0",
+            "color": "black",
+            "border": "1px solid #555",
+            "fontWeight": "bold",
+        }
+    )
+    
     if not team_number:
         return dbc.Alert("No team number provided. Please go back and search again.", color="warning")
 
@@ -1013,7 +1291,7 @@ def team_layout(team_number, year):
 
     badges = generate_notable_badges(team_number)
     
-    # Team Info Card
+        # Team Info Card
     team_card = dbc.Card(
         dbc.CardBody(
             [
@@ -1038,6 +1316,7 @@ def team_layout(team_number, year):
                                     ],
                                     style={"marginBottom": "10px"},
                                 ),
+                                favorite_button  # ⭐ Inserted here
                             ],
                             width=9,
                         ),
@@ -1371,6 +1650,7 @@ def team_layout(team_number, year):
     return html.Div(
         [
             topbar,
+            dbc.Alert(id="favorite-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
                 [
                     team_card,
@@ -1395,6 +1675,47 @@ def team_layout(team_number, year):
             footer,
         ]
     )
+
+@app.callback(
+    Output("favorite-alert", "children"),
+    Output("favorite-alert", "is_open"),
+    Input("favorite-team-btn", "n_clicks"),
+    State("url", "pathname"),
+    prevent_initial_call=True
+)
+def save_favorite(n_clicks, pathname):
+
+    if "user_id" not in session:
+        return "You must be logged in.", True
+
+    user_id = session["user_id"]
+
+    # Extract team number from URL: e.g. "/team/1912"
+    if pathname.startswith("/team/"):
+        team_key = pathname.split("/team/")[1].split("/")[0]
+    else:
+        return "Invalid team path.", True
+
+    conn = sqlite3.connect("user_data.sqlite")
+    cursor = conn.cursor()
+
+    # Avoid duplicates
+    cursor.execute("""
+        SELECT id FROM saved_items
+        WHERE user_id = ? AND item_type = 'team' AND item_key = ?
+    """, (user_id, team_key))
+    if cursor.fetchone():
+        conn.close()
+        return "Team already favorited.", True
+
+    cursor.execute("""
+        INSERT INTO saved_items (user_id, item_type, item_key)
+        VALUES (?, 'team', ?)
+    """, (user_id, team_key))
+    conn.commit()
+    conn.close()
+
+    return "Team favorited successfully!", True
 
 def events_layout(year=2025):
     year_dropdown = dcc.Dropdown(
@@ -3000,6 +3321,12 @@ def handle_navigation(
 
     return "/"
 
+def wrap_with_toast_or_star(content):
+    return html.Div([
+        content,
+        universal_profile_icon_or_toast()
+    ])
+
 @app.callback(
     Output("page-content", "children"),
     Input("url", "pathname")
@@ -3010,26 +3337,32 @@ def display_page(pathname):
     if len(path_parts) >= 2 and path_parts[0] == "team":
         team_number = path_parts[1]
         year = path_parts[2] if len(path_parts) > 2 else None
-        return team_layout(team_number, year)
+        return wrap_with_toast_or_star(team_layout(team_number, year))
     
     if pathname.startswith("/event/"):
         event_key = pathname.split("/")[-1]
-        return event_layout(event_key)
+        return wrap_with_toast_or_star(event_layout(event_key))
     
     if pathname == "/teams":
-        return teams_layout()
+        return wrap_with_toast_or_star(teams_layout())
     
     if pathname == "/map":
-        return teams_map_layout()
+        return wrap_with_toast_or_star(teams_map_layout)
     
     if pathname == "/events":
-        return events_layout()
+        return wrap_with_toast_or_star(events_layout())
     
     if pathname == "/challenges":
-        return challenges_layout()
+        return wrap_with_toast_or_star(challenges_layout())
 
     if pathname == "/blog":
-        return blog_layout
+        return wrap_with_toast_or_star(blog_layout)
+
+    if pathname == "/login":
+        return login_layout()
+
+    if pathname == "/user":
+        return user_layout()
     
     if pathname.startswith("/challenge/"):
         year = pathname.split("/")[-1]
@@ -3039,7 +3372,8 @@ def display_page(pathname):
             year = None
         return challenge_details_layout(year)
 
-    return home_layout
+    return wrap_with_toast_or_star(home_layout)
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
