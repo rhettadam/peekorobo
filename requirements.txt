@@ -5,3 +5,4 @@ python-dotenv>=0.21.0
 dash-bootstrap-components>=1.6.0
 numpy>=1.26.4
 pandas>=2.2.2
+bcrypt>=3.2.0
