@@ -3,6 +3,13 @@ import sqlite3
 
 DB = "user_data.sqlite"
 
+def is_secure_password(pw):
+    if len(pw) < 6:
+        return False, "Password must be at least 6 characters."
+    if pw.isalpha() or pw.isdigit():
+        return False, "Password must include both letters and numbers."
+    return True, "OK"
+
 def register_user(username, password):
     conn = sqlite3.connect(DB)
     cursor = conn.cursor()

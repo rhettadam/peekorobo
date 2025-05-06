@@ -3,7 +3,7 @@ import dash_bootstrap_components as dbc
 from dash import callback, html, dcc, dash_table
 from dash.dependencies import Input, Output, State
 from flask import session
-from auth import register_user, verify_user
+from auth import register_user, verify_user, is_secure_password
 
 import os
 import numpy as np
@@ -291,8 +291,20 @@ def handle_login(login_clicks, register_clicks, username, password):
             return "❌ Invalid username or password.", dash.no_update
 
     elif button_id == "register-btn":
-        success, message = register_user(username, password)
-        return f"✅ {message}" if success else f"❌ {message}", dash.no_update
+        success, message = register_user(username.strip(), password.strip())
+        if success:
+            # Auto-login after registration
+            conn = sqlite3.connect("user_data.sqlite")
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM users WHERE username = ?", (username.strip(),))
+            user_id = cursor.fetchone()[0]
+            conn.close()
+            session["user_id"] = user_id
+            session["username"] = username.strip()
+            return f"✅ Welcome, {username.strip()}!", "/user"
+        else:
+            return message, dash.no_update
+
 
 topbar = dbc.Navbar(
     dbc.Container(
