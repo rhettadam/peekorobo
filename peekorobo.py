@@ -144,6 +144,10 @@ def get_username(user_id):
     conn.close()
     return row[0].title() if row else f"USER {user_id}"
 
+def get_available_avatars():
+        avatar_dir = "assets/avatars"
+        return [f for f in os.listdir(avatar_dir) if f.endswith(".png")]
+
 def user_layout():
     user_id = session.get("user_id")
     
@@ -158,16 +162,20 @@ def user_layout():
     conn = sqlite3.connect("user_data.sqlite")
     cursor = conn.cursor()
 
+    username = f"USER {user_id}"
+    avatar_key = "stock"
+    
     try:
         cursor.execute("SELECT username, avatar_key FROM users WHERE id = ?", (user_id,))
         user_row = cursor.fetchone()
-        username = user_row[0] if user_row else f"USER {user_id}"
-        avatar_key = user_row[1] if user_row and user_row[1] else "stock"
-    except sqlite3.OperationalError:
-        cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
-        user_row = cursor.fetchone()
-        username = user_row[0] if user_row else f"USER {user_id}"
-        avatar_key = "stock"
+        if user_row:
+            username = user_row[0] or username
+            avatar_key = user_row[1] or "stock"
+    except sqlite3.OperationalError as e:
+        if "no such column: avatar_key" in str(e).lower():
+            cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+            user_row = cursor.fetchone()
+
 
     cursor.execute("SELECT item_key FROM saved_items WHERE user_id = ? AND item_type = 'team'", (user_id,))
     team_keys = [r[0] for r in cursor.fetchall()]
@@ -177,24 +185,57 @@ def user_layout():
 
     conn.close()
 
+    available_avatars = get_available_avatars()
+
     store_data = dash.callback_context.states.get("favorites-store.data", {"deleted": []})
     deleted_items = set(tuple(i) for i in store_data.get("deleted", []))
 
     team_keys = [k for k in team_keys if ("team", k) not in deleted_items]
     event_keys = [k for k in event_keys if ("event", k) not in deleted_items]
 
-    def card(title, body_elements, delete_button=None):
+    def team_card(title, body_elements, delete_button=None):
         return dbc.Card(
             dbc.CardBody([
                 html.Div([
-                    html.H5(title, className="card-title", style={"fontWeight": "bold", "display": "inline-block"}),
+                    html.Div(title, style={
+                        "fontWeight": "bold",
+                        "fontSize": "1.1rem",
+                        "textDecoration": "underline",
+                        "color": "#007bff",
+                        "cursor": "pointer"
+                    }),
                     delete_button if delete_button else None
                 ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"}),
                 html.Hr(),
-                *body_elements
+                *body_elements,
             ]),
+            className="mb-4",
+            style={  # ✅ Custom styling applied here
+                "marginBottom": "20px",
+                "borderRadius": "10px",
+                "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+                "backgroundColor": "#f9f9f9",
+            }
         )
 
+
+    def event_card(body_elements, delete_button=None):
+        return dbc.Card(
+            dbc.CardBody([
+                html.Div([
+                    delete_button if delete_button else None
+                ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"}),
+                *body_elements
+            ]),
+            className="mb-4",
+            style={  # ✅ Custom styling applied here
+                "marginBottom": "20px",
+                "borderRadius": "10px",
+                "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+                "backgroundColor": "#f9f9f9",
+            }
+        )
+    
     team_cards = []
     for team_key in team_keys:
         try:
@@ -250,13 +291,17 @@ def user_layout():
 
         delete_btn = html.Button("🗑️", id={"type": "delete-favorite", "item_type": "team", "key": team_key}, className="btn btn-sm btn-danger")
 
-        team_cards.append(card(
-            f"⭐ {team_number} | {team_data.get('nickname', '')}",
+        team_cards.append(team_card(
+            html.A(
+                f"{team_number} | {team_data.get('nickname', '')}",
+                href=f"/team/{team_key}",
+                style={"textDecoration": "none", "color": "inherit"}
+            ),
+
             [
                 html.Img(src=get_team_avatar(team_key), style={"height": "80px", "borderRadius": "50%"}),
                 metrics,
                 html.Br(),
-                html.A("View Team Page", href=f"/team/{team_key}"),
                 html.Hr(),
                 build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025)
             ],
@@ -286,30 +331,105 @@ def user_layout():
 
         delete_btn = html.Button("🗑️", id={"type": "delete-favorite", "item_type": "event", "key": event_key}, className="btn btn-sm btn-danger")
 
-        event_cards.append(card(
-            f"⭐ Event {event_key}",
-            [
-                html.A("View Event Page", href=f"/event/{event_key}"),
-                html.Br(), html.Br(),
+        event_data = EVENT_DATABASE.get(year, {}).get(event_key, {})
+        event_name = event_data.get("n", "Unknown Event")
+        event_label = f"{event_name} | {event_key}"
+        event_url = f"/event/{event_key}"
+        location = ", ".join(filter(None, [event_data.get("c", ""), event_data.get("s", ""), event_data.get("co", "")]))
+        
+
+        event_cards.append(event_card(
+            body_elements=[
+                html.Div([
+                    html.A(
+                        event_label,
+                        href=event_url,
+                        style={
+                            "fontWeight": "bold",
+                            "fontSize": "1.1rem",
+                            "textDecoration": "underline",
+                            "color": "#007bff",
+                            "cursor": "pointer"
+                        }
+                    ),
+                    delete_btn
+                ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"}),
+        
+                html.Div(location, style={"fontSize": "0.85rem", "color": "#666", "marginBottom": "0.5rem"}),
+                html.Hr(),
                 build_recent_matches_section(event_key, year, epa_data)
-            ],
-            delete_button=delete_btn
+            ]
         ))
 
     return html.Div([
         dcc.Store(id="favorites-store", data={"deleted": []}),
-        dcc.Store(id="user-session", data={"user_id": user_id}),  
+        dcc.Store(id="user-session", data={"user_id": user_id}),
         topbar,
         dcc.Location(id="login-redirect", refresh=True),
         dbc.Container([
             dbc.Card(
                 dbc.CardBody([
-                    html.H2(f"Welcome, {username}!", style={"textAlign": "center", "marginTop": "1rem", "color": "#333"}),
+                    html.Div([
+                        # Left: Avatar image and user info
+                        html.Div([
+                            html.Img(
+                                id="user-avatar-img",
+                                src=get_team_avatar(avatar_key),
+                                style={"height": "60px", "borderRadius": "50%", "marginRight": "15px"}
+                            ),
+                            html.Div([
+                                html.H2(f"Welcome, {username.title()}!", style={"margin": 0, "fontSize": "1.5rem", "color": "#333"}),
+                                html.Div(f"⭐ {len(team_keys)} favorited teams | 🎯 {len(event_keys)} favorited events",
+                                         style={"fontSize": "0.85rem", "color": "#555"}),
+                            ]),
+                        ], style={"display": "flex", "alignItems": "center"}),
+    
+                        # Right: Avatar dropdown
+                        html.Div([
+                            html.Label("Select Avatar", style={
+                                "fontSize": "0.75rem",
+                                "fontWeight": "600",
+                                "marginBottom": "4px",
+                                "color": "#444"
+                            }),
+                            dcc.Dropdown(
+                                id="avatar-selector",
+                                options=[
+                                    {"label": html.Div([
+                                        html.Img(src=f"/assets/avatars/{f}", height="20px", style={"marginRight": "8px"}),
+                                        f
+                                    ], style={"display": "flex", "alignItems": "center"}), "value": f}
+                                    for f in available_avatars
+                                ],
+                                value=avatar_key,
+                                clearable=False,
+                                style={
+                                    "width": "140px",
+                                    "fontSize": "0.75rem",
+                                    "height": "30px",
+                                    "marginLeft": "auto"
+                                }
+                            )
+                        ], style={
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "alignItems": "flex-end",
+                            "justifyContent": "center"
+                        })
+                    ], style={
+                        "display": "flex",
+                        "justifyContent": "space-between",
+                        "alignItems": "center",
+                        "gap": "15px"
+                    })
                 ]),
-                className="mb-4 shadow-sm",
-                style={"borderRadius": "10px", "backgroundColor": "#fff8dc"}
+                style={
+                    "borderRadius": "10px",
+                    "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+                    "background": "linear-gradient(to right, #fff8dc, #FFE88A)",
+                    "marginBottom": "20px"
+                }
             ),
-
             html.H3("Favorited Teams", className="mb-3"),
             *team_cards,
             html.Hr(),
@@ -322,12 +442,52 @@ def user_layout():
         footer
     ])
 
+
+def ensure_avatar_column_exists():
+    conn = sqlite3.connect("user_data.sqlite")
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(users)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "avatar_key" not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN avatar_key TEXT DEFAULT 'stock'")
+        conn.commit()
+    conn.close()
+
+@app.callback(
+    Output("avatar-selector", "value"),
+    Output("user-avatar-img", "src"),
+    Input("avatar-selector", "value"),
+    State("user-session", "data")
+)
+def update_user_avatar(new_avatar, session_data):
+    if not new_avatar or not session_data:
+        raise dash.exceptions.PreventUpdate
+
+    ensure_avatar_column_exists()
+
+    user_id = session_data.get("user_id")
+    conn = sqlite3.connect("user_data.sqlite")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET avatar_key = ? WHERE id = ?", (new_avatar, user_id))
+    conn.commit()
+    conn.close()
+
+    print(f"Updated avatar for user {user_id} to {new_avatar}")
+
+    return new_avatar, f"/assets/avatars/{new_avatar}"  # ← Ensure correct path
+
 def admin_layout():
     conn = sqlite3.connect("user_data.sqlite")
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id, username FROM users")
-    users = cursor.fetchall()
+    # Include avatar_key in the selection
+    try:
+        cursor.execute("SELECT id, username, avatar_key FROM users")
+        users = cursor.fetchall()
+    except sqlite3.OperationalError:
+        # fallback in case avatar_key doesn't exist yet
+        cursor.execute("SELECT id, username FROM users")
+        users = [(uid, uname, "stock") for uid, uname in cursor.fetchall()]
 
     cursor.execute("SELECT user_id, item_type, item_key FROM saved_items")
     favorites = cursor.fetchall()
@@ -338,8 +498,9 @@ def admin_layout():
         columns=[
             {"name": "User ID", "id": "id"},
             {"name": "Username", "id": "username"},
+            {"name": "Avatar Key", "id": "avatar_key"},
         ],
-        data=[{"id": uid, "username": uname} for uid, uname in users],
+        data=[{"id": uid, "username": uname, "avatar_key": avatar} for uid, uname, avatar in users],
         style_table={"overflowX": "auto"},
         style_cell={"textAlign": "left"},
     )
@@ -1255,83 +1416,163 @@ def build_recent_matches_section(event_key, year, epa_data):
     if not matches:
         return html.P("No matches available for this event.")
 
+    epa_data = epa_data or {}
+
+    # Sort matches by comp level and match number
+    comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
+
+    def match_sort_key(m):
+        lvl = comp_level_order.get(m.get("cl", ""), 99)
+        num = m.get("mn", 9999)
+        return (lvl, num)
+
+    matches.sort(key=match_sort_key)
+    qual_matches = [m for m in matches if m.get("cl") == "qm"]
+    playoff_matches = [m for m in matches if m.get("cl") != "qm"]
+
+    # Utilities
+    def format_teams_markdown(team_str):
+        return ", ".join(f"[{t}](/team/{t})" for t in team_str.split(",") if t.strip().isdigit())
+
+    def get_team_epa_info(t_key):
+        info = epa_data.get(t_key.strip(), {})
+        return {
+            "epa": info.get("epa", 0),
+            "confidence": info.get("confidence", 0) / 100,  # normalize
+            "consistency": info.get("consistency", 0),
+        }
+
     def effective_epa(team_infos):
         if not team_infos:
             return 0
-        return mean(t["epa"] for t in team_infos if t)
+        weighted_epas = []
+        for t in team_infos:
+            epa = t["epa"]
+            conf = t["confidence"]
+            cons = t["consistency"]
+            reliability = 0.5 * conf + 0.5 * cons
+            weight = 0.5 + 0.5 * reliability
+            weighted_epas.append(epa * weight)
+        return mean(weighted_epas)
 
     def predict_win_probability(red_info, blue_info):
         red_eff = effective_epa(red_info)
         blue_eff = effective_epa(blue_info)
-        total_reliability = mean([t["confidence"] for t in red_info + blue_info if t]) or 0.5
+        total_reliability = mean([t["confidence"] for t in red_info + blue_info]) or 0.5
         if red_eff + blue_eff == 0:
             return 0.5, 0.5
         diff = red_eff - blue_eff
-        scale = 0.1 * (1 - total_reliability)
+        scale = 0.25 + 0.3 * (1 - total_reliability)
         p_red = 1 / (1 + math.exp(-scale * diff))
         return p_red, 1 - p_red
 
-    def get_team_info(t_key):
-        return {
-            "epa": epa_data.get(t_key, {}).get("epa", 0),
-            "confidence": epa_data.get(t_key, {}).get("confidence", 0),
-            "consistency": epa_data.get(t_key, {}).get("consistency", 0),
-        }
-
-    def format_team_links(team_str):
-        return ", ".join(f"[{t}](/team/{t})" for t in team_str.split(",") if t.strip().isdigit())
-
-    def build_rows():
-        comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
-        sorted_matches = sorted(matches, key=lambda m: (comp_level_order.get(m.get("cl", ""), 99), m.get("mn", 9999)))
+    def build_match_rows(match_list):
         rows = []
-        for m in sorted_matches:
-            red_str = m.get("rt", "")
-            blue_str = m.get("bt", "")
-            red_teams = [get_team_info(t.strip()) for t in red_str.split(",")]
-            blue_teams = [get_team_info(t.strip()) for t in blue_str.split(",")]
+        for match in match_list:
+            red_str = match.get("rt", "")
+            blue_str = match.get("bt", "")
+            red_score = match.get("rs", 0)
+            blue_score = match.get("bs", 0)
+            winner = match.get("wa", "")
+            label = match.get("cl", "").upper() + str(match.get("mn", ""))
 
-            p_red, p_blue = predict_win_probability(red_teams, blue_teams)
-            prediction = f"{max(p_red, p_blue):.0%}"
-            prediction_percent = round(max(p_red, p_blue) * 100)
+            red_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
+            blue_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
 
-            row = {
-                "Video": f"[Watch](https://youtube.com/watch?v={m['yt']})" if m.get("yt") else "N/A",
-                "Match": f"{m.get('cl', '').upper()} {m.get('mn', '')}",
-                "Red Teams": format_team_links(red_str),
-                "Blue Teams": format_team_links(blue_str),
-                "Red Score": m.get("rs", 0),
-                "Blue Score": m.get("bs", 0),
-                "Winner": m.get("wa", "N/A").title(),
+            p_red, p_blue = predict_win_probability(red_info, blue_info)
+            if p_red == 0.5 and p_blue == 0.5:
+                prediction = "N/A"
+            else:
+                prediction = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
+
+            yid = match.get("yt")
+            video_link = f"[Watch](https://youtube.com/watch?v={yid})" if yid else "N/A"
+
+            rows.append({
+                "Video": video_link,
+                "Match": label,
+                "Red Teams": format_teams_markdown(red_str),
+                "Blue Teams": format_teams_markdown(blue_str),
+                "Red Score": red_score,
+                "Blue Score": blue_score,
+                "Winner": winner.title() if winner else "N/A",
                 "Prediction": prediction,
-                "Prediction %": prediction_percent,
-            }
-            rows.append(row)
+            })
         return rows
 
-    table = dash_table.DataTable(
-        columns=[
-            {"name": "Video", "id": "Video", "presentation": "markdown"},
-            {"name": "Match", "id": "Match"},
-            {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
-            {"name": "Blue Teams", "id": "Blue Teams", "presentation": "markdown"},
-            {"name": "Red Score", "id": "Red Score"},
-            {"name": "Blue Score", "id": "Blue Score"},
-            {"name": "Winner", "id": "Winner"},
-            {"name": "Prediction", "id": "Prediction"},
-        ],
-        data=build_rows(),
-        page_size=10,
-        style_table={"overflowX": "auto", "border": "1px solid #ccc", "borderRadius": "5px"},
-        style_header={"backgroundColor": "#f9f9f9", "fontWeight": "bold"},
-        style_cell={"textAlign": "center", "padding": "6px"},
-    )
+    # Data rows
+    qual_data = build_match_rows(qual_matches)
+    playoff_data = build_match_rows(playoff_matches)
+
+    # Columns and styling
+    match_columns = [
+        {"name": "Video", "id": "Video", "presentation": "markdown"},
+        {"name": "Match", "id": "Match"},
+        {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
+        {"name": "Blue Teams", "id": "Blue Teams", "presentation": "markdown"},
+        {"name": "Red Score", "id": "Red Score"},
+        {"name": "Blue Score", "id": "Blue Score"},
+        {"name": "Winner", "id": "Winner"},
+        {"name": "Prediction", "id": "Prediction", "presentation": "markdown"},
+    ]
+
+    style_table = {
+        "overflowX": "auto",
+        "border": "1px solid #ddd",
+        "borderRadius": "5px",
+    }
+    style_header = {
+        "backgroundColor": "#F2F2F2",
+        "fontWeight": "bold",
+        "border": "1px solid #ddd",
+        "textAlign": "center",
+    }
+    style_cell = {
+        "textAlign": "center",
+        "border": "1px solid #ddd",
+        "padding": "8px",
+    }
+    row_style = [
+        {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "#ffe6e6"},
+        {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
+    ]
+
+    qual_table = [
+        html.H5("Qualification Matches", className="mb-3 mt-3"),
+        dash_table.DataTable(
+            columns=match_columns,
+            data=qual_data,
+            page_size=10,
+            style_table=style_table,
+            style_header=style_header,
+            style_cell=style_cell,
+            style_data_conditional=row_style,
+        )
+    ] if qual_data else [
+        html.H5("Qualification Matches", className="mb-3 mt-3"),
+        dbc.Alert("No qualification matches found.", color="info"),
+    ]
+
+    playoff_table = [
+        html.H5("Playoff Matches", className="mb-3 mt-5"),
+        dash_table.DataTable(
+            columns=match_columns,
+            data=playoff_data,
+            page_size=10,
+            style_table=style_table,
+            style_header=style_header,
+            style_cell=style_cell,
+            style_data_conditional=row_style,
+        )
+    ] if playoff_data else [
+        html.H5("Playoff Matches", className="mb-3 mt-5"),
+        dbc.Alert("No playoff matches found.", color="info"),
+    ]
 
     return html.Div([
-        html.H5("Recent Matches", style={"marginTop": "10px", "marginBottom": "5px"}),
-        table
+        *qual_table,
+        *playoff_table
     ])
-
 
 def team_layout(team_number, year):
 
@@ -1339,7 +1580,7 @@ def team_layout(team_number, year):
     is_logged_in = bool(user_id)
     
     favorite_button = dbc.Button(
-        "⭐ Favorite Team",
+        "⭐  Favorite Team",
         id="favorite-team-btn",
         href="/login" if not is_logged_in else None,
         color="warning",
@@ -1590,7 +1831,7 @@ def team_layout(team_number, year):
             "marginBottom": "20px",
             "borderRadius": "10px",
             "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
-            "backgroundColor": "#f9f9f9",
+            "backgroundColor": "#f9f9f9"
         },
     )
 
