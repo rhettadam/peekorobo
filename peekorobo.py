@@ -2379,7 +2379,6 @@ def create_event_card(event, favorited=False):
     prevent_initial_call=True,
 )
 def toggle_favorite_event(n_clicks_list, id_list, store_data):
-    from flask import session
     if "user_id" not in session:
         return dash.no_update, False, dash.no_update
 
@@ -2799,8 +2798,6 @@ def parse_event_key(event_key):
     prevent_initial_call=True
 )
 def handle_event_favorite(pathname, n_clicks, store_data):
-    from flask import session
-    import sqlite3
 
     if "user_id" not in session:
         raise PreventUpdate
