@@ -187,6 +187,7 @@ def user_layout():
         ])
 
     dcc.Store(id="user-session", data={"user_id": user_id}),
+    dcc.Store(id="favorites-store") 
 
     conn = get_pg_connection()
     cursor = conn.cursor()
@@ -1683,26 +1684,32 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
     def effective_epa(team_infos):
         if not team_infos:
             return 0
-    
+        
         weighted_epas = []
         for t in team_infos:
             epa = t["epa"]
-            weighted_epas.append(epa)
-    
+            conf = t["confidence"]
+            cons = t["consistency"]
+            reliability = 0.5 * conf + 0.5 * cons
+            weight = 0.5 + 0.5 * reliability
+            weighted_epas.append(epa * weight)
+        
         return mean(weighted_epas)
-
-    def predict_win_probability(red_info, blue_info):
+    
+    def predict_win_probability(red_info, blue_info, boost=1.1):
         red_eff = effective_epa(red_info)
         blue_eff = effective_epa(blue_info)
-        total_reliability = mean([t["confidence"] for t in red_info + blue_info])  # 0–1
-            
+        reliability = mean([t["confidence"] for t in red_info + blue_info]) if red_info + blue_info else 0
+    
         if red_eff + blue_eff == 0:
-            return 0.5, 0.5  # Unknowns cancel out
-            
+            return 0.5, 0.5
+    
         diff = red_eff - blue_eff
-        scale = 0.1 * (1 - total_reliability)  # dynamic scaling: more uncertainty → softer sigmoid
+        scale = boost * (0.06 + 0.3 * (1 - reliability))
         p_red = 1 / (1 + math.exp(-scale * diff))
+        p_red = max(0.15, min(0.90, p_red))  # clip for calibration
         return p_red, 1 - p_red
+
 
 
     for event_key, event in EVENT_DATABASE.get(year, {}).items():
@@ -2000,6 +2007,7 @@ def build_recent_matches_section(event_key, year, epa_data):
     def effective_epa(team_infos):
         if not team_infos:
             return 0
+        
         weighted_epas = []
         for t in team_infos:
             epa = t["epa"]
@@ -2008,18 +2016,23 @@ def build_recent_matches_section(event_key, year, epa_data):
             reliability = 0.5 * conf + 0.5 * cons
             weight = 0.5 + 0.5 * reliability
             weighted_epas.append(epa * weight)
+        
         return mean(weighted_epas)
-
-    def predict_win_probability(red_info, blue_info):
+    
+    def predict_win_probability(red_info, blue_info, boost=1.1):
         red_eff = effective_epa(red_info)
         blue_eff = effective_epa(blue_info)
-        total_reliability = mean([t["confidence"] for t in red_info + blue_info]) or 0.5
+        reliability = mean([t["confidence"] for t in red_info + blue_info]) if red_info + blue_info else 0
+    
         if red_eff + blue_eff == 0:
             return 0.5, 0.5
+    
         diff = red_eff - blue_eff
-        scale = 0.1 * (1 - total_reliability)
+        scale = boost * (0.06 + 0.3 * (1 - reliability))
         p_red = 1 / (1 + math.exp(-scale * diff))
+        p_red = max(0.15, min(0.90, p_red))  # clip for calibration
         return p_red, 1 - p_red
+
 
     def build_match_rows(match_list):
         rows = []
@@ -3677,30 +3690,32 @@ def update_matches_table(selected_team, event_matches, epa_data):
     def effective_epa(team_infos):
         if not team_infos:
             return 0
-    
+        
         weighted_epas = []
         for t in team_infos:
             epa = t["epa"]
-            conf = t["confidence"]  # 0–1
-            cons = t["consistency"]  # 0–1
-            reliability = 0.5 * conf + 0.5 * cons  # weighted average of trustworthiness
-            weight = 0.5 + 0.5 * reliability  # shrink range: 0.5 (unreliable) to 1.0 (reliable)
+            conf = t["confidence"]
+            cons = t["consistency"]
+            reliability = 0.5 * conf + 0.5 * cons
+            weight = 0.5 + 0.5 * reliability
             weighted_epas.append(epa * weight)
-    
+        
         return mean(weighted_epas)
-
-    def predict_win_probability(red_info, blue_info):
+    
+    def predict_win_probability(red_info, blue_info, boost=1.1):
         red_eff = effective_epa(red_info)
         blue_eff = effective_epa(blue_info)
-        total_reliability = mean([t["confidence"] for t in red_info + blue_info])  # 0–1
-            
+        reliability = mean([t["confidence"] for t in red_info + blue_info]) if red_info + blue_info else 0
+    
         if red_eff + blue_eff == 0:
-            return 0.5, 0.5  # Unknowns cancel out
-            
+            return 0.5, 0.5
+    
         diff = red_eff - blue_eff
-        scale = 0.25 + 0.3 * (1 - total_reliability)  # dynamic scaling: more uncertainty → softer sigmoid
+        scale = boost * (0.06 + 0.3 * (1 - reliability))
         p_red = 1 / (1 + math.exp(-scale * diff))
+        p_red = max(0.15, min(0.90, p_red))  # clip for calibration
         return p_red, 1 - p_red
+
 
     
     def build_match_rows(matches):
