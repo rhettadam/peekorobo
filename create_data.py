@@ -9,21 +9,31 @@ def setup_database():
     cursor = conn.cursor()
 
     try:
-        # Create users table
-        cursor.execute("DROP TABLE IF EXISTS users CASCADE")
-
+        # Drop and re-add followers/following columns with correct type (JSONB)
         cursor.execute("""
-            CREATE TABLE users (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                password_hash BYTEA NOT NULL,
-                avatar_key VARCHAR(50) DEFAULT 'stock'
-            )
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='followers') THEN
+                    ALTER TABLE users DROP COLUMN followers;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='following') THEN
+                    ALTER TABLE users DROP COLUMN following;
+                END IF;
+            END $$;
         """)
 
+        # Add columns (JSONB)
+        cursor.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user',
+            ADD COLUMN IF NOT EXISTS team VARCHAR(20),
+            ADD COLUMN IF NOT EXISTS bio TEXT,
+            ADD COLUMN IF NOT EXISTS followers JSONB DEFAULT '[]'::jsonb,
+            ADD COLUMN IF NOT EXISTS following JSONB DEFAULT '[]'::jsonb,
+            ADD COLUMN IF NOT EXISTS avatar_key TEXT DEFAULT 'stock'
+        """)
 
-
-        # Create saved_items table
+        # Create saved_items table if it doesn't exist
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS saved_items (
                 id SERIAL PRIMARY KEY,
@@ -34,7 +44,7 @@ def setup_database():
             )
         """)
 
-        # Create epa_history table
+        # Create epa_history table if it doesn't exist
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS epa_history (
                 id SERIAL PRIMARY KEY,
@@ -46,11 +56,11 @@ def setup_database():
         """)
 
         conn.commit()
-        print("Database schema created successfully!")
+        print("Database updated successfully!")
 
     except Exception as e:
         conn.rollback()
-        print(f"Error setting up database: {e}")
+        print(f"Error updating database: {e}")
 
     finally:
         conn.close()

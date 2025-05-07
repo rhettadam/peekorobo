@@ -179,7 +179,7 @@ def get_available_avatars():
 
 def user_layout():
     user_id = session.get("user_id")
-    
+
     if not user_id:
         return html.Div([
             dcc.Store(id="user-session", data={}),
@@ -193,18 +193,34 @@ def user_layout():
 
     username = f"USER {user_id}"
     avatar_key = "stock"
-    
+
     try:
-        cursor.execute("SELECT username, avatar_key FROM users WHERE id = %s", (user_id,))
+        cursor.execute("""
+            SELECT username, avatar_key, role, team, bio, followers, following
+            FROM users WHERE id = %s
+        """, (user_id,))
         user_row = cursor.fetchone()
         if user_row:
             username = user_row[0] or username
             avatar_key = user_row[1] or "stock"
-    except sqlite3.OperationalError as e:
-        if "no such column: avatar_key" in str(e).lower():
-            cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
-            user_row = cursor.fetchone()
-
+            role = user_row[2] or "No role"
+            team_affil = user_row[3] or "####"
+            bio = user_row[4] or "No bio"
+            followers = user_row[5] or 0
+            following = user_row[6] or 0
+        else:
+            role = "No role"
+            team_affil = "####"
+            bio = "No bio"
+            followers = 0
+            following = 0
+    except Exception as e:
+        print(f"Error retrieving user info: {e}")
+        role = "No role"
+        team_affil = "####"
+        bio = "No bio"
+        followers = 0
+        following = 0
 
     cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (user_id,))
     team_keys = [r[0] for r in cursor.fetchall()]
@@ -216,11 +232,66 @@ def user_layout():
 
     available_avatars = get_available_avatars()
 
+    # use hidden=True/False for reliable Dash state
+    profile_display = html.Div(
+        id="profile-display",
+        hidden=False,
+        children=[
+            html.Div([
+                html.Span(f"Role: {role}", id="profile-role"),
+                html.Span(" | "),
+                html.Span([
+                    "Team: ",
+                    html.A(team_affil, href=f"/team/{team_affil}", style={"color": "#007bff", "textDecoration": "underline"})
+                ], id="profile-team"),
+                html.Span(" | "),
+                html.Span(f"Followers: {followers}"),
+                html.Span(" | "),
+                html.Span(f"Following: {following}")
+            ], style={"fontSize": "0.8rem", "color": "#444", "marginTop": "2px"}),
+            html.Div(bio, id="profile-bio", style={"fontSize": "0.85rem", "color": "#555", "marginTop": "4px"})
+        ]
+    )
+
+    profile_edit_form = html.Div(
+        id="profile-edit-form",
+        hidden=True,
+        children=[
+            dbc.Input(id="edit-username", value=username, placeholder="Username", className="mb-2", size="sm"),
+            dbc.Input(id="edit-role", value=role, placeholder="Role", className="mb-2", size="sm"),
+            dbc.Input(id="edit-team", value=team_affil, placeholder="Team", className="mb-2", size="sm"),
+            dbc.Textarea(id="edit-bio", value=bio, placeholder="Bio", className="mb-2", style={"height": "60px", "fontSize": "0.85rem"}),
+            html.Label("Select Avatar", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#444"}),
+            dcc.Dropdown(
+                id="edit-avatar-key",
+                options=[
+                    {"label": html.Div([
+                        html.Img(src=f"/assets/avatars/{f}", height="20px", style={"marginRight": "8px"}), f
+                    ], style={"display": "flex", "alignItems": "center"}), "value": f}
+                    for f in sorted(available_avatars, key=sort_key)
+                ],
+                value=avatar_key,
+                clearable=False,
+                style={"width": "200px", "fontSize": "0.75rem"}
+            )
+        ]
+    )
+
     store_data = dash.callback_context.states.get("favorites-store.data", {"deleted": []})
     deleted_items = set(tuple(i) for i in store_data.get("deleted", []))
 
     team_keys = [k for k in team_keys if ("team", k) not in deleted_items]
     event_keys = [k for k in event_keys if ("event", k) not in deleted_items]
+
+    epa_data = {
+        str(team_num): {
+            "epa": data.get("epa", 0),
+            "auto_epa": data.get("auto_epa", 0),
+            "teleop_epa": data.get("teleop_epa", 0),
+            "endgame_epa": data.get("endgame_epa", 0),
+        }
+        for team_num, data in TEAM_DATABASE.get(2025, {}).items()
+    }
 
     def team_card(title, body_elements, delete_button=None):
         return dbc.Card(
@@ -240,10 +311,10 @@ def user_layout():
             ]),
             className="mb-4",
             style={  # ✅ Custom styling applied here
-                "marginBottom": "20px",
                 "borderRadius": "10px",
-                "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+                "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
                 "backgroundColor": "#f9f9f9",
+                "marginBottom": "20px"
             }
         )
 
@@ -257,13 +328,14 @@ def user_layout():
                 *body_elements
             ]),
             className="mb-4",
-            style={  # ✅ Custom styling applied here
-                "marginBottom": "20px",
+            style={  # ← You can replace this block:
                 "borderRadius": "10px",
-                "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+                "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
                 "backgroundColor": "#f9f9f9",
+                "marginBottom": "20px"
             }
         )
+
     
     team_cards = []
     for team_key in team_keys:
@@ -274,14 +346,28 @@ def user_layout():
 
         team_data = TEAM_DATABASE.get(2025, {}).get(team_number)
         year_data = TEAM_DATABASE.get(2025, {})
-        epa_data = {
-            str(team_num): {
-                "epa": data.get("epa", 0),
-                "confidence": data.get("confidence", 0),
-                "consistency": data.get("consistency", 0)
-            }
-            for team_num, data in year_data.items()
-        }
+
+        def get_epa_color(value, all_values):
+            if not all_values:
+                return "#000000"  # default to black
+            sorted_vals = sorted(all_values, reverse=True)
+            rank = sorted_vals.index(value) + 1
+            percentile = rank / len(sorted_vals)
+        
+            if percentile <= 0.01:
+                return "#800080"  # purple
+            elif percentile <= 0.05:
+                return "#0000ff"  # blue
+            elif percentile <= 0.10:
+                return "#008000"  # green
+            elif percentile <= 0.25:
+                return "orange"  # yellow
+            elif percentile <= 0.50:
+                return "#ff0000"  # red
+            else:
+                return "#8B4513"  # brown
+        
+
 
         if team_data:
             epa = team_data.get("epa", 0)
@@ -304,21 +390,72 @@ def user_layout():
                     if (other.get("state_prov") or "").lower() == state:
                         state_rank += 1
 
+            team_data_2025 = list(TEAM_DATABASE.get(2025, {}).values())
+
+            epa_vals = [t.get("epa", 0) or 0 for t in team_data_2025]
+            auto_vals = [t.get("auto_epa", 0) or 0 for t in team_data_2025]
+            teleop_vals = [t.get("teleop_epa", 0) or 0 for t in team_data_2025]
+            endgame_vals = [t.get("endgame_epa", 0) or 0 for t in team_data_2025]
+
+
+            epa_color = get_epa_color(epa, epa_vals)
+            auto_color = get_epa_color(auto, auto_vals)
+            teleop_color = get_epa_color(teleop, teleop_vals)
+            endgame_color = get_epa_color(endgame, endgame_vals)
+
+
             metrics = html.Div([
-                html.Div(f"ACE: {epa:.2f}", style={"fontWeight": "bold", "color": "#17A2B8"}),
-                html.Div(f"Auto ACE: {auto:.2f}", style={"fontWeight": "bold", "color": "#17A2B8"}),
-                html.Div(f"Teleop ACE: {teleop:.2f}", style={"fontWeight": "bold", "color": "#17A2B8"}),
-                html.Div(f"Endgame ACE: {endgame:.2f}", style={"fontWeight": "bold", "color": "#17A2B8"}),
+                html.Div("ACE", className="metric-label"),
+                html.Div(f"{epa:.2f}", className="metric-value", style={"color": epa_color, "fontWeight": "bold"}),
+            
+                html.Div("Auto", className="metric-label"),
+                html.Div(f"{auto:.2f}", className="metric-value", style={"color": auto_color, "fontWeight": "bold"}),
+            
+                html.Div("Teleop", className="metric-label"),
+                html.Div(f"{teleop:.2f}", className="metric-value", style={"color": teleop_color, "fontWeight": "bold"}),
+            
+                html.Div("Endgame", className="metric-label"),
+                html.Div(f"{endgame:.2f}", className="metric-value", style={"color": endgame_color, "fontWeight": "bold"}),
+            
+                html.Div("Global Rank", className="metric-label"),
+                html.Div(global_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
+            
+                html.Div("Country Rank", className="metric-label"),
+                html.Div(country_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
+            
+                html.Div("State Rank", className="metric-label"),
+                html.Div(state_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
+            
                 html.Div([
-                    html.Span("Record: "),
+                    html.Span("Record", className="metric-label", style={"marginRight": "8px"}),
                     html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
                     html.Span(" / "),
-                    html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
-                ]),
-                html.Div(f"Global Rank: {global_rank}", style={"color": "#007BFF"}),
-            ], style={"marginTop": "10px", "fontSize": "0.95rem"})
+                    html.Span(str(losses), style={"color": "red", "fontWeight": "bold"})
+                ], style={"gridColumn": "span 8", "display": "flex", "alignItems": "center"})
+            ], style={
+                "display": "grid",
+                "gridTemplateColumns": "repeat(8, 1fr)",
+                "gap": "4px 8px",
+                "fontSize": "0.85rem",
+                "marginTop": "10px",
+                "width": "100%"
+            })
+            
 
-        delete_btn = html.Button("🗑️", id={"type": "delete-favorite", "item_type": "team", "key": team_key}, className="btn btn-sm btn-danger")
+
+
+        delete_btn = html.Button(
+            "🗑️",
+            id={"type": "delete-favorite", "item_type": "team", "key": team_key},
+            style={
+                "backgroundColor": "transparent",
+                "border": "none",
+                "color": "#dc3545",  # optional: red trash color
+                "cursor": "pointer",
+                "fontSize": "1.2rem"  # optional: adjust icon size
+            }
+        )
+
 
         team_cards.append(team_card(
             html.A(
@@ -341,14 +478,6 @@ def user_layout():
     for event_key in event_keys:
         year = 2025
         matches = [m for m in EVENT_MATCHES.get(year, []) if m.get("ek") == event_key]
-        epa_data = {
-            str(t): {
-                "epa": d.get("epa", 0),
-                "confidence": d.get("confidence", 0),
-                "consistency": d.get("consistency", 0)
-            }
-            for t, d in TEAM_DATABASE.get(2025, {}).items()
-        }
 
         match_rows = []
         if matches:
@@ -356,9 +485,30 @@ def user_layout():
                 m for m in matches
                 if any(t.strip().isdigit() for t in (m.get("rt", "") + "," + m.get("bt", "")).split(","))
             ]
-            match_rows = build_recent_events_section("", 0, epa_data, 2025).children[-1].children if match_rows else [html.P("No recent matches.")]
+            event_teams = EVENT_TEAMS.get(2025, {}).get(event_key, [])
+            fav_team_numbers = [int(k) for k in team_keys if k.isdigit()]
+            matched_team = next((t for t in event_teams if int(t["tk"]) in fav_team_numbers), None)
+            
+            if matched_team:
+                team_number = int(matched_team["tk"])
+                event_section = build_recent_events_section(f"frc{team_number}", team_number, epa_data, 2025)
+                match_rows = event_section.children[-1].children
+            else:
+                match_rows = [html.P("No favorited teams at this event.")]
 
-        delete_btn = html.Button("🗑️", id={"type": "delete-favorite", "item_type": "event", "key": event_key}, className="btn btn-sm btn-danger")
+
+        delete_btn = html.Button(
+            "🗑️",
+            id={"type": "delete-favorite", "item_type": "team", "key": team_key},
+            style={
+                "backgroundColor": "transparent",
+                "border": "none",
+                "color": "#dc3545",  # optional: red trash color
+                "cursor": "pointer",
+                "fontSize": "1.2rem"  # optional: adjust icon size
+            }
+        )
+
 
         event_data = EVENT_DATABASE.get(year, {}).get(event_key, {})
         event_name = event_data.get("n", "Unknown Event")
@@ -399,76 +549,32 @@ def user_layout():
             dbc.Card(
                 dbc.CardBody([
                     html.Div([
-                        # Left: Avatar image and user info
                         html.Div([
                             html.Img(
                                 id="user-avatar-img",
-                                src=get_team_avatar(avatar_key),
+                                src=get_user_avatar(avatar_key),
                                 style={"height": "60px", "borderRadius": "50%", "marginRight": "15px"}
                             ),
                             html.Div([
                                 html.H2(f"Welcome, {username.title()}!", style={"margin": 0, "fontSize": "1.5rem", "color": "#333"}),
-                                html.Div(f"⭐ {len(team_keys)} favorited teams | 🎯 {len(event_keys)} favorited events",
-                                         style={"fontSize": "0.85rem", "color": "#555"}),
+                                html.Div(f"{len(team_keys)} favorite teams | {len(event_keys)} favorite events", style={"fontSize": "0.85rem", "color": "#555"}),
+                                profile_display,
+                                profile_edit_form
                             ]),
                         ], style={"display": "flex", "alignItems": "center"}),
-    
-                        # Right: Avatar dropdown
                         html.Div([
-                            html.Label("Select Avatar", style={
-                                "fontSize": "0.75rem",
-                                "fontWeight": "600",
-                                "marginBottom": "4px",
-                                "color": "#444"
-                            }),
-                            dcc.Dropdown(
-                                id="avatar-selector",
-                                options = [
-                                    {
-                                        "label": html.Div([
-                                            html.Img(src=f"/assets/avatars/{f}", height="20px", style={"marginRight": "8px"}),
-                                            f
-                                        ], style={"display": "flex", "alignItems": "center"}),
-                                        "value": f
-                                    }
-                                    for f in sorted(available_avatars, key=sort_key)
-                                ],
-                                value=avatar_key,
-                                clearable=False,
-                                style={
-                                    "width": "140px",
-                                    "fontSize": "0.75rem",
-                                    "height": "30px",
-                                    "marginLeft": "auto"
-                                }
-                            ),
-                            html.A("Log Out", href="/logout", style={
-                                "marginTop": "8px",
-                                "fontSize": "0.75rem",
-                                "color": "#dc3545",
-                                "textDecoration": "none",
-                                "fontWeight": "600"
-                            })
-                        ], style={
-                            "display": "flex",
-                            "flexDirection": "column",
-                            "alignItems": "flex-end",
-                            "justifyContent": "center"
-                        })
-
-                    ], style={
-                        "display": "flex",
-                        "justifyContent": "space-between",
-                        "alignItems": "center",
-                        "gap": "15px"
-                    })
+                            html.A("Log Out", href="/logout", style={"marginTop": "8px", "fontSize": "0.75rem", "color": "#dc3545", "textDecoration": "none", "fontWeight": "600"}),
+                            html.Div([
+                                html.H5("🔍 Search for Users", style={"marginTop": "10px", "fontSize": "0.95rem"}),
+                                dbc.Input(id="user-search-input", placeholder="Search by username...", type="text", size="sm", className="mb-2"),
+                                html.Div(id="user-search-results")
+                            ], style={"marginTop": "10px", "width": "100%"}),
+                            html.Button("Edit Profile", id="edit-profile-btn", className="btn btn-warning btn-sm mt-2"),
+                            html.Button("Save", id="save-profile-btn", className="btn btn-warning btn-sm mt-2", style={"display": "none"})
+                        ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-end", "justifyContent": "center"})
+                    ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "15px"})
                 ]),
-                style={
-                    "borderRadius": "10px",
-                    "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
-                    "background": "linear-gradient(to right, #fff8dc, #FFE88A)",
-                    "marginBottom": "20px"
-                }
+                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "backgroundColor": "#f9f9f9", "marginBottom": "20px"}
             ),
             html.H3("Favorite Teams", className="mb-3"),
             *team_cards,
@@ -482,51 +588,455 @@ def user_layout():
         footer
     ])
 
+def ensure_list(value):
+    if isinstance(value, str):
+        return json.loads(value)
+    if isinstance(value, list):
+        return value
+    return []
+
+def other_user_layout(username):
+    session_user_id = session.get("user_id")
+    if not session_user_id:
+        return dcc.Location(href="/login", id="force-login-redirect")
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, avatar_key, role, team, bio, followers, following
+        FROM users WHERE username = %s
+    """, (username,))
+    row = cur.fetchone()
+
+    if not row:
+        conn.close()
+        return html.Div("User not found.", style={"padding": "2rem", "fontSize": "1.2rem"})
+
+    uid, avatar_key, role, team, bio, followers_json, following_json = row
+    is_following = session_user_id in (followers_json or [])
+
+    cur.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (uid,))
+    team_keys = [r[0] for r in cur.fetchall()]
+
+    cur.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'event'", (uid,))
+    event_keys = [r[0] for r in cur.fetchall()]
+    conn.close()
+
+    epa_data = {
+        str(team_num): {
+            "epa": data.get("epa", 0),
+            "auto_epa": data.get("auto_epa", 0),
+            "teleop_epa": data.get("teleop_epa", 0),
+            "endgame_epa": data.get("endgame_epa", 0),
+        }
+        for team_num, data in TEAM_DATABASE.get(2025, {}).items()
+    }
+
+    def get_epa_color(value, all_values):
+        if not all_values:
+            return "#000000"
+        sorted_vals = sorted(all_values, reverse=True)
+        rank = sorted_vals.index(value) + 1
+        percentile = rank / len(sorted_vals)
+        if percentile <= 0.01:
+            return "#800080"
+        elif percentile <= 0.05:
+            return "#0000ff"
+        elif percentile <= 0.10:
+            return "#008000"
+        elif percentile <= 0.25:
+            return "orange"
+        elif percentile <= 0.50:
+            return "#ff0000"
+        else:
+            return "#8B4513"
+
+    def team_card(title, body_elements):
+        return dbc.Card(
+            dbc.CardBody([
+                html.Div([
+                    html.Div(title, style={
+                        "fontWeight": "bold",
+                        "fontSize": "1.1rem",
+                        "textDecoration": "underline",
+                        "color": "#007bff",
+                        "cursor": "pointer"
+                    })
+                ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"}),
+                html.Hr(),
+                *body_elements
+            ]),
+            className="mb-4",
+            style={
+                "borderRadius": "10px",
+                "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
+                "backgroundColor": "#f9f9f9",
+                "marginBottom": "20px"
+            }
+        )
+
+    team_cards = []
+    for team_key in team_keys:
+        try:
+            team_number = int(team_key)
+        except:
+            continue
+
+        team_data = TEAM_DATABASE.get(2025, {}).get(team_number)
+        if not team_data:
+            continue
+
+        epa = team_data.get("epa", 0)
+        teleop = team_data.get("teleop_epa", 0)
+        auto = team_data.get("auto_epa", 0)
+        endgame = team_data.get("endgame_epa", 0)
+        wins = team_data.get("wins", 0)
+        losses = team_data.get("losses", 0)
+        country = (team_data.get("country") or "").lower()
+        state = (team_data.get("state_prov") or "").lower()
+
+        global_rank = 1
+        country_rank = 1
+        state_rank = 1
+        for other in TEAM_DATABASE.get(2025, {}).values():
+            if (other.get("epa", 0) or 0) > epa:
+                global_rank += 1
+                if (other.get("country") or "").lower() == country:
+                    country_rank += 1
+                if (other.get("state_prov") or "").lower() == state:
+                    state_rank += 1
+
+        year_data = list(TEAM_DATABASE.get(2025, {}).values())
+        epa_vals = [t.get("epa", 0) or 0 for t in year_data]
+        auto_vals = [t.get("auto_epa", 0) or 0 for t in year_data]
+        teleop_vals = [t.get("teleop_epa", 0) or 0 for t in year_data]
+        endgame_vals = [t.get("endgame_epa", 0) or 0 for t in year_data]
+
+        epa_color = get_epa_color(epa, epa_vals)
+        auto_color = get_epa_color(auto, auto_vals)
+        teleop_color = get_epa_color(teleop, teleop_vals)
+        endgame_color = get_epa_color(endgame, endgame_vals)
+
+        metrics = html.Div([
+            html.Div("ACE", className="metric-label"),
+            html.Div(f"{epa:.2f}", className="metric-value", style={"color": epa_color, "fontWeight": "bold"}),
+            html.Div("Auto", className="metric-label"),
+            html.Div(f"{auto:.2f}", className="metric-value", style={"color": auto_color, "fontWeight": "bold"}),
+            html.Div("Teleop", className="metric-label"),
+            html.Div(f"{teleop:.2f}", className="metric-value", style={"color": teleop_color, "fontWeight": "bold"}),
+            html.Div("Endgame", className="metric-label"),
+            html.Div(f"{endgame:.2f}", className="metric-value", style={"color": endgame_color, "fontWeight": "bold"}),
+            html.Div("Global Rank", className="metric-label"),
+            html.Div(global_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
+            html.Div("Country Rank", className="metric-label"),
+            html.Div(country_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
+            html.Div("State Rank", className="metric-label"),
+            html.Div(state_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
+            html.Div([
+                html.Span("Record", className="metric-label", style={"marginRight": "8px"}),
+                html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
+                html.Span(" / "),
+                html.Span(str(losses), style={"color": "red", "fontWeight": "bold"})
+            ], style={"gridColumn": "span 8", "display": "flex", "alignItems": "center"})
+        ], style={
+            "display": "grid",
+            "gridTemplateColumns": "repeat(8, 1fr)",
+            "gap": "4px 8px",
+            "fontSize": "0.85rem",
+            "marginTop": "10px",
+            "width": "100%"
+        })
+
+        team_cards.append(team_card(
+            html.A(
+                f"{team_number} | {team_data.get('nickname', '')}",
+                href=f"/team/{team_key}",
+                style={"textDecoration": "none", "color": "inherit"}
+            ),
+            [
+                html.Img(src=get_team_avatar(team_key), style={"height": "80px", "borderRadius": "50%"}),
+                metrics,
+                html.Br(),
+                html.Hr(),
+                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025)
+            ]
+        ))
+
+    event_cards = []
+    for event_key in event_keys:
+        event_data = EVENT_DATABASE.get(2025, {}).get(event_key, {})
+        event_name = event_data.get("n", "Unknown Event")
+        location = ", ".join(filter(None, [event_data.get("c", ""), event_data.get("s", ""), event_data.get("co", "")]))
+
+        matches = [m for m in EVENT_MATCHES.get(2025, []) if m.get("ek") == event_key]
+        event_teams = EVENT_TEAMS.get(2025, {}).get(event_key, [])
+        fav_team_numbers = [int(k) for k in team_keys if k.isdigit()]
+        matched_team = next((t for t in event_teams if int(t["tk"]) in fav_team_numbers), None)
+
+        if matched_team:
+            team_number = int(matched_team["tk"])
+            section = build_recent_events_section(f"frc{team_number}", team_number, epa_data, 2025)
+        else:
+            section = html.P("No favorited teams at this event.")
+
+        event_cards.append(
+            dbc.Card(
+                dbc.CardBody([
+                    html.Div([
+                        html.A(f"{event_name} | {event_key}", href=f"/event/{event_key}", style={"fontWeight": "bold", "fontSize": "1.1rem", "textDecoration": "underline", "color": "#007bff"})
+                    ], style={"display": "flex", "justifyContent": "space-between"}),
+                    html.Div(location, style={"fontSize": "0.85rem", "color": "#666", "marginBottom": "0.5rem"}),
+                    html.Hr(),
+                    section
+                ]),
+                className="mb-4",
+                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "backgroundColor": "#f9f9f9"}
+            )
+        )
+
+    follow_button = html.Button(
+        "Unfollow" if is_following else "Follow",
+        id={"type": "follow-user", "user_id": uid},
+        className="btn btn-outline-primary btn-sm"
+    ) if uid != session_user_id else None
+
+    return html.Div([
+        dcc.Store(id="user-session", data={"user_id": session_user_id}),
+        topbar(),
+        dbc.Container([
+            dbc.Card(dbc.CardBody([
+                html.Div([
+                    html.Img(src=get_user_avatar(avatar_key), style={"height": "80px", "borderRadius": "50%", "marginRight": "20px"}),
+                    html.Div([
+                        html.H2(username.title()),
+                        html.Div(f"Role: {role}"),
+                        html.Div([
+                            "Team: ",
+                            html.A(team, href=f"/team/{team}", style={"color": "#007bff"})
+                        ]) if team else None,
+                        html.Div(f"Bio: {bio or 'No bio'}"),
+                        html.Div(f"Followers: {len(followers_json or [])}"),
+                        html.Div(f"Following: {len(following_json or [])}"),
+                        html.Br(),
+                        html.Button(
+                            "Unfollow" if is_following else "Follow",
+                            id={"type": "follow-user", "user_id": uid},
+                            className="btn btn-outline-primary btn-sm"
+                        ) if uid != session_user_id else None
+                    ])
+                ], style={"display": "flex"})
+            ])),
+            html.Hr(),
+            html.H3("Favorite Teams", className="mb-3"),
+            *team_cards,
+            html.Hr(),
+            html.H3("Favorite Events", className="mb-3"),
+            *event_cards,
+            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            footer,
+        ], style={"padding": "20px", "maxWidth": "1000px"})
+    ])
+
 @app.server.route("/logout")
 def logout():
     flask.session.clear()
     return flask.redirect("/login")
 
-def ensure_avatar_column_exists():
-    conn = get_pg_connection()
-    cursor = conn.cursor()
+def get_user_avatar(avatar_key):
+    return f"/assets/avatars/{avatar_key}"
 
-    # Check if avatar_key column exists
-    cursor.execute("""
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name='users' AND column_name='avatar_key'
-    """)
-    exists = cursor.fetchone()
-
-    if not exists:
-        cursor.execute("ALTER TABLE users ADD COLUMN avatar_key TEXT DEFAULT 'stock'")
-        conn.commit()
-
-    conn.close()
-
-@app.callback(
-    Output("avatar-selector", "value"),
+@callback(
+    Output("profile-display", "hidden"),
+    Output("profile-edit-form", "hidden"),
+    Output("save-profile-btn", "style"),
+    Output("edit-profile-btn", "n_clicks"),
     Output("user-avatar-img", "src"),
-    Input("avatar-selector", "value"),
+    Output("profile-role", "children"),
+    Output("profile-team", "children"),
+    Output("profile-bio", "children"),
+    Input("edit-profile-btn", "n_clicks"),
+    Input("save-profile-btn", "n_clicks"),
+    State("profile-edit-form", "hidden"),
+    State("edit-username", "value"),
+    State("edit-role", "value"),
+    State("edit-team", "value"),
+    State("edit-bio", "value"),
+    State("edit-avatar-key", "value"),
     State("user-session", "data")
 )
-def update_user_avatar(new_avatar, session_data):
-    if not new_avatar or not session_data:
-        raise dash.exceptions.PreventUpdate
+def handle_profile_edit(
+    edit_clicks, save_clicks, editing_hidden,
+    username, role, team, bio, avatar_key_selected,
+    session_data
+):
+    triggered_id = ctx.triggered_id
 
-    ensure_avatar_column_exists()
+    if triggered_id == "save-profile-btn" and session_data:
+        user_id = session_data.get("user_id")
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                UPDATE users
+                SET username = %s,
+                    role = %s,
+                    team = %s,
+                    bio = %s,
+                    avatar_key = %s
+                WHERE id = %s
+            """, (username, role, team, bio, avatar_key_selected, user_id))
+            conn.commit()
 
-    user_id = session_data.get("user_id")
+            cur.execute("""
+                SELECT role, team, bio FROM users WHERE id = %s
+            """, (user_id,))
+            new_role, new_team, new_bio = cur.fetchone()
+        except Exception as e:
+            print(f"Error saving profile: {e}")
+            new_role, new_team, new_bio = role, team, bio
+        finally:
+            conn.close()
+
+        return (
+            False,    # show profile-display
+            True,     # hide profile-edit-form
+            {"display": "none"},
+            0,
+            get_user_avatar(avatar_key_selected),
+            f"\U0001F8BE Role: {new_role}",
+            html.Span([
+                "\U0001F916 Team: ",
+                html.A(new_team, href=f"/team/{new_team}", style={"color": "#007bff", "textDecoration": "underline"})
+            ]),
+            new_bio
+        )
+
+    if triggered_id == "edit-profile-btn":
+        is_editing = not editing_hidden
+        return (
+            not is_editing,  # hide profile-display if editing
+            is_editing,      # show profile-edit-form if editing
+            {"display": "inline-block"} if is_editing else {"display": "none"},
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update
+        )
+
+    return (
+        dash.no_update,
+        dash.no_update,
+        dash.no_update,
+        dash.no_update,
+        dash.no_update,
+        dash.no_update,
+        dash.no_update,
+        dash.no_update
+    )
+
+@callback(
+    Output({"type": "follow-user", "user_id": MATCH}, "children"),
+    Input({"type": "follow-user", "user_id": MATCH}, "n_clicks"),
+    State("user-session", "data"),
+    State({"type": "follow-user", "user_id": MATCH}, "children"),
+    prevent_initial_call=True
+)
+def toggle_follow_user(_, session_data, current_text):
+    follower_id = session_data.get("user_id")
+    followee_id = ctx.triggered_id["user_id"]
+
+    if follower_id == followee_id:
+        return dash.no_update
+
     conn = get_pg_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET avatar_key = %s WHERE id = %s", (new_avatar, user_id))
-    conn.commit()
+    cur = conn.cursor()
+
+    try:
+        # Get followers for followee
+        cur.execute("SELECT followers FROM users WHERE id = %s", (followee_id,))
+        followers = cur.fetchone()[0] or []
+        if isinstance(followers, str):
+            followers = json.loads(followers)
+
+        # Get following for follower
+        cur.execute("SELECT following FROM users WHERE id = %s", (follower_id,))
+        following = cur.fetchone()[0] or []
+        if isinstance(following, str):
+            following = json.loads(following)
+
+        followers = set(followers)
+        following = set(following)
+
+        if current_text == "Follow":
+            followers.add(follower_id)
+            following.add(followee_id)
+            new_label = "Unfollow"
+        else:
+            followers.discard(follower_id)
+            following.discard(followee_id)
+            new_label = "Follow"
+
+        # Update both sides
+        cur.execute("UPDATE users SET followers = %s WHERE id = %s", (json.dumps(list(followers)), followee_id))
+        cur.execute("UPDATE users SET following = %s WHERE id = %s", (json.dumps(list(following)), follower_id))
+
+        conn.commit()
+        return new_label
+
+    except Exception as e:
+        print("Error during follow/unfollow:", e)
+        conn.rollback()
+        return current_text
+
+    finally:
+        conn.close()
+
+@callback(
+    Output("user-search-results", "children"),
+    Input("user-search-input", "value"),
+    State("user-session", "data")
+)
+def search_users(query, session_data):
+    if not query or not session_data:
+        return []
+
+    current_user_id = session_data.get("user_id")
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, username, avatar_key, followers
+        FROM users
+        WHERE username ILIKE %s AND id != %s
+        LIMIT 10
+    """, (f"%{query}%", current_user_id))
+    rows = cur.fetchall()
     conn.close()
 
-    print(f"Updated avatar for user {user_id} to {new_avatar}")
+    user_blocks = []
+    for uid, username, avatar_key, followers in rows:
+        followers = json.loads(followers) if isinstance(followers, str) else (followers or [])
+        is_following = current_user_id in followers
+        avatar_src = get_user_avatar(avatar_key or "stock")
 
-    return new_avatar, f"/assets/avatars/{new_avatar}"  # ← Ensure correct path
+        user_blocks.append(html.Div([
+            html.Img(src=avatar_src, style={
+                "height": "32px", "width": "32px", "borderRadius": "50%", "marginRight": "8px"
+            }),
+            html.A(username, href=f"/user/{username}", style={
+                "fontWeight": "bold", "textDecoration": "none", "color": "#007bff", "flexGrow": "1"
+            }),
+            html.Button("Unfollow" if is_following else "Follow", id={
+                "type": "follow-user", "user_id": uid
+            }, className="btn btn-sm btn-warning")
+        ], style={
+            "display": "flex", "alignItems": "center", "gap": "10px", "marginBottom": "8px"
+        }))
+
+    return user_blocks
 
 @callback(
     Output("favorites-store", "data"),
@@ -799,6 +1309,26 @@ app.layout = html.Div([
     html.Div(id="page-content")
 ])
 
+def team_link_with_avatar(team):
+    team_number = team.get("team_number", "???")
+    nickname = team.get("nickname", "")
+    avatar_url = f"/assets/avatars/{team_number}.png"
+
+    return html.A(
+        html.Div([
+            html.Img(src=avatar_url, style={
+                "height": "20px",
+                "width": "20px",
+                "marginRight": "8px",
+                "objectFit": "contain",
+                "verticalAlign": "middle"
+            }),
+            f"{team_number} | {nickname}"
+        ], style={"display": "flex", "alignItems": "center"}),
+        href=f"/team/{team_number}",
+        style={"textDecoration": "none", "color": "black"}
+    )
+
 @app.callback(
     Output("navbar-collapse", "is_open"),
     [Input("navbar-toggler", "n_clicks")],
@@ -900,16 +1430,10 @@ def update_search_preview(desktop_value, mobile_value):
                     background_color = "#FFDD00"
 
                 row_el = dbc.Row(
-                    dbc.Col(
-                        html.A(
-                            f"{tn} | {nm}",
-                            href=f"/team/{tn}",
-                            style={"lineHeight": "20px", "textDecoration": "none", "color": "black"},
-                        ),
-                        width=True,
-                    ),
+                    dbc.Col(team_link_with_avatar(team)),
                     style={"padding": "5px", "backgroundColor": background_color},
                 )
+
                 children.append(row_el)
 
         # Events section
@@ -1458,7 +1982,7 @@ def build_recent_matches_section(event_key, year, epa_data):
         if red_eff + blue_eff == 0:
             return 0.5, 0.5
         diff = red_eff - blue_eff
-        scale = 0.25 + 0.3 * (1 - total_reliability)
+        scale = 0.1 * (1 - total_reliability)
         p_red = 1 / (1 + math.exp(-scale * diff))
         return p_red, 1 - p_red
 
@@ -4115,6 +4639,13 @@ def display_page(pathname):
 
     if pathname == "/user":
         return user_layout()
+
+    if len(path_parts) == 2 and path_parts[0] == "user":
+        try:
+            username = pathname.split("/user/")[1]
+            return wrap_with_toast_or_star(other_user_layout(username))
+        except ValueError:
+            pass
     
     if pathname.startswith("/challenge/"):
         year = pathname.split("/")[-1]
