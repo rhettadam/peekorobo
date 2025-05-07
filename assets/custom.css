@@ -4,13 +4,13 @@
     }
 
     img:hover {
-        transform: scale(1.05);
+        transform: scale(1.02);
         transition: transform 0.3s ease;
     }
 
     button:hover {
-        transform: scale(1.05);
-        transition: transform 0.2s ease;
+        transform: scale(1.02);
+        transition: transform 0.1s ease;
         box-shadow: 0px 0px 8px rgba(255, 221, 0, 0.5);
     }
 
@@ -20,20 +20,18 @@
     }
 
     .custom-navlink {
-        border: none;
         color: white;
-        font-size: 16px;
-        cursor: pointer;
-        border-radius: 10px;
-        transition: all 0.3s ease-in-out;
+        background-color: transparent;
+        text-decoration: none;
+        transition: color 0.2s, background-color 0.2s;
+    }
+    
+    .custom-navlink:hover,
+    .custom-navlink:focus,
+    .custom-navlink:active {
+        color: #ffdd00;
     }
 
-    .custom-navlink:hover {
-        color: black;
-        background-color: #ffdd00ff;
-        box-shadow: 0 0 25px #000000;
-        transform: scale(1.05);
-    }
 
     .button {
         border: none;

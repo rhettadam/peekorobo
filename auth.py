@@ -1,47 +1,76 @@
-import bcrypt
-import sqlite3
+import os
+import hashlib
+import psycopg2
+from dotenv import load_dotenv
 
-DB = "user_data.sqlite"
+load_dotenv()
 
-def is_secure_password(pw):
-    if len(pw) < 6:
-        return False, "Password must be at least 6 characters."
-    if pw.isalpha() or pw.isdigit():
-        return False, "Password must include both letters and numbers."
-    return True, "OK"
+
+def get_pg_connection():
+    url = os.environ.get("DATABASE_URL")
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return psycopg2.connect(url)
 
 def register_user(username, password):
-    conn = sqlite3.connect(DB)
-    cursor = conn.cursor()
+    username = username.lower()
 
-    # Check for existing user
-    cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
-    if cursor.fetchone():
+    if len(username) < 3:
+        return False, "Username must be at least 3 characters."
+
+    if len(password) < 8 or not any(c.isupper() for c in password) or not any(c.islower() for c in password) or not any(c.isdigit() for c in password):
+        return False, "Password must be at least 8 characters and include upper, lower, and digits."
+
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM users WHERE LOWER(username) = %s", (username,))
+        if cur.fetchone():
+            return False, "Username already exists."
+
+        salt = os.urandom(32)
+        key = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100000)
+        hashed = salt + key
+        cur.execute(
+            "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id",
+            (username, psycopg2.Binary(hashed)),
+        )
+        user_id = cur.fetchone()[0]
+        conn.commit()
+        return True, user_id
+
+    except Exception as e:
+        print("Register error:", e)
+        return False, "Registration failed"
+
+    finally:
         conn.close()
-        return False, "Username already taken."
-
-    # Validate password strength
-    ok, msg = is_secure_password(password)
-    if not ok:
-        conn.close()
-        return False, msg
-
-    # Hash and store
-    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-    cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, hashed))
-    conn.commit()
-    conn.close()
-    return True, "Registration successful!"
 
 
 def verify_user(username, password):
-    conn = sqlite3.connect(DB)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, password_hash FROM users WHERE username = ?", (username,))
-    result = cursor.fetchone()
-    conn.close()
-    if result:
-        user_id, stored_hash = result
-        if bcrypt.checkpw(password.encode(), stored_hash):
-            return True, user_id
-    return False, None
+    username = username.lower()
+
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id, password_hash FROM users WHERE LOWER(username) = %s", (username,))
+        row = cur.fetchone()
+        if not row:
+            return False, None
+
+        user_id, stored_hash = row
+        stored_hash = stored_hash.tobytes() if isinstance(stored_hash, memoryview) else stored_hash
+
+        salt = stored_hash[:32]
+        key = stored_hash[32:]
+        new_key = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100000)
+
+        return (new_key == key), user_id if new_key == key else None
+
+    except Exception as e:
+        print("Verify error:", e)
+        return False, None
+
+    finally:
+        conn.close()
+

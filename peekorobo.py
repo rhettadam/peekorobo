@@ -4,13 +4,16 @@ from dash import callback, html, dcc, dash_table, ctx, ALL, MATCH, no_update
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 
+import flask
 from flask import session
-from auth import register_user, verify_user, is_secure_password
+from auth import get_pg_connection, register_user, verify_user
 
 import os
 import numpy as np
 import datetime
 import sqlite3
+import psycopg2
+from urllib.parse import urlparse
 import json
 from statistics import mean, pstdev
 import statistics
@@ -20,6 +23,9 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from datagather import frc_games, COUNTRIES, STATES, tba_get, load_data, get_team_avatar, calculate_ranks
+
+from dotenv import load_dotenv
+load_dotenv()
 
 TEAM_DATABASE, EVENT_DATABASE, EVENTS_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES, EVENT_OPRS = load_data()
 
@@ -41,13 +47,31 @@ server.secret_key = "my-dev-secret-key-123"
 
 # -------------- LAYOUTS --------------
 
+def get_pg_connection():
+    url = os.environ.get("DATABASE_URL")
+    if url is None:
+        raise Exception("DATABASE_URL not set in environment.")
+
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+
+    result = urlparse(url)
+    conn = psycopg2.connect(
+        database=result.path[1:],
+        user=result.username,
+        password=result.password,
+        host=result.hostname,
+        port=result.port
+    )
+    return conn
+
 def login_layout():
     # Optional redirect if logged in
     if "user_id" in session:
         return dcc.Location(href="/user", id="redirect-to-profile")
 
     return html.Div([
-        topbar,
+        topbar(),
         dcc.Location(id="login-redirect", refresh=True),
         dbc.Container(fluid=True, children=[
             dbc.Row(
@@ -79,6 +103,7 @@ def login_layout():
         dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
         footer
     ])
+
 
 def universal_profile_icon_or_toast():
     if "user_id" in session:
@@ -136,10 +161,14 @@ def universal_profile_icon_or_toast():
             },
         )
 
+def sort_key(filename):
+    name = filename.split('.')[0]
+    return (0, int(name)) if name.isdigit() else (1, name.lower())
+
 def get_username(user_id):
-    conn = sqlite3.connect("user_data.sqlite")
+    conn = get_pg_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
     row = cursor.fetchone()
     conn.close()
     return row[0].title() if row else f"USER {user_id}"
@@ -159,28 +188,28 @@ def user_layout():
 
     dcc.Store(id="user-session", data={"user_id": user_id}),
 
-    conn = sqlite3.connect("user_data.sqlite")
+    conn = get_pg_connection()
     cursor = conn.cursor()
 
     username = f"USER {user_id}"
     avatar_key = "stock"
     
     try:
-        cursor.execute("SELECT username, avatar_key FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT username, avatar_key FROM users WHERE id = %s", (user_id,))
         user_row = cursor.fetchone()
         if user_row:
             username = user_row[0] or username
             avatar_key = user_row[1] or "stock"
     except sqlite3.OperationalError as e:
         if "no such column: avatar_key" in str(e).lower():
-            cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+            cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
             user_row = cursor.fetchone()
 
 
-    cursor.execute("SELECT item_key FROM saved_items WHERE user_id = ? AND item_type = 'team'", (user_id,))
+    cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (user_id,))
     team_keys = [r[0] for r in cursor.fetchall()]
 
-    cursor.execute("SELECT item_key FROM saved_items WHERE user_id = ? AND item_type = 'event'", (user_id,))
+    cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'event'", (user_id,))
     event_keys = [r[0] for r in cursor.fetchall()]
 
     conn.close()
@@ -364,7 +393,7 @@ def user_layout():
     return html.Div([
         dcc.Store(id="favorites-store", data={"deleted": []}),
         dcc.Store(id="user-session", data={"user_id": user_id}),
-        topbar,
+        topbar(),
         dcc.Location(id="login-redirect", refresh=True),
         dbc.Container([
             dbc.Card(
@@ -394,12 +423,15 @@ def user_layout():
                             }),
                             dcc.Dropdown(
                                 id="avatar-selector",
-                                options=[
-                                    {"label": html.Div([
-                                        html.Img(src=f"/assets/avatars/{f}", height="20px", style={"marginRight": "8px"}),
-                                        f
-                                    ], style={"display": "flex", "alignItems": "center"}), "value": f}
-                                    for f in available_avatars
+                                options = [
+                                    {
+                                        "label": html.Div([
+                                            html.Img(src=f"/assets/avatars/{f}", height="20px", style={"marginRight": "8px"}),
+                                            f
+                                        ], style={"display": "flex", "alignItems": "center"}),
+                                        "value": f
+                                    }
+                                    for f in sorted(available_avatars, key=sort_key)
                                 ],
                                 value=avatar_key,
                                 clearable=False,
@@ -409,13 +441,21 @@ def user_layout():
                                     "height": "30px",
                                     "marginLeft": "auto"
                                 }
-                            )
+                            ),
+                            html.A("Log Out", href="/logout", style={
+                                "marginTop": "8px",
+                                "fontSize": "0.75rem",
+                                "color": "#dc3545",
+                                "textDecoration": "none",
+                                "fontWeight": "600"
+                            })
                         ], style={
                             "display": "flex",
                             "flexDirection": "column",
                             "alignItems": "flex-end",
                             "justifyContent": "center"
                         })
+
                     ], style={
                         "display": "flex",
                         "justifyContent": "space-between",
@@ -430,10 +470,10 @@ def user_layout():
                     "marginBottom": "20px"
                 }
             ),
-            html.H3("Favorited Teams", className="mb-3"),
+            html.H3("Favorite Teams", className="mb-3"),
             *team_cards,
             html.Hr(),
-            html.H3("Favorited Events", className="mb-3"),
+            html.H3("Favorite Events", className="mb-3"),
             *event_cards,
         ], style={"padding": "20px", "maxWidth": "1000px"}),
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
@@ -442,15 +482,27 @@ def user_layout():
         footer
     ])
 
+@app.server.route("/logout")
+def logout():
+    flask.session.clear()
+    return flask.redirect("/login")
 
 def ensure_avatar_column_exists():
-    conn = sqlite3.connect("user_data.sqlite")
+    conn = get_pg_connection()
     cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(users)")
-    columns = [row[1] for row in cursor.fetchall()]
-    if "avatar_key" not in columns:
+
+    # Check if avatar_key column exists
+    cursor.execute("""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name='users' AND column_name='avatar_key'
+    """)
+    exists = cursor.fetchone()
+
+    if not exists:
         cursor.execute("ALTER TABLE users ADD COLUMN avatar_key TEXT DEFAULT 'stock'")
         conn.commit()
+
     conn.close()
 
 @app.callback(
@@ -466,74 +518,15 @@ def update_user_avatar(new_avatar, session_data):
     ensure_avatar_column_exists()
 
     user_id = session_data.get("user_id")
-    conn = sqlite3.connect("user_data.sqlite")
+    conn = get_pg_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE users SET avatar_key = ? WHERE id = ?", (new_avatar, user_id))
+    cursor.execute("UPDATE users SET avatar_key = %s WHERE id = %s", (new_avatar, user_id))
     conn.commit()
     conn.close()
 
     print(f"Updated avatar for user {user_id} to {new_avatar}")
 
     return new_avatar, f"/assets/avatars/{new_avatar}"  # ← Ensure correct path
-
-def admin_layout():
-    conn = sqlite3.connect("user_data.sqlite")
-    cursor = conn.cursor()
-
-    # Include avatar_key in the selection
-    try:
-        cursor.execute("SELECT id, username, avatar_key FROM users")
-        users = cursor.fetchall()
-    except sqlite3.OperationalError:
-        # fallback in case avatar_key doesn't exist yet
-        cursor.execute("SELECT id, username FROM users")
-        users = [(uid, uname, "stock") for uid, uname in cursor.fetchall()]
-
-    cursor.execute("SELECT user_id, item_type, item_key FROM saved_items")
-    favorites = cursor.fetchall()
-
-    conn.close()
-
-    user_table = dash_table.DataTable(
-        columns=[
-            {"name": "User ID", "id": "id"},
-            {"name": "Username", "id": "username"},
-            {"name": "Avatar Key", "id": "avatar_key"},
-        ],
-        data=[{"id": uid, "username": uname, "avatar_key": avatar} for uid, uname, avatar in users],
-        style_table={"overflowX": "auto"},
-        style_cell={"textAlign": "left"},
-    )
-
-    favorites_table = dash_table.DataTable(
-        columns=[
-            {"name": "User ID", "id": "user_id"},
-            {"name": "Item Type", "id": "item_type"},
-            {"name": "Item Key", "id": "item_key"},
-        ],
-        data=[
-            {"user_id": u, "item_type": t, "item_key": k}
-            for u, t, k in favorites
-        ],
-        style_table={"overflowX": "auto"},
-        style_cell={"textAlign": "left"},
-    )
-
-    return html.Div([
-        topbar,
-        dbc.Container([
-            html.H2("Admin Dashboard", className="mt-4 mb-4"),
-            html.H4("Registered Users"),
-            user_table,
-            html.Hr(),
-            html.H4("Favorites"),
-            favorites_table
-        ], style={"paddingBottom": "40px"}),
-        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-        footer
-    ])
 
 @callback(
     Output("favorites-store", "data"),
@@ -552,10 +545,10 @@ def remove_favorite(n_clicks, store_data, session_data):
     user_id = session_data.get("user_id")
 
     # Delete from database
-    conn = sqlite3.connect("user_data.sqlite")
+    conn = get_pg_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "DELETE FROM saved_items WHERE user_id = ? AND item_type = ? AND item_key = ?",
+        "DELETE FROM saved_items WHERE user_id = %s AND item_type = %s AND item_key = %s",
         (user_id, item_type, item_key)
     )
     conn.commit()
@@ -589,7 +582,7 @@ def handle_login(login_clicks, register_clicks, username, password):
         if valid:
             session["user_id"] = user_id
             session["username"] = username
-            redirect_url = "/admin" if username == "admin" else "/user"
+            redirect_url = "/user"
             return f"✅ Welcome, {username}!", redirect_url
         else:
             return "❌ Invalid username or password.", dash.no_update
@@ -598,63 +591,60 @@ def handle_login(login_clicks, register_clicks, username, password):
         success, message = register_user(username.strip(), password.strip())
         if success:
             # Auto-login after registration
-            conn = sqlite3.connect("user_data.sqlite")
+            conn = get_pg_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT id FROM users WHERE username = ?", (username.strip(),))
+            cursor.execute("SELECT id FROM users WHERE username = %s", (username.strip(),))
             user_id = cursor.fetchone()[0]
             conn.close()
             session["user_id"] = user_id
             session["username"] = username.strip()
-            redirect_url = "/admin" if username.strip() == "admin" else "/user"
+            redirect_url = "/user"
             return f"✅ Welcome, {username.strip()}!", redirect_url
         else:
             return message, dash.no_update
 
-topbar = dbc.Navbar(
-    dbc.Container(
-        [
-            dbc.Row(
-                [
-                    # LOGO on the left
-                    dbc.Col(
-                        dbc.NavbarBrand(
-                            html.Img(
-                                src="/assets/logo.png",
-                                style={"height": "40px","width": "auto","marginRight": "10px"},
-                            ),
-                            href="/",
-                            className="navbar-brand-custom",
-                        ),
-                        width="auto",
-                        align="center",
-                    ),
+def login_nav_button(button_id):
+    return dbc.Button(
+        id=button_id,
+        children="Login / Register",
+        href="/login",
+        color="warning",
+        className="custom-navlink",
+        style={"display": "none"}  # Initially hidden
+    )
 
-                    # MOBILE SEARCH in the middle (only visible on sm)
-                    dbc.Col(
-                        [
-                            dbc.InputGroup(
-                                [
-                                    dbc.Input(
-                                        id="mobile-search-input",
-                                        placeholder="Search",
-                                        type="text",
-                                    ),
-                                    dbc.Button(
-                                        "🔎",
-                                        id="mobile-search-button",
-                                        color="primary",
-                                        style={
-                                            "backgroundColor": "#FFDD00",
-                                            "border": "none",
-                                            "color": "black",
-                                        },
-                                    ),
-                                ],
-                                style={"width": "180px"},  
+def topbar():
+    return dbc.Navbar(
+        dbc.Container(
+            [
+                dcc.Store(id="login-state-ready", data=False),
+
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            dbc.NavbarBrand(
+                                html.Img(
+                                    src="/assets/logo.png",
+                                    style={"height": "40px", "width": "auto", "marginRight": "10px"},
+                                ),
+                                href="/",
+                                className="navbar-brand-custom",
                             ),
-                            html.Div(
-                                id="mobile-search-preview",
-                                style={
+                            width="auto",
+                            align="center",
+                        ),
+                        dbc.Col(
+                            [
+                                dbc.InputGroup(
+                                    [
+                                        dbc.Input(id="mobile-search-input", placeholder="Search", type="text"),
+                                        dbc.Button("🔎", id="mobile-search-button", color="primary", style={
+                                            "backgroundColor": "#FFDD00", "border": "none", "color": "black",
+                                        }),
+                                    ],
+                                    style={"width": "180px"},
+                                ),
+                                html.Div(id="mobile-search-preview", style={
                                     "backgroundColor": "white",
                                     "border": "1px solid #ddd",
                                     "borderRadius": "8px",
@@ -670,94 +660,101 @@ topbar = dbc.Navbar(
                                     "left": "0",
                                     "top": "100%",
                                     "display": "none",
-                                },
-                            ),
-                        ],
-                        width="auto",
-                        align="center",
-                        className="d-md-none",  # hide on md+
-                        style={"position": "relative","textAlign": "center"},
-                    ),
-
-                    # NAV TOGGLER on the right
-                    dbc.Col(
-                        dbc.NavbarToggler(id="navbar-toggler", n_clicks=0),
-                        width="auto",
-                        align="center",
-                        className="d-md-none",  # toggler on mobile only
-                    ),
-                ],
-                className="g-2",  # small horizontal gutter
-                align="center",
-                justify="between",  # pushes left col to start, right col to end
-            ),
-
-            dbc.Collapse(
-                dbc.Nav(
-                    [
-                        dbc.NavItem(dbc.NavLink("Teams", href="/teams", className="custom-navlink")),
-                        dbc.NavItem(dbc.NavLink("Map", href="/map", className="custom-navlink")),
-                        dbc.NavItem(dbc.NavLink("Events", href="/events", className="custom-navlink")),
-                        dbc.NavItem(dbc.NavLink("Challenges", href="/challenges", className="custom-navlink")),
-                        dbc.NavItem(dbc.NavLink("Blog", href="/blog", className="custom-navlink")),
-                        # Resources Dropdown
-                        dbc.DropdownMenu(
-                            label="Resources",
-                            nav=True,
-                            in_navbar=True,
-                            children=[
-                                dbc.DropdownMenuItem("Communication", header=True),
-                                dbc.DropdownMenuItem("Chief Delphi", href="https://www.chiefdelphi.com/", target="_blank"),
-                                dbc.DropdownMenuItem("The Blue Alliance", href="https://www.thebluealliance.com/", target="_blank"),
-                                dbc.DropdownMenuItem("FRC Subreddit", href="https://www.reddit.com/r/FRC/", target="_blank"),
-                                dbc.DropdownMenuItem("FRC Discord", href="https://discord.com/invite/frc", target="_blank"),
-                                dbc.DropdownMenuItem(divider=True),
-                                dbc.DropdownMenuItem("Technical Resources", header=True),
-                                dbc.DropdownMenuItem("FIRST Technical Resources", href="https://www.firstinspires.org/resource-library/frc/technical-resources", target="_blank"),
-                                dbc.DropdownMenuItem("FRCDesign", href="https://www.frcdesign.org/learning-course/", target="_blank"),
-                                dbc.DropdownMenuItem("OnShape4FRC", href="https://onshape4frc.com/", target="_blank"),
-                                dbc.DropdownMenuItem(divider=True),
-                                dbc.DropdownMenuItem("Scouting/Statistics", header=True),
-                                dbc.DropdownMenuItem("Statbotics", href="https://www.statbotics.io/", target="_blank"),
-                                dbc.DropdownMenuItem("ScoutRadioz", href="https://scoutradioz.com/", target="_blank"),
-                                dbc.DropdownMenuItem("Peekorobo", href="https://www.peekorobo.com/", target="_blank"),
+                                }),
                             ],
+                            width="auto",
+                            align="center",
+                            className="d-md-none",
+                            style={"position": "relative", "textAlign": "center"},
+                        ),
+                        dbc.Col(
+                            dbc.NavbarToggler(id="navbar-toggler", n_clicks=0),
+                            width="auto",
+                            align="center",
+                            className="d-md-none",
                         ),
                     ],
+                    className="g-2",
+                    align="center",
+                    justify="between",
+                ),
+
+                dbc.Collapse(
+                    dbc.Container([
+                        dbc.Row(
+                            dbc.Nav(
+                                [
+                                    dbc.NavItem(dbc.NavLink("Teams", href="/teams", className="custom-navlink")),
+                                    dbc.NavItem(dbc.NavLink("Map", href="/map", className="custom-navlink")),
+                                    dbc.NavItem(dbc.NavLink("Events", href="/events", className="custom-navlink")),
+                                    dbc.NavItem(dbc.NavLink("Challenges", href="/challenges", className="custom-navlink")),
+                                    dbc.NavItem(dbc.NavLink("Blog", href="/blog", className="custom-navlink")),
+                                    dbc.DropdownMenu(
+                                        label="Resources",
+                                        nav=True,
+                                        in_navbar=True,
+                                        className="custom-navlink",
+                                        children=[
+                                            dbc.DropdownMenuItem("Chief Delphi", href="https://www.chiefdelphi.com/", target="_blank"),
+                                            dbc.DropdownMenuItem("The Blue Alliance", href="https://www.thebluealliance.com/", target="_blank"),
+                                            dbc.DropdownMenuItem("FRC Subreddit", href="https://www.reddit.com/r/FRC/", target="_blank"),
+                                            dbc.DropdownMenuItem("FRC Discord", href="https://discord.com/invite/frc", target="_blank"),
+                                            dbc.DropdownMenuItem(divider=True),
+                                            dbc.DropdownMenuItem("FIRST Technical Resources", href="https://www.firstinspires.org/resource-library/frc/technical-resources", target="_blank"),
+                                            dbc.DropdownMenuItem("FRCDesign", href="https://www.frcdesign.org/learning-course/", target="_blank"),
+                                            dbc.DropdownMenuItem("OnShape4FRC", href="https://onshape4frc.com/", target="_blank"),
+                                            dbc.DropdownMenuItem(divider=True),
+                                            dbc.DropdownMenuItem("Statbotics", href="https://www.statbotics.io/", target="_blank"),
+                                            dbc.DropdownMenuItem("ScoutRadioz", href="https://scoutradioz.com/", target="_blank"),
+                                            dbc.DropdownMenuItem("Peekorobo", href="https://www.peekorobo.com/", target="_blank"),
+                                        ]
+                                    ),
+                                ],
+                                navbar=True,
+                                className="justify-content-center",  # Center horizontally
+                            ),
+                            justify="center",
+                        ),
+                        dbc.Row(
+                            dbc.Col(
+                                dbc.NavLink("Login / Register", href="/login", id="login-link-mobile", style={
+                                    "color": "white", "textDecoration": "none"
+                                }),
+                                className="d-md-none mt-3 text-center"
+                            ),
+                            justify="center"
+                        ),
+                    ]),
+                    id="navbar-collapse",
+                    is_open=False,
                     navbar=True,
                 ),
-                id="navbar-collapse",
-                is_open=False,
-                navbar=True,
-            ),
 
-            # Desktop Search
-            dbc.Row(
-                [
-                    dbc.Col(
-                        [
-                            dbc.InputGroup(
-                                [
-                                    dbc.Input(
-                                        id="desktop-search-input",
-                                        placeholder="Search Teams or Events",
-                                        type="text",
-                                    ),
-                                    dbc.Button(
-                                        "🔎",
-                                        id="desktop-search-button",
-                                        color="primary",
-                                        style={
-                                            "backgroundColor": "#FFDD00",
-                                            "border": "none",
-                                            "color": "black",
-                                        },
-                                    ),
-                                ]
-                            ),
-                            html.Div(
-                                id="desktop-search-preview",
-                                style={
+
+
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            dbc.NavLink("Login / Register", href="/login", id="login-link-desktop", style={
+                                "color": "white", "textDecoration": "none"
+                            }),
+                            width="auto",
+                            className="d-none d-md-block",  # <-- corrected
+                        ),
+
+
+
+                        dbc.Col(
+                            [
+                                dbc.InputGroup(
+                                    [
+                                        dbc.Input(id="desktop-search-input", placeholder="Search Teams or Events", type="text"),
+                                        dbc.Button("🔎", id="desktop-search-button", color="primary", style={
+                                            "backgroundColor": "#FFDD00", "border": "none", "color": "black",
+                                        }),
+                                    ]
+                                ),
+                                html.Div(id="desktop-search-preview", style={
                                     "backgroundColor": "white",
                                     "border": "1px solid #ddd",
                                     "borderRadius": "8px",
@@ -773,30 +770,29 @@ topbar = dbc.Navbar(
                                     "left": "0",
                                     "top": "100%",
                                     "display": "none",
-                                },
-                            )
-                        ],
-                        width="auto",
-                        className="desktop-search d-none d-md-block",
-                        style={"position": "relative"},
-                    ),
-                ],
-                align="center",
-            ),
-        ],
-        fluid=True,
-    ),
-    color="#353535",
-    dark=True,
-    className="mb-4",
-    style={
-        "padding": "5px 0px",
-        "position": "sticky",
-        "top": "0",
-        "zIndex": "1020",
-        "boxShadow": "0px 2px 2px rgba(0,0,0,0.1)",
-    },
-)
+                                }),
+                            ],
+                            width="auto",
+                            className="desktop-search d-none d-md-block",
+                            style={"position": "relative"},
+                        ),
+                    ],
+                    align="center",
+                ),
+            ],
+            fluid=True,
+        ),
+        color="#353535",
+        dark=True,
+        className="mb-4",
+        style={
+            "padding": "5px 0px",
+            "position": "sticky",
+            "top": "0",
+            "zIndex": "1020",
+            "boxShadow": "0px 2px 2px rgba(0,0,0,0.1)",
+        },
+    )
 
 app.layout = html.Div([
     dcc.Location(id="url", refresh=False),
@@ -1007,7 +1003,7 @@ footer = dbc.Container(
 )
 
 home_layout = html.Div([
-    topbar,
+    topbar(),
     dbc.Container(fluid=True, children=[
         dbc.Row(
             [
@@ -1659,16 +1655,7 @@ def team_layout(team_number, year):
     if website and website.startswith("http://"):
         website = "https://" + website[len("http://"):]
     
-    avatar_data = tba_get(f"team/{team_key}/media/2025")
-    avatar_url = None
-    if avatar_data:
-        for media in avatar_data:
-            if media.get("type") == "avatar" and media.get("details", {}).get("base64Image"):
-                avatar_url = f"data:image/png;base64,{media['details']['base64Image']}"
-                break
-            elif media.get("preferred") and media.get("direct_url"):
-                avatar_url = media["direct_url"]
-                break
+    avatar_url = get_team_avatar(team_number)
     
         # Get all years this team appears in, sorted
     years_participated = sorted([
@@ -2129,7 +2116,7 @@ def team_layout(team_number, year):
     
     return html.Div(
         [
-            topbar,
+            topbar(),
             dbc.Alert(id="favorite-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
                 [
@@ -2176,13 +2163,13 @@ def save_favorite(n_clicks, pathname):
     else:
         return "Invalid team path.", True
 
-    conn = sqlite3.connect("user_data.sqlite")
+    conn = get_pg_connection()
     cursor = conn.cursor()
 
     # Avoid duplicates
     cursor.execute("""
         SELECT id FROM saved_items
-        WHERE user_id = ? AND item_type = 'team' AND item_key = ?
+        WHERE user_id = %s AND item_type = 'team' AND item_key = %s
     """, (user_id, team_key))
     if cursor.fetchone():
         conn.close()
@@ -2190,7 +2177,7 @@ def save_favorite(n_clicks, pathname):
 
     cursor.execute("""
         INSERT INTO saved_items (user_id, item_type, item_key)
-        VALUES (?, 'team', ?)
+        VALUES (%s, 'team', %s)
     """, (user_id, team_key))
     conn.commit()
     conn.close()
@@ -2267,13 +2254,49 @@ def events_layout(year=2025):
             "gap": "12px",
             "rowGap": "16px",
             "margin": "0 auto",
-            "maxWidth": "1000px"
+            "maxWidth": "1000px",
+            "position": "sticky",
+            "top": "60px",
+            "zIndex": 10,
+            "backgroundColor": "transparent",
+            "padding": "10px 0",
         }
     )
 
     return html.Div(
         [
-            topbar,
+            topbar(),
+            dcc.Store(id="event-favorites-store", storage_type="session"),
+            dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
+            dbc.Container(
+                [
+                    html.H3("Upcoming Events", className="mb-4 mt-4 text-center"),
+                    dbc.Row(id="upcoming-events-container", className="justify-content-center"),
+
+                    html.Div(id="ongoing-events-wrapper", children=[]),
+
+                    html.H3("All Events", className="mb-4 mt-4 text-center"),
+                    filters_row,
+                    html.Div(
+                        id="all-events-container",
+                        className="d-flex flex-wrap justify-content-center",
+                        children=[
+                            html.Div("No events match your filters.", className="text-muted")
+                        ]
+                    ),
+                ],
+                style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
+            ),
+            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            footer
+        ]
+    )
+
+    return html.Div(
+        [
+            topbar(),
             dcc.Store(id="event-favorites-store", storage_type="session"),
             dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
@@ -2301,6 +2324,7 @@ def events_layout(year=2025):
             footer
         ]
     )
+
 
 def create_event_card(event, favorited=False):
     event_key = event["k"]
@@ -2332,16 +2356,16 @@ def create_event_card(event, favorited=False):
                             "border": "none",
                             "boxShadow": "none",
                             "background": "none",
-                            "textDecoration": "none"  # <-- removes underline
+                            "textDecoration": "none"
                         }
                     )
-
                 ]
             )
         ],
         className="mb-4 shadow",
         style={"width": "18rem", "height": "22rem", "margin": "10px"},
     )
+
 
 @app.callback(
     [
@@ -2356,8 +2380,6 @@ def create_event_card(event, favorited=False):
 )
 def toggle_favorite_event(n_clicks_list, id_list, store_data):
     from flask import session
-    import sqlite3
-
     if "user_id" not in session:
         return dash.no_update, False, dash.no_update
 
@@ -2373,32 +2395,33 @@ def toggle_favorite_event(n_clicks_list, id_list, store_data):
     event_key = triggered["key"]
     store_data = store_data or []
 
-    conn = sqlite3.connect("user_data.sqlite")
+    conn = get_pg_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
         SELECT id FROM saved_items
-        WHERE user_id = ? AND item_type = 'event' AND item_key = ?
+        WHERE user_id = %s AND item_type = 'event' AND item_key = %s
     """, (user_id, event_key))
     existing = cursor.fetchone()
 
     if existing:
         cursor.execute("""
             DELETE FROM saved_items
-            WHERE user_id = ? AND item_type = 'event' AND item_key = ?
+            WHERE user_id = %s AND item_type = 'event' AND item_key = %s
         """, (user_id, event_key))
         conn.commit()
-        conn.close()
         new_store = [k for k in store_data if k != event_key]
-        return "Event removed from favorites.", True, new_store
+        result = ("Event removed from favorites.", True, new_store)
     else:
         cursor.execute("""
             INSERT INTO saved_items (user_id, item_type, item_key)
-            VALUES (?, 'event', ?)
+            VALUES (%s, 'event', %s)
         """, (user_id, event_key))
         conn.commit()
-        conn.close()
-        return "Event added to favorites.", True, store_data + [event_key]
+        result = ("Event added to favorites.", True, store_data + [event_key])
+
+    conn.close()
+    return result
 
 WEEK_RANGES = [
     (datetime.date(2025, 2, 26), datetime.date(2025, 3, 2)),  # Week 1
@@ -2675,7 +2698,7 @@ def event_layout(event_key):
     return html.Div(
         [
             dcc.Store(id="user-session"),  # Holds user_id from session
-            topbar,
+            topbar(),
             dcc.Store(id="event-favorites-store", storage_type="session"),
             dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
@@ -2788,28 +2811,28 @@ def handle_event_favorite(pathname, n_clicks, store_data):
 
     # Case: user clicked star
     if ctx.triggered_id == "favorite-event-btn":
-        conn = sqlite3.connect("user_data.sqlite")
+        conn = get_pg_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM saved_items WHERE user_id = ? AND item_type = 'event' AND item_key = ?", (user_id, event_key))
+        cursor.execute("SELECT id FROM saved_items WHERE user_id = %s AND item_type = 'event' AND item_key = %s", (user_id, event_key))
         existing = cursor.fetchone()
 
         if existing:
-            cursor.execute("DELETE FROM saved_items WHERE user_id = ? AND item_type = 'event' AND item_key = ?", (user_id, event_key))
+            cursor.execute("DELETE FROM saved_items WHERE user_id = %s AND item_type = 'event' AND item_key = %s", (user_id, event_key))
             conn.commit()
             conn.close()
             new_store = [k for k in store_data if k != event_key]
             return new_store, "Removed from favorites", True
         else:
-            cursor.execute("INSERT INTO saved_items (user_id, item_type, item_key) VALUES (?, 'event', ?)", (user_id, event_key))
+            cursor.execute("INSERT INTO saved_items (user_id, item_type, item_key) VALUES (%s, 'event', %s)", (user_id, event_key))
             conn.commit()
             conn.close()
             return store_data + [event_key], "Added to favorites", True
 
     # Case: just loading the page (preload from DB)
     if ctx.triggered_id == "url":
-        conn = sqlite3.connect("user_data.sqlite")
+        conn = get_pg_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT 1 FROM saved_items WHERE user_id = ? AND item_type = 'event' AND item_key = ?", (user_id, event_key))
+        cursor.execute("SELECT 1 FROM saved_items WHERE user_id = %s AND item_type = 'event' AND item_key = %s", (user_id, event_key))
         favorited = cursor.fetchone()
         conn.close()
         return ([event_key] if favorited else []), dash.no_update, dash.no_update
@@ -3275,7 +3298,7 @@ def challenges_layout():
 
     return html.Div(
         [
-            topbar,
+            topbar(),
             dbc.Container(
                 [
                     html.H2("Challenges", className="text-center mb-4"),
@@ -3303,7 +3326,7 @@ def challenge_details_layout(year):
 
     return html.Div(
         [
-            topbar,
+            topbar(),
             dbc.Container(
                 [
                     # Title and Logo
@@ -3366,7 +3389,7 @@ def challenge_details_layout(year):
     )
 
 blog_layout = html.Div([
-    topbar,
+    topbar(),
     dbc.Container([
         html.H2("ACE (Adjusted Contribution Estimate) Algorithm", className="text-center my-4"),
 
@@ -3635,16 +3658,28 @@ def teams_layout(default_year=2025):
         className="mb-3",
     )
 
-    filters_row = dbc.Row(
-        [
-            dbc.Col(teams_year_dropdown, xs=6, sm=4, md=2),
-            dbc.Col(country_dropdown, xs=6, sm=4, md=2),
-            dbc.Col(state_dropdown, xs=6, sm=4, md=2),
-            dbc.Col(search_input, xs=6, sm=4, md=3),
-            dbc.Col(sort_dropdown, xs=6, sm=4, md=2),
-        ],
-        className="mb-4 justify-content-center",
+    filters_row = html.Div(
+        dbc.Row(
+            [
+                dbc.Col(teams_year_dropdown, xs=6, sm=4, md=2),
+                dbc.Col(country_dropdown, xs=6, sm=4, md=2),
+                dbc.Col(state_dropdown, xs=6, sm=4, md=2),
+                dbc.Col(search_input, xs=6, sm=4, md=3),
+                dbc.Col(sort_dropdown, xs=6, sm=4, md=2),
+            ],
+            className="gx-2 gy-2 justify-content-center",  # tighter gaps
+            style={"margin": "0 auto", "maxWidth": "1000px"},
+        ),
+        style={
+            "position": "sticky",
+            "top": "60px",
+            "zIndex": 10,
+            "backgroundColor": "transparent",  
+            "padding": "6px 8px",  # less vertical padding
+        }
     )
+
+
 
     teams_table = dash_table.DataTable(
         id="teams-table",
@@ -3690,9 +3725,9 @@ def teams_layout(default_year=2025):
     )
 
     tabs = dbc.Tabs([
-        dbc.Tab(label="Teams Table", tab_id="table-tab"),
+        dbc.Tab(label="Insights", tab_id="table-tab"),
         dbc.Tab(label="Avatars", tab_id="avatars-tab"),
-        dbc.Tab(label="Bubble Map", tab_id="bubble-map-tab"),
+        dbc.Tab(label="Bubble Chart", tab_id="bubble-map-tab"),
     ], id="teams-tabs", active_tab="table-tab", className="mb-3")
 
     content = html.Div(id="teams-tab-content", children=[
@@ -3703,7 +3738,7 @@ def teams_layout(default_year=2025):
 
     return html.Div(
         [
-            topbar,
+            topbar(),
             dbc.Container([
                 dbc.Row(id="top-teams-container", className="justify-content-center mb-5"),
                 filters_row,
@@ -3932,7 +3967,7 @@ def teams_map_layout():
     map_path = "assets/teams_map.html"
 
     return html.Div([
-        topbar,
+        topbar(),
         dbc.Container(
             [
                 html.Iframe(
@@ -4067,7 +4102,7 @@ def display_page(pathname):
         return wrap_with_toast_or_star(teams_layout())
     
     if pathname == "/map":
-        return wrap_with_toast_or_star(teams_map_layout)
+        return wrap_with_toast_or_star(teams_map_layout())
     
     if pathname == "/events":
         return wrap_with_toast_or_star(events_layout())
@@ -4083,9 +4118,6 @@ def display_page(pathname):
 
     if pathname == "/user":
         return user_layout()
-
-    if pathname == "/admin":
-        return admin_layout()
     
     if pathname.startswith("/challenge/"):
         year = pathname.split("/")[-1]
