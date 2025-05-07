@@ -1362,6 +1362,17 @@ def update_search_preview(desktop_value, mobile_value):
         if not val:
             return [], {"display": "none"}
 
+                # --- Filter Users from PostgreSQL ---
+        try:
+            conn = get_pg_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT username, avatar_key FROM users WHERE username ILIKE %s LIMIT 10", (f"%{val}%",))
+            user_rows = cur.fetchall()
+            conn.close()
+        except Exception as e:
+            print("User search error:", e)
+            user_rows = []
+
         # --- Filter Teams ---
         filtered_teams = [
             t for t in teams_data
@@ -1469,6 +1480,30 @@ def update_search_preview(desktop_value, mobile_value):
                     style={"padding": "5px", "backgroundColor": background_color},
                 )
                 children.append(row_el)
+
+                # Users section
+        if user_rows:
+            children.append(
+                dbc.Row(
+                    dbc.Col(
+                        html.Div("Users", style={"fontWeight": "bold", "padding": "5px"}),
+                    ),
+                    style={"backgroundColor": "#f1f1f1", "marginTop": "5px"}
+                )
+            )
+            for username, avatar_key in user_rows:
+                avatar_src = f"/assets/avatars/{avatar_key or 'stock'}"
+                row_el = dbc.Row(
+                    dbc.Col(
+                        html.A([
+                            html.Img(src=avatar_src, style={"height": "20px", "width": "20px", "borderRadius": "50%", "marginRight": "8px"}),
+                            username
+                        ], href=f"/user/{username}", style={"textDecoration": "none", "color": "black"}),
+                    ),
+                    style={"padding": "5px", "backgroundColor": "white"},
+                )
+                children.append(row_el)
+
 
         if not filtered_teams and not filtered_events:
             children.append(html.Div("No results found.", style={"padding": "5px", "color": "#555"}))
