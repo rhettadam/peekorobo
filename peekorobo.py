@@ -177,8 +177,8 @@ def get_available_avatars():
         avatar_dir = "assets/avatars"
         return [f for f in os.listdir(avatar_dir) if f.endswith(".png")]
 
-def user_layout():
-    user_id = session.get("user_id")
+def user_layout(_user_id=None, deleted_items=None):
+    user_id = _user_id or session.get("user_id")
 
     if not user_id:
         return html.Div([
@@ -187,7 +187,6 @@ def user_layout():
         ])
 
     dcc.Store(id="user-session", data={"user_id": user_id}),
-    dcc.Store(id="favorites-store") 
 
     conn = get_pg_connection()
     cursor = conn.cursor()
@@ -197,7 +196,7 @@ def user_layout():
 
     try:
         cursor.execute("""
-            SELECT username, avatar_key, role, team, bio, followers, following
+            SELECT username, avatar_key, role, team, bio, followers, following, color
             FROM users WHERE id = %s
         """, (user_id,))
         user_row = cursor.fetchone()
@@ -207,14 +206,18 @@ def user_layout():
             role = user_row[2] or "No role"
             team_affil = user_row[3] or "####"
             bio = user_row[4] or "No bio"
-            followers = user_row[5] or 0
-            following = user_row[6] or 0
+            followers = user_row[5] or []
+            following = user_row[6] or []
+            followers = len(followers)
+            following = len(following)
+            color = user_row[7] or "#f9f9f9"
         else:
             role = "No role"
             team_affil = "####"
             bio = "No bio"
             followers = 0
             following = 0
+            color = "#f9f9f9"
     except Exception as e:
         print(f"Error retrieving user info: {e}")
         role = "No role"
@@ -222,6 +225,7 @@ def user_layout():
         bio = "No bio"
         followers = 0
         following = 0
+        color = "#f9f9f9"
 
     cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (user_id,))
     team_keys = [r[0] for r in cursor.fetchall()]
@@ -239,20 +243,46 @@ def user_layout():
         hidden=False,
         children=[
             html.Div([
-                html.Span(f"Role: {role}", id="profile-role"),
-                html.Span(" | "),
+                html.Span(f"Role: {role}", id="profile-role", style={
+                    "fontWeight": "500",
+                    "color": "#333"
+                }),
+                html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
                 html.Span([
                     "Team: ",
-                    html.A(team_affil, href=f"/team/{team_affil}", style={"color": "#007bff", "textDecoration": "underline"})
+                    html.A(team_affil, href=f"/team/{team_affil}", style={
+                        "color": "#3897f0",
+                        "textDecoration": "none",
+                        "fontWeight": "500"
+                    })
                 ], id="profile-team"),
-                html.Span(" | "),
-                html.Span(f"Followers: {followers}"),
-                html.Span(" | "),
-                html.Span(f"Following: {following}")
-            ], style={"fontSize": "0.8rem", "color": "#444", "marginTop": "2px"}),
-            html.Div(bio, id="profile-bio", style={"fontSize": "0.85rem", "color": "#555", "marginTop": "4px"})
+                html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
+                html.Span(f"Followers: {followers}", style={
+                    "color": "#333",
+                    "fontWeight": "500",
+                }),
+                html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
+                html.Span(f"Following: {following}", style={
+                    "color": "#333",
+                    "fontWeight": "500",
+                })
+            ], style={
+                "fontSize": "0.85rem",
+                "color": "#444",
+                "marginTop": "6px",
+                "display": "flex",
+                "flexWrap": "wrap"
+            }),
+            html.Div(bio, id="profile-bio", style={
+                "fontSize": "0.9rem",
+                "color": "#444",
+                "marginTop": "8px",
+                "whiteSpace": "pre-wrap",
+                "lineHeight": "1.4"
+            })
         ]
     )
+
 
     profile_edit_form = html.Div(
         id="profile-edit-form",
@@ -274,12 +304,80 @@ def user_layout():
                 value=avatar_key,
                 clearable=False,
                 style={"width": "200px", "fontSize": "0.75rem"}
-            )
-        ]
-    )
+            ),
+            html.Label("Change Card Background Color", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#444"}),
+            dcc.Dropdown(
+                id="edit-bg-color",
+                options=[
+                    {
+                        "label": html.Span([
+                            html.Div(style={
+                                "display": "inline-block",
+                                "width": "12px",
+                                "height": "12px",
+                                "backgroundColor": color,
+                                "marginRight": "8px",
+                                "border": "1px solid #ccc",
+                                "verticalAlign": "middle"
+                            }),
+                            name
+                        ]),
+                        "value": color
+                    }
+                    for name, color in [
+                        ("White", "#ffffff"),
+                        ("Light Gray", "#f9f9f9"),
+                        ("Gray", "#d3d3d3"),
+                        ("Dark Gray", "#888888"),
+                        ("Black", "#000000"),
+                        ("Red", "#f44336"),
+                        ("Dark Red", "#b71c1c"),
+                        ("Pink", "#e91e63"),
+                        ("Light Pink", "#f8bbd0"),
+                        ("Purple", "#9c27b0"),
+                        ("Indigo", "#3f51b5"),
+                        ("Blue", "#2196f3"),
+                        ("Sky Blue", "#e3f2fd"),
+                        ("Teal", "#009688"),
+                        ("Cyan", "#00bcd4"),
+                        ("Mint", "#b2dfdb"),
+                        ("Green", "#4caf50"),
+                        ("Light Green", "#e8f5e9"),
+                        ("Lime", "#cddc39"),
+                        ("Olive", "#808000"),
+                        ("Yellow", "#ffeb3b"),
+                        ("Soft Yellow", "#fffde7"),
+                        ("Amber", "#ffc107"),
+                        ("Orange", "#ff9800"),
+                        ("Deep Orange", "#ff5722"),
+                        ("Coral", "#ffccbc"),
+                        ("Brown", "#795548"),
+                        ("Tan", "#d2b48c"),
+                        ("Beige", "#f5f5dc"),
+                        ("Gold", "#ffd700"),
+                        ("Silver", "#c0c0c0"),
+                        ("Turquoise", "#40e0d0"),
+                        ("Navy", "#001f3f"),
+                        ("Maroon", "#800000"),
+                        ("Lavender", "#e6e6fa"),
+                        ("Peach", "#ffe5b4"),
+                        ("Khaki", "#f0e68c"),
+                        ("Salmon", "#fa8072"),
+                        ("Steel Blue", "#4682b4"),
+                        ("Slate Gray", "#708090"),
+                    ]
 
-    store_data = dash.callback_context.states.get("favorites-store.data", {"deleted": []})
+                ],
+                value=color,
+                clearable=False,
+                style={"width": "200px", "fontSize": "0.75rem"}
+            ),
+        ])
+            
+
+    store_data = {"deleted": []}  # default state, actual deletion handled via callback
     deleted_items = set(tuple(i) for i in store_data.get("deleted", []))
+
 
     team_keys = [k for k in team_keys if ("team", k) not in deleted_items]
     event_keys = [k for k in event_keys if ("event", k) not in deleted_items]
@@ -347,6 +445,18 @@ def user_layout():
 
         team_data = TEAM_DATABASE.get(2025, {}).get(team_number)
         year_data = TEAM_DATABASE.get(2025, {})
+
+        delete_team_btn = html.Button(
+            "🗑️",
+            id={"type": "delete-favorite", "item_type": "team", "key": team_key},
+            style={
+                "backgroundColor": "transparent",
+                "border": "none",
+                "color": "#dc3545",  # optional: red trash color
+                "cursor": "pointer",
+                "fontSize": "1.2rem"  # optional: adjust icon size
+            }
+        )
 
         def get_epa_color(value, all_values):
             if not all_values:
@@ -441,22 +551,6 @@ def user_layout():
                 "marginTop": "10px",
                 "width": "100%"
             })
-            
-
-
-
-        delete_btn = html.Button(
-            "🗑️",
-            id={"type": "delete-favorite", "item_type": "team", "key": team_key},
-            style={
-                "backgroundColor": "transparent",
-                "border": "none",
-                "color": "#dc3545",  # optional: red trash color
-                "cursor": "pointer",
-                "fontSize": "1.2rem"  # optional: adjust icon size
-            }
-        )
-
 
         team_cards.append(team_card(
             html.A(
@@ -472,13 +566,27 @@ def user_layout():
                 html.Hr(),
                 build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025)
             ],
-            delete_button=delete_btn
+            delete_button=delete_team_btn
         ))
 
     event_cards = []
     for event_key in event_keys:
+        if event_key not in EVENT_DATABASE.get(2025, {}):
+            continue  # Skip deleted or invalid events
         year = 2025
         matches = [m for m in EVENT_MATCHES.get(year, []) if m.get("ek") == event_key]
+
+        delete_event_btn = html.Button(
+            "🗑️",
+            id={"type": "delete-favorite", "item_type": "event", "key": event_key},
+            style={
+                "backgroundColor": "transparent",
+                "border": "none",
+                "color": "#dc3545",  # optional: red trash color
+                "cursor": "pointer",
+                "fontSize": "1.2rem"  # optional: adjust icon size
+            }
+        )
 
         match_rows = []
         if matches:
@@ -496,19 +604,6 @@ def user_layout():
                 match_rows = event_section.children[-1].children
             else:
                 match_rows = [html.P("No favorited teams at this event.")]
-
-
-        delete_btn = html.Button(
-            "🗑️",
-            id={"type": "delete-favorite", "item_type": "team", "key": team_key},
-            style={
-                "backgroundColor": "transparent",
-                "border": "none",
-                "color": "#dc3545",  # optional: red trash color
-                "cursor": "pointer",
-                "fontSize": "1.2rem"  # optional: adjust icon size
-            }
-        )
 
 
         event_data = EVENT_DATABASE.get(year, {}).get(event_key, {})
@@ -532,7 +627,7 @@ def user_layout():
                             "cursor": "pointer"
                         }
                     ),
-                    delete_btn
+                    delete_event_btn
                 ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"}),
         
                 html.Div(location, style={"fontSize": "0.85rem", "color": "#666", "marginBottom": "0.5rem"}),
@@ -575,13 +670,16 @@ def user_layout():
                         ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-end", "justifyContent": "center"})
                     ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "15px"})
                 ]),
-                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "backgroundColor": "#f9f9f9", "marginBottom": "20px"}
+                id="profile-card",
+                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "marginBottom": "20px", "backgroundColor": color or "#f9f9f9"}
+
             ),
             html.H3("Favorite Teams", className="mb-3"),
             *team_cards,
             html.Hr(),
             html.H3("Favorite Events", className="mb-3"),
             *event_cards,
+
         ], style={"padding": "20px", "maxWidth": "1000px"}),
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
@@ -604,7 +702,7 @@ def other_user_layout(username):
     conn = get_pg_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT id, avatar_key, role, team, bio, followers, following
+        SELECT id, avatar_key, role, team, bio, followers, following, color
         FROM users WHERE username = %s
     """, (username,))
     row = cur.fetchone()
@@ -613,7 +711,7 @@ def other_user_layout(username):
         conn.close()
         return html.Div("User not found.", style={"padding": "2rem", "fontSize": "1.2rem"})
 
-    uid, avatar_key, role, team, bio, followers_json, following_json = row
+    uid, avatar_key, role, team, bio, followers_json, following_json, color = row
     is_following = session_user_id in (followers_json or [])
 
     cur.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (uid,))
@@ -765,6 +863,8 @@ def other_user_layout(username):
 
     event_cards = []
     for event_key in event_keys:
+        if event_key not in EVENT_DATABASE.get(2025, {}):
+            continue  # Skip deleted or invalid events
         event_data = EVENT_DATABASE.get(2025, {}).get(event_key, {})
         event_name = event_data.get("n", "Unknown Event")
         location = ", ".join(filter(None, [event_data.get("c", ""), event_data.get("s", ""), event_data.get("co", "")]))
@@ -801,44 +901,99 @@ def other_user_layout(username):
         className="btn btn-outline-primary btn-sm"
     ) if uid != session_user_id else None
 
+    profile_display = html.Div(
+        id="profile-display",
+        hidden=False,
+        children=[
+            html.Div([
+                html.Span(f"Role: {role}", id="profile-role", style={
+                    "fontWeight": "500",
+                    "color": "#333"
+                }),
+                html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
+                html.Span([
+                    "Team: ",
+                    html.A(team, href=f"/team/{team}", style={
+                        "color": "#3897f0",
+                        "textDecoration": "none",
+                        "fontWeight": "500"
+                    })
+                ], id="profile-team"),
+                html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
+                html.Span(f"Followers: {len(followers_json)}", style={
+                    "color": "#333",
+                    "fontWeight": "500",
+                }),
+                html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
+                html.Span(f"Following: {len(following_json)}", style={
+                    "color": "#333",
+                    "fontWeight": "500",
+                })
+            ], style={
+                "fontSize": "0.85rem",
+                "color": "#444",
+                "marginTop": "6px",
+                "display": "flex",
+                "flexWrap": "wrap"
+            }),
+            html.Div(bio, id="profile-bio", style={
+                "fontSize": "0.9rem",
+                "color": "#444",
+                "marginTop": "8px",
+                "whiteSpace": "pre-wrap",
+                "lineHeight": "1.4"
+            })
+        ]
+    )
+
     return html.Div([
         dcc.Store(id="user-session", data={"user_id": session_user_id}),
         topbar(),
+        dcc.Location(id="login-redirect", refresh=True),
         dbc.Container([
-            dbc.Card(dbc.CardBody([
-                html.Div([
-                    html.Img(src=get_user_avatar(avatar_key), style={"height": "80px", "borderRadius": "50%", "marginRight": "20px"}),
+            dbc.Card(
+                dbc.CardBody([
                     html.Div([
-                        html.H2(username.title()),
-                        html.Div(f"Role: {role}"),
                         html.Div([
-                            "Team: ",
-                            html.A(team, href=f"/team/{team}", style={"color": "#007bff"})
-                        ]) if team else None,
-                        html.Div(f"Bio: {bio or 'No bio'}"),
-                        html.Div(f"Followers: {len(followers_json or [])}"),
-                        html.Div(f"Following: {len(following_json or [])}"),
-                        html.Br(),
-                        html.Button(
-                            "Unfollow" if is_following else "Follow",
-                            id={"type": "follow-user", "user_id": uid},
-                            className="btn btn-outline-primary btn-sm"
-                        ) if uid != session_user_id else None
-                    ])
-                ], style={"display": "flex"})
-            ])),
-            html.Hr(),
+                            html.Img(
+                                src=get_user_avatar(avatar_key),
+                                style={"height": "60px", "borderRadius": "50%", "marginRight": "15px"}
+                            ),
+                            html.Div([
+                                html.H2(f"{username.title()}", style={"margin": 0, "fontSize": "1.5rem", "color": "#333"}),
+                                html.Div(f"{len(team_keys)} favorite teams | {len(event_keys)} favorite events", style={"fontSize": "0.85rem", "color": "#555"}),
+                                profile_display,
+                            ]),
+                        ], style={"display": "flex", "alignItems": "center"}),
+                        html.Div([
+                            html.Button(
+                                "Unfollow" if is_following else "Follow",
+                                id={"type": "follow-user", "user_id": uid},
+                                className="btn btn-outline-primary btn-sm mt-2"
+                            ) if uid != session_user_id else None
+                        ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-end", "justifyContent": "center"})
+                    ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "15px"})
+                ]),
+                id="profile-card",
+                style={
+                    "borderRadius": "10px",
+                    "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
+                    "marginBottom": "20px",
+                    "backgroundColor": color or "#f9f9f9"
+                }
+            ),
             html.H3("Favorite Teams", className="mb-3"),
             *team_cards,
             html.Hr(),
             html.H3("Favorite Events", className="mb-3"),
             *event_cards,
-            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-            footer,
-        ], style={"padding": "20px", "maxWidth": "1000px"})
+        ], style={"padding": "20px", "maxWidth": "1000px"}),
+        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+        footer,
     ])
+
 
 @app.server.route("/logout")
 def logout():
@@ -850,6 +1005,7 @@ def get_user_avatar(avatar_key):
 
 @callback(
     Output("profile-display", "hidden"),
+    Output("profile-card", "style"),  # 🔄 apply bg color update here
     Output("profile-edit-form", "hidden"),
     Output("save-profile-btn", "style"),
     Output("edit-profile-btn", "n_clicks"),
@@ -861,6 +1017,7 @@ def get_user_avatar(avatar_key):
     Input("save-profile-btn", "n_clicks"),
     State("profile-edit-form", "hidden"),
     State("edit-username", "value"),
+    State("edit-bg-color", "value"),  # ✅ added dropdown state
     State("edit-role", "value"),
     State("edit-team", "value"),
     State("edit-bio", "value"),
@@ -869,15 +1026,30 @@ def get_user_avatar(avatar_key):
 )
 def handle_profile_edit(
     edit_clicks, save_clicks, editing_hidden,
-    username, role, team, bio, avatar_key_selected,
+    username, bg_color, role, team, bio, avatar_key_selected,
     session_data
 ):
     triggered_id = ctx.triggered_id
 
-    if triggered_id == "save-profile-btn" and session_data:
-        user_id = session_data.get("user_id")
-        conn = get_pg_connection()
-        cur = conn.cursor()
+    if isinstance(session_data, str):
+        user_id = session_data
+    else:
+        user_id = session_data.get("user_id") if session_data else None
+
+    if not user_id:
+        return [dash.no_update] * 9
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+
+    if triggered_id == "save-profile-btn":
+        if not username or len(username.strip()) < 3:
+            return [dash.no_update] * 9
+
+        cur.execute("SELECT id FROM users WHERE LOWER(username) = %s AND id != %s", (username.lower(), user_id))
+        if cur.fetchone():
+            return [dash.no_update] * 9
+
         try:
             cur.execute("""
                 UPDATE users
@@ -885,41 +1057,52 @@ def handle_profile_edit(
                     role = %s,
                     team = %s,
                     bio = %s,
-                    avatar_key = %s
+                    avatar_key = %s,
+                    color = %s
                 WHERE id = %s
-            """, (username, role, team, bio, avatar_key_selected, user_id))
+            """, (username, role, team, bio, avatar_key_selected, bg_color, user_id))
             conn.commit()
 
-            cur.execute("""
-                SELECT role, team, bio FROM users WHERE id = %s
-            """, (user_id,))
-            new_role, new_team, new_bio = cur.fetchone()
+            cur.execute("SELECT role, team, bio, color FROM users WHERE id = %s", (user_id,))
+            new_role, new_team, new_bio, new_color = cur.fetchone()
         except Exception as e:
             print(f"Error saving profile: {e}")
-            new_role, new_team, new_bio = role, team, bio
+            new_role, new_team, new_bio, new_color = role, team, bio, bg_color
         finally:
             conn.close()
 
         return (
-            False,    # show profile-display
-            True,     # hide profile-edit-form
+            False,  # show profile-display
+            {"backgroundColor": new_color or "transparent", "borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "marginBottom": "20px"},
+            True,  # hide profile-edit-form
             {"display": "none"},
-            0,
+            0,  # reset edit-profile-btn clicks
             get_user_avatar(avatar_key_selected),
-            f"\U0001F8BE Role: {new_role}",
+            f"Role: {new_role}",
             html.Span([
-                "\U0001F916 Team: ",
+                "Team: ",
                 html.A(new_team, href=f"/team/{new_team}", style={"color": "#007bff", "textDecoration": "underline"})
             ]),
             new_bio
         )
 
     if triggered_id == "edit-profile-btn":
-        is_editing = not editing_hidden
+        # Load saved color from the database to apply immediately
+        try:
+            cur.execute("SELECT color FROM users WHERE id = %s", (user_id,))
+            result = cur.fetchone()
+            saved_color = result[0] if result else "#f9f9f9"
+        except Exception as e:
+            print(f"Error loading color on edit: {e}")
+            saved_color = "#f9f9f9"
+        finally:
+            conn.close()
+
         return (
-            not is_editing,  # hide profile-display if editing
-            is_editing,      # show profile-edit-form if editing
-            {"display": "inline-block"} if is_editing else {"display": "none"},
+            True,  # show profile-edit-form
+            {"backgroundColor": saved_color, "borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "marginBottom": "20px"},
+            False,  # hide profile-display
+            {"display": "inline-block"},
             dash.no_update,
             dash.no_update,
             dash.no_update,
@@ -927,16 +1110,8 @@ def handle_profile_edit(
             dash.no_update
         )
 
-    return (
-        dash.no_update,
-        dash.no_update,
-        dash.no_update,
-        dash.no_update,
-        dash.no_update,
-        dash.no_update,
-        dash.no_update,
-        dash.no_update
-    )
+    conn.close()
+    return [dash.no_update] * 9
 
 @callback(
     Output({"type": "follow-user", "user_id": MATCH}, "children"),
@@ -1041,6 +1216,7 @@ def search_users(query, session_data):
 
 @callback(
     Output("favorites-store", "data"),
+    Output("user-layout-wrapper", "children"),
     Input({"type": "delete-favorite", "item_type": ALL, "key": ALL}, "n_clicks"),
     State("favorites-store", "data"),
     State("user-session", "data"),
@@ -1048,11 +1224,10 @@ def search_users(query, session_data):
 )
 def remove_favorite(n_clicks, store_data, session_data):
     if not ctx.triggered_id or not session_data:
-        return no_update
+        return no_update, no_update
 
-    triggered = ctx.triggered_id  # This will be a dict with item_type and key
-    item_type = triggered["item_type"]
-    item_key = triggered["key"]
+    item_type = ctx.triggered_id["item_type"]
+    item_key = ctx.triggered_id["key"]
     user_id = session_data.get("user_id")
 
     # Delete from database
@@ -1065,11 +1240,15 @@ def remove_favorite(n_clicks, store_data, session_data):
     conn.commit()
     conn.close()
 
-    # Update store to reflect deletion
+    # Update favorites store
     store_data = store_data or {"deleted": []}
     deleted = set(tuple(i) for i in store_data.get("deleted", []))
     deleted.add((item_type, item_key))
-    return {"deleted": list(deleted)}
+    new_store = {"deleted": list(deleted)}
+
+    # Rerender layout
+    return new_store, user_layout(user_id, deleted)
+
     
 @app.callback(
     Output("login-message", "children"),
@@ -2919,7 +3098,6 @@ def create_event_card(event, favorited=False):
                     dbc.Button(
                         "★" if favorited else "☆",
                         id={"type": "favorite-event-btn", "key": event_key},
-                        n_clicks=0,
                         color="link",
                         className="mt-2 p-0",
                         style={
@@ -3184,7 +3362,6 @@ def event_layout(event_key):
                 children="★",  # will be toggled dynamically
                 color="link",
                 className="p-0",
-                n_clicks=0,
                 style={
                     "position": "absolute",
                     "top": "12px",
@@ -4101,7 +4278,6 @@ def epa_legend_layout():
 def create_team_card(team, year, avatar_url, epa_ranks):
     team_number = str(team.get("team_number"))
     epa_data = epa_ranks.get(team_number, {})
-
     nickname = team.get("nickname", "Unknown")
     location = ", ".join(filter(None, [team.get("city", ""), team.get("state_prov", ""), team.get("country", "")]))
     epa_display = epa_data.get("epa_display", "N/A")
@@ -4112,33 +4288,28 @@ def create_team_card(team, year, avatar_url, epa_ranks):
             dbc.CardImg(
                 src=avatar_url,
                 top=True,
-                style={
-                    "objectFit": "contain",
-                    "height": "150px",
-                    "padding": "0.5rem",
-                    "backgroundColor": "#fff"
-                }
+                style={"objectFit": "contain", "height": "150px", "padding": "0.5rem", "backgroundColor": "#fff"}
             ),
-            dbc.CardBody([
-                html.H5(f"#{team_number} | {nickname}", className="card-title", style={"fontSize": "1.1rem"}),
-                html.P(f"Location: {location}", className="card-text", style={"fontSize": "0.9rem"}),
-                html.P(f"ACE: {epa_display} (Global Rank: {rank})", className="card-text", style={"fontSize": "0.9rem"}),
-                dbc.Button("View Team", href=f"/team/{team_number}/{year}", color="warning", className="mt-auto"),
-            ], style={"display": "flex", "flexDirection": "column", "flexGrow": "1"})
+            html.Div([
+                dbc.CardBody([
+                    html.H5(f"#{team_number} | {nickname}", className="card-title", style={"fontSize": "1.1rem"}),
+                    html.P(f"Location: {location}", className="card-text", style={"fontSize": "0.9rem"}),
+                    html.P(f"ACE: {epa_display} (Global Rank: {rank})", className="card-text", style={"fontSize": "0.9rem"}),
+                    dbc.Button("View Team", href=f"/team/{team_number}/{year}", color="warning", className="mt-auto"),
+                ], style={"display": "flex", "flexDirection": "column", "flexGrow": "1"})
+            ], style={"position": "relative"})
         ],
         className="m-2 shadow",
         style={
-            "width": "18rem",
-            "height": "22rem",  # 🔒 consistent height
-            "display": "flex",
-            "flexDirection": "column",
-            "justifyContent": "start",
-            "alignItems": "stretch",
+            "width": "18rem", "height": "22rem",
+            "display": "flex", "flexDirection": "column",
+            "justifyContent": "start", "alignItems": "stretch",
             "borderRadius": "10px"
         }
     )
 
 def teams_layout(default_year=2025):
+    user_id = session.get("user_id")
     teams_year_dropdown = dcc.Dropdown(
         id="teams-year-dropdown",
         options=[{"label": str(y), "value": y} for y in range(1992, 2026)],
@@ -4309,9 +4480,10 @@ def teams_layout(default_year=2025):
 
     return html.Div(
         [
+            dcc.Store(id="user-session"),
             topbar(),
             dbc.Container([
-                dbc.Row(id="top-teams-container", className="justify-content-center mb-5"),
+                dbc.Row(id="top-teams-container", className="gx-4 gy-4 justify-content-center mb-5", justify="center"),
                 filters_row,
                 axis_dropdowns,
                 epa_legend_layout(),
@@ -4346,6 +4518,7 @@ def teams_layout(default_year=2025):
         Input("x-axis-dropdown", "value"),
         Input("y-axis-dropdown", "value"),
     ],
+    prevent_initial_call="initial_duplicate" 
 )
 def load_teams(selected_year, selected_country, selected_state, search_query, active_tab, sort_by, x_axis, y_axis):
   
@@ -4429,19 +4602,27 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
         })
 
     dcc.Location(id="teams-url", refresh=False),
+    
+    
 
-    top_teams_layout = dbc.Row([
-        dbc.Col(
+    top_teams_layout = html.Div(
+        [
             create_team_card(
                 t,
                 selected_year,
                 get_team_avatar(t.get("team_number"), selected_year),
-                epa_ranks  # new argument
-            ),
-            width="auto"
-        )
-        for t in teams_data[:3] if t.get("team_number")
-    ], className="justify-content-center")
+                epa_ranks,
+            )
+            for t in teams_data[:3] if t.get("team_number")
+        ],
+        style={
+            "display": "flex",
+            "justifyContent": "center",
+            "flexWrap": "wrap",
+            "gap": "1rem",
+            "padding": "1rem",
+        }
+    )
     
     if active_tab == "avatars-tab":
         table_style, avatar_style, map_style = {"display": "none"}, {"display": "flex"}, {"display": "none"}
@@ -4688,7 +4869,12 @@ def display_page(pathname):
         return login_layout()
 
     if pathname == "/user":
-        return user_layout()
+        return html.Div([
+            dcc.Store(id="favorites-store", data={"deleted": []}),
+            dcc.Store(id="user-session", data={"user_id": session.get("user_id")}),
+            html.Div(id="user-layout-wrapper", children=user_layout())
+        ])
+
 
     if len(path_parts) == 2 and path_parts[0] == "user":
         try:
