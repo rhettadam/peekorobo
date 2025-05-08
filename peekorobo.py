@@ -529,13 +529,44 @@ def user_layout(_user_id=None, deleted_items=None):
                 html.Div(f"{endgame:.2f}", className="metric-value", style={"color": endgame_color, "fontWeight": "bold"}),
             
                 html.Div("Global Rank", className="metric-label"),
-                html.Div(global_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
-            
-                html.Div("Country Rank", className="metric-label"),
-                html.Div(country_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
-            
-                html.Div("State Rank", className="metric-label"),
-                html.Div(state_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
+                    html.A(
+                        str(global_rank),
+                        href="/teams?sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
+                        className="metric-value",
+                        style={
+                            "color": "#007BFF",
+                            "fontWeight": "bold",
+                            "textDecoration": "underline",
+                            "cursor": "pointer"
+                        }
+                    ),
+
+                    
+                    html.Div(f"{country.title()} Rank", className="metric-label"),
+                    html.A(
+                        str(country_rank),
+                        href=f"/teams?country={country}&sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
+                        className="metric-value",
+                        style={
+                            "color": "#007BFF",
+                            "fontWeight": "bold",
+                            "textDecoration": "underline",
+                            "cursor": "pointer"
+                        }
+                    ),
+                    
+                    html.Div(f"{state.title()} Rank", className="metric-label"),
+                    html.A(
+                        str(state_rank),
+                        href=f"/teams?country={country}&state={state}&sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
+                        className="metric-value",
+                        style={
+                            "color": "#007BFF",
+                            "fontWeight": "bold",
+                            "textDecoration": "underline",
+                            "cursor": "pointer"
+                        }
+                    ),
             
                 html.Div([
                     html.Span("Record", className="metric-label", style={"marginRight": "8px"}),
@@ -661,7 +692,7 @@ def user_layout(_user_id=None, deleted_items=None):
                         html.Div([
                             html.A("Log Out", href="/logout", style={"marginTop": "8px", "fontSize": "0.75rem", "color": "#dc3545", "textDecoration": "none", "fontWeight": "600"}),
                             html.Div([
-                                html.H5("🔍 Search for Users", style={"marginTop": "10px", "fontSize": "0.95rem"}),
+                                html.H5("Search Users", style={"marginTop": "10px", "fontSize": "0.95rem"}),
                                 dbc.Input(id="user-search-input", placeholder="Search by username...", type="text", size="sm", className="mb-2"),
                                 html.Div(id="user-search-results")
                             ], style={"marginTop": "10px", "width": "100%"}),
@@ -1321,7 +1352,7 @@ def topbar():
                                 className="navbar-brand-custom",
                             ),
                             width="auto",
-                            align="center",
+                            className="align-self-center",
                         ),
                         dbc.Col(
                             [
@@ -1353,15 +1384,13 @@ def topbar():
                                 }),
                             ],
                             width="auto",
-                            align="center",
-                            className="d-md-none",
+                            className="d-md-none align-self-center",
                             style={"position": "relative", "textAlign": "center"},
                         ),
                         dbc.Col(
                             dbc.NavbarToggler(id="navbar-toggler", n_clicks=0),
                             width="auto",
-                            align="center",
-                            className="d-md-none",
+                            className="d-md-none align-self-center",
                         ),
                     ],
                     className="g-2",
@@ -1401,18 +1430,9 @@ def topbar():
                                     ),
                                 ],
                                 navbar=True,
-                                className="justify-content-center",  # Center horizontally
+                                className="justify-content-center",
                             ),
                             justify="center",
-                        ),
-                        dbc.Row(
-                            dbc.Col(
-                                dbc.NavLink("Login / Register", href="/login", id="login-link-mobile", style={
-                                    "color": "white", "textDecoration": "none"
-                                }),
-                                className="d-md-none mt-3 text-center"
-                            ),
-                            justify="center"
                         ),
                     ]),
                     id="navbar-collapse",
@@ -1420,57 +1440,40 @@ def topbar():
                     navbar=True,
                 ),
 
-
-
-                dbc.Row(
+                dbc.Col(
                     [
-                        dbc.Col(
-                            dbc.NavLink("Login / Register", href="/login", id="login-link-desktop", style={
-                                "color": "white", "textDecoration": "none"
-                            }),
-                            width="auto",
-                            className="d-none d-md-block",  # <-- corrected
-                        ),
-
-
-
-                        dbc.Col(
+                        dbc.InputGroup(
                             [
-                                dbc.InputGroup(
-                                    [
-                                        dbc.Input(id="desktop-search-input", placeholder="Search Teams or Events", type="text"),
-                                        dbc.Button("🔎", id="desktop-search-button", color="primary", style={
-                                            "backgroundColor": "#FFDD00", "border": "none", "color": "black",
-                                        }),
-                                    ]
-                                ),
-                                html.Div(id="desktop-search-preview", style={
-                                    "backgroundColor": "white",
-                                    "border": "1px solid #ddd",
-                                    "borderRadius": "8px",
-                                    "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
-                                    "marginTop": "5px",
-                                    "padding": "5px",
-                                    "maxHeight": "200px",
-                                    "overflowY": "auto",
-                                    "overflowX": "hidden",
-                                    "width": "100%",
-                                    "zIndex": "9999",
-                                    "position": "absolute",
-                                    "left": "0",
-                                    "top": "100%",
-                                    "display": "none",
+                                dbc.Input(id="desktop-search-input", placeholder="Search Teams or Events", type="text"),
+                                dbc.Button("🔎", id="desktop-search-button", color="primary", style={
+                                    "backgroundColor": "#FFDD00", "border": "none", "color": "black",
                                 }),
-                            ],
-                            width="auto",
-                            className="desktop-search d-none d-md-block",
-                            style={"position": "relative"},
+                            ]
                         ),
+                        html.Div(id="desktop-search-preview", style={
+                            "backgroundColor": "white",
+                            "border": "1px solid #ddd",
+                            "borderRadius": "8px",
+                            "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
+                            "marginTop": "5px",
+                            "padding": "5px",
+                            "maxHeight": "200px",
+                            "overflowY": "auto",
+                            "overflowX": "hidden",
+                            "width": "100%",
+                            "zIndex": "9999",
+                            "position": "absolute",
+                            "left": "0",
+                            "top": "100%",
+                            "display": "none",
+                        }),
                     ],
-                    align="center",
+                    width="auto",
+                    className="desktop-search d-none d-md-block",
+                    style={"position": "relative"},
                 ),
             ],
-            fluid=True,
+            fluid=True  # ✅ This belongs here
         ),
         color="#353535",
         dark=True,
@@ -1481,7 +1484,7 @@ def topbar():
             "top": "0",
             "zIndex": "1020",
             "boxShadow": "0px 2px 2px rgba(0,0,0,0.1)",
-        },
+        }
     )
 
 app.layout = html.Div([
@@ -2327,7 +2330,7 @@ def team_layout(team_number, year):
     is_logged_in = bool(user_id)
     
     favorite_button = dbc.Button(
-        "⭐  Favorite Team",
+        "⭐  Favorite",
         id="favorite-team-btn",
         href="/login" if not is_logged_in else None,
         color="warning",
@@ -2521,7 +2524,7 @@ def team_layout(team_number, year):
                                 *badges,
                                 html.P([html.I(className="bi bi-geo-alt-fill"), f"📍 {city}, {state}, {country}"]),
                                 html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
-                                        html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "none"})]),
+                                        html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "underline"})]),
                                 html.P([html.I(className="bi bi-award"), f" Rookie Year: {rookie_year}"]),
                                 html.Div(
                                     [
@@ -2529,7 +2532,7 @@ def team_layout(team_number, year):
                                         " Years Participated: ",
                                         html.Div(
                                             years_links,
-                                            style={"display": "flex", "flexWrap": "wrap", "gap": "8px"},
+                                            style={"display": "flex", "flexWrap": "wrap", "gap": "8px", "textDecoration": "underline","color": "#007BFF"},
                                         ),
                                     ],
                                     style={"marginBottom": "10px"},
@@ -2609,7 +2612,11 @@ def team_layout(team_number, year):
                                 html.Div(
                                     [
                                         html.P(f"{country} Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(f"{country_rank}", style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#FFC107"}),
+                                        html.A(
+                                            f"{country_rank}",
+                                            href=f"/teams?country={country}&sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
+                                            style={"color": "#007BFF", "textDecoration": "underline", "fontWeight": "bold", "fontSize": "1.1rem"},
+                                        ),
                                     ],
                                     style={"textAlign": "center"},
                                 ),
@@ -2618,8 +2625,12 @@ def team_layout(team_number, year):
                             dbc.Col(
                                 html.Div(
                                     [
-                                        html.P("Global Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(f"{global_rank}", style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#007BFF"}),
+                                        html.P(f"Global Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
+                                        html.A(
+                                            f"{global_rank}",
+                                            href=f"/teams?&sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
+                                            style={"color": "#007BFF", "textDecoration": "underline", "fontWeight": "bold", "fontSize": "1.1rem"},
+                                        ),
                                     ],
                                     style={"textAlign": "center"},
                                 ),
@@ -2628,8 +2639,12 @@ def team_layout(team_number, year):
                             dbc.Col(
                                 html.Div(
                                     [
-                                        html.P(f"{state} Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.1rem"}),
-                                        html.P(f"{state_rank}", style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#FFC107"}),
+                                    html.P(f"{state} Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
+                                    html.A(
+                                            f"{state_rank}",
+                                            href=f"/teams?country={country}&state={state}&sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
+                                            style={"color": "#007BFF", "textDecoration": "underline", "fontWeight": "bold", "fontSize": "1.1rem"},
+                                        ),
                                     ],
                                     style={"textAlign": "center"},
                                 ),
@@ -3383,7 +3398,7 @@ def event_layout(event_key):
                 html.P(f"Dates: {start_date} - {end_date}", className="card-text"),
                 html.P(f"Type: {event_type}", className="card-text"),
                 dbc.Button(
-                    "Visit Event Website",
+                    "Visit Website",
                     href=website,
                     external_link=True,
                     className="mt-3",
@@ -3514,7 +3529,7 @@ def create_team_card_spotlight(team, epa_data, event_year):
                 html.H5(f"#{t_num} | {nickname}", className="card-title mb-3"),
                 html.P(f"Location: {location_str}", className="card-text"),
                 html.P(f"ACE: {epa_display} (Global Rank: {epa_rank})", className="card-text"),
-                dbc.Button("View Team", href=team_url, color="warning", className="mt-2"),
+                dbc.Button("View", href=team_url, color="warning", className="mt-2"),
             ]
         )
     )
@@ -4295,7 +4310,7 @@ def create_team_card(team, year, avatar_url, epa_ranks):
                     html.H5(f"#{team_number} | {nickname}", className="card-title", style={"fontSize": "1.1rem"}),
                     html.P(f"Location: {location}", className="card-text", style={"fontSize": "0.9rem"}),
                     html.P(f"ACE: {epa_display} (Global Rank: {rank})", className="card-text", style={"fontSize": "0.9rem"}),
-                    dbc.Button("View Team", href=f"/team/{team_number}/{year}", color="warning", className="mt-auto"),
+                    dbc.Button("View", href=f"/team/{team_number}/{year}", color="warning", className="mt-auto"),
                 ], style={"display": "flex", "flexDirection": "column", "flexGrow": "1"})
             ], style={"position": "relative"})
         ],
@@ -4480,6 +4495,7 @@ def teams_layout(default_year=2025):
 
     return html.Div(
         [
+            dcc.Location(id="teams-url", refresh=False),
             dcc.Store(id="user-session"),
             topbar(),
             dbc.Container([
@@ -4497,6 +4513,8 @@ def teams_layout(default_year=2025):
         ]
     )
 
+from urllib.parse import urlencode
+
 @callback(
     [
         Output("teams-table", "data"),
@@ -4507,6 +4525,7 @@ def teams_layout(default_year=2025):
         Output("avatar-gallery", "style"),
         Output("bubble-map", "figure"),
         Output("bubble-map", "style"),
+        Output("teams-url", "search"),
     ],
     [
         Input("teams-year-dropdown", "value"),
@@ -4518,10 +4537,38 @@ def teams_layout(default_year=2025):
         Input("x-axis-dropdown", "value"),
         Input("y-axis-dropdown", "value"),
     ],
-    prevent_initial_call="initial_duplicate" 
+    prevent_initial_call="initial_duplicate",
 )
 def load_teams(selected_year, selected_country, selected_state, search_query, active_tab, sort_by, x_axis, y_axis):
-  
+    from urllib.parse import urlencode
+
+    default_values = {
+        "year": 2025,
+        "country": "All",
+        "state": "All",
+        "search": "",
+        "sort_by": "weighted_ace",
+        "x": "epa",
+        "y": "auto_epa",
+        "tab": "table-tab",
+    }
+    
+    params = {
+        "year": selected_year,
+        "country": selected_country,
+        "state": selected_state,
+        "search": search_query,
+        "sort_by": sort_by,
+        "x": x_axis,
+        "y": y_axis,
+        "tab": active_tab,
+    }
+    
+    query_string = "?" + urlencode({
+        k: v for k, v in params.items()
+        if v not in (None, "", "All") and str(v) != str(default_values[k])
+    })
+    
     all_teams, epa_ranks = load_teams_and_compute_epa_ranks(selected_year)
 
     teams_data = all_teams.copy()
@@ -4601,10 +4648,6 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
             "record": record,
         })
 
-    dcc.Location(id="teams-url", refresh=False),
-    
-    
-
     top_teams_layout = html.Div(
         [
             create_team_card(
@@ -4640,7 +4683,7 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
                     href=f"/team/{team_number}/{selected_year}",
                     style={"display": "inline-block"}
                 ))
-        return table_rows, state_options, top_teams_layout, table_style, avatars, avatar_style, go.Figure(), map_style
+        return table_rows, state_options, top_teams_layout, table_style, avatars, avatar_style, go.Figure(), map_style, query_string
 
     elif active_tab == "bubble-map-tab":
         chart_data = []
@@ -4698,11 +4741,41 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
             plot_bgcolor="white",
             showlegend=False,
         )
-        return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}
+        return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, query_string
         
     # Default to table tab
-    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}
+    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string
 
+from urllib.parse import parse_qs
+
+@callback(
+    Output("teams-year-dropdown", "value"),
+    Output("country-dropdown", "value"),
+    Output("state-dropdown", "value"),
+    Output("sort-by-dropdown", "value"),
+    Output("x-axis-dropdown", "value"),
+    Output("y-axis-dropdown", "value"),
+    Input("teams-url", "href"),  # << use .href or .pathname to break the loop
+    prevent_initial_call=True,
+)
+def apply_url_filters(href):
+    if not href or "?" not in href:
+        return 2025, "All", "All", "epa", "teleop_epa", "auto+endgame"
+
+    query = href.split("?", 1)[1]
+    params = parse_qs(query)
+
+    def get_param(name, default):
+        return params.get(name, [default])[0]
+
+    return (
+        int(get_param("year", 2025)),
+        get_param("country", "All"),
+        get_param("state", "All"),
+        get_param("sort_by", "epa"),
+        get_param("x", "teleop_epa"),
+        get_param("y", "auto+endgame"),
+    )
 
 @callback(
     Output("axis-dropdown-container", "style"),
