@@ -104,62 +104,83 @@ def login_layout():
         footer
     ])
 
-
 def universal_profile_icon_or_toast():
     if "user_id" in session:
+        user_id = session["user_id"]
+
+        # Fetch avatar_key from database
+        conn = get_pg_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT avatar_key FROM users WHERE id = %s", (user_id,))
+            row = cursor.fetchone()
+            avatar_key = row[0] if row and row[0] else "stock"
+        except Exception as e:
+            print(f"Error fetching avatar: {e}")
+            avatar_key = "stock.png"
+        finally:
+            conn.close()
+
         return html.A(
-            html.Img(
-                src="/assets/avatars/star.png",
-                style={
-                    "position": "fixed",
-                    "bottom": "20px",
-                    "right": "20px",
-                    "height": "60px",
-                    "cursor": "pointer",
-                    "zIndex": 9999
-                }
-            ),
-            href="/user"
-        )
-    else:
-        return dbc.Toast(
-            [
-                html.Strong("New here?", className="me-auto"),
-                html.Div("Create an account or log in to save favorite teams & events."),
-                dbc.Row([
-                    dbc.Col(
-                        dbc.Button("Login", href="/login", size="sm", color="secondary", className="mt-2", style={
-                            "width": "100%",
-                            "backgroundColor": "#ddd",
-                            "color": "#000",
-                            "border": "1px solid #999"
-                        }),
-                        width=6
-                    ),
-                    dbc.Col(
-                        dbc.Button("Register", href="/login", size="sm", color="warning", className="mt-2", style={
-                            "width": "100%",
-                            "backgroundColor": "#ffdd00ff",
-                            "color": "#000",
-                            "border": "1px solid #999"
-                        }),
-                        width=6
-                    )
-                ], className="mt-1")
-            ],
-            id="register-popup",
-            header="Join Peekorobo",
-            is_open=True,
-            dismissable=True,
-            icon="warning",
-            style={
-                "position": "fixed",
-                "bottom": 20,
-                "right": 20,
-                "width": 300,
-                "zIndex": 9999
-            },
-        )
+    html.Img(
+        src=f"/assets/avatars/{avatar_key}",
+        style={
+            "position": "fixed",
+            "bottom": "20px",
+            "right": "20px",
+            "height": "60px",
+            "width": "auto",           # ✅ Let width adjust naturally
+            "cursor": "pointer",
+            "zIndex": 9999,
+            "border": "none",          # ✅ No border
+            "borderRadius": "0",       # ✅ NOT a circle
+            "backgroundColor": "transparent",  # ✅ No background
+            "objectFit": "contain"     # ✅ Avoid distortion
+        }
+    ),
+    href="/user"
+)
+
+
+    # Unauthenticated fallback toast
+    return dbc.Toast(
+        [
+            html.Strong("New here?", className="me-auto"),
+            html.Div("Create an account or log in to save favorite teams & events."),
+            dbc.Row([
+                dbc.Col(
+                    dbc.Button("Login", href="/login", size="sm", color="secondary", className="mt-2", style={
+                        "width": "100%",
+                        "backgroundColor": "#ddd",
+                        "color": "#000",
+                        "border": "1px solid #999"
+                    }),
+                    width=6
+                ),
+                dbc.Col(
+                    dbc.Button("Register", href="/login", size="sm", color="warning", className="mt-2", style={
+                        "width": "100%",
+                        "backgroundColor": "#ffdd00ff",
+                        "color": "#000",
+                        "border": "1px solid #999"
+                    }),
+                    width=6
+                )
+            ], className="mt-1")
+        ],
+        id="register-popup",
+        header="Join Peekorobo",
+        is_open=True,
+        dismissable=True,
+        icon="warning",
+        style={
+            "position": "fixed",
+            "bottom": 20,
+            "right": 20,
+            "width": 300,
+            "zIndex": 9999
+        },
+    )
 
 def sort_key(filename):
     name = filename.split('.')[0]
@@ -177,7 +198,15 @@ def get_available_avatars():
         avatar_dir = "assets/avatars"
         return [f for f in os.listdir(avatar_dir) if f.endswith(".png")]
 
+def get_contrast_text_color(hex_color):
+        """Return black or white text color based on background brightness."""
+        hex_color = hex_color.lstrip("#")
+        r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        brightness = (r * 299 + g * 587 + b * 114) / 1000
+        return "#000000" if brightness > 150 else "#FFFFFF"
+
 def user_layout(_user_id=None, deleted_items=None):
+
     user_id = _user_id or session.get("user_id")
 
     if not user_id:
@@ -237,6 +266,8 @@ def user_layout(_user_id=None, deleted_items=None):
 
     available_avatars = get_available_avatars()
 
+    text_color = get_contrast_text_color(color)
+
     # use hidden=True/False for reliable Dash state
     profile_display = html.Div(
         id="profile-display",
@@ -245,37 +276,37 @@ def user_layout(_user_id=None, deleted_items=None):
             html.Div([
                 html.Span(f"Role: {role}", id="profile-role", style={
                     "fontWeight": "500",
-                    "color": "#333"
+                    "color": text_color
                 }),
                 html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
                 html.Span([
                     "Team: ",
                     html.A(team_affil, href=f"/team/{team_affil}", style={
-                        "color": "#3897f0",
-                        "textDecoration": "none",
+                        "color": text_color,
+                        "textDecoration": "underline",
                         "fontWeight": "500"
                     })
                 ], id="profile-team"),
                 html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
                 html.Span(f"Followers: {followers}", style={
-                    "color": "#333",
+                    "color": text_color,
                     "fontWeight": "500",
                 }),
                 html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
                 html.Span(f"Following: {following}", style={
-                    "color": "#333",
+                    "color": text_color,
                     "fontWeight": "500",
                 })
             ], style={
                 "fontSize": "0.85rem",
-                "color": "#444",
+                "color": text_color,
                 "marginTop": "6px",
                 "display": "flex",
                 "flexWrap": "wrap"
             }),
             html.Div(bio, id="profile-bio", style={
                 "fontSize": "0.9rem",
-                "color": "#444",
+                "color": text_color,
                 "marginTop": "8px",
                 "whiteSpace": "pre-wrap",
                 "lineHeight": "1.4"
@@ -316,6 +347,7 @@ def user_layout(_user_id=None, deleted_items=None):
                                 "width": "12px",
                                 "height": "12px",
                                 "backgroundColor": color,
+                                "color": "333",
                                 "marginRight": "8px",
                                 "border": "1px solid #ccc",
                                 "verticalAlign": "middle"
@@ -325,48 +357,67 @@ def user_layout(_user_id=None, deleted_items=None):
                         "value": color
                     }
                     for name, color in [
+                        # Very light pastels and whites
                         ("White", "#ffffff"),
-                        ("Light Gray", "#f9f9f9"),
-                        ("Gray", "#d3d3d3"),
-                        ("Dark Gray", "#888888"),
-                        ("Black", "#000000"),
-                        ("Red", "#f44336"),
-                        ("Dark Red", "#b71c1c"),
-                        ("Pink", "#e91e63"),
-                        ("Light Pink", "#f8bbd0"),
-                        ("Purple", "#9c27b0"),
-                        ("Indigo", "#3f51b5"),
-                        ("Blue", "#2196f3"),
-                        ("Sky Blue", "#e3f2fd"),
-                        ("Teal", "#009688"),
-                        ("Cyan", "#00bcd4"),
-                        ("Mint", "#b2dfdb"),
-                        ("Green", "#4caf50"),
-                        ("Light Green", "#e8f5e9"),
-                        ("Lime", "#cddc39"),
-                        ("Olive", "#808000"),
-                        ("Yellow", "#ffeb3b"),
-                        ("Soft Yellow", "#fffde7"),
-                        ("Amber", "#ffc107"),
-                        ("Orange", "#ff9800"),
-                        ("Deep Orange", "#ff5722"),
-                        ("Coral", "#ffccbc"),
-                        ("Brown", "#795548"),
-                        ("Tan", "#d2b48c"),
+                        ("Floral White", "#fffaf0"),
+                        ("Ivory", "#fffff0"),
+                        ("Old Lace", "#fdf5e6"),
+                        ("Seashell", "#fff5ee"),
+                        ("Lemon Chiffon", "#fffacd"),
+                        ("Cornsilk", "#fff8dc"),
+                        ("Papaya Whip", "#ffefd5"),
+                        ("Peach Puff", "#ffdab9"),
+                        ("Misty Rose", "#ffe4e1"),
                         ("Beige", "#f5f5dc"),
-                        ("Gold", "#ffd700"),
-                        ("Silver", "#c0c0c0"),
-                        ("Turquoise", "#40e0d0"),
-                        ("Navy", "#001f3f"),
-                        ("Maroon", "#800000"),
+                        ("Antique White", "#faebd7"),
+                        ("Light Goldenrod", "#fafad2"),
+                        ("Wheat", "#f5deb3"),
+                    
+                        # Light cool tones
+                        ("Honeydew", "#f0fff0"),
+                        ("Mint Cream", "#f5fffa"),
+                        ("Azure", "#f0ffff"),
+                        ("Alice Blue", "#f0f8ff"),
+                        ("Ghost White", "#f8f8ff"),
                         ("Lavender", "#e6e6fa"),
-                        ("Peach", "#ffe5b4"),
-                        ("Khaki", "#f0e68c"),
-                        ("Salmon", "#fa8072"),
+                        ("Light Cyan", "#e0ffff"),
+                        ("Powder Blue", "#b0e0e6"),
+                        ("Light Steel Blue", "#b0c4de"),
+                        ("Thistle", "#d8bfd8"),
+                        ("Plum", "#dda0dd"),
+                        ("Gainsboro", "#dcdcdc"),
+                        ("Light Gray", "#f5f5f5"),
+                    
+                        # Saturated / mid tones
+                        ("Sky Blue", "#87ceeb"),
+                        ("Light Pink", "#ffb6c1"),
+                        ("Orchid", "#da70d6"),
+                        ("Medium Slate Blue", "#7b68ee"),
+                        ("Slate Blue", "#6a5acd"),
                         ("Steel Blue", "#4682b4"),
-                        ("Slate Gray", "#708090"),
+                        ("Medium Violet Red", "#c71585"),
+                        ("Tomato", "#ff6347"),
+                        ("Goldenrod", "#daa520"),
+                        ("Dark Orange", "#ff8c00"),
+                        ("Crimson", "#dc143c"),
+                    
+                        # Cool / bold
+                        ("Royal Blue", "#4169e1"),
+                        ("Dodger Blue", "#1e90ff"),
+                        ("Deep Sky Blue", "#00bfff"),
+                        ("Teal", "#008080"),
+                        ("Dark Cyan", "#008b8b"),
+                        ("Sea Green", "#2e8b57"),
+                        ("Forest Green", "#228b22"),
+                    
+                        # Deep earth tones
+                        ("Olive", "#808000"),
+                        ("Saddle Brown", "#8b4513"),
+                        ("Dark Slate Gray", "#2f4f4f"),
+                        ("Navy", "#001f3f"),
+                        ("Midnight Blue", "#191970"),
+                        ("Black", "#000000"),
                     ]
-
                 ],
                 value=color,
                 clearable=False,
@@ -683,20 +734,44 @@ def user_layout(_user_id=None, deleted_items=None):
                                 style={"height": "60px", "borderRadius": "50%", "marginRight": "15px"}
                             ),
                             html.Div([
-                                html.H2(f"Welcome, {username.title()}!", style={"margin": 0, "fontSize": "1.5rem", "color": "#333"}),
-                                html.Div(f"{len(team_keys)} favorite teams | {len(event_keys)} favorite events", style={"fontSize": "0.85rem", "color": "#555"}),
+                                html.H2(
+                                    f"Welcome, {username.title()}!",
+                                    id="profile-header",
+                                    style={"margin": 0, "fontSize": "1.5rem", "color": text_color}
+                                ),
+                                html.Div(
+                                    f"{len(team_keys)} favorite teams | {len(event_keys)} favorite events",
+                                    id="profile-subheader",
+                                    style={"fontSize": "0.85rem", "color": text_color}
+                                ),
                                 profile_display,
                                 profile_edit_form
                             ]),
                         ], style={"display": "flex", "alignItems": "center"}),
                         html.Div([
-                            html.A("Log Out", href="/logout", style={"marginTop": "8px", "fontSize": "0.75rem", "color": "#dc3545", "textDecoration": "none", "fontWeight": "600"}),
+                            html.A("Log Out", href="/logout", style={"marginTop": "8px", "fontSize": "0.75rem", "color": text_color, "textDecoration": "none", "fontWeight": "600"}),
                             html.Div([
-                                html.H5("Search Users", style={"marginTop": "10px", "fontSize": "0.95rem"}),
-                                dbc.Input(id="user-search-input", placeholder="Search by username...", type="text", size="sm", className="mb-2"),
+                                html.H5(
+                                    id="profile-search-header",
+                                    style={"marginTop": "10px", "fontSize": "0.95rem", "color": text_color}
+                                ),
+                                dbc.Input(id="user-search-input", placeholder="Search Users", type="text", size="sm", className="mb-2"),
                                 html.Div(id="user-search-results")
                             ], style={"marginTop": "10px", "width": "100%"}),
-                            html.Button("Edit Profile", id="edit-profile-btn", className="btn btn-warning btn-sm mt-2"),
+                            html.Button(
+                                "Edit Profile",
+                                id="edit-profile-btn",
+                                style={
+                                    "background": "none",
+                                    "border": "none",
+                                    "padding": "0",
+                                    "marginTop": "8px",
+                                    "color": text_color,
+                                    "fontWeight": "bold",
+                                    "fontSize": "0.85rem",
+                                    "textDecoration": "none"
+                                }
+                            ),
                             html.Button("Save", id="save-profile-btn", className="btn btn-warning btn-sm mt-2", style={"display": "none"})
                         ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-end", "justifyContent": "center"})
                     ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "15px"})
@@ -751,6 +826,8 @@ def other_user_layout(username):
     cur.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'event'", (uid,))
     event_keys = [r[0] for r in cur.fetchall()]
     conn.close()
+
+    text_color = get_contrast_text_color(color)
 
     epa_data = {
         str(team_num): {
@@ -945,19 +1022,19 @@ def other_user_layout(username):
                 html.Span([
                     "Team: ",
                     html.A(team, href=f"/team/{team}", style={
-                        "color": "#3897f0",
+                        "color": text_color,
                         "textDecoration": "none",
                         "fontWeight": "500"
                     })
                 ], id="profile-team"),
                 html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
                 html.Span(f"Followers: {len(followers_json)}", style={
-                    "color": "#333",
+                    "color": text_color,
                     "fontWeight": "500",
                 }),
                 html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
                 html.Span(f"Following: {len(following_json)}", style={
-                    "color": "#333",
+                    "color": text_color,
                     "fontWeight": "500",
                 })
             ], style={
@@ -992,7 +1069,7 @@ def other_user_layout(username):
                             ),
                             html.Div([
                                 html.H2(f"{username.title()}", style={"margin": 0, "fontSize": "1.5rem", "color": "#333"}),
-                                html.Div(f"{len(team_keys)} favorite teams | {len(event_keys)} favorite events", style={"fontSize": "0.85rem", "color": "#555"}),
+                                html.Div(f"{len(team_keys)} favorite teams | {len(event_keys)} favorite events", style={"fontSize": "0.85rem", "color": text_color}),
                                 profile_display,
                             ]),
                         ], style={"display": "flex", "alignItems": "center"}),
@@ -1000,7 +1077,18 @@ def other_user_layout(username):
                             html.Button(
                                 "Unfollow" if is_following else "Follow",
                                 id={"type": "follow-user", "user_id": uid},
-                                className="btn btn-outline-primary btn-sm mt-2"
+                                style={
+                                    "backgroundColor": "white" if is_following else "#ffdd00",
+                                    "border": "1px solid #ccc",
+                                    "borderRadius": "12px",
+                                    "padding": "4px 10px",
+                                    "fontSize": "0.85rem",
+                                    "fontWeight": "500",
+                                    "color": "#000",
+                                    "cursor": "pointer",
+                                    "boxShadow": "0 1px 3px rgba(0, 0, 0, 0.1)",
+                                    "marginTop": "8px"
+                                }
                             ) if uid != session_user_id else None
                         ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-end", "justifyContent": "center"})
                     ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "15px"})
@@ -1036,7 +1124,7 @@ def get_user_avatar(avatar_key):
 
 @callback(
     Output("profile-display", "hidden"),
-    Output("profile-card", "style"),  # 🔄 apply bg color update here
+    Output("profile-card", "style"),
     Output("profile-edit-form", "hidden"),
     Output("save-profile-btn", "style"),
     Output("edit-profile-btn", "n_clicks"),
@@ -1044,11 +1132,14 @@ def get_user_avatar(avatar_key):
     Output("profile-role", "children"),
     Output("profile-team", "children"),
     Output("profile-bio", "children"),
+    Output("profile-header", "style"),        # NEW
+    Output("profile-subheader", "style"),     # NEW
+    Output("profile-search-header", "style"), # NEW
     Input("edit-profile-btn", "n_clicks"),
     Input("save-profile-btn", "n_clicks"),
     State("profile-edit-form", "hidden"),
     State("edit-username", "value"),
-    State("edit-bg-color", "value"),  # ✅ added dropdown state
+    State("edit-bg-color", "value"),
     State("edit-role", "value"),
     State("edit-team", "value"),
     State("edit-bio", "value"),
@@ -1062,11 +1153,7 @@ def handle_profile_edit(
 ):
     triggered_id = ctx.triggered_id
 
-    if isinstance(session_data, str):
-        user_id = session_data
-    else:
-        user_id = session_data.get("user_id") if session_data else None
-
+    user_id = session_data if isinstance(session_data, str) else session_data.get("user_id") if session_data else None
     if not user_id:
         return [dash.no_update] * 9
 
@@ -1096,54 +1183,78 @@ def handle_profile_edit(
 
             cur.execute("SELECT role, team, bio, color FROM users WHERE id = %s", (user_id,))
             new_role, new_team, new_bio, new_color = cur.fetchone()
+            text_color = get_contrast_text_color(new_color)
         except Exception as e:
             print(f"Error saving profile: {e}")
             new_role, new_team, new_bio, new_color = role, team, bio, bg_color
+            text_color = get_contrast_text_color(bg_color)
         finally:
             conn.close()
 
         return (
             False,  # show profile-display
-            {"backgroundColor": new_color or "transparent", "borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "marginBottom": "20px"},
+            {
+                "backgroundColor": new_color or "transparent",
+                "color": text_color,
+                "borderRadius": "10px",
+                "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
+                "marginBottom": "20px"
+            },
             True,  # hide profile-edit-form
             {"display": "none"},
-            0,  # reset edit-profile-btn clicks
+            0,
             get_user_avatar(avatar_key_selected),
-            f"Role: {new_role}",
+            html.Span(f"Role: {new_role}", style={"color": text_color}),
             html.Span([
                 "Team: ",
-                html.A(new_team, href=f"/team/{new_team}", style={"color": "#007bff", "textDecoration": "underline"})
+                html.A(new_team, href=f"/team/{new_team}", style={"color": text_color, "textDecoration": "underline"})
             ]),
-            new_bio
+            html.Div(new_bio, style={"color": text_color}),
+            {"color": text_color},  # for profile-header
+            {"color": text_color},  # for profile-subheader
+            {"color": text_color},  # for profile-search-header
         )
 
-    if triggered_id == "edit-profile-btn":
-        # Load saved color from the database to apply immediately
+    elif triggered_id == "edit-profile-btn":
         try:
             cur.execute("SELECT color FROM users WHERE id = %s", (user_id,))
             result = cur.fetchone()
             saved_color = result[0] if result else "#f9f9f9"
+            text_color = get_contrast_text_color(saved_color)
         except Exception as e:
             print(f"Error loading color on edit: {e}")
             saved_color = "#f9f9f9"
+            text_color = "#000"
         finally:
             conn.close()
 
         return (
             True,  # show profile-edit-form
-            {"backgroundColor": saved_color, "borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "marginBottom": "20px"},
+            {
+                "backgroundColor": saved_color,
+                "color": "#333",
+                "borderRadius": "10px",
+                "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
+                "marginBottom": "20px"
+            },
             False,  # hide profile-display
             {"display": "inline-block"},
             dash.no_update,
             dash.no_update,
-            dash.no_update,
-            dash.no_update,
-            dash.no_update
+            html.Span(f"Role: {role}", style={"color": text_color}),
+            html.Span([
+                "Team: ",
+                html.A(team, href=f"/team/{team}", style={"color": text_color, "textDecoration": "underline"})
+            ]),
+            html.Div(bio, style={"color": text_color}),
+            {"color": text_color},  # for profile-header
+            {"color": text_color},  # for profile-subheader
+            {"color": text_color},  # for profile-search-header
         )
 
     conn.close()
-    return [dash.no_update] * 9
-
+    return [dash.no_update] * 12
+    
 @callback(
     Output({"type": "follow-user", "user_id": MATCH}, "children"),
     Input({"type": "follow-user", "user_id": MATCH}, "n_clicks"),
@@ -1234,11 +1345,24 @@ def search_users(query, session_data):
                 "height": "32px", "width": "32px", "borderRadius": "50%", "marginRight": "8px"
             }),
             html.A(username, href=f"/user/{username}", style={
-                "fontWeight": "bold", "textDecoration": "none", "color": "#007bff", "flexGrow": "1"
+                "fontWeight": "bold", "textDecoration": "none", "color": "#ffffff", "flexGrow": "1"
             }),
-            html.Button("Unfollow" if is_following else "Follow", id={
-                "type": "follow-user", "user_id": uid
-            }, className="btn btn-sm btn-warning")
+            html.Button(
+                "Unfollow" if is_following else "Follow",
+                id={"type": "follow-user", "user_id": uid},
+                style={
+                    "backgroundColor": "white",
+                    "border": "1px solid #ccc",
+                    "borderRadius": "12px",
+                    "padding": "4px 10px",
+                    "fontSize": "0.85rem",
+                    "fontWeight": "500",
+                    "color": "#333",
+                    "cursor": "pointer",
+                    "boxShadow": "0 1px 3px rgba(0, 0, 0, 0.1)",
+                    "transition": "all 0.2s ease-in-out"
+                }
+            ),
         ], style={
             "display": "flex", "alignItems": "center", "gap": "10px", "marginBottom": "8px"
         }))
