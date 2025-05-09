@@ -1206,7 +1206,7 @@ def other_user_layout(username):
                                 style={"height": "60px", "borderRadius": "50%", "marginRight": "15px"}
                             ),
                             html.Div([
-                                html.H2(f"{username.title()}", style={"margin": 0, "fontSize": "1.5rem", "color": "#333"}),
+                                html.H2(f"{username.title()}", style={"margin": 0, "fontSize": "1.5rem", "color": text_color}),
                                 html.Div(f"{len(team_keys)} favorite teams | {len(event_keys)} favorite events", style={"fontSize": "0.85rem", "color": text_color}),
                                 profile_display,
                             ]),
@@ -1596,20 +1596,10 @@ def handle_login(login_clicks, register_clicks, username, password):
             conn.close()
             session["user_id"] = user_id
             session["username"] = username.strip()
-            redirect_url = "/login"
+            redirect_url = "/user"
             return f"✅ Welcome, {username.strip()}!", redirect_url
         else:
             return message, dash.no_update
-
-def login_nav_button(button_id):
-    return dbc.Button(
-        id=button_id,
-        children="Login / Register",
-        href="/login",
-        color="warning",
-        className="custom-navlink",
-        style={"display": "none"}  # Initially hidden
-    )
 
 def topbar():
     return dbc.Navbar(
