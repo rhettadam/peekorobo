@@ -3811,7 +3811,7 @@ def load_teams_and_compute_epa_ranks(year):
         epa_info[team_number] = {
             "epa": ace,
             "rank": rank,
-            "epa_display": get_epa_display(ace, percentiles),
+            "epa_display": ace,
         }
 
     return teams_data, epa_info
@@ -4731,40 +4731,54 @@ consistency = 1 - (statistics.stdev(scores) / statistics.mean(scores))
     footer
 ])
 
-def get_epa_display(epa, percentiles):
-
-    if epa is None:
-        return "N/A"
-
-    if epa >= percentiles["99"]:
-        color = "🟣"  # Purple
-    elif epa >= percentiles["95"]:
-        color = "🔵"  # Blue
-    elif epa >= percentiles["90"]:
-        color = "🟢"  # Green
-    elif epa >= percentiles["75"]:
-        color = "🟡"  # Yellow
-    elif epa >= percentiles["50"]:
-        color = "🟠"  # Orange
-    elif epa >= percentiles["25"]:
-        color = "🔴"  # Brown
-    else:
-        color = "🟤"  # Red
-
-    return f"{color} {epa:.2f}"
-
 def epa_legend_layout():
+    color_map = [
+        ("≥ 99%", "#6a1b9a"),   # Deep Purple
+        ("≥ 97%", "#8e24aa"),
+        ("≥ 95%", "#3949ab"),
+        ("≥ 93%", "#1565c0"),
+        ("≥ 91%", "#1e88e5"),
+        ("≥ 89%", "#43a047"),
+        ("≥ 85%", "#2e7d32"),
+        ("≥ 80%", "#c0ca33"),
+        ("≥ 75%", "#f9a825"),
+        ("≥ 65%", "#ffb300"),
+        ("≥ 55%", "#fb8c00"),
+        ("≥ 40%", "#e53935"),
+        ("≥ 25%", "#b71c1c"),
+        ("≥ 10%", "#7b0000"),
+        ("< 10%", "#4d0000"),
+    ]
+
+    blocks = [
+        html.Div(
+            label,
+            style={
+                "backgroundColor": color,
+                "color": "white",
+                "padding": "2px 6px",
+                "borderRadius": "4px",
+                "fontSize": "0.7rem",
+                "fontWeight": "500",
+                "textAlign": "center",
+                "minWidth": "48px",
+            }
+        )
+        for label, color in color_map
+    ]
+
     return dbc.Alert(
         [
-            html.H5("ACE Color Key (Percentile):", className="mb-3", style={"fontWeight": "bold"}),
-            html.Div("🟣  ≥ 99% | 🔵  ≥ 95% | 🟢  ≥ 90% | 🟡  ≥ 75% | 🟠  ≥ 50% | 🔴  ≥ 25% | 🟤  < 25%"),
+            html.Small("ACE Color Key (Percentiles):", className="d-block mb-2", style={"fontWeight": "bold"}),
+            html.Div(blocks, style={"display": "flex", "flexWrap": "wrap", "gap": "4px"})
         ],
         color="light",
         style={
             "border": "1px solid #ccc",
-            "borderRadius": "10px",
-            "padding": "10px",
-            "fontSize": "0.9rem",
+            "borderRadius": "8px",
+            "padding": "8px",
+            "fontSize": "0.8rem",
+            "marginBottom": "1rem",
         },
     )
     
@@ -5039,9 +5053,6 @@ def get_epa_styling(percentiles_dict):
                 })
     
         return style_rules
-    
-    
-        
 
 def compute_percentiles(values):
     percentiles = ["99", "97", "95", "93", "91", "89", "85", "80", "75", "65", "55", "40", "25", "10", "0"]
