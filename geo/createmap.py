@@ -1,155 +1,166 @@
 import folium
-from folium.plugins import MarkerCluster
+from folium.plugins import MarkerCluster, Search
 import json
 import os
 import numpy as np
+import sqlite3
 from dotenv import load_dotenv
+from folium.features import GeoJson  
+from folium import IFrame
 
-# Load environment variables
-def configure():
-    load_dotenv()
+load_dotenv()
 
-TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
-
-def tba_get(endpoint: str):
-    headers = {"X-TBA-Auth-Key": os.getenv("TBA_API_KEY")}
-    url = f"{TBA_BASE_URL}/{endpoint}"
-    r = requests.get(url, headers=headers)
-    if r.status_code == 200:
-        return r.json()
-    return None
-
-def load_team_data(locations_file="geo/mapteams_2025.json", epa_file="team_data/teams_2024.json"):
-    """
-    Loads location data from 2025 and EPA rankings from 2024.teams_
-    Matches teams by team_number.
-    """
-    if not os.path.exists(locations_file):
-        print(f"Error: Locations file {locations_file} not found.")
+def load_team_data(locations_file="2025_geo_teams.json", epa_db="epa_teams.sqlite"):
+    if not os.path.exists(locations_file) or not os.path.exists(epa_db):
         return []
-    if not os.path.exists(epa_file):
-        print(f"Error: EPA data file {epa_file} not found.")
-        return []
-
-    # Load team locations
     with open(locations_file, "r", encoding="utf-8") as f:
         location_data = json.load(f)
-
-    # Load EPA data
-    with open(epa_file, "r", encoding="utf-8") as f:
-        epa_data = json.load(f)
-
-    # Convert EPA data into a dictionary for quick lookup
-    epa_dict = {team["team_number"]: team for team in epa_data}
-
-    # Merge location data with EPA data
-    merged_teams = []
+    conn = sqlite3.connect(epa_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT team_number, epa FROM epa_history WHERE year = 2025")
+    epa_rows = cursor.fetchall()
+    conn.close()
+    epa_dict = {team_num: epa for team_num, epa in epa_rows}
     for team in location_data:
         team_number = team.get("team_number")
-        if team_number in epa_dict:
-            team["epa"] = epa_dict[team_number].get("epa", None)
-        else:
-            team["epa"] = None  # If no EPA data, assign None
-        merged_teams.append(team)
-
-    return merged_teams
+        team["epa"] = epa_dict.get(team_number)
+    return location_data
 
 def calculate_global_rankings(teams_data):
-    """Assign global rankings based on EPA."""
-    # Sort teams by EPA descending (higher EPA = better ranking)
     sorted_teams = sorted(teams_data, key=lambda x: x.get("epa", 0) or 0, reverse=True)
-
-    # Compute percentiles for ranking
     epa_values = [team["epa"] for team in sorted_teams if team.get("epa") is not None]
     percentiles = {
         "99": np.percentile(epa_values, 99) if epa_values else 0,
+        "95": np.percentile(epa_values, 95) if epa_values else 0,  # ADD THIS
         "90": np.percentile(epa_values, 90) if epa_values else 0,
         "75": np.percentile(epa_values, 75) if epa_values else 0,
+        "50": np.percentile(epa_values, 50) if epa_values else 0,  # AND THIS
         "25": np.percentile(epa_values, 25) if epa_values else 0,
     }
-
-    # Assign rankings to teams
     for idx, team in enumerate(sorted_teams):
-        team["global_rank"] = idx + 1  # Rank starts at 1
-        team["epa_display"] = get_epa_display(team.get("epa", None), percentiles)
-
+        team["global_rank"] = idx + 1
+        team["epa_display"] = get_epa_display(team.get("epa"), percentiles)
     return sorted_teams
 
 def get_epa_display(epa, percentiles):
-    """Returns a formatted string with a colored circle based on EPA percentile."""
     if epa is None:
         return "N/A"
-    
     if epa >= percentiles["99"]:
-        color = "🔵"  # Blue circle
+        color = "🟣"  # Purple
+    elif epa >= percentiles["95"]:
+        color = "🔵"  # Blue
     elif epa >= percentiles["90"]:
-        color = "🟢"  # Green circle
+        color = "🟢"  # Green
     elif epa >= percentiles["75"]:
-        color = "🟡"  # Yellow circle
-    elif epa >= percentiles["25"]:
-        color = "🟠"  # Orange circle
+        color = "🟠"  # Orange
+    elif epa >= percentiles["50"]:
+        color = "🔴"  # Red
+    elif epa <= percentiles["25"]:
+        color = "🟤"  # Brown
     else:
-        color = "🔴"  # Red circle
-
+        color = "⚪"
     return f"{color} {epa:.2f}"
 
-def generate_team_map(output_file="assets/teams_map.html"):
-    """
-    Generates an interactive map of FRC teams with Global Rank & EPA.
-    Saves it as an HTML file.
-    """
-    # Load team data from 2025 locations and 2024 EPA
+def get_marker_color(epa, percentiles):
+    if epa is None:
+        return "gray"
+    if epa >= percentiles["99"]:
+        return "purple"
+    elif epa >= percentiles["95"]:
+        return "blue"
+    elif epa >= percentiles["90"]:
+        return "green"
+    elif epa >= percentiles["75"]:
+        return "orange"
+    elif epa >= percentiles["50"]:
+        return "red"
+    elif epa <= percentiles["25"]:
+        return "darkred"
+    else:
+        return "darkred"
+
+
+def generate_team_map(output_file="teams_map.html"):
     teams_data = load_team_data()
-
-    # Filter only teams with valid lat/lng
     map_teams = [t for t in teams_data if t.get("lat") and t.get("lng")]
-
-    # Calculate Global Rankings & EPA display
     map_teams = calculate_global_rankings(map_teams)
 
-    # Create a Folium map centered on the USA
-    m = folium.Map(location=[39.8283, -98.5795], zoom_start=4, tiles="OpenStreetMap")
+    m = folium.Map(location=[39.8283, -98.5795], zoom_start=4)
+    cluster = MarkerCluster(name="FRC Teams").add_to(m)
+    search_layer = folium.FeatureGroup(name="Search Layer (invisible)", show=False).add_to(m)
 
-    # Add state boundaries (GeoJSON)
-    folium.GeoJson(
-        "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json",
-        name="State Boundaries",
-        style_function=lambda x: {
-            "color": "black",
-            "weight": 1,
-            "fillOpacity": 0.1,
-        },
-    ).add_to(m)
+    epa_values = [t["epa"] for t in map_teams if t.get("epa") is not None]
+    percentiles = {
+        "99": np.percentile(epa_values, 99) if epa_values else 0,
+        "95": np.percentile(epa_values, 95) if epa_values else 0,
+        "90": np.percentile(epa_values, 90) if epa_values else 0,
+        "75": np.percentile(epa_values, 75) if epa_values else 0,
+        "50": np.percentile(epa_values, 50) if epa_values else 0,
+        "25": np.percentile(epa_values, 25) if epa_values else 0,
+    }
 
-    # Use MarkerCluster for better performance with large datasets
-    marker_cluster = MarkerCluster().add_to(m)
-
-    # Add team locations to the map with clickable links & rankings
     for team in map_teams:
-        team_id = team["team_number"]
-        epa_value = team.get("epa", "N/A")
-        global_rank = team.get("global_rank", "N/A")
-        epa_display = team.get("epa_display", "N/A")
+        lat, lng = team["lat"], team["lng"]
+        label = f"{team['team_number']} {team.get('nickname', '')} ({team.get('city', '')}, {team.get('state_prov', '')}, {team.get('country', '')})".strip()
 
-        popup_html = (
-            f"<b>Team {team_id}:</b> {team['nickname']}<br>"
-            f"<b>Location:</b> {team['city']}, {team['state_prov']}, {team['country']}<br>"
-            f"<b>Global Rank:</b> #{global_rank}<br>"
-            f"<b>EPA:</b> {epa_display}<br>"
-            f"<a href='/team/{team_id}' target='_top'>View Team Page</a>"
-        )
+        popup_html = f"""
+            <b>Team {team['team_number']}:</b> {team.get('nickname', '')}<br>
+            <b>Location:</b> {team.get('city', '')}, {team.get('state_prov', '')}, {team.get('country', '')}<br>
+            <b>Global Rank:</b> #{team.get('global_rank', 'N/A')}<br>
+            <b>EPA:</b> {team.get('epa_display', 'N/A')}<br>
+            <a href='/team/{team['team_number']}' target='_top'>View Team Page</a>
+        """
+        iframe = IFrame(popup_html, width=350, height=150)
+        popup = folium.Popup(iframe, max_width=500)
+
+        color = get_marker_color(team.get("epa"), percentiles)
 
         folium.Marker(
-            location=[team["lat"], team["lng"]],
-            popup=folium.Popup(popup_html, max_width=300),
-            icon=folium.Icon(color="blue", icon="info-sign"),
-        ).add_to(marker_cluster)
+            location=[lat, lng],
+            popup=popup,
+            tooltip=label,
+            icon=folium.Icon(color=color, icon="info-sign")
+        ).add_to(cluster)
 
-    # Save the map to an HTML file
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        # Invisible searchable marker
+        marker = folium.CircleMarker(
+            location=[lat, lng],
+            radius=0.0001,
+            fill=True,
+            fill_opacity=0,
+            opacity=0,
+            popup=popup_html
+        )
+        marker.add_to(search_layer)
+        marker.options.update({"name": label})
+
+    Search(
+        layer=search_layer,
+        search_label="name",
+        placeholder="Search team number, name, city...",
+        collapsed=False
+    ).add_to(m)
+
+    # Shrink the search box
+    m.get_root().html.add_child(folium.Element("""
+    <style>
+    .leaflet-control-search input {
+        width: 180px !important;
+        font-size: 12px;
+        padding: 3px;
+    }
+    </style>
+    """))
+
+    folium.LayerControl().add_to(m)
+
+    output_dir = os.path.dirname(output_file)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
     m.save(output_file)
-    print(f"✅ Map successfully saved to {output_file}")
+    print(f"✅ Map saved with EPA-colored markers, search, and compact legend: {output_file}")
 
-# Run the script
+
 if __name__ == "__main__":
     generate_team_map()

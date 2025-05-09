@@ -1,112 +1,96 @@
+#!/usr/bin/env python3
+
 import os
+import time
 import json
 import requests
-import time
-import random
-import concurrent.futures
 from tqdm import tqdm
 from dotenv import load_dotenv
-from geopy.geocoders import Nominatim
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import random
 
-# Load environment variables
 load_dotenv()
-TBA_KEYS = os.getenv("TBA_API_KEYS")
-if not TBA_KEYS:
-    raise ValueError("TBA_API_KEYS not found in .env")
-API_KEYS = TBA_KEYS.split(",")
 
-TBA_URL = "https://www.thebluealliance.com/api/v3"
-geolocator = Nominatim(user_agent="peekorobo_2025_geocoder")
+TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
+API_KEYS = os.getenv("TBA_API_KEYS").split(',')
+LOCATIONIQ_KEY = os.getenv("LOCATIONIQ_API_KEY") or "pk.62a48aee2f1255204a72a9934eb15b47"
+YEAR = 2025
+GEO_URL = "https://us1.locationiq.com/v1/search.php"
+
 geo_cache = {}
 
-@retry(stop=stop_after_attempt(10), wait=wait_exponential(min=0.2, max=5), retry=retry_if_exception_type(Exception))
-def tba_get(endpoint):
-    api_key = random.choice(API_KEYS)
-    headers = {"X-TBA-Auth-Key": api_key}
-    url = f"{TBA_URL}/{endpoint}"
-    resp = requests.get(url, headers=headers, timeout=10)
-    resp.raise_for_status()
-    return resp.json()
+def tba_get(endpoint: str):
+    for _ in range(5):
+        try:
+            key = random.choice(API_KEYS)
+            headers = {"X-TBA-Auth-Key": key}
+            url = f"{TBA_BASE_URL}/{endpoint}"
+            r = requests.get(url, headers=headers)
+            if r.status_code == 200:
+                return r.json()
+            else:
+                print(f"[{r.status_code}] Error fetching {endpoint}")
+        except Exception as e:
+            print(f"Exception fetching {endpoint}: {e}")
+        time.sleep(1 + random.random())
+    return []
 
-@retry(stop=stop_after_attempt(5), wait=wait_exponential(min=0.2, max=5), retry=retry_if_exception_type(Exception))
-def geocode_location_retry(address_str):
-    return geolocator.geocode(address_str, timeout=10)
+def build_address(team):
+    parts = [team.get("city"), team.get("state_prov"), team.get("postal_code"), team.get("country")]
+    return ", ".join([p for p in parts if p])
 
-def geocode_location(item):
-    if item.get("lat") is not None and item.get("lng") is not None:
-        return item["lat"], item["lng"]
-
-    address = ", ".join(filter(None, [item.get("city"), item.get("state_prov"), item.get("postal_code"), item.get("country")]))
-    if not address:
-        return None, None
-
+def safe_geocode(address):
     if address in geo_cache:
         return geo_cache[address]
 
-    try:
-        time.sleep(0.1)
-        loc = geocode_location_retry(address)
-        coords = (loc.latitude, loc.longitude) if loc else (None, None)
-    except Exception:
-        coords = (None, None)
+    params = {
+        "key": LOCATIONIQ_KEY,
+        "q": address,
+        "format": "json",
+        "limit": 1,
+    }
 
-    geo_cache[address] = coords
-    return coords
-
-def process_team(team, year):
-    team["lat"], team["lng"] = geocode_location(team)
-    team_key = team.get("key", "")
-    if not team_key:
-        team["events"] = []
-        return team
-
-    try:
-        events = tba_get(f"team/{team_key}/events/{year}")
-    except Exception as e:
-        print(f"Error fetching events for {team_key}: {e}")
-        team["events"] = []
-        return team
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(geocode_location, evt): evt for evt in events}
-        for future in concurrent.futures.as_completed(futures):
-            evt = futures[future]
-            try:
-                evt["lat"], evt["lng"] = future.result()
-            except Exception:
-                evt["lat"], evt["lng"] = None, None
-
-    team["events"] = events
-    return team
+    for _ in range(5):
+        try:
+            time.sleep(0.6 + random.uniform(0.1, 0.3))  # stay under 2 req/sec
+            r = requests.get(GEO_URL, params=params, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                if isinstance(data, list) and data:
+                    lat = float(data[0]["lat"])
+                    lon = float(data[0]["lon"])
+                    geo_cache[address] = (lat, lon)
+                    return lat, lon
+                break
+            else:
+                print(f"Error {r.status_code} geocoding '{address}'")
+        except Exception as e:
+            print(f"Retrying geocode for '{address}': {e}")
+            time.sleep(3)
+    geo_cache[address] = (None, None)
+    return None, None
 
 def main():
-    year = 2025
     all_teams = []
     page = 0
-    print("Fetching teams from TBA...")
     while True:
-        data = tba_get(f"teams/{year}/{page}")
-        if not data:
+        page_data = tba_get(f"teams/{YEAR}/{page}")
+        if not page_data:
             break
-        all_teams.extend(data)
+        all_teams.extend(page_data)
         page += 1
 
-    print(f"Total teams fetched: {len(all_teams)}")
+    print(f"Fetched {len(all_teams)} teams.")
 
-    processed_teams = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-        futures = [executor.submit(process_team, team, year) for team in all_teams]
-        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Geocoding & Processing"):
-            try:
-                processed_teams.append(future.result())
-            except Exception as e:
-                print(f"Failed to process team: {e}")
+    for team in tqdm(all_teams, desc="Geocoding", unit="team"):
+        address = build_address(team)
+        lat, lng = safe_geocode(address)
+        team["lat"] = lat
+        team["lng"] = lng
 
-    out_file = f"teams_{year}.json"
-    with open(out_file, "w", encoding="utf-8") as f:
-        json.dump(processed_teams, f, indent=2)
-    print(f"Saved {len(processed_teams)} teams to {out_file}")
+    with open(f"{YEAR}_geo_teams.json", "w") as f:
+        json.dump(all_teams, f, indent=2)
+
+    print(f"Saved {YEAR}_geo_teams.json")
 
 if __name__ == "__main__":
     main()
