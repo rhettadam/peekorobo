@@ -690,8 +690,28 @@ def user_layout(_user_id=None, deleted_items=None):
     for event_key in event_keys:
         if event_key not in EVENT_DATABASE.get(2025, {}):
             continue  # Skip deleted or invalid events
+    
+        # Skip 2025cmptx unless team actually participated
+        if event_key == "2025cmptx":
+            year = 2025
+            # Check for matches
+            played_matches = any(
+                str(team_number) in (m.get("rt", "") + "," + m.get("bt", ""))
+                for m in EVENT_MATCHES.get(year, [])
+                if m.get("ek") == "2025cmptx"
+            )
+            # Check for awards
+            earned_awards = any(
+                aw["tk"] == team_number and aw["ek"] == "2025cmptx" and aw["y"] == 2025
+                for aw in EVENTS_AWARDS
+            )
+    
+            if not played_matches and not earned_awards:
+                continue  # skip Einstein if no participation
+    
         year = 2025
         matches = [m for m in EVENT_MATCHES.get(year, []) if m.get("ek") == event_key]
+        # ... rest of your card building logic ...
 
         delete_event_btn = html.Button(
             "🗑️",
@@ -2153,9 +2173,28 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
 
     for event_key, event in EVENT_DATABASE.get(year, {}).items():
         event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
+        
+        # Skip if team wasn't on the team list
         if not any(int(t["tk"]) == team_number for t in event_teams if "tk" in t):
             continue
-
+    
+        # === Special check for Einstein (2025cmptx) ===
+        if event_key == "2025cmptx":
+            # Check if they played matches at Einstein
+            einstein_matches = [
+                m for m in EVENT_MATCHES.get(year, [])
+                if m.get("ek") == "2025cmptx" and str(team_number) in (m.get("rt", "") + "," + m.get("bt", ""))
+            ]
+    
+            # Check if they earned an award at Einstein
+            einstein_awards = [
+                a for a in EVENTS_AWARDS
+                if a["tk"] == team_number and a["ek"] == "2025cmptx" and a["y"] == year
+            ]
+    
+            # If neither, skip
+            if not einstein_matches and not einstein_awards:
+                continue
 
         event_name = event.get("n", "Unknown")
         loc = ", ".join(filter(None, [event.get("c", ""), event.get("s", ""), event.get("co", "")]))
