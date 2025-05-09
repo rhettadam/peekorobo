@@ -1053,9 +1053,9 @@ def other_user_layout(username):
             html.Div(f"{endgame:.2f}", className="metric-value", style={"color": endgame_color, "fontWeight": "bold"}),
             html.Div("Global Rank", className="metric-label"),
             html.Div(global_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
-            html.Div("Country Rank", className="metric-label"),
+            html.Div(f"{country} Rank", className="metric-label"),
             html.Div(country_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
-            html.Div("State Rank", className="metric-label"),
+            html.Div(f"{state} Rank", className="metric-label"),
             html.Div(state_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
             html.Div([
                 html.Span("Record", className="metric-label", style={"marginRight": "8px"}),
