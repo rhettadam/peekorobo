@@ -2334,9 +2334,22 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
             ],
             data=match_rows,
             page_size=10,
-            style_table={"overflowX": "auto", "border": "1px solid #ddd", "borderRadius": "5px"},
-            style_header={"backgroundColor": "#F2F2F2", "fontWeight": "bold", "border": "1px solid #ddd", "textAlign": "center"},
-            style_cell={"textAlign": "center", "border": "1px solid #ddd", "padding": "8px"},
+            style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"},
+            style_header={
+                "backgroundColor": "white",        # Match the table background
+                "fontWeight": "bold",              # Keep column labels strong
+                "textAlign": "center",
+                "borderBottom": "1px solid #ccc",  # Thin line under header only
+                "padding": "6px",                  # Reduce banner size
+                "fontSize": "13px",                # Optional: shrink text slightly
+            },
+    
+            style_cell={
+                "textAlign": "center",
+                "padding": "10px",
+                "border": "none",
+                "fontSize": "14px",
+            },
             style_data_conditional=[
                 {
                     "if": {"filter_query": '{Winner} = "Red"'},
@@ -2554,21 +2567,21 @@ def build_recent_matches_section(event_key, year, epa_data):
         {"name": "Prediction", "id": "Prediction", "presentation": "markdown"},
     ]
 
-    style_table = {
-        "overflowX": "auto",
-        "border": "1px solid #ddd",
-        "borderRadius": "5px",
-    }
-    style_header = {
-        "backgroundColor": "#F2F2F2",
-        "fontWeight": "bold",
-        "border": "1px solid #ddd",
+    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"}
+    style_header={
+        "backgroundColor": "white",        # Match the table background
+        "fontWeight": "bold",              # Keep column labels strong
         "textAlign": "center",
+        "borderBottom": "1px solid #ccc",  # Thin line under header only
+        "padding": "6px",                  # Reduce banner size
+        "fontSize": "13px",                # Optional: shrink text slightly
     }
-    style_cell = {
+
+    style_cell={
         "textAlign": "center",
-        "border": "1px solid #ddd",
-        "padding": "8px",
+        "padding": "10px",
+        "border": "none",
+        "fontSize": "14px",
     }
     row_style = [
         {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "#ffe6e6"},
@@ -3086,9 +3099,22 @@ def team_layout(team_number, year):
         ],
         data=events_data,
         page_size=5,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "1px solid #ddd"},
-        style_header={"backgroundColor": "#FFCC00", "fontWeight": "bold", "textAlign": "center", "border": "1px solid #ddd"},
-        style_cell={"textAlign": "center", "padding": "10px", "border": "1px solid #ddd"},
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"},
+        style_header={
+            "backgroundColor": "white",        # Match the table background
+            "fontWeight": "bold",              # Keep column labels strong
+            "textAlign": "center",
+            "borderBottom": "1px solid #ccc",  # Thin line under header only
+            "padding": "6px",                  # Reduce banner size
+            "fontSize": "13px",                # Optional: shrink text slightly
+        },
+
+        style_cell={
+            "textAlign": "center",
+            "padding": "10px",
+            "border": "none",
+            "fontSize": "14px",
+        },
         style_cell_conditional=[{"if": {"column_id": "event_name"}, "textAlign": "center"}],
         style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
     )
@@ -3119,9 +3145,22 @@ def team_layout(team_number, year):
         ],
         data=awards_data,
         page_size=5,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "1px solid #ddd"},
-        style_header={"backgroundColor": "#FFCC00", "fontWeight": "bold", "textAlign": "center", "border": "1px solid #ddd"},
-        style_cell={"textAlign": "center", "padding": "10px", "border": "1px solid #ddd"},
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"},
+        style_header={
+            "backgroundColor": "white",        # Match the table background
+            "fontWeight": "bold",              # Keep column labels strong
+            "textAlign": "center",
+            "borderBottom": "1px solid #ccc",  # Thin line under header only
+            "padding": "6px",                  # Reduce banner size
+            "fontSize": "13px",                # Optional: shrink text slightly
+        },
+
+        style_cell={
+            "textAlign": "center",
+            "padding": "10px",
+            "border": "none",
+            "fontSize": "14px",
+        },
         style_cell_conditional=[{"if": {"column_id": "award_name"}, "textAlign": "left"}],
         style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
     )
@@ -3540,7 +3579,7 @@ def update_events_tab_content(
     if active_tab == "table-tab":
         df = compute_event_insights_from_data(EVENT_TEAMS, EVENT_DATABASE, TEAM_DATABASE, selected_year)
     
-        # Sort by "Top 8 EPA"
+        # Sort by "Top 8 ACE"
         df = df.sort_values(by="Top 8 ACE", ascending=False).reset_index(drop=True)
     
         # Ensure no NaNs interfere with percentile calculations
@@ -3584,21 +3623,21 @@ def update_events_tab_content(
                 {"name": "Top 24 ACE", "id": "Top 24 ACE"},
             ],
             data=df.to_dict("records"),
-            style_table={
-                "overflowX": "auto",
-                "borderRadius": "10px",
-                "boxShadow": "0 2px 10px rgba(0,0,0,0.08)",
+            style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"},
+            style_header={
+                "backgroundColor": "white",        # Match the table background
+                "fontWeight": "bold",              # Keep column labels strong
+                "textAlign": "center",
+                "borderBottom": "1px solid #ccc",  # Thin line under header only
+                "padding": "6px",                  # Reduce banner size
+                "fontSize": "13px",                # Optional: shrink text slightly
             },
+    
             style_cell={
                 "textAlign": "center",
                 "padding": "10px",
-                "fontFamily": "system-ui",
+                "border": "none",
                 "fontSize": "14px",
-            },
-            style_header={
-                "backgroundColor": "#f1f3f4",
-                "fontWeight": "600",
-                "borderBottom": "2px solid #ccc",
             },
             style_data_conditional=style_data_conditional,
             style_as_list_view=True,
@@ -3783,7 +3822,7 @@ def event_layout(event_key):
     if not event:
         return dbc.Alert("Event details could not be found.", color="danger")
 
-    _, epa_data = load_teams_and_compute_epa_ranks(parsed_year, use_weighted_ace=True)
+    _, epa_data = load_teams_and_compute_epa_ranks(parsed_year)
     event_year = parsed_year
     event_teams = EVENT_TEAMS.get(event_year, {}).get(event_key, [])
     rankings = EVENT_RANKINGS.get(event_year, {}).get(event_key, {})
@@ -4055,26 +4094,46 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
         return dbc.Alert("Select a data category above.", color="info")
 
     # === Shared styles ===
-    common_style_table = {
-        "overflowX": "auto",
-        "border": "1px solid #ddd",
-        "borderRadius": "5px",
-    }
-    common_style_header = {
-        "backgroundColor": "#F2F2F2",
-        "fontWeight": "bold",
-        "border": "1px solid #ddd",
+    common_style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"}
+    common_style_header={
+        "backgroundColor": "white",        # Match the table background
+        "fontWeight": "bold",              # Keep column labels strong
         "textAlign": "center",
+        "borderBottom": "1px solid #ccc",  # Thin line under header only
+        "padding": "6px",                  # Reduce banner size
+        "fontSize": "13px",                # Optional: shrink text slightly
     }
-    common_style_cell = {
+
+    common_style_cell={
         "textAlign": "center",
-        "border": "1px solid #ddd",
-        "padding": "8px",
+        "padding": "10px",
+        "border": "none",
+        "fontSize": "14px",
     }
 
     def safe_int(val):
         try: return int(val)
         except: return 999999
+
+    event_team_keys = {t["tk"] for t in event_teams}
+    full_teams = [t for t in TEAM_DATABASE.get(event_year, {}).values() if t.get("team_number") in event_team_keys]
+
+
+    extract_valid = lambda key: [t[key] for t in full_teams if key in t and t[key] is not None]
+
+    overall_percentiles = compute_percentiles(extract_valid("epa"))
+    auto_percentiles = compute_percentiles(extract_valid("auto_epa"))
+    teleop_percentiles = compute_percentiles(extract_valid("teleop_epa"))
+    endgame_percentiles = compute_percentiles(extract_valid("endgame_epa"))
+
+    percentiles_dict = {
+        "ACE": overall_percentiles,
+        "Auto ACE": auto_percentiles,
+        "Teleop ACE": teleop_percentiles,
+        "Endgame ACE": endgame_percentiles,
+    }
+        
+    style_data_conditional = get_epa_styling(percentiles_dict)
 
     # === Rankings Tab ===
     if active_tab == "rankings":
@@ -4099,7 +4158,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 "Ties": rank_info.get("t", "N/A"),
                 "DQ": rank_info.get("dq", "N/A"),
                 "ACE Rank": epa_rank,
-                "ACE": epa_display,
+                "ACE": epa_data.get(tstr, {}).get("epa", "N/A"),
             })
 
         data_rows.sort(key=lambda r: safe_int(r["Rank"]))
@@ -4124,6 +4183,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 style_table=common_style_table,
                 style_header=common_style_header,
                 style_cell=common_style_cell,
+                style_data_conditional=style_data_conditional
             )
         ])
 
@@ -4137,13 +4197,12 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             team_data = year_teams.get(int(team_num), {})
             nickname = team_data.get("nickname", "Unknown")
             epa_rank = epa_data.get(tnum_str, {}).get("rank", "N/A")
-            epa_display = epa_data.get(tnum_str, {}).get("epa_display", "N/A")
     
             data.append({
                 "Team": f"[{tnum_str} | {nickname}](/team/{tnum_str})",
                 "OPR": opr_val,
                 "ACE Rank": epa_rank,
-                "ACE": epa_display,
+                "ACE": epa_data.get(tnum_str, {}).get("epa", "N/A"),
             })
     
         data.sort(key=lambda x: x["OPR"], reverse=True)
@@ -4165,22 +4224,11 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             style_table=common_style_table,
             style_header=common_style_header,
             style_cell=common_style_cell,
+            style_data_conditional=style_data_conditional
         )
 
     # === Teams Tab ===
     elif active_tab == "teams":
-        year_teams = TEAM_DATABASE.get(event_year, {})
-        full_teams = [year_teams.get(t.get("tk")) for t in event_teams if year_teams.get(t.get("tk"))]
-
-        def compute_percentiles(values):
-            return {p: np.percentile(values, int(p)) for p in ["99", "95", "90", "75", "50", "25"]} if values else {p: 0 for p in ["99", "95", "90", "75", "50", "25"]}
-
-        extract_valid = lambda key: [t[key] for t in full_teams if key in t and t[key] is not None]
-
-        overall_percentiles = compute_percentiles(extract_valid("epa"))
-        auto_percentiles = compute_percentiles(extract_valid("auto_epa"))
-        teleop_percentiles = compute_percentiles(extract_valid("teleop_epa"))
-        endgame_percentiles = compute_percentiles(extract_valid("endgame_epa"))
 
         # Sort by global ACE rank
         sorted_teams = sorted(
@@ -4199,16 +4247,16 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
         for t in event_teams:
             tnum = t.get("tk")
             tstr = str(tnum)
-            full_data = year_teams.get(tnum, {})
+            full_data = next((team for team in full_teams if team.get("team_number") == tnum), {})
             epa_rank = epa_data.get(tstr, {}).get("rank", "N/A")
             epa_disp = epa_data.get(tstr, {}).get("epa_display", "N/A")
 
             rows.append({
                 "ACE Rank": epa_rank,
-                "ACE": epa_disp,
-                "Auto ACE": get_epa_display(full_data.get("auto_epa"), auto_percentiles),
-                "Teleop ACE": get_epa_display(full_data.get("teleop_epa"), teleop_percentiles),
-                "Endgame ACE": get_epa_display(full_data.get("endgame_epa"), endgame_percentiles),
+                "ACE": epa_data.get(tstr, {}).get("epa", "N/A"),
+                "Auto ACE": round(full_data.get("auto_epa", 0), 2),
+                "Teleop ACE": round(full_data.get("teleop_epa", 0), 2),
+                "Endgame ACE": round(full_data.get("endgame_epa", 0), 2),
                 "Team": f"[{tstr} | {t.get('nn', 'Unknown')}](/team/{tstr})",
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
@@ -4236,6 +4284,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 style_table=common_style_table,
                 style_header=common_style_header,
                 style_cell=common_style_cell,
+                style_data_conditional=style_data_conditional
             )
         ])
 
@@ -4394,21 +4443,21 @@ def update_matches_table(selected_team, event_matches, epa_data):
         {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
     ]
 
-    style_table = {
-        "overflowX": "auto",
-        "border": "1px solid #ddd",
-        "borderRadius": "5px",
-    }
-    style_header = {
-        "backgroundColor": "#F2F2F2",
-        "fontWeight": "bold",
-        "border": "1px solid #ddd",
+    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"}
+    style_header={
+        "backgroundColor": "white",        # Match the table background
+        "fontWeight": "bold",              # Keep column labels strong
         "textAlign": "center",
+        "borderBottom": "1px solid #ccc",  # Thin line under header only
+        "padding": "6px",                  # Reduce banner size
+        "fontSize": "13px",                # Optional: shrink text slightly
     }
-    style_cell = {
+
+    style_cell={
         "textAlign": "center",
-        "border": "1px solid #ddd",
-        "padding": "8px",
+        "padding": "10px",
+        "border": "none",
+        "fontSize": "14px",
     }
 
     qual_table = [
@@ -4886,24 +4935,27 @@ def teams_layout(default_year=2025):
         ],
         data=[],
         page_size=50,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "1px solid #ddd"},
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"},
         style_header={
-            "backgroundColor": "#FFCC00",
-            "fontWeight": "bold",
+            "backgroundColor": "white",        # Match the table background
+            "fontWeight": "bold",              # Keep column labels strong
             "textAlign": "center",
-            "border": "1px solid #ddd",
+            "borderBottom": "1px solid #ccc",  # Thin line under header only
+            "padding": "6px",                  # Reduce banner size
+            "fontSize": "13px",                # Optional: shrink text slightly
         },
+
         style_cell={
             "textAlign": "center",
             "padding": "10px",
-            "border": "1px solid #ddd",
+            "border": "none",
             "fontSize": "14px",
         },
         style_data_conditional=[
             {
                 "if": {"state": "selected"},
                 "backgroundColor": "rgba(255, 221, 0, 0.5)",
-                "border": "1px solid #FFCC00",
+                "border": "none",
             },
         ],
     )
@@ -4946,6 +4998,55 @@ def teams_layout(default_year=2025):
         ]
     )
 
+def get_epa_styling(percentiles_dict):
+        color_map = [
+            ("99", "#6a1b9a"),   # Deep Purple
+            ("97", "#8e24aa"),   # Medium Purple
+            ("95", "#3949ab"),   # Indigo
+            ("93", "#1565c0"),   # Blue
+            ("91", "#1e88e5"),   # Sky Blue
+            ("89", "#43a047"),   # Medium Green
+            ("85", "#2e7d32"),   # Dark Green
+            ("80", "#c0ca33"),   # Lime
+            ("75", "#f9a825"),   # Yellow
+            ("65", "#ffb300"),   # Dark Yellow
+            ("55", "#fb8c00"),   # Orange
+            ("40", "#e53935"),   # Red
+            ("25", "#b71c1c"),   # Dark Red
+            ("10", "#7b0000"),   # Maroon
+            ("0",  "#4d0000"),   # Deep Maroon
+        ]
+    
+        style_rules = []
+    
+        for col, percentiles in percentiles_dict.items():
+            thresholds = {int(k): v for k, v in percentiles.items()}
+    
+            for i, (lower_str, color) in enumerate(color_map):
+                lower = thresholds.get(int(lower_str), 0)
+                upper = thresholds.get(int(color_map[i - 1][0]), float("inf")) if i > 0 else float("inf")
+    
+                style_rules.append({
+                    "if": {
+                        "filter_query": f"{{{col}}} >= {lower}" + (f" && {{{col}}} < {upper}" if upper < float("inf") else ""),
+                        "column_id": col
+                    },
+                    "backgroundColor": color,
+                    "color": "white",
+                    "fontWeight": "bold",
+                    "borderRadius": "6px",
+                    "padding": "4px 6px",
+                })
+    
+        return style_rules
+    
+    
+        
+
+def compute_percentiles(values):
+    percentiles = ["99", "97", "95", "93", "91", "89", "85", "80", "75", "65", "55", "40", "25", "10", "0"]
+    return {p: np.percentile(values, int(p)) for p in percentiles} if values else {p: 0 for p in percentiles}
+
 @callback(
     [
         Output("teams-table", "data"),
@@ -4957,6 +5058,7 @@ def teams_layout(default_year=2025):
         Output("bubble-map", "figure"),
         Output("bubble-map", "style"),
         Output("teams-url", "search"),
+        Output("teams-table", "style_data_conditional"), 
     ],
     [
         Input("district-dropdown", "value"),
@@ -4985,10 +5087,13 @@ def load_teams(
         "country": "All",
         "state": "All",
         "search": "",
-        "x": "epa",
-        "y": "auto_epa",
+        "x": "teleop_epa",       # ✅ match x_axis_dropdown
+        "y": "auto+endgame",     # ✅ match y_axis_dropdown
         "tab": "table-tab",
+        "district": "All"
     }
+
+
 
     params = {
         "year": selected_year,
@@ -5042,15 +5147,22 @@ def load_teams(
         ]
 
     teams_data.sort(key=lambda t: t.get("weighted_ace") or 0, reverse=True)
-
-    def compute_percentiles(values):
-        return {p: np.percentile(values, int(p)) for p in ["99", "95", "90", "75", "50", "25"]} if values else {p: 0 for p in ["99", "95", "90", "75", "50", "25"]}
-
+    
     extract_valid = lambda key: [t[key] for t in teams_data if t.get(key) is not None]
+    
     overall_percentiles = compute_percentiles(extract_valid("epa"))
     auto_percentiles = compute_percentiles(extract_valid("auto_epa"))
     teleop_percentiles = compute_percentiles(extract_valid("teleop_epa"))
     endgame_percentiles = compute_percentiles(extract_valid("endgame_epa"))
+    
+    percentiles_dict = {
+        "epar": overall_percentiles,
+        "auto_epa": auto_percentiles,
+        "teleop_epa": teleop_percentiles,
+        "endgame_epa": endgame_percentiles,
+    }
+
+    style_data_conditional = get_epa_styling(percentiles_dict)
 
     state_options = [{"label": "All States", "value": "All"}]
     if selected_country and selected_country in STATES:
@@ -5060,10 +5172,10 @@ def load_teams(
         ]
 
     def get_axis_value(team, axis):
-        auto = team.get("auto_epa") or 0
-        teleop = team.get("teleop_epa") or 0
-        endgame = team.get("endgame_epa") or 0
-        total = team.get("epa") or 0
+        auto = abs(team.get("auto_epa") or 0)
+        teleop = abs(team.get("teleop_epa") or 0)
+        endgame = abs(team.get("endgame_epa") or 0)
+        total = abs(team.get("epa") or 0)
         return {
             "auto_epa": auto,
             "teleop_epa": teleop,
@@ -5085,10 +5197,10 @@ def load_teams(
             "team_display": f"[{team_num} | {t.get('nickname', 'Unknown')}](/team/{team_num}/{selected_year})",
             "confidence": t.get("confidence", 0),
             "trend": t.get("trend", 0),
-            "epar": get_epa_display(t.get("epa"), overall_percentiles),
-            "auto_epa": get_epa_display(t.get("auto_epa"), auto_percentiles),
-            "teleop_epa": get_epa_display(t.get("teleop_epa"), teleop_percentiles),
-            "endgame_epa": get_epa_display(t.get("endgame_epa"), endgame_percentiles),
+            "epar": round(abs(t.get("epa") or 0), 2),
+            "auto_epa": round(abs(t.get("auto_epa") or 0), 2),
+            "teleop_epa": round(abs(t.get("teleop_epa") or 0), 2),
+            "endgame_epa": round(abs(t.get("endgame_epa") or 0), 2),
             "location_display": ", ".join(filter(None, [t.get("city", ""), t.get("state_prov", ""), t.get("country", "")])),
             "record": record,
         })
@@ -5128,7 +5240,7 @@ def load_teams(
                     href=f"/team/{team_number}/{selected_year}",
                     style={"display": "inline-block"}
                 ))
-        return table_rows, state_options, top_teams_layout, {"display": "none"}, avatars, {"display": "flex"}, go.Figure(), {"display": "none"}, query_string
+        return table_rows, state_options, top_teams_layout, {"display": "none"}, avatars, {"display": "flex"}, go.Figure(), {"display": "none"}, query_string, style_data_conditional
 
     # Bubble Chart Tab
     elif active_tab == "bubble-map-tab":
@@ -5147,10 +5259,6 @@ def load_teams(
 
         df = pd.DataFrame(chart_data)
         df["label"] = ""
-        if not df.empty:
-            top_10 = df.sort_values(by="epa", ascending=False).head(10)
-            df.loc[top_10.index, "label"] = df.loc[top_10.index, "team"]
-
         q = (search_query or "").lower().strip()
         df["is_match"] = df["team"].str.lower().str.contains(q) if q else False
         df["hover"] = df.apply(lambda r: f"<b>{r['team']}</b><br>X: {r['x']:.2f}<br>Y: {r['y']:.2f}", axis=1)
@@ -5187,9 +5295,9 @@ def load_teams(
             plot_bgcolor="white",
             showlegend=False,
         )
-        return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, query_string
+        return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, query_string, style_data_conditional
 
-    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string
+    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string, style_data_conditional
 
 @callback(
     Output("teams-year-dropdown", "value"),
@@ -5203,7 +5311,7 @@ def load_teams(
 )
 def apply_url_filters(href):
     if not href or "?" not in href:
-        return 2025, "All", "All", "All", "epa", "teleop_epa"
+        return 2025, "All", "All", "All", "teleop_epa", "auto+endgame"
 
     query = href.split("?", 1)[1]
     params = parse_qs(query)
