@@ -22,7 +22,7 @@ import pandas as pd
 
 import plotly.graph_objects as go
 
-from datagather import frc_games, COUNTRIES, STATES, tba_get, load_data, get_team_avatar, calculate_ranks
+from datagather import frc_games,COUNTRIES,STATES,load_data,get_team_avatar,calculate_ranks
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -789,7 +789,7 @@ def user_layout(_user_id=None, deleted_items=None):
                                             html.Ul([
                                                 html.Li([
                                                     html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
-                                                    html.A(user[1], href=f"/user/{user[0]}", style={"textDecoration": "none", "color": "#007bff"})
+                                                    html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
                                                 ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
                                                 for user in followers_user_objs[:5]
                                             ], style={
@@ -803,7 +803,7 @@ def user_layout(_user_id=None, deleted_items=None):
                                             html.Ul([
                                                 html.Li([
                                                     html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
-                                                    html.A(user[1], href=f"/user/{user[0]}", style={"textDecoration": "none", "color": "#007bff"})
+                                                    html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
                                                 ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
                                                 for user in followers_user_objs[5:]
                                             ], id="followers-hidden", style={
