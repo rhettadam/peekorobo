@@ -5053,7 +5053,7 @@ def toggle_axis_dropdowns(active_tab):
 
 def teams_map_layout():
     # Generate and get the map file path
-    map_path = "geo/teams_map.html"
+    map_path = "assets/teams_map.html"
 
     return html.Div([
         topbar(),
