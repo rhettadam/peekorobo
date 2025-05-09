@@ -67,6 +67,66 @@ def get_pg_connection():
     )
     return conn
 
+def get_epa_styling(percentiles_dict):
+        color_map = [
+            ("99", "#6a1b9a"),   # Deep Purple
+            ("97", "#8e24aa"),   # Medium Purple
+            ("95", "#3949ab"),   # Indigo
+            ("93", "#1565c0"),   # Blue
+            ("91", "#1e88e5"),   # Sky Blue
+            ("89", "#43a047"),   # Medium Green
+            ("85", "#2e7d32"),   # Dark Green
+            ("80", "#c0ca33"),   # Lime
+            ("75", "#f9a825"),   # Yellow
+            ("65", "#ffb300"),   # Dark Yellow
+            ("55", "#fb8c00"),   # Orange
+            ("40", "#e53935"),   # Red
+            ("25", "#b71c1c"),   # Dark Red
+            ("10", "#7b0000"),   # Maroon
+            ("0",  "#4d0000"),   # Deep Maroon
+        ]
+    
+        style_rules = []
+    
+        for col, percentiles in percentiles_dict.items():
+            thresholds = {int(k): v for k, v in percentiles.items()}
+    
+            for i, (lower_str, color) in enumerate(color_map):
+                lower = thresholds.get(int(lower_str), 0)
+                upper = thresholds.get(int(color_map[i - 1][0]), float("inf")) if i > 0 else float("inf")
+    
+                style_rules.append({
+                    "if": {
+                        "filter_query": f"{{{col}}} >= {lower}" + (f" && {{{col}}} < {upper}" if upper < float("inf") else ""),
+                        "column_id": col
+                    },
+                    "backgroundColor": color,
+                    "color": "white",
+                    "fontWeight": "bold",
+                    "borderRadius": "6px",
+                    "padding": "4px 6px",
+                })
+    
+        return style_rules
+
+def compute_percentiles(values):
+    percentiles = ["99", "97", "95", "93", "91", "89", "85", "80", "75", "65", "55", "40", "25", "10", "0"]
+    return {p: np.percentile(values, int(p)) for p in percentiles} if values else {p: 0 for p in percentiles}
+
+def get_color_from_value(val, percentiles):
+    color_map = [
+        ("99", "#6a1b9a"), ("97", "#8e24aa"), ("95", "#3949ab"), ("93", "#1565c0"), ("91", "#1e88e5"),
+        ("89", "#43a047"), ("85", "#2e7d32"), ("80", "#c0ca33"), ("75", "#f9a825"), ("65", "#ffb300"),
+        ("55", "#fb8c00"), ("40", "#e53935"), ("25", "#b71c1c"), ("10", "#7b0000"), ("0", "#4d0000"),
+    ]
+
+    for i, (lower_str, color) in enumerate(color_map):
+        lower = percentiles.get(int(lower_str), 0)
+        upper = percentiles.get(int(color_map[i - 1][0]), float("inf")) if i > 0 else float("inf")
+        if lower <= val < upper:
+            return color
+    return "#4d0000"  # fallback
+
 def login_layout():
     # Optional redirect if logged in
     if "user_id" in session:
@@ -2702,6 +2762,21 @@ def team_layout(team_number, year):
         for team_num, data in year_data.items()
     }
 
+    epa_values = [data.get("normal_epa", 0) for data in year_data.values()]
+    auto_values = [data.get("auto_epa", 0) for data in year_data.values()]
+    teleop_values = [data.get("teleop_epa", 0) for data in year_data.values()]
+    endgame_values = [data.get("endgame_epa", 0) for data in year_data.values()]
+    ace_values = [data.get("epa", 0) for data in year_data.values()]
+
+    percentiles_dict = {
+        "epa": compute_percentiles(epa_values),
+        "auto_epa": compute_percentiles(auto_values),
+        "teleop_epa": compute_percentiles(teleop_values),
+        "endgame_epa": compute_percentiles(endgame_values),
+        "ace": compute_percentiles(ace_values),
+    }
+
+
     nickname = selected_team.get("nickname", "Unknown")
     city = selected_team.get("city", "")
     state = selected_team.get("state_prov", "")
@@ -2899,140 +2974,105 @@ def team_layout(team_number, year):
             "fontSize": "1.3rem",
             "fontWeight": "bold",
             "marginBottom": "10px",
-        },
+        }
+    )
+    def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state):
+        def rank_card(label, rank, href):
+            return dbc.Card(
+                dbc.CardBody([
+                    html.P(label, style={"fontSize": "1rem", "color": "#888", "marginBottom": "4px"}),
+                    html.A(str(rank), href=href, style={
+                        "fontSize": "1.6rem",
+                        "fontWeight": "bold",
+                        "color": "#007BFF",
+                        "textDecoration": "none",
+                    }),
+                ]),
+                style={
+                    "textAlign": "center",
+                    "borderRadius": "10px",
+                    "boxShadow": "0px 2px 6px rgba(0,0,0,0.1)",
+                    "backgroundColor": "white",
+                    "padding": "15px",
+                }
+            )
+    
+        return dbc.Row([
+            dbc.Col(rank_card("Global Rank", global_rank, f"/teams?year={performance_year}&sort_by=epa"), width=4),
+            dbc.Col(rank_card(f"{country} Rank", country_rank, f"/teams?year={performance_year}&country={country}&sort_by=epa"), width=4),
+            dbc.Col(rank_card(f"{state} Rank", state_rank, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa"), width=4),
+        ], className="mb-4")
+
+
+    def build_performance_metrics_card(selected_team, performance_year, percentiles_dict):
+        def pill(label, value, color):
+            return html.Span(f"{label}: {value}", style={
+                "backgroundColor": color,
+                "borderRadius": "6px",
+                "padding": "4px 10px",
+                "color": "white",
+                "fontWeight": "bold",
+                "fontSize": "0.85rem",
+                "marginRight": "6px",
+                "display": "inline-block"
+            })
+    
+        # Fixed colors to match screenshot styling
+        auto_color = "#1976d2"     # Blue
+        teleop_color = "#fb8c00"   # Orange
+        endgame_color = "#388e3c"  # Green
+        norm_color = "#d32f2f"    # Red
+        conf_color = "#555"        # Gray for confidence
+        total_color = "#673ab7"     # Deep Purple for normal EPA
+    
+        total = selected_team.get("epa", 0)
+        normal_epa = selected_team.get("normal_epa", 0)
+        confidence = selected_team.get("confidence", 0)
+        auto = selected_team.get("auto_epa", 0)
+        teleop = selected_team.get("teleop_epa", 0)
+        endgame = selected_team.get("endgame_epa", 0)
+        wins = selected_team.get("wins", 0)
+        losses = selected_team.get("losses", 0)
+        ties = selected_team.get("ties", 0)
+        team_number = selected_team.get("team_number", "")
+        nickname = selected_team.get("nickname", "")
+    
+        return html.Div([
+            html.P([
+                html.Span(f"Team {team_number} ({nickname}) had a record of ", style={"fontWeight": "bold"}),
+                html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
+                html.Span("-"),
+                html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
+                html.Span("-"),
+                html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
+                html.Span(f" in {performance_year}.")
+            ], style={"marginBottom": "6px", "fontWeight": "bold"}),
+            html.Div([
+                pill("Auto", f"{auto:.1f}", auto_color),
+                pill("Teleop", f"{teleop:.1f}", teleop_color),
+                pill("Endgame", f"{endgame:.1f}", endgame_color),
+                pill("EPA", f"{normal_epa:.2f}", norm_color),
+                pill("Confidence", f"{confidence:.2f}", conf_color),
+                pill("ACE", f"{total:.1f}", total_color),
+            ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
+        ])
+
+
+    rank_card = build_rank_cards(
+        performance_year,
+        global_rank,
+        country_rank,
+        state_rank,
+        country,
+        state
     )
 
-    performance_card = dbc.Card(
-        dbc.CardBody(
-            [
-                perf,
-                html.Div(
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.P(f"{country} Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.A(
-                                            f"{country_rank}",
-                                            href=f"/teams?year={performance_year}&country={country}&sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
-                                            style={"color": "#007BFF", "textDecoration": "underline", "fontWeight": "bold", "fontSize": "1.1rem"},
-                                        ),
-                                    ],
-                                    style={"textAlign": "center"},
-                                ),
-                                width=4,
-                            ),
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.P(f"Global Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.A(
-                                            f"{global_rank}",
-                                            href=f"/teams?year={performance_year}&sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
-                                            style={"color": "#007BFF", "textDecoration": "underline", "fontWeight": "bold", "fontSize": "1.1rem"},
-                                        ),
-                                    ],
-                                    style={"textAlign": "center"},
-                                ),
-                                width=4,
-                            ),
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                    html.P(f"{state} Rank", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                    html.A(
-                                            f"{state_rank}",
-                                            href=f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
-                                            style={"color": "#007BFF", "textDecoration": "underline", "fontWeight": "bold", "fontSize": "1.1rem"},
-                                        ),
-                                    ],
-                                    style={"textAlign": "center"},
-                                ),
-                                width=4,
-                            ),
-                        ],
-                        style={"marginBottom": "10px"},
-                    ),
-                ),
-                html.Div(
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.P("ACE", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
-                                    ],
-                                    style={"textAlign": "center"},
-                                ),
-                                width=4,
-                            ),
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.P("Win/Loss Ratio", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(win_loss_ratio, style={"fontSize": "1.1rem", "fontWeight": "bold"}),
-                                    ],
-                                    style={"textAlign": "center"},
-                                ),
-                                width=4,
-                            ),
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.P("Avg Match Score", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(avg_score_str, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
-                                    ],
-                                    style={"textAlign": "center"},
-                                ),
-                                width=4,
-                            ),
-                        ],
-                    ),
-                ),
-                html.Div(
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.P("Auto ACE", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(auto_epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
-                                    ],
-                                    style={"textAlign": "center"},
-                                ),
-                                width=4,
-                            ),
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.P("Teleop ACE", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(teleop_epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
-                                    ],
-                                    style={"textAlign": "center"},
-                                ),
-                                width=4,
-                            ),
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.P("Endgame ACE", style={"color": "#666", "marginBottom": "2px", "fontSize": "1.0rem"}),
-                                        html.P(endgame_epa_display, style={"fontSize": "1.1rem", "fontWeight": "bold", "color": "#17A2B8"}),
-                                    ],
-                                    style={"textAlign": "center"},
-                                ),
-                                width=4,
-                            ),
-                        ]
-                    )
-                ),
-            ],
-        ),
-        style={"marginBottom": "15px", "borderRadius": "8px", "boxShadow": "0px 2px 4px rgba(0,0,0,0.1)", "backgroundColor": "#f9f9f9", "padding": "10px"},
+    performance_metrics_card = build_performance_metrics_card(
+        selected_team,
+        performance_year,
+        percentiles_dict
     )
-    
-        # --- Team Events from local database ---
+
     events_data = []
     
     year_keys = [year] if year else list(EVENT_DATABASE.keys())
@@ -3232,14 +3272,15 @@ def team_layout(team_number, year):
             dbc.Container(
                 [
                     team_card,
-                    performance_card,
+                    rank_card,  # ← new
+                    performance_metrics_card,  # ← new
                     html.Hr(),
                     build_recent_events_section(team_key, team_number, epa_data, performance_year),
                     html.H3("Events", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
                     events_table,
                     html.H3("Awards", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
                     awards_table,
-                    #rank_tabs,  # Rank Over Time tabs inserted here
+                    # rank_tabs,
                     blue_banner_section,
                     html.Br(),
                     dbc.Button("Go Back", id="btn-go-back", color="secondary", href="/", external_link=True, 
@@ -3253,6 +3294,7 @@ def team_layout(team_number, year):
             footer,
         ]
     )
+
 
 @app.callback(
     Output("favorite-alert", "children"),
@@ -3617,7 +3659,6 @@ def update_events_tab_content(
                 {"name": "Name", "id": "Name", "presentation": "markdown"},
                 {"name": "Week", "id": "Week"},
                 {"name": "Event Type", "id": "Event Type"},
-                {"name": "District", "id": "District"},
                 {"name": "Max ACE", "id": "Max ACE"},
                 {"name": "Top 8 ACE", "id": "Top 8 ACE"},
                 {"name": "Top 24 ACE", "id": "Top 24 ACE"},
@@ -4939,9 +4980,11 @@ def teams_layout(default_year=2025):
         columns=[
             {"name": "ACE Rank", "id": "epa_rank"},
             {"name": "Team", "id": "team_display", "presentation": "markdown"},
-            {"name": "Trend", "id": "trend"},
+            {"name": "EPA", "id": "epa"},
+            {"name": "×", "id": "mult_symbol"},
             {"name": "Confidence", "id": "confidence"},
-            {"name": "ACE", "id": "epar"},
+            {"name": "=", "id": "equals_symbol"},
+            {"name": "ACE", "id": "ace"},
             {"name": "Auto ACE", "id": "auto_epa"},
             {"name": "Teleop ACE", "id": "teleop_epa"},
             {"name": "Endgame ACE", "id": "endgame_epa"},
@@ -5011,52 +5054,6 @@ def teams_layout(default_year=2025):
             footer,
         ]
     )
-
-def get_epa_styling(percentiles_dict):
-        color_map = [
-            ("99", "#6a1b9a"),   # Deep Purple
-            ("97", "#8e24aa"),   # Medium Purple
-            ("95", "#3949ab"),   # Indigo
-            ("93", "#1565c0"),   # Blue
-            ("91", "#1e88e5"),   # Sky Blue
-            ("89", "#43a047"),   # Medium Green
-            ("85", "#2e7d32"),   # Dark Green
-            ("80", "#c0ca33"),   # Lime
-            ("75", "#f9a825"),   # Yellow
-            ("65", "#ffb300"),   # Dark Yellow
-            ("55", "#fb8c00"),   # Orange
-            ("40", "#e53935"),   # Red
-            ("25", "#b71c1c"),   # Dark Red
-            ("10", "#7b0000"),   # Maroon
-            ("0",  "#4d0000"),   # Deep Maroon
-        ]
-    
-        style_rules = []
-    
-        for col, percentiles in percentiles_dict.items():
-            thresholds = {int(k): v for k, v in percentiles.items()}
-    
-            for i, (lower_str, color) in enumerate(color_map):
-                lower = thresholds.get(int(lower_str), 0)
-                upper = thresholds.get(int(color_map[i - 1][0]), float("inf")) if i > 0 else float("inf")
-    
-                style_rules.append({
-                    "if": {
-                        "filter_query": f"{{{col}}} >= {lower}" + (f" && {{{col}}} < {upper}" if upper < float("inf") else ""),
-                        "column_id": col
-                    },
-                    "backgroundColor": color,
-                    "color": "white",
-                    "fontWeight": "bold",
-                    "borderRadius": "6px",
-                    "padding": "4px 6px",
-                })
-    
-        return style_rules
-
-def compute_percentiles(values):
-    percentiles = ["99", "97", "95", "93", "91", "89", "85", "80", "75", "65", "55", "40", "25", "10", "0"]
-    return {p: np.percentile(values, int(p)) for p in percentiles} if values else {p: 0 for p in percentiles}
 
 @callback(
     [
@@ -5167,7 +5164,7 @@ def load_teams(
     endgame_percentiles = compute_percentiles(extract_valid("endgame_epa"))
     
     percentiles_dict = {
-        "epar": overall_percentiles,
+        "ace": overall_percentiles,
         "auto_epa": auto_percentiles,
         "teleop_epa": teleop_percentiles,
         "endgame_epa": endgame_percentiles,
@@ -5206,9 +5203,9 @@ def load_teams(
         table_rows.append({
             "epa_rank": rank,
             "team_display": f"[{team_num} | {t.get('nickname', 'Unknown')}](/team/{team_num}/{selected_year})",
+            "epa": round(abs(t.get("normal_epa") or 0), 2),
             "confidence": t.get("confidence", 0),
-            "trend": t.get("trend", 0),
-            "epar": round(abs(t.get("epa") or 0), 2),
+            "ace": round(abs(t.get("epa") or 0), 2),
             "auto_epa": round(abs(t.get("auto_epa") or 0), 2),
             "teleop_epa": round(abs(t.get("teleop_epa") or 0), 2),
             "endgame_epa": round(abs(t.get("endgame_epa") or 0), 2),
