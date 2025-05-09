@@ -706,3 +706,18 @@ frc_games = {
                "manual": "Not Available", 
                "summary": "Four contestants vie in a round to see who can collect the highest point value total of tennis balls, return to home base, and defend their cache successfully. Each round is two minutes long. The game is played on a 16-foot X 16-foot square playing arena covered with 1.5 inch layer of whole corn kernels."}
     }
+
+DISTRICT_STATES = {
+    "ONT": ["Ontario"],
+    "FMA": ["Delaware", "New Jersey", "Pennsylvania"],
+    "ISR": ["Israel"],
+    "CHS": ["Maryland", "Virginia", "District of Columbia"],
+    "FIT": ["Texas", "New Mexico"],
+    "PCH": ["Georgia", "South Carolina"],
+    "PNW": ["Washington", "Oregon"],
+    "FIM": ["Michigan"],
+    "FSC": ["South Carolina"],
+    "FNC": ["North Carolina"],
+    "FIN": ["Indiana"],
+    "NE": ["Connecticut", "Massachusetts", "Maine", "New Hampshire", "Vermont"],
+}
