@@ -4,14 +4,8 @@
     }
 
     img:hover {
-        transform: scale(1.02);
+        transform: scale(1.01);
         transition: transform 0.3s ease;
-    }
-
-    button:hover {
-        transform: scale(1.02);
-        transition: transform 0.1s ease;
-        box-shadow: 0px 0px 8px rgba(255, 221, 0, 0.5);
     }
 
     .navbar {

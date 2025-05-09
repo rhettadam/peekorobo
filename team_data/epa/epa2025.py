@@ -16,17 +16,6 @@ TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
 
 API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 
-def get_team_epa_from_db(team_key, year):
-    try:
-        conn = sqlite3.connect('epa_teams.sqlite')
-        cursor = conn.cursor()
-        cursor.execute("SELECT epa FROM epa_history WHERE team_key = ? AND year = ?", (team_key, year))
-        result = cursor.fetchone()
-        conn.close()
-        return result[0] if result else None
-    except Exception:
-        return None
-
 @retry(
     stop=stop_never,
     wait=wait_exponential(multiplier=1, min=0.5, max=5),
