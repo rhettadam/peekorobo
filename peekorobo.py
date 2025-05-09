@@ -5193,7 +5193,7 @@ def load_teams(
         team_num = t.get("team_number")
         record = f"{t.get('wins', 0)} - {t.get('losses', 0)} - {t.get('ties', 0)} - {t.get('dq', 0)}"
         table_rows.append({
-            "epa_rank": {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, rank),
+            "epa_rank": rank,
             "team_display": f"[{team_num} | {t.get('nickname', 'Unknown')}](/team/{team_num}/{selected_year})",
             "confidence": t.get("confidence", 0),
             "trend": t.get("trend", 0),
