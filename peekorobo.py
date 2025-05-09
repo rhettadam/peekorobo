@@ -1576,7 +1576,7 @@ def handle_login(login_clicks, register_clicks, username, password):
             conn.close()
             session["user_id"] = user_id
             session["username"] = username.strip()
-            redirect_url = "/user"
+            redirect_url = "/login"
             return f"✅ Welcome, {username.strip()}!", redirect_url
         else:
             return message, dash.no_update
@@ -2997,7 +2997,25 @@ def team_layout(team_number, year):
     for year_key in year_keys:
         for event_key, event in EVENT_DATABASE.get(year_key, {}).items():
             team_list = EVENT_TEAMS.get(year_key, {}).get(event_key, [])
-            if any(t["tk"] == team_number for t in team_list):  # using team_number now
+            if any(t["tk"] == team_number for t in team_list):
+                # Special case: Einstein (2025cmptx) filter
+                if event_key == "2025cmptx":
+                    # Check if team played matches on Einstein
+                    einstein_matches = [
+                        m for m in EVENT_MATCHES.get(year_key, [])
+                        if m.get("ek") == "2025cmptx" and str(team_number) in (m.get("rt", "") + "," + m.get("bt", ""))
+                    ]
+    
+                    # Check if team won an award at Einstein
+                    einstein_awards = [
+                        aw for aw in EVENTS_AWARDS
+                        if aw["tk"] == team_number and aw["ek"] == "2025cmptx" and aw["y"] == year_key
+                    ]
+    
+                    # Skip Einstein if no matches and no awards
+                    if not einstein_matches and not einstein_awards:
+                        continue
+    
                 participated_events.append((year_key, event_key, event))
     
     # Sort events by start date
@@ -3028,7 +3046,6 @@ def team_layout(team_number, year):
             "start_date": start_date,
             "end_date": end_date,
         })
-    
     events_table = dash_table.DataTable(
         columns=[
             {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
@@ -3044,6 +3061,7 @@ def team_layout(team_number, year):
         style_cell_conditional=[{"if": {"column_id": "event_name"}, "textAlign": "center"}],
         style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
     )
+
     
     # --- Awards Section ---
     team_awards = [
