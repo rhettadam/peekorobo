@@ -350,8 +350,6 @@ def user_layout(_user_id=None, deleted_items=None):
         ]
     )
 
-
-
     profile_edit_form = html.Div(
         id="profile-edit-form",
         hidden=True,
@@ -828,7 +826,7 @@ def user_layout(_user_id=None, deleted_items=None):
                                             html.Ul([
                                                 html.Li([
                                                     html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
-                                                    html.A(user[1], href=f"/user/{user[0]}", style={"textDecoration": "none", "color": "#007bff"})
+                                                    html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
                                                 ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
                                                 for user in following_user_objs[:5]
                                             ], style={
@@ -842,7 +840,7 @@ def user_layout(_user_id=None, deleted_items=None):
                                             html.Ul([
                                                 html.Li([
                                                     html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
-                                                    html.A(user[1], href=f"/user/{user[0]}", style={"textDecoration": "none", "color": "#007bff"})
+                                                    html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
                                                 ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
                                                 for user in following_user_objs[5:]
                                             ], id="following-hidden", style={
@@ -942,6 +940,11 @@ def other_user_layout(username):
     event_keys = [r[0] for r in cur.fetchall()]
     conn.close()
 
+    if color:
+        color = color
+    else:
+        color = "#ffffff"
+        
     text_color = get_contrast_text_color(color)
 
     epa_data = {
@@ -1131,9 +1134,9 @@ def other_user_layout(username):
             html.Div([
                 html.Span(f"Role: {role}", id="profile-role", style={
                     "fontWeight": "500",
-                    "color": "#333"
+                    "color": text_color,
                 }),
-                html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
+                html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
                 html.Span([
                     html.Span("Team: ", style={"color": text_color, "fontWeight": "500"}),
                     html.A(team, href=f"/team/{team}", style={
@@ -1142,26 +1145,26 @@ def other_user_layout(username):
                         "fontWeight": "500"
                     })
                 ], id="profile-team"),
-                html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
+                html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
                 html.Span(f"Followers: {len(followers_json)}", style={
                     "color": text_color,
                     "fontWeight": "500",
                 }),
-                html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
+                html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
                 html.Span(f"Following: {len(following_json)}", style={
                     "color": text_color,
                     "fontWeight": "500",
                 })
             ], style={
                 "fontSize": "0.85rem",
-                "color": "#444",
+                "color": text_color,
                 "marginTop": "6px",
                 "display": "flex",
                 "flexWrap": "wrap"
             }),
             html.Div(bio, id="profile-bio", style={
                 "fontSize": "0.9rem",
-                "color": "#444",
+                "color": text_color,
                 "marginTop": "8px",
                 "whiteSpace": "pre-wrap",
                 "lineHeight": "1.4"
