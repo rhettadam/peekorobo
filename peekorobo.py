@@ -14,6 +14,8 @@ import datetime
 import sqlite3
 import psycopg2
 from urllib.parse import urlparse
+from urllib.parse import parse_qs
+from urllib.parse import urlencode
 import json
 from statistics import mean, pstdev
 import statistics
@@ -22,7 +24,7 @@ import pandas as pd
 
 import plotly.graph_objects as go
 
-from datagather import frc_games,COUNTRIES,STATES,load_data,get_team_avatar,calculate_ranks
+from datagather import frc_games,COUNTRIES,STATES,load_data,get_team_avatar,calculate_ranks,DISTRICT_STATES
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -3313,9 +3315,9 @@ def events_layout(year=2025):
             html.Div(year_dropdown, style={"flex": "0 0 60px", "minWidth": "60px"}),
             html.Div(event_type_dropdown, style={"flex": "1 1 150px", "minWidth": "140px"}),
             html.Div(week_dropdown, style={"flex": "0 0 80px", "minWidth": "80px"}),
-            html.Div(district_dropdown, style={"flex": "1 1 120px", "minWidth": "120px"}),
+            html.Div(district_dropdown, style={"flex": "1 1 80px", "minWidth": "80px"}),
             html.Div(sort_toggle, style={"flex": "1 1 175px", "minWidth": "175px"}),
-            html.Div(search_input, style={"flex": "2 1 130px", "minWidth": "130px"}),
+            html.Div(search_input, style={"flex": "2 1 100px", "minWidth": "100px"}),
         ],
         style={
             "display": "flex",
@@ -3325,7 +3327,6 @@ def events_layout(year=2025):
             "rowGap": "16px",
             "margin": "0 auto",
             "maxWidth": "1000px",
-            "position": "sticky",
             "top": "60px",
             "zIndex": 10,
             "backgroundColor": "transparent",
@@ -3340,61 +3341,296 @@ def events_layout(year=2025):
             dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
                 [
-                    html.H3("Upcoming Events", className="mb-4 mt-4 text-center"),
                     dbc.Row(id="upcoming-events-container", className="justify-content-center"),
-
+    
                     html.Div(id="ongoing-events-wrapper", children=[]),
-
-                    html.H3("All Events", className="mb-4 mt-4 text-center"),
+    
                     filters_row,
-                    html.Div(
-                        id="all-events-container",
-                        className="d-flex flex-wrap justify-content-center",
+                    dbc.Tabs(
+                        id="events-tabs",
+                        active_tab="cards-tab",
                         children=[
-                            html.Div("No events match your filters.", className="text-muted")
-                        ]
+                            dbc.Tab(label="Cards", tab_id="cards-tab"),
+                            dbc.Tab(label="Event Insights", tab_id="table-tab"),
+                        ],
+                        className="mb-4",
                     ),
+                    html.Div(id="events-tab-content"),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-            footer
+            footer,
         ]
     )
 
-    return html.Div(
-        [
-            topbar(),
-            dcc.Store(id="event-favorites-store", storage_type="session"),
-            dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
-            dbc.Container(
-                [
-                    html.H3("Upcoming Events", className="mb-4 mt-4 text-center"),
-                    dbc.Row(id="upcoming-events-container", className="justify-content-center"),
+@app.callback(
+    [
+        Output("events-tab-content", "children"),
+        Output("district-dropdown", "options"),
+    ],
+    [
+        Input("events-tabs", "active_tab"),
+        Input("year-dropdown", "value"),
+        Input("event-type-dropdown", "value"),
+        Input("week-dropdown", "value"),
+        Input("search-input", "value"),
+        Input("district-dropdown", "value"),
+        Input("sort-mode-toggle", "value"),
+        Input("event-favorites-store", "data"),
+    ],
+)
+def update_events_tab_content(
+    active_tab,
+    selected_year,
+    selected_event_types,
+    selected_week,
+    search_query,
+    selected_district,
+    sort_mode,
+    store_data,
+):
+    user_favorites = set(store_data or [])
+    events_data = list(EVENT_DATABASE.get(selected_year, {}).values())
+    if not events_data:
+        return html.Div("No events available."), []
 
-                    html.Div(
-                        id="ongoing-events-wrapper",
-                        children=[],
-                    ),
+    if not isinstance(selected_event_types, list):
+        selected_event_types = [selected_event_types]
 
-                    html.H3("All Events", className="mb-4 mt-4 text-center"),
-                    filters_row,
-                    html.Div(
-                        id="all-events-container",
-                        className="d-flex flex-wrap justify-content-center"
-                    ),
-                ],
-                style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
-            ),
-            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-            footer
+    def extract_district_key(event_name):
+        parts = event_name.split()
+        if "District" in parts:
+            idx = parts.index("District")
+            return parts[idx - 1] if idx > 0 else None
+        return None
+
+    district_keys = sorted(set(
+        extract_district_key(ev["n"]) for ev in events_data
+        if "District" in ev.get("n", "")
+    ))
+
+    district_options = [{"label": "All", "value": "all"}] + [
+        {"label": dk, "value": dk} for dk in district_keys if dk
+    ]
+
+    if selected_district and selected_district != "all":
+        events_data = [
+            ev for ev in events_data
+            if extract_district_key(ev.get("n", "")) == selected_district
         ]
-    )
 
+    if "all" not in selected_event_types:
+        filtered = []
+        for et in selected_event_types:
+            if et == "season":
+                filtered.extend([ev for ev in events_data if ev.get("et") not in [99, 100]])
+            elif et == "offseason":
+                filtered.extend([ev for ev in events_data if ev.get("et") in [99, 100]])
+            elif et == "regional":
+                filtered.extend([ev for ev in events_data if "regional" in (ev.get("et") or "").lower()])
+            elif et == "district":
+                filtered.extend([ev for ev in events_data if "district" in (ev.get("et") or "").lower()])
+            elif et == "championship":
+                filtered.extend([ev for ev in events_data if "championship" in (ev.get("et") or "").lower()])
+        events_data = list({ev["k"]: ev for ev in filtered}.values())
+
+    def parse_date(d):
+        try:
+            return datetime.datetime.strptime(d, "%Y-%m-%d").date()
+        except:
+            return datetime.date(1900, 1, 1)
+
+    def get_week_number(start_date):
+        WEEK_RANGES = [
+            (datetime.date(2025, 2, 26), datetime.date(2025, 3, 2)),   # Week 1
+            (datetime.date(2025, 3, 5),  datetime.date(2025, 3, 9)),   # Week 2
+            (datetime.date(2025, 3, 12), datetime.date(2025, 3, 17)),  # Week 3
+            (datetime.date(2025, 3, 19), datetime.date(2025, 3, 23)),  # Week 4
+            (datetime.date(2025, 3, 25), datetime.date(2025, 3, 30)),  # Week 5
+            (datetime.date(2025, 4, 2),  datetime.date(2025, 4, 6)),   # Week 6
+        ]
+        
+        if start_date < WEEK_RANGES[0][0]:
+            return 0
+        elif start_date > WEEK_RANGES[-1][1]:
+            return 7
+    
+        for i, (start, end) in enumerate(WEEK_RANGES):
+            if start <= start_date <= end:
+                return i + 1
+    
+        return "N/A"
+
+
+    def compute_event_insights_from_data(EVENT_TEAMS, EVENT_DATABASE, TEAM_DATABASE, selected_year, filtered_event_keys=None):
+        rows = []
+    
+        teams_by_event = EVENT_TEAMS.get(selected_year, {})
+        events = EVENT_DATABASE.get(selected_year, {})
+    
+        for event_key, team_entries in teams_by_event.items():
+            if filtered_event_keys and event_key not in filtered_event_keys:
+                continue
+    
+            event = events.get(event_key)
+            if not event:
+                continue
+    
+            full_name = event.get("n", "")
+            name = full_name.split(" presented by")[0].strip()
+
+            try:
+                start_date = datetime.datetime.strptime(event.get("sd", ""), "%Y-%m-%d").date()
+                week = get_week_number(start_date)
+            except Exception:
+                week = "N/A"
+    
+            epa_values = []
+            for t in team_entries:
+                team_number = t["tk"]
+                team_data = TEAM_DATABASE.get(selected_year, {}).get(team_number)
+                if team_data and team_data.get("epa") is not None:
+                    epa_values.append(team_data["epa"])
+    
+            if not epa_values:
+                continue
+    
+            epa_values.sort(reverse=True)
+            max_epa = max(epa_values)
+            top_8 = statistics.mean(epa_values[:8]) if len(epa_values) >= 8 else statistics.mean(epa_values)
+            top_24 = statistics.mean(epa_values[:24]) if len(epa_values) >= 24 else statistics.mean(epa_values)
+            mean_epa = statistics.median(epa_values)
+    
+            rows.append({
+                "Name": f"[{name}](/event/{event_key})",
+                "Week": week,
+                "Event Type": event.get("et", "N/A"),
+                "District": extract_district_key(name) or "N/A",
+                "Max ACE": round(max_epa, 2),
+                "Top 8 ACE": round(top_8, 2),
+                "Top 24 ACE": round(top_24, 2),
+            })
+    
+        return pd.DataFrame(rows).sort_values(by="Top 8 ACE", ascending=False)
+    
+
+    for ev in events_data:
+        ev["_start_date_obj"] = parse_date(ev.get("sd", "1900-01-01"))
+        ev["_end_date_obj"] = parse_date(ev.get("ed", "1900-01-01"))
+        ev["w"] = get_week_number(ev["_start_date_obj"])
+
+    if selected_week != "all":
+        events_data = [ev for ev in events_data if ev.get("w") == selected_week]
+
+    if search_query:
+        q = search_query.lower()
+        events_data = [
+            ev for ev in events_data
+            if q in ev.get("n", "").lower() or q in ev.get("c", "").lower()
+        ]
+
+    if sort_mode == "time":
+        events_data.sort(key=lambda x: x["_start_date_obj"])
+    elif sort_mode == "alpha":
+        events_data.sort(key=lambda x: x.get("n", "").lower())
+
+    if active_tab == "table-tab":
+        df = compute_event_insights_from_data(EVENT_TEAMS, EVENT_DATABASE, TEAM_DATABASE, selected_year)
+    
+        # Sort by "Top 8 EPA"
+        df = df.sort_values(by="Top 8 ACE", ascending=False).reset_index(drop=True)
+    
+        # Ensure no NaNs interfere with percentile calculations
+        percentiles_map = {}
+        for col in ["Max ACE", "Top 8 ACE", "Top 24 ACE"]:
+            values = df[col].dropna().values
+            percentiles_map[col] = np.percentile(values, [99, 95, 90, 75, 50, 25])
+    
+        # Define color scale by percentile
+        def get_color(value, thresholds):
+            if value >= thresholds[0]: return "#6a1b9a"  # Purple
+            if value >= thresholds[1]: return "#1565c0"  # Blue
+            if value >= thresholds[2]: return "#2e7d32"  # Green
+            if value >= thresholds[3]: return "#f9a825"  # Yellow
+            if value >= thresholds[4]: return "#ef6c00"  # Orange
+            if value >= thresholds[5]: return "#c62828"  # Red
+            return "#4e342e"                             # Brown
+    
+        # Create conditional styling for each EPA cell
+        style_data_conditional = []
+        for i, row in df.iterrows():
+            for col in ["Max ACE", "Top 8 ACE", "Top 24 ACE"]:
+                color = get_color(row[col], percentiles_map[col])
+                style_data_conditional.append({
+                    "if": {"row_index": i, "column_id": col},
+                    "backgroundColor": color,
+                    "color": "white",
+                    "fontWeight": "bold",
+                    "borderRadius": "6px",
+                })
+    
+        return dash_table.DataTable(
+            id="event-insights-table",
+            columns=[
+                {"name": "Name", "id": "Name", "presentation": "markdown"},
+                {"name": "Week", "id": "Week"},
+                {"name": "Event Type", "id": "Event Type"},
+                {"name": "District", "id": "District"},
+                {"name": "Max ACE", "id": "Max ACE"},
+                {"name": "Top 8 ACE", "id": "Top 8 ACE"},
+                {"name": "Top 24 ACE", "id": "Top 24 ACE"},
+            ],
+            data=df.to_dict("records"),
+            style_table={
+                "overflowX": "auto",
+                "borderRadius": "10px",
+                "boxShadow": "0 2px 10px rgba(0,0,0,0.08)",
+            },
+            style_cell={
+                "textAlign": "center",
+                "padding": "10px",
+                "fontFamily": "system-ui",
+                "fontSize": "14px",
+            },
+            style_header={
+                "backgroundColor": "#f1f3f4",
+                "fontWeight": "600",
+                "borderBottom": "2px solid #ccc",
+            },
+            style_data_conditional=style_data_conditional,
+            style_as_list_view=True,
+        ), district_options
+
+
+    # Default: cards tab
+    today = datetime.date.today()
+    upcoming = [ev for ev in events_data if ev["_start_date_obj"] > today]
+    ongoing = [ev for ev in events_data if ev["_start_date_obj"] <= today <= ev["_end_date_obj"]]
+
+    up_cards = [dbc.Col(create_event_card(ev, favorited=(ev["k"] in user_favorites)), width="auto") for ev in upcoming[:5]]
+
+    ongoing_section = html.Div([
+        html.H3("Ongoing Events", className="mb-4 mt-4 text-center"),
+        dbc.Row([dbc.Col(create_event_card(ev, favorited=(ev["k"] in user_favorites)), width="auto") for ev in ongoing], className="justify-content-center"),
+    ]) if ongoing else html.Div()
+
+    all_event_cards = [create_event_card(ev, favorited=(ev["k"] in user_favorites)) for ev in events_data]
+
+        # Conditionally render Upcoming Events section
+    upcoming_section = html.Div([
+        html.H3("Upcoming Events", className="mb-4 mt-4 text-center"),
+        dbc.Row(up_cards, className="justify-content-center"),
+    ]) if upcoming else html.Div()
+    
+    return html.Div([
+        upcoming_section,
+        ongoing_section,
+        html.Div(all_event_cards, className="d-flex flex-wrap justify-content-center"),
+    ]), district_options
+    
 
 def create_event_card(event, favorited=False):
     event_key = event["k"]
@@ -3434,7 +3670,6 @@ def create_event_card(event, favorited=False):
         className="mb-4 shadow",
         style={"width": "18rem", "height": "22rem", "margin": "10px"},
     )
-
 
 @app.callback(
     [
@@ -3506,117 +3741,7 @@ def get_week_number(start_date):
             return i
     return None
 
-
-@app.callback(
-    [
-        Output("upcoming-events-container", "children"),
-        Output("ongoing-events-wrapper", "children"),
-        Output("all-events-container", "children"),
-        Output("district-dropdown", "options"),
-    ],
-    [
-        Input("year-dropdown", "value"),
-        Input("event-type-dropdown", "value"),
-        Input("week-dropdown", "value"),
-        Input("search-input", "value"),
-        Input("district-dropdown", "value"),
-        Input("sort-mode-toggle", "value"),
-        Input("event-favorites-store", "data"),
-    ],
-)
-def update_events_table(selected_year, selected_event_types, selected_week, search_query, selected_district, sort_mode, store_data):
-    user_favorites = set(store_data or [])
-
-    events_data = list(EVENT_DATABASE.get(selected_year, {}).values())
-    if not events_data:
-        return [], [], [], []
-
-    if not isinstance(selected_event_types, list):
-        selected_event_types = [selected_event_types]
-
-    def extract_district_key(event_name):
-        parts = event_name.split()
-        if "District" in parts:
-            idx = parts.index("District")
-            return parts[idx - 1] if idx > 0 else None
-        return None
-
-    district_keys = sorted(set(
-        extract_district_key(ev["n"]) for ev in events_data
-        if "District" in ev.get("n", "")
-    ))
-
-    district_options = [{"label": "All", "value": "all"}] + [
-        {"label": dk, "value": dk} for dk in district_keys if dk
-    ]
-
-    if selected_district and selected_district != "all":
-        events_data = [
-            ev for ev in events_data
-            if extract_district_key(ev.get("n", "")) == selected_district
-        ]
-
-    if "all" not in selected_event_types:
-        filtered = []
-        for et in selected_event_types:
-            if et == "season":
-                filtered.extend([ev for ev in events_data if ev.get("et") not in [99, 100]])
-            elif et == "offseason":
-                filtered.extend([ev for ev in events_data if ev.get("et") in [99, 100]])
-            elif et == "regional":
-                filtered.extend([ev for ev in events_data if "regional" in (ev.get("et") or "").lower()])
-            elif et == "district":
-                filtered.extend([ev for ev in events_data if "district" in (ev.get("et") or "").lower()])
-            elif et == "championship":
-                filtered.extend([ev for ev in events_data if "championship" in (ev.get("et") or "").lower()])
-        events_data = list({ev["k"]: ev for ev in filtered}.values())
-
-    def parse_date(d):
-        try:
-            return datetime.datetime.strptime(d, "%Y-%m-%d").date()
-        except:
-            return datetime.date(1900, 1, 1)
-
-    for ev in events_data:
-        ev["_start_date_obj"] = parse_date(ev.get("sd", "1900-01-01"))
-        ev["_end_date_obj"] = parse_date(ev.get("ed", "1900-01-01"))
-        ev["w"] = get_week_number(ev["_start_date_obj"])
-
-    if selected_week != "all":
-        events_data = [ev for ev in events_data if ev.get("w") == selected_week]
-
-    if search_query:
-        q = search_query.lower()
-        events_data = [
-            ev for ev in events_data
-            if q in ev.get("n", "").lower() or q in ev.get("c", "").lower()
-        ]
-
-    if sort_mode == "time":
-        events_data.sort(key=lambda x: x["_start_date_obj"])
-    elif sort_mode == "alpha":
-        events_data.sort(key=lambda x: x.get("n", "").lower())
-
-    today = datetime.date.today()
-    upcoming = [ev for ev in events_data if ev["_start_date_obj"] > today]
-    ongoing = [ev for ev in events_data if ev["_start_date_obj"] <= today <= ev["_end_date_obj"]]
-
-    if ongoing:
-        ongoing_layout = html.Div([
-            html.H3("Ongoing Events", className="mb-4 mt-4 text-center"),
-            dbc.Row([dbc.Col(create_event_card(ev, favorited=(ev["k"] in user_favorites)), width="auto") for ev in ongoing], className="justify-content-center"),
-        ])
-    else:
-        ongoing_layout = html.Div()
-
-    up_cards = [dbc.Col(create_event_card(ev, favorited=(ev["k"] in user_favorites)), width="auto") for ev in upcoming[:5]]
-    upcoming_layout = dbc.Row(up_cards, className="justify-content-center")
-
-    all_event_cards = [create_event_card(ev, favorited=(ev["k"] in user_favorites)) for ev in events_data]
-
-    return upcoming_layout, ongoing_layout, all_event_cards, district_options
-
-def load_teams_and_compute_epa_ranks(year, use_weighted_ace=False):
+def load_teams_and_compute_epa_ranks(year):
     epa_info = {}
 
     year_data = TEAM_DATABASE.get(year)
@@ -4635,6 +4760,7 @@ def teams_layout(default_year=2025):
         value=default_year,
         clearable=False,
         placeholder="Select Year",
+        style={"width": "100%"},
     )
 
     country_dropdown = dcc.Dropdown(
@@ -4643,6 +4769,7 @@ def teams_layout(default_year=2025):
         value="All",
         clearable=False,
         placeholder="Select Country",
+        style={"width": "100%"},
     )
 
     state_dropdown = dcc.Dropdown(
@@ -4651,20 +4778,22 @@ def teams_layout(default_year=2025):
         value="All",
         clearable=False,
         placeholder="Select State/Province",
+        style={"width": "100%"},
     )
 
-    sort_dropdown = dcc.Dropdown(
-        id="sort-by-dropdown",
+    district_dropdown = dcc.Dropdown(
+        id="district-dropdown",
         options=[
-            {"label": "Total ACE", "value": "epa"},
-            {"label": "Auto ACE", "value": "auto_epa"},
-            {"label": "Teleop ACE", "value": "teleop_epa"},
-            {"label": "Endgame ACE", "value": "endgame_epa"},
+            {"label": "All Districts", "value": "All"},
+            *[
+                {"label": acronym, "value": acronym}
+                for acronym in DISTRICT_STATES.keys()
+            ]
         ],
-        value="epa",
+        value="All",
         clearable=False,
-        placeholder="ACE",
-        style={"width": "180px"}
+        placeholder="Select District",
+        style={"width": "100%"},
     )
 
     x_axis_dropdown = dcc.Dropdown(
@@ -4717,26 +4846,26 @@ def teams_layout(default_year=2025):
         placeholder="Search",
         type="text",
         className="mb-3",
+        style={"width": "100%"},
     )
 
     filters_row = html.Div(
         dbc.Row(
             [
-                dbc.Col(teams_year_dropdown, xs=6, sm=4, md=2),
-                dbc.Col(country_dropdown, xs=6, sm=4, md=2),
-                dbc.Col(state_dropdown, xs=6, sm=4, md=2),
+                dbc.Col(teams_year_dropdown, xs=4, sm=3, md=2),
+                dbc.Col(country_dropdown, xs=4, sm=3, md=2),
+                dbc.Col(state_dropdown, xs=4, sm=3, md=2),
+                dbc.Col(district_dropdown, xs=4, sm=3, md=2),
                 dbc.Col(search_input, xs=6, sm=4, md=3),
-                dbc.Col(sort_dropdown, xs=6, sm=4, md=2),
             ],
-            className="gx-2 gy-2 justify-content-center",  # tighter gaps
+            className="gx-2 gy-2 justify-content-center",
             style={"margin": "0 auto", "maxWidth": "1000px"},
         ),
         style={
-            "position": "sticky",
             "top": "60px",
             "zIndex": 10,
-            "backgroundColor": "transparent",  
-            "padding": "6px 8px",  # less vertical padding
+            "backgroundColor": "transparent",
+            "padding": "6px 8px",
         }
     )
 
@@ -4817,8 +4946,6 @@ def teams_layout(default_year=2025):
         ]
     )
 
-from urllib.parse import urlencode
-
 @callback(
     [
         Output("teams-table", "data"),
@@ -4832,68 +4959,79 @@ from urllib.parse import urlencode
         Output("teams-url", "search"),
     ],
     [
+        Input("district-dropdown", "value"),
         Input("teams-year-dropdown", "value"),
         Input("country-dropdown", "value"),
         Input("state-dropdown", "value"),
         Input("search-bar", "value"),
         Input("teams-tabs", "active_tab"),
-        Input("sort-by-dropdown", "value"),
         Input("x-axis-dropdown", "value"),
         Input("y-axis-dropdown", "value"),
     ],
     prevent_initial_call="initial_duplicate",
 )
-def load_teams(selected_year, selected_country, selected_state, search_query, active_tab, sort_by, x_axis, y_axis):
-    from urllib.parse import urlencode
-
+def load_teams(
+    selected_district,
+    selected_year,
+    selected_country,
+    selected_state,
+    search_query,
+    active_tab,
+    x_axis,
+    y_axis,
+):
     default_values = {
         "year": 2025,
         "country": "All",
         "state": "All",
         "search": "",
-        "sort_by": "weighted_ace",
         "x": "epa",
         "y": "auto_epa",
         "tab": "table-tab",
     }
-    
+
     params = {
         "year": selected_year,
         "country": selected_country,
         "state": selected_state,
         "search": search_query,
-        "sort_by": sort_by,
         "x": x_axis,
         "y": y_axis,
         "tab": active_tab,
+        "district": selected_district,
     }
-    
+
     query_string = "?" + urlencode({
         k: v for k, v in params.items()
-        if v not in (None, "", "All") and str(v) != str(default_values[k])
+        if v not in (None, "", "All") and str(v) != str(default_values.get(k, ""))
     })
-    
-    all_teams, epa_ranks = load_teams_and_compute_epa_ranks(selected_year)
 
+    all_teams, epa_ranks = load_teams_and_compute_epa_ranks(selected_year)
     teams_data = all_teams.copy()
 
     if not teams_data:
-        return (
-            [],  # teams-table
-            [{"label": "All States", "value": "All"}],  # state-dropdown
-            [],  # top-teams-container
-            {"display": "block"},  # table style
-            [],  # avatar gallery children
-            {"display": "none"},  # avatar gallery style
-            go.Figure(),  # bubble-map figure
-            {"display": "none"},  # bubble-map style
-            query_string  # teams-url search
-        )
+        return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string
 
     if selected_country and selected_country != "All":
         teams_data = [t for t in teams_data if (t.get("country") or "").lower() == selected_country.lower()]
-    if selected_state and selected_state != "All":
+
+    if selected_district and selected_district != "All":
+        if selected_district == "ISR":
+            teams_data = [
+                t for t in teams_data
+                if (t.get("country") or "").lower() == "israel"
+            ]
+        else:
+            allowed_states = [s.lower() for s in DISTRICT_STATES.get(selected_district, [])]
+            teams_data = [
+                t for t in teams_data
+                if (t.get("state_prov") or "").lower() in allowed_states
+            ]
+    
+
+    elif selected_state and selected_state != "All":
         teams_data = [t for t in teams_data if (t.get("state_prov") or "").lower() == selected_state.lower()]
+
     if search_query:
         q = search_query.lower()
         teams_data = [
@@ -4903,14 +5041,7 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
             or q in t.get("city", "").lower()
         ]
 
-    if sort_by == "auto_epa":
-        teams_data.sort(key=lambda t: t.get("auto_epa") or 0, reverse=True)
-    elif sort_by == "teleop_epa":
-        teams_data.sort(key=lambda t: t.get("teleop_epa") or 0, reverse=True)
-    elif sort_by == "endgame_epa":
-        teams_data.sort(key=lambda t: t.get("endgame_epa") or 0, reverse=True)
-    else:
-        teams_data.sort(key=lambda t: t.get("weighted_ace") or 0, reverse=True)
+    teams_data.sort(key=lambda t: t.get("weighted_ace") or 0, reverse=True)
 
     def compute_percentiles(values):
         return {p: np.percentile(values, int(p)) for p in ["99", "95", "90", "75", "50", "25"]} if values else {p: 0 for p in ["99", "95", "90", "75", "50", "25"]}
@@ -4980,9 +5111,9 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
             "padding": "1rem",
         }
     )
-    
+
+    # Avatars Tab
     if active_tab == "avatars-tab":
-        table_style, avatar_style, map_style = {"display": "none"}, {"display": "flex"}, {"display": "none"}
         avatars = []
         for t in teams_data:
             team_number = t.get("team_number")
@@ -4997,8 +5128,9 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
                     href=f"/team/{team_number}/{selected_year}",
                     style={"display": "inline-block"}
                 ))
-        return table_rows, state_options, top_teams_layout, table_style, avatars, avatar_style, go.Figure(), map_style, query_string
+        return table_rows, state_options, top_teams_layout, {"display": "none"}, avatars, {"display": "flex"}, go.Figure(), {"display": "none"}, query_string
 
+    # Bubble Chart Tab
     elif active_tab == "bubble-map-tab":
         chart_data = []
         for t in teams_data:
@@ -5056,25 +5188,22 @@ def load_teams(selected_year, selected_country, selected_state, search_query, ac
             showlegend=False,
         )
         return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, query_string
-        
-    # Default to table tab
-    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string
 
-from urllib.parse import parse_qs
+    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string
 
 @callback(
     Output("teams-year-dropdown", "value"),
     Output("country-dropdown", "value"),
     Output("state-dropdown", "value"),
-    Output("sort-by-dropdown", "value"),
+    Output("district-dropdown", "value"),
     Output("x-axis-dropdown", "value"),
     Output("y-axis-dropdown", "value"),
-    Input("teams-url", "href"),  # << use .href or .pathname to break the loop
+    Input("teams-url", "href"),
     prevent_initial_call=True,
 )
 def apply_url_filters(href):
     if not href or "?" not in href:
-        return 2025, "All", "All", "epa", "teleop_epa", "auto+endgame"
+        return 2025, "All", "All", "All", "epa", "teleop_epa"
 
     query = href.split("?", 1)[1]
     params = parse_qs(query)
@@ -5086,7 +5215,7 @@ def apply_url_filters(href):
         int(get_param("year", 2025)),
         get_param("country", "All"),
         get_param("state", "All"),
-        get_param("sort_by", "epa"),
+        get_param("district", "All"),
         get_param("x", "teleop_epa"),
         get_param("y", "auto+endgame"),
     )
