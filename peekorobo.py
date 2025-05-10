@@ -188,9 +188,9 @@ def universal_profile_icon_or_toast():
         src=f"/assets/avatars/{avatar_key}",
         style={
             "position": "fixed",
-            "bottom": "20px",
-            "right": "20px",
-            "height": "60px",
+            "bottom": "10px",
+            "right": "10px",
+            "height": "45px",
             "width": "auto",           # ✅ Let width adjust naturally
             "cursor": "pointer",
             "zIndex": 9999,
