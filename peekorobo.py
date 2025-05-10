@@ -758,7 +758,7 @@ def user_layout(_user_id=None, deleted_items=None):
             year = 2025
             # Check for matches
             played_matches = any(
-                str(team_number) in (m.get("rt", "") + "," + m.get("bt", ""))
+                str(team_number) in m.get("rt", "").split(",") or str(team_number) in m.get("bt", "").split(",")
                 for m in EVENT_MATCHES.get(year, [])
                 if m.get("ek") == "2025cmptx"
             )
@@ -2235,9 +2235,12 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
             # Check if they played matches at Einstein
             einstein_matches = [
                 m for m in EVENT_MATCHES.get(year, [])
-                if m.get("ek") == "2025cmptx" and str(team_number) in (m.get("rt", "") + "," + m.get("bt", ""))
+                if m.get("ek") == "2025cmptx" and (
+                    str(team_number) in m.get("rt", "").split(",") or
+                    str(team_number) in m.get("bt", "").split(",")
+                )
             ]
-    
+
             # Check if they earned an award at Einstein
             einstein_awards = [
                 a for a in EVENTS_AWARDS
@@ -2307,7 +2310,10 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
         ], style={"marginBottom": "10px"})
 
         matches = [m for m in EVENT_MATCHES.get(year, []) if m.get("ek") == event_key]
-        matches = [m for m in matches if str(team_number) in (m.get("rt") or "") or str(team_number) in (m.get("bt") or "")]
+        matches = [
+            m for m in matches
+            if str(team_number) in m.get("rt", "").split(",") or str(team_number) in m.get("bt", "").split(",")
+        ]
 
         def build_match_rows(matches):
             rows = []
@@ -3086,8 +3092,11 @@ def team_layout(team_number, year):
                 if event_key == "2025cmptx":
                     # Check if team played matches on Einstein
                     einstein_matches = [
-                        m for m in EVENT_MATCHES.get(year_key, [])
-                        if m.get("ek") == "2025cmptx" and str(team_number) in (m.get("rt", "") + "," + m.get("bt", ""))
+                        m for m in EVENT_MATCHES.get(year, [])
+                        if m.get("ek") == "2025cmptx" and (
+                            str(team_number) in m.get("rt", "").split(",") or
+                            str(team_number) in m.get("bt", "").split(",")
+                        )
                     ]
     
                     # Check if team won an award at Einstein
@@ -4371,8 +4380,8 @@ def update_matches_table(selected_team, event_matches, epa_data):
     if selected_team and selected_team != "ALL":
         event_matches = [
             m for m in event_matches
-            if selected_team in (m.get("rt", "") + "," + m.get("bt", ""))
-        ]
+            if selected_team in m.get("rt", "").split(",") or selected_team in m.get("bt", "").split(",")
+        ] 
 
     # 2) Sort and separate by comp level
     comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
