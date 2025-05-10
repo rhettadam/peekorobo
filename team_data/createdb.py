@@ -51,40 +51,44 @@ def update_2025_epa_from_json():
     )
     """)
 
-    # Delete existing 2025 entries to avoid duplication
-    cur.execute("DELETE FROM epa_history WHERE year = ?", (year,))
+    try:
+        cur.execute("BEGIN TRANSACTION;")
+        cur.execute("DELETE FROM epa_history WHERE year = ?", (year,))
 
-    for team in teams:
-        cur.execute("""
-        INSERT OR REPLACE INTO epa_history (
-            year, team_number, nickname, city, state_prov, country, website,
-            normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-            consistency, average_match_score, wins, losses
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            year,
-            team.get("team_number"),
-            team.get("nickname"),
-            team.get("city"),
-            team.get("state_prov"),
-            team.get("country"),
-            team.get("website"),
-            team.get("normal_epa"),
-            team.get("epa"),
-            team.get("confidence"),
-            team.get("auto_epa"),
-            team.get("teleop_epa"),
-            team.get("endgame_epa"),
-            team.get("consistency"),
-            team.get("average_match_score"),
-            team.get("wins"),
-            team.get("losses"),
-        ))
+        for team in teams:
+            cur.execute("""
+            INSERT OR REPLACE INTO epa_history (
+                year, team_number, nickname, city, state_prov, country, website,
+                normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+                consistency, average_match_score, wins, losses
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                year,
+                team.get("team_number"),
+                team.get("nickname"),
+                team.get("city"),
+                team.get("state_prov"),
+                team.get("country"),
+                team.get("website"),
+                team.get("normal_epa"),
+                team.get("ace"),  # renamed from "epa" to "ace"
+                team.get("confidence"),
+                team.get("auto_ace"),
+                team.get("teleop_ace"),
+                team.get("endgame_ace"),
+                team.get("consistency"),
+                team.get("average_match_score"),
+                team.get("wins"),
+                team.get("losses"),
+            ))
 
-    conn.commit()
-    conn.close()
-    print(f"✅ Successfully updated {len(teams)} entries for 2025 in {db_file}")
+        conn.commit()
+        print(f"✅ Successfully updated {len(teams)} entries for 2025 in {db_file}")
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Error during database update: {e}")
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     update_2025_epa_from_json()
-
