@@ -30,7 +30,7 @@ def load_veteran_teams():
     try:
         conn = sqlite3.connect("epa_teams.sqlite")
         cursor = conn.cursor()
-        cursor.execute("SELECT team_number FROM epa_history WHERE year = 2023")
+        cursor.execute("SELECT team_number FROM epa_history WHERE year = 2024")
         rows = cursor.fetchall()
         conn.close()
         return {f"frc{row[0]}" for row in rows if isinstance(row[0], int)}
@@ -69,6 +69,16 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
     carry_scores = []
 
     for match in matches:
+
+        event_key = match.get("event_key", "")
+        is_worlds = event_key in {
+            "2025hop", "2025gal", "2025new", "2025arc",
+            "2025dal", "2025cur", "2025mil", "2025joh"
+        }
+
+        # ↓ Optional: apply multiplier to importance or decay
+        world_champ_penalty = 0.7 if is_worlds else 1.0  # Downweight champs matches
+        
         # Skip matches where the team did not play
         if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
             continue
@@ -108,7 +118,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         net = breakdown.get("netAlgaeCount", 0)
         processor = breakdown.get("wallAlgaeCount", 0)
 
-        estimated_teleop = (bot * 3 + mid * 4 + top * 5 + trough * 2 + net * 4 + processor * 6)
+        estimated_teleop = (bot * 3 + mid * 4 + top * 5 + trough * 2 + net * 4 + processor * 2.5)
         actual_teleop = estimated_teleop / team_count
         actual_overall = actual_auto + actual_teleop + actual_endgame
         opponent_score = match["alliances"][opponent_alliance]["score"] / team_count
@@ -121,7 +131,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         match_importance = importance.get(match.get("comp_level", "qm"), 1.0)
         total_matches = sum(1 for m in matches if team_key in m["alliances"]["red"]["team_keys"] or team_key in m["alliances"]["blue"]["team_keys"])
 
-        decay = min(1.0, (match_count / total_matches) ** 2)
+        decay = world_champ_penalty * (match_count / len(matches)) ** 2
 
         others = [k for k in team_keys if k != team_key]
         if others:
@@ -147,7 +157,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         else:
             K = 0.3
 
-        K *= match_importance
+        K *= match_weight * world_champ_penalty
 
         delta_auto = decay * K * (actual_auto - auto_epa)
         delta_teleop = decay * K * (actual_teleop - teleop_epa)
@@ -169,18 +179,25 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         
     is_veteran = veteran_teams and team_key in veteran_teams
     teammate_avg_epa = statistics.mean(teammate_epas) if teammate_epas else overall_epa
-    carry_score = min(1.25, statistics.mean(carry_scores)) if carry_scores else 1.0
-    dominance_avg = min(1., statistics.mean(dominance_scores))
+    carry = min(1.25, statistics.mean(carry_scores)) if carry_scores else 1.0
+    dominance = min(1., statistics.mean(dominance_scores))
+    win_rate = wins / match_count if match_count else 0
+    
+    expected_margin = dominance
+    actual_margin = (wins - losses) / match_count if match_count else 0
+    
+    # Let dominance override weak records with diminishing punishment
+    record_alignment_score = 1 / (1 + math.exp(10 * (actual_margin - dominance)))
 
     average_match_score = total_score / match_count if match_count else 0
 
     raw_confidence = (
-        0.3 * consistency +
+        0.25 * consistency +
         0.1 * (1.0 if is_veteran else 0.6) +
-        0.3  * carry_score +
-        0.3  * dominance_avg
+        0.25  * carry +
+        0.25  * dominance + 
+        0.15 * record_alignment_score
     )
-
     confidence = min(1.0, raw_confidence)
 
     actual_epa = overall_epa * confidence
@@ -214,11 +231,11 @@ def fetch_team_components(team, year, team_epa_cache=None, veteran_teams=None):
         "country": team.get("country"),
         "website": team.get("website", "N/A"),
         "normal_epa": components["overall"] if components else None,
-        "epa": components["actual_epa"] if components else None,
+        "ace": components["actual_epa"] if components else None,
         "confidence": components["confidence"] if components else None,
-        "auto_epa": components["auto"] if components else None,
-        "teleop_epa": components["teleop"] if components else None,
-        "endgame_epa": components["endgame"] if components else None,
+        "auto_ace": components["auto"] if components else None,
+        "teleop_ace": components["teleop"] if components else None,
+        "endgame_ace": components["endgame"] if components else None,
         "consistency": components["consistency"] if components else None,
         "average_match_score": components["average_match_score"] if components else None,
         "wins": components["wins"] if components else None,
