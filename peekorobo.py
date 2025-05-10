@@ -4908,6 +4908,13 @@ def teams_layout(default_year=2025):
         placeholder="Select District",
         style={"width": "100%"},
     )
+    percentile_toggle = dbc.Checklist(
+        options=[{"label": "Filter Percentiles", "value": "filtered"}],
+        value=[],  # Empty means global by default
+        id="percentile-toggle",
+        switch=True,
+        style={"marginTop": "0px"}
+    )
 
     x_axis_dropdown = dcc.Dropdown(
         id="x-axis-dropdown",
@@ -4965,11 +4972,12 @@ def teams_layout(default_year=2025):
     filters_row = html.Div(
         dbc.Row(
             [
-                dbc.Col(teams_year_dropdown, xs=4, sm=3, md=2),
-                dbc.Col(country_dropdown, xs=4, sm=3, md=2),
-                dbc.Col(state_dropdown, xs=4, sm=3, md=2),
-                dbc.Col(district_dropdown, xs=4, sm=3, md=2),
-                dbc.Col(search_input, xs=6, sm=4, md=3),
+                dbc.Col(teams_year_dropdown, sm=2),
+                dbc.Col(country_dropdown, sm=2),
+                dbc.Col(state_dropdown, sm=2),
+                dbc.Col(district_dropdown, sm=2),
+                dbc.Col(percentile_toggle, sm=2),
+                dbc.Col(search_input, sm=2),
             ],
             className="gx-2 gy-2 justify-content-center",
             style={"margin": "0 auto", "maxWidth": "1000px"},
@@ -5086,6 +5094,7 @@ def teams_layout(default_year=2025):
         Input("teams-tabs", "active_tab"),
         Input("x-axis-dropdown", "value"),
         Input("y-axis-dropdown", "value"),
+        Input("percentile-toggle", "value"),
     ],
     prevent_initial_call="initial_duplicate",
 )
@@ -5098,6 +5107,7 @@ def load_teams(
     active_tab,
     x_axis,
     y_axis,
+    percentile_mode
 ):
     default_values = {
         "year": 2025,
@@ -5121,18 +5131,23 @@ def load_teams(
         "y": y_axis,
         "tab": active_tab,
         "district": selected_district,
+        "percentile": "filtered" if "filtered" in percentile_mode else None
     }
+
 
     query_string = "?" + urlencode({
         k: v for k, v in params.items()
         if v not in (None, "", "All") and str(v) != str(default_values.get(k, ""))
     })
+    
 
     all_teams, epa_ranks = load_teams_and_compute_epa_ranks(selected_year)
     teams_data = all_teams.copy()
 
+    empty_style = []
     if not teams_data:
-        return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string
+        return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string, empty_style
+
 
     if selected_country and selected_country != "All":
         teams_data = [t for t in teams_data if (t.get("country") or "").lower() == selected_country.lower()]
@@ -5165,12 +5180,19 @@ def load_teams(
 
     teams_data.sort(key=lambda t: t.get("weighted_ace") or 0, reverse=True)
     
+    # Always compute global percentiles
+    global_data, _ = load_teams_and_compute_epa_ranks(selected_year)
+    extract_global = lambda key: [t[key] for t in global_data if t.get(key) is not None]
+
     extract_valid = lambda key: [t[key] for t in teams_data if t.get(key) is not None]
     
-    overall_percentiles = compute_percentiles(extract_valid("epa"))
-    auto_percentiles = compute_percentiles(extract_valid("auto_epa"))
-    teleop_percentiles = compute_percentiles(extract_valid("teleop_epa"))
-    endgame_percentiles = compute_percentiles(extract_valid("endgame_epa"))
+    # Use filtered data only if toggle is on
+    extract_used = extract_valid if "filtered" in percentile_mode else extract_global
+    
+    overall_percentiles = compute_percentiles(extract_used("epa"))
+    auto_percentiles = compute_percentiles(extract_used("auto_epa"))
+    teleop_percentiles = compute_percentiles(extract_used("teleop_epa"))
+    endgame_percentiles = compute_percentiles(extract_used("endgame_epa"))
     
     percentiles_dict = {
         "ace": overall_percentiles,
@@ -5323,6 +5345,7 @@ def load_teams(
     Output("district-dropdown", "value"),
     Output("x-axis-dropdown", "value"),
     Output("y-axis-dropdown", "value"),
+    Output("percentile-toggle", "value"),  # ← ADD THIS
     Input("teams-url", "href"),
     prevent_initial_call=True,
 )
@@ -5334,7 +5357,12 @@ def apply_url_filters(href):
     params = parse_qs(query)
 
     def get_param(name, default):
-        return params.get(name, [default])[0]
+        val = params.get(name, [default])
+        if isinstance(val, list):
+            val = val[0]
+        return val if val not in ("[]", "['']") else default
+    
+        
 
     return (
         int(get_param("year", 2025)),
@@ -5343,6 +5371,7 @@ def apply_url_filters(href):
         get_param("district", "All"),
         get_param("x", "teleop_epa"),
         get_param("y", "auto+endgame"),
+        ["filtered"] if get_param("percentile", "") == "filtered" else [],
     )
 
 @callback(
