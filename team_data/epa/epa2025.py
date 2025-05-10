@@ -157,7 +157,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         else:
             K = 0.3
 
-        K *= importance * world_champ_penalty
+        K *= match_importance * world_champ_penalty
 
         delta_auto = decay * K * (actual_auto - auto_epa)
         delta_teleop = decay * K * (actual_teleop - teleop_epa)
