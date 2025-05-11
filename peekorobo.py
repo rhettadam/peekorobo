@@ -5096,6 +5096,7 @@ def teams_layout(default_year=2025):
         Input("y-axis-dropdown", "value"),
         Input("percentile-toggle", "value"),
     ],
+    [State("teams-url", "href")],
     prevent_initial_call="initial_duplicate",
 )
 def load_teams(
@@ -5107,21 +5108,40 @@ def load_teams(
     active_tab,
     x_axis,
     y_axis,
-    percentile_mode
+    percentile_mode,
+    href
 ):
+    # Default filter values
     default_values = {
         "year": 2025,
         "country": "All",
         "state": "All",
         "search": "",
-        "x": "teleop_epa",       # ✅ match x_axis_dropdown
-        "y": "auto+endgame",     # ✅ match y_axis_dropdown
+        "x": "teleop_epa",
+        "y": "auto+endgame",
         "tab": "table-tab",
         "district": "All"
     }
 
+    # Parse from URL if present
+    from urllib.parse import parse_qs, urlencode
+    if href and "?" in href:
+        query = href.split("?", 1)[1]
+        params = parse_qs(query)
+        def get_param(name, fallback):
+            val = params.get(name, [fallback])
+            return val[0] if isinstance(val, list) else val
+        selected_year = int(get_param("year", selected_year))
+        selected_country = get_param("country", selected_country)
+        selected_state = get_param("state", selected_state)
+        selected_district = get_param("district", selected_district)
+        search_query = get_param("search", search_query)
+        x_axis = get_param("x", x_axis)
+        y_axis = get_param("y", y_axis)
+        active_tab = get_param("tab", active_tab)
+        percentile_mode = ["filtered"] if get_param("percentile", "") == "filtered" else []
 
-
+    # Build query string for updating URL
     params = {
         "year": selected_year,
         "country": selected_country,
@@ -5131,23 +5151,21 @@ def load_teams(
         "y": y_axis,
         "tab": active_tab,
         "district": selected_district,
-        "percentile": "filtered" if "filtered" in percentile_mode else None
+        "percentile": "filtered" if "filtered" in percentile_mode else None,
     }
-
 
     query_string = "?" + urlencode({
         k: v for k, v in params.items()
         if v not in (None, "", "All") and str(v) != str(default_values.get(k, ""))
     })
-    
 
+    # Load and filter teams
     all_teams, epa_ranks = load_teams_and_compute_epa_ranks(selected_year)
     teams_data = all_teams.copy()
 
     empty_style = []
     if not teams_data:
         return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string, empty_style
-
 
     if selected_country and selected_country != "All":
         teams_data = [t for t in teams_data if (t.get("country") or "").lower() == selected_country.lower()]
