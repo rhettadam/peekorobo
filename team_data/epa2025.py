@@ -38,7 +38,6 @@ def load_veteran_teams():
         print(f"Failed to load veteran teams: {e}")
         return set()
 
-# Helper for auto score estimation
 def estimate_consistent_auto(breakdowns, team_count):
     def score_per_breakdown(b):
         reef = b.get("autoReef", {})
@@ -47,26 +46,87 @@ def estimate_consistent_auto(breakdowns, team_count):
         mid = reef.get("tba_midRowCount", 0)
         top = reef.get("tba_topRowCount", 0)
         coral_score = trough * 3 + bot * 4 + mid * 6 + top * 7
-        mobility = b.get("autoMobilityPoints", 0) / team_count
-        return mobility + coral_score
-    scores = sorted(score_per_breakdown(b) for b in breakdowns)
-    if len(scores) >= 4:
-        cutoff = int(len(scores) * 0.75)
-        scores = scores[:cutoff]
-    return round(min(statistics.mean(scores) if scores else 0, 33), 2)
+        mobility = b.get("autoMobilityPoints", 0)
+        
+        # Scale entire contribution based on alliance size
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (mobility + coral_score) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in teleop
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+
+def estimate_consistent_teleop(breakdowns, team_count):
+    def score_per_breakdown(b):
+        reef = b.get("teleopReef", {})
+        bot = reef.get("tba_botRowCount", 0)
+        mid = reef.get("tba_midRowCount", 0)
+        top = reef.get("tba_topRowCount", 0)
+        trough = reef.get("trough", 0)
+        net = b.get("netAlgaeCount", 0)
+        processor = b.get("wallAlgaeCount", 0)
+        estimated_teleop = (bot * 3 + mid * 4 + top * 5 + trough * 2 + net * 4 + processor * 2.5)
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return estimated_teleop * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Smoothed trimming based on match count
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]  # trim from low-end only
+
+    return round(statistics.mean(trimmed_scores), 2)
 
 def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veteran_teams=None):
 
-    importance = {"qm": 1.0, "qf": 1.1, "sf": 1.2, "f": 1.2}
+    importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
     matches = sorted(matches, key=lambda m: m.get("time") or 0)
 
     match_count = 0
     overall_epa = auto_epa = teleop_epa = endgame_epa = None
     contributions, teammate_epas = [], []
     total_score = wins = losses = 0
-    auto_breakdowns = []
+    breakdowns = []
     dominance_scores = []
-    carry_scores = []
 
     for match in matches:
 
@@ -80,7 +140,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         is_einstein = event_key == "2025cmptx"
 
         if is_einstein:
-            world_champ_penalty = 0.85  # Optional bonus for Einstein
+            world_champ_penalty = 0.95  # Optional bonus for Einstein
         elif is_division:
             world_champ_penalty = 0.85  # Slight penalty (less than 0.7)
         else:
@@ -109,27 +169,15 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
             losses += 1
 
         breakdown = (match.get("score_breakdown") or {}).get(alliance, {})
-        auto_breakdowns.append(breakdown)
+        breakdowns.append(breakdown)
 
-        # Auto EPA from consistent pattern analysis
-        actual_auto = estimate_consistent_auto(auto_breakdowns, team_count)
-
+        actual_auto = estimate_consistent_auto(breakdowns, team_count)
+        actual_teleop = estimate_consistent_teleop(breakdowns, team_count)
         robot_endgame = breakdown.get(f"endGameRobot{index}", "None")
         actual_endgame = {"DeepCage": 12, "ShallowCage": 6, "Parked": 2}.get(robot_endgame, 0)
-
-        reef = breakdown.get("teleopReef", {})
-        bot = reef.get("tba_botRowCount", 0)
-        mid = reef.get("tba_midRowCount", 0)
-        top = reef.get("tba_topRowCount", 0)
-        trough = reef.get("trough", 0)
-        net = breakdown.get("netAlgaeCount", 0)
-        processor = breakdown.get("wallAlgaeCount", 0)
-
-        estimated_teleop = (bot * 3 + mid * 4 + top * 5 + trough * 2 + net * 4 + processor * 2.5)
-        actual_teleop = estimated_teleop / team_count
         actual_overall = actual_auto + actual_teleop + actual_endgame
+        
         opponent_score = match["alliances"][opponent_alliance]["score"] / team_count
-
         margin = actual_overall - opponent_score
         scaled_margin = margin / (opponent_score + 1e-6)
         norm_margin = (scaled_margin + 1) / 1.3  # maps [-1, 1] → [0, 1]
@@ -140,15 +188,6 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
 
         decay = world_champ_penalty * (match_count / len(matches)) ** 2
 
-        others = [k for k in team_keys if k != team_key]
-        if others:
-            match_teammate_epa = (alliance_score - actual_overall) / (team_count - 1)
-            carry_ratio = actual_overall / (match_teammate_epa + 1e-6)
-
-            # Sharper sigmoid: higher slope, lower midpoint
-            match_carry_score = 1 / (1 + math.exp(-4.0 * (carry_ratio - 0.5)))  # Midpoint at 0.9, steeper curve
-            carry_scores.append(match_carry_score)
-
         if overall_epa is None:
             overall_epa = actual_overall
             auto_epa = actual_auto
@@ -156,13 +195,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
             teleop_epa = actual_teleop
             continue
 
-
-        if match_count <= 6:
-            K = 0.5
-        elif match_count <= 12:
-            K = 0.5 + ((match_count - 6) * ((1.0 - 0.5) / 6))
-        else:
-            K = 0.3
+        K = 0.4
 
         K *= match_importance * world_champ_penalty
 
@@ -186,26 +219,36 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         
     is_veteran = veteran_teams and team_key in veteran_teams
     teammate_avg_epa = statistics.mean(teammate_epas) if teammate_epas else overall_epa
-    carry = min(1.25, statistics.mean(carry_scores)) if carry_scores else 1.0
     dominance = min(1., statistics.mean(dominance_scores))
+
+    event_count = len({match["event_key"] for match in matches})
+    event_boost = 1.0 if event_count >= 2 else 0.60
+    
     win_rate = wins / match_count if match_count else 0
-    
-    expected_margin = dominance
-    actual_margin = (wins - losses) / match_count if match_count else 0
-    
-    # Let dominance override weak records with diminishing punishment
-    record_alignment_score = 1.0 if actual_margin >= dominance else 1 - (dominance - actual_margin) / 0.8
-    record_alignment_score = max(0.0, record_alignment_score)
 
     average_match_score = total_score / match_count if match_count else 0
 
+    expected_win_rate = dominance  # roughly aligned
+    record_alignment_score = 1.0 - abs(expected_win_rate - win_rate)
+
+    weights = {
+        "consistency": 0.4,
+        "dominance": 0.25,
+        "record_alignment": 0.15,
+        "veteran": 0.1,
+        "events": 0.05,
+        "base": 0.05,
+    }
+    
     raw_confidence = (
-        0.25 * consistency +
-        0.1 * (1.0 if is_veteran else 0.6) +
-        0.25  * carry +
-        0.25  * dominance + 
-        0.15 * record_alignment_score
+        weights["consistency"] * consistency +
+        weights["dominance"] * dominance +
+        weights["record_alignment"] * record_alignment_score +
+        weights["veteran"] * (1.0 if is_veteran else 0.6) +
+        weights["events"] * event_boost +
+        weights["base"]
     )
+    
     confidence = min(1.0, raw_confidence)
 
     actual_epa = overall_epa * confidence
@@ -218,10 +261,9 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
     print(f"→ Overall EPA (unweighted): {round(overall_epa, 2)}")
     print("\n===== Confidence Breakdown =====")
     print(f"→ Consistency:     {round(consistency, 3)} × 0.25 = {round(0.25 * consistency, 4)}")
-    print(f"→ Veteran Boost:   {'1.0' if is_veteran else '0.6'} × 0.1 = {round(0.1 * (1.0 if is_veteran else 0.6), 4)}")
-    print(f"→ Carry Score:     {round(carry, 3)} × 0.25 = {round(0.25 * carry, 4)}")
-    print(f"→ Dominance:       {round(dominance, 3)} × 0.25 = {round(0.25 * dominance, 4)}")
     print(f"→ Record Align:    {round(record_alignment_score, 3)} × 0.15 = {round(0.15 * record_alignment_score, 4)}")
+    print(f"→ Veteran Boost:   {'1.0' if is_veteran else '0.6'} × 0.1 = {round(0.1 * (1.0 if is_veteran else 0.6), 4)}")
+    print(f"→ Dominance:       {round(dominance, 3)} × 0.25 = {round(0.25 * dominance, 4)}")
     print(f"→ Confidence Total: {round(raw_confidence, 4)} → Capped: {round(confidence, 3)}")
     print("\n===== Final EPA Calculation =====")
     print(f"{round(overall_epa, 2)} (overall) × {round(confidence, 3)} (confidence) = {round(actual_epa, 2)}")
