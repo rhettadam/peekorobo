@@ -3,6 +3,7 @@ import sqlite3
 import os
 import random
 import requests
+import numpy as np
 
 load_dotenv()
 
@@ -141,6 +142,70 @@ def calculate_ranks(team_data, selected_team):
             state_rank += 1
 
     return global_rank, country_rank, state_rank
+
+def get_pg_connection():
+    url = os.environ.get("DATABASE_URL")
+    if url is None:
+        raise Exception("DATABASE_URL not set in environment.")
+
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+
+    result = urlparse(url)
+    conn = psycopg2.connect(
+        database=result.path[1:],
+        user=result.username,
+        password=result.password,
+        host=result.hostname,
+        port=result.port
+    )
+    return conn
+
+def get_epa_styling(percentiles_dict):
+        color_map = [
+            ("99", "#6a1b9a"),   # Deep Purple
+            ("97", "#8e24aa"),   # Medium Purple
+            ("95", "#3949ab"),   # Indigo
+            ("93", "#1565c0"),   # Blue
+            ("91", "#1e88e5"),   # Sky Blue
+            ("89", "#43a047"),   # Medium Green
+            ("85", "#2e7d32"),   # Dark Green
+            ("80", "#c0ca33"),   # Lime
+            ("75", "#f9a825"),   # Yellow
+            ("65", "#ffb300"),   # Dark Yellow
+            ("55", "#fb8c00"),   # Orange
+            ("40", "#e53935"),   # Red
+            ("25", "#b71c1c"),   # Dark Red
+            ("10", "#7b0000"),   # Maroon
+            ("0",  "#4d0000"),   # Deep Maroon
+        ]
+    
+        style_rules = []
+    
+        for col, percentiles in percentiles_dict.items():
+            thresholds = {int(k): v for k, v in percentiles.items()}
+    
+            for i, (lower_str, color) in enumerate(color_map):
+                lower = thresholds.get(int(lower_str), 0)
+                upper = thresholds.get(int(color_map[i - 1][0]), float("inf")) if i > 0 else float("inf")
+    
+                style_rules.append({
+                    "if": {
+                        "filter_query": f"{{{col}}} >= {lower}" + (f" && {{{col}}} < {upper}" if upper < float("inf") else ""),
+                        "column_id": col
+                    },
+                    "backgroundColor": color,
+                    "color": "white",
+                    "fontWeight": "bold",
+                    "borderRadius": "6px",
+                    "padding": "4px 6px",
+                })
+    
+        return style_rules
+
+def compute_percentiles(values):
+    percentiles = ["99", "97", "95", "93", "91", "89", "85", "80", "75", "65", "55", "40", "25", "10", "0"]
+    return {p: np.percentile(values, int(p)) for p in percentiles} if values else {p: 0 for p in percentiles}
 
 # locations.py
 
