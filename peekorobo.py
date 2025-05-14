@@ -11,6 +11,8 @@ from auth import get_pg_connection, register_user, verify_user
 import os
 import numpy as np
 import datetime
+from datetime import datetime, date
+
 import sqlite3
 import psycopg2
 from urllib.parse import urlparse
@@ -2192,6 +2194,26 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
     recent_rows = []
     year = performance_year 
 
+    # Get the 3 most recent events by start date
+    # Get team-attended events with start dates
+    event_dates = []
+    for ek, ev in EVENT_DATABASE.get(performance_year, {}).items():
+        event_teams = EVENT_TEAMS.get(performance_year, {}).get(ek, [])
+        if not any(int(t.get("tk", -1)) == team_number for t in event_teams):
+            continue
+    
+        start_str = ev.get("sd")
+        if start_str:
+            try:
+                dt = datetime.strptime(start_str, "%Y-%m-%d")
+                event_dates.append((dt, ek))
+            except ValueError:
+                continue
+    
+    # Most recent 3 events they attended
+    recent_event_keys = {ek for _, ek in sorted(event_dates, reverse=True)[:3]}
+
+
     def effective_epa(team_infos):
         if not team_infos:
             return 0
@@ -2224,8 +2246,11 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
 
 
     for event_key, event in EVENT_DATABASE.get(year, {}).items():
+        if event_key not in recent_event_keys:
+            continue
+    
         event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
-        
+    
         # Skip if team wasn't on the team list
         if not any(int(t["tk"]) == team_number for t in event_teams if "tk" in t):
             continue
@@ -3816,13 +3841,14 @@ def toggle_favorite_event(n_clicks_list, id_list, store_data):
     return result
 
 WEEK_RANGES = [
-    (datetime.date(2025, 2, 26), datetime.date(2025, 3, 2)),  # Week 1
-    (datetime.date(2025, 3, 5),  datetime.date(2025, 3, 9)),   # Week 2
-    (datetime.date(2025, 3, 12), datetime.date(2025, 3, 17)),  # Week 3
-    (datetime.date(2025, 3, 19), datetime.date(2025, 3, 23)),  # Week 4
-    (datetime.date(2025, 3, 25), datetime.date(2025, 3, 30)),  # Week 5
-    (datetime.date(2025, 4, 2),  datetime.date(2025, 4, 6)),   # Week 6
+    (date(2025, 2, 26), date(2025, 3, 2)),  # Week 1
+    (date(2025, 3, 5),  date(2025, 3, 9)),   # Week 2
+    (date(2025, 3, 12), date(2025, 3, 17)),  # Week 3
+    (date(2025, 3, 19), date(2025, 3, 23)),  # Week 4
+    (date(2025, 3, 25), date(2025, 3, 30)),  # Week 5
+    (date(2025, 4, 2),  date(2025, 4, 6)),   # Week 6
 ]
+
 
 def get_week_number(start_date):
     for i, (start, end) in enumerate(WEEK_RANGES):
