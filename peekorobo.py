@@ -15,6 +15,7 @@ from datetime import datetime, date
 
 import sqlite3
 import psycopg2
+import re
 from urllib.parse import urlparse
 from urllib.parse import parse_qs
 from urllib.parse import urlencode
@@ -2357,7 +2358,7 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                 blue_str = match.get("bt", "")
                 red_score = match.get("rs", 0)
                 blue_score = match.get("bs", 0)
-                label = (match.get("k", "").replace(f"{event_key}_", "")).upper()
+                label = match.get("k", "").split("_", 1)[-1].upper()
                 
                 def get_team_epa_info(t_key):
                     t_data = epa_data.get(t_key.strip(), {})
@@ -2558,9 +2559,20 @@ def build_recent_matches_section(event_key, year, epa_data):
     comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
 
     def match_sort_key(m):
-        lvl = comp_level_order.get(m.get("cl", ""), 99)
-        num = m.get("mn", 9999)
-        return (lvl, num)
+        # Use the match key (preferred in playoff)
+        key = m.get("k", "").split("_", 1)[-1].lower()
+    
+        # Use regex to extract comp level, set number, and match number
+        match_re = re.match(r"(qm|qf|sf|f)?(\d*)m(\d+)", key)
+        if match_re:
+            level_str, set_num_str, match_num_str = match_re.groups()
+            level = {"qm": 0, "qf": 1, "sf": 2, "f": 3}.get(level_str, 99)
+            set_num = int(set_num_str) if set_num_str.isdigit() else 0
+            match_num = int(match_num_str)
+            return (level, set_num, match_num)
+        else:
+            # Fallback if format is weird
+            return (99, 99, 9999)
 
     matches.sort(key=match_sort_key)
     qual_matches = [m for m in matches if m.get("cl") == "qm"]
@@ -3996,6 +4008,7 @@ def event_layout(event_key):
             dbc.Tab(label="Rankings", tab_id="rankings", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="OPRs", tab_id="oprs", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Matches", tab_id="matches", label_style=tab_style, active_label_style=tab_style),
+            dbc.Tab(label="Alliances", tab_id="alliances", label_style=tab_style, active_label_style=tab_style),
         ],
         id="event-data-tabs",
         active_tab="teams",
@@ -4388,6 +4401,181 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             html.Div(id="matches-container")
         ])
 
+    elif active_tab == "alliances":
+    
+        # === Extract alliance picks ===
+        def extract_alliance_picks(teams, rankings=None):
+            teams = [t for t in teams if t.strip()] + ["?", "?", "?"]
+            teams = teams[:3]
+            if rankings:
+                teams = sorted(teams, key=lambda t: rankings.get(t, {}).get("rk", 9999))
+            return teams[0], teams[1], teams[2]
+    
+        # === Identify alliances from SF matches ===
+        sf_alliance_map = {1: (1, 8), 2: (4, 5), 3: (2, 7), 4: (3, 6)}
+        alliance_slots = {}
+        sf_matches = [m for m in event_matches if m.get("cl") == "sf" and m.get("mn") == 1]
+    
+        for match in sf_matches:
+            key = match.get("k", "").split("_", 1)[-1].lower()
+            match_re = re.match(r"sf(\d+)m1", key)
+            if not match_re:
+                continue
+            sf_num = int(match_re.group(1))
+            if sf_num not in sf_alliance_map:
+                continue
+            red_alliance, blue_alliance = sf_alliance_map[sf_num]
+            alliance_slots[red_alliance] = match.get("rt", "").split(",")
+            alliance_slots[blue_alliance] = match.get("bt", "").split(",")
+    
+        # === Build picked team set ===
+        picked_teams = set()
+        for teams in alliance_slots.values():
+            picked_teams.update([t for t in teams if t.strip()])
+    
+        # === Alliance table ===
+        alliance_table_data = []
+        for i in range(1, 9):
+            teams = alliance_slots.get(i, [])
+            captain, pick1, pick2 = extract_alliance_picks(teams, rankings)
+            alliance_table_data.append({
+                "Alliance": f"Alliance {i}",
+                "Captain": f"[{captain}](/team/{captain})" if captain.isdigit() else "?",
+                "Pick 1": f"[{pick1}](/team/{pick1})" if pick1.isdigit() else "?",
+                "Pick 2": f"[{pick2}](/team/{pick2})" if pick2.isdigit() else "?",
+            })
+    
+        # === Ranked teams ===
+        ranked_teams = sorted(
+            ((str(t["tk"]), rankings.get(str(t["tk"]), {}).get("rk", 9999)) for t in event_teams),
+            key=lambda x: x[1]
+        )
+    
+        # === Nodes and Edges ===
+        nodes = []
+        edges = []
+    
+        # Teams left and right, compact spacing
+        team_spacing = 0.05
+        left_teams = ranked_teams[::2]
+        right_teams = ranked_teams[1::2]
+    
+        for idx, (tnum, rk) in enumerate(left_teams):
+            nodes.append({
+                "id": tnum,
+                "label": f"{tnum} (#{rk})",
+                "x": -2,
+                "y": -idx * team_spacing,
+                "type": "team",
+                "picked": tnum in picked_teams
+            })
+    
+        for idx, (tnum, rk) in enumerate(right_teams):
+            nodes.append({
+                "id": tnum,
+                "label": f"{tnum} (#{rk})",
+                "x": 2,
+                "y": -idx * team_spacing,
+                "type": "team",
+                "picked": tnum in picked_teams
+            })
+    
+        # Calculate vertical span and center alliances accordingly
+        max_left_y = -(len(left_teams) - 1) * team_spacing / 2
+        max_right_y = -(len(right_teams) - 1) * team_spacing / 2
+        alliance_start_y = (max_left_y + max_right_y) / 2 + (8 / 2) * team_spacing
+    
+        for i in range(1, 9):
+            y_pos = alliance_start_y - (i - 1) * team_spacing * 2
+            nodes.append({
+                "id": f"A{i}",
+                "label": f"Alliance {i}",
+                "x": 0,
+                "y": y_pos,
+                "type": "alliance"
+            })
+    
+        # Edges from alliances to picked teams
+        for i in range(1, 9):
+            for t in alliance_slots.get(i, []):
+                if t.strip():
+                    edges.append((f"A{i}", t))
+    
+        # Build edge traces
+        edge_x, edge_y = [], []
+        for src, dst in edges:
+            src_node = next(n for n in nodes if n["id"] == src)
+            dst_node = next(n for n in nodes if n["id"] == dst)
+            edge_x += [src_node["x"], dst_node["x"], None]
+            edge_y += [src_node["y"], dst_node["y"], None]
+    
+        # Build node traces
+        node_x = [n["x"] for n in nodes]
+        node_y = [n["y"] for n in nodes]
+        node_text = [n["label"] for n in nodes]
+        node_color = [
+            "#2759d6" if n["type"] == "alliance" else ("#2ca02c" if n.get("picked") else "#c62828")
+            for n in nodes
+        ]
+        node_size = [30 if n["type"] == "alliance" else 12 for n in nodes]
+    
+        # === Build figure ===
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=edge_x, y=edge_y, mode="lines",
+            line=dict(width=2, color="#aaa"), hoverinfo="none"
+        ))
+        fig.add_trace(go.Scatter(
+            x=node_x, y=node_y, mode="markers+text",
+            text=node_text, textposition="middle right",
+            marker=dict(size=node_size, color=node_color, line=dict(width=1, color="black")),
+            hoverinfo="text"
+        ))
+        fig.update_layout(
+            showlegend=False,
+            margin=dict(l=20, r=20, t=20, b=20),
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-2.5, 2.5]),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            plot_bgcolor="white",
+            height=1600,
+        )
+    
+        # === Render ===
+        return html.Div([
+            dash_table.DataTable(
+                columns=[
+                    {"name": "Alliance", "id": "Alliance", "presentation": "markdown"},
+                    {"name": "Captain", "id": "Captain", "presentation": "markdown"},
+                    {"name": "Pick 1", "id": "Pick 1", "presentation": "markdown"},
+                    {"name": "Pick 2", "id": "Pick 2", "presentation": "markdown"},
+                ],
+                data=alliance_table_data,
+                style_table=common_style_table,
+                style_header={
+                    "backgroundColor": "white",
+                    "fontWeight": "bold",
+                    "padding": "6px",
+                    "fontSize": "13px",
+                },
+                style_cell={
+                    "padding": "8px",
+                    "fontSize": "14px",
+                    "textAlign": "center"  # Default to center for safety
+                },
+                style_cell_conditional=[
+                    {"if": {"column_id": "Alliance"}, "textAlign": "left", "fontWeight": "bold"},
+                ],
+                style_header_conditional=[
+                    {"if": {"column_id": "Alliance"}, "textAlign": "left"},
+                    {"if": {"column_id": "Captain"}, "textAlign": "center"},
+                    {"if": {"column_id": "Pick 1"}, "textAlign": "center"},
+                    {"if": {"column_id": "Pick 2"}, "textAlign": "center"},
+                ],
+                page_size=8
+            ),
+            dcc.Graph(figure=fig),
+        ])
+
     return dbc.Alert("No data available.", color="warning")
 
 @app.callback(
@@ -4413,9 +4601,21 @@ def update_matches_table(selected_team, event_matches, epa_data):
     comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
 
     def match_sort_key(m):
-        lvl = comp_level_order.get(m.get("cl", ""), 99)
-        num = m.get("mn", 9999)
-        return (lvl, num)
+        # Use the match key (preferred in playoff)
+        key = m.get("k", "").split("_", 1)[-1].lower()
+    
+        # Use regex to extract comp level, set number, and match number
+        match_re = re.match(r"(qm|qf|sf|f)?(\d*)m(\d+)", key)
+        if match_re:
+            level_str, set_num_str, match_num_str = match_re.groups()
+            level = {"qm": 0, "qf": 1, "sf": 2, "f": 3}.get(level_str, 99)
+            set_num = int(set_num_str) if set_num_str.isdigit() else 0
+            match_num = int(match_num_str)
+            return (level, set_num, match_num)
+        else:
+            # Fallback if format is weird
+            return (99, 99, 9999)
+    
 
     event_matches.sort(key=match_sort_key)
     qual_matches = [m for m in event_matches if m.get("cl") == "qm"]
