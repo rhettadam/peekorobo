@@ -2357,7 +2357,7 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                 blue_str = match.get("bt", "")
                 red_score = match.get("rs", 0)
                 blue_score = match.get("bs", 0)
-                label = match.get("cl", "").upper() + " " + str(match.get("mn", ""))
+                label = (match.get("k", "").replace(f"{event_key}_", "")).upper()
                 
                 def get_team_epa_info(t_key):
                     t_data = epa_data.get(t_key.strip(), {})
@@ -2616,7 +2616,7 @@ def build_recent_matches_section(event_key, year, epa_data):
             red_score = match.get("rs", 0)
             blue_score = match.get("bs", 0)
             winner = match.get("wa", "")
-            label = match.get("cl", "").upper() + str(match.get("mn", ""))
+            label = (match.get("k", "").replace(f"{event_key}_", "")).upper()
 
             red_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
             blue_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
@@ -3554,18 +3554,18 @@ def update_events_tab_content(
 
     def parse_date(d):
         try:
-            return datetime.datetime.strptime(d, "%Y-%m-%d").date()
+            return datetime.strptime(d, "%Y-%m-%d").date()
         except:
             return datetime.date(1900, 1, 1)
 
     def get_week_number(start_date):
         WEEK_RANGES = [
-            (datetime.date(2025, 2, 26), datetime.date(2025, 3, 2)),   # Week 1
-            (datetime.date(2025, 3, 5),  datetime.date(2025, 3, 9)),   # Week 2
-            (datetime.date(2025, 3, 12), datetime.date(2025, 3, 17)),  # Week 3
-            (datetime.date(2025, 3, 19), datetime.date(2025, 3, 23)),  # Week 4
-            (datetime.date(2025, 3, 25), datetime.date(2025, 3, 30)),  # Week 5
-            (datetime.date(2025, 4, 2),  datetime.date(2025, 4, 6)),   # Week 6
+            (date(2025, 2, 26), date(2025, 3, 2)),   # Week 1
+            (date(2025, 3, 5),  date(2025, 3, 9)),   # Week 2
+            (date(2025, 3, 12), date(2025, 3, 17)),  # Week 3
+            (date(2025, 3, 19), date(2025, 3, 23)),  # Week 4
+            (date(2025, 3, 25), date(2025, 3, 30)),  # Week 5
+            (date(2025, 4, 2),  date(2025, 4, 6)),   # Week 6
         ]
         
         if start_date < WEEK_RANGES[0][0]:
@@ -3598,7 +3598,7 @@ def update_events_tab_content(
             name = full_name.split(" presented by")[0].strip()
 
             try:
-                start_date = datetime.datetime.strptime(event.get("sd", ""), "%Y-%m-%d").date()
+                start_date = datetime.strptime(event.get("sd", ""), "%Y-%m-%d").date()
                 week = get_week_number(start_date)
             except Exception:
                 week = "N/A"
@@ -3720,7 +3720,7 @@ def update_events_tab_content(
 
 
     # Default: cards tab
-    today = datetime.date.today()
+    today = date.today()
     upcoming = [ev for ev in events_data if ev["_start_date_obj"] > today]
     ongoing = [ev for ev in events_data if ev["_start_date_obj"] <= today <= ev["_end_date_obj"]]
 
@@ -4472,7 +4472,8 @@ def update_matches_table(selected_team, event_matches, epa_data):
             red_score = match.get("rs", 0)
             blue_score = match.get("bs", 0)
             winner = match.get("wa", "")
-            label = match.get("cl", "").upper() + str(match.get("mn", ""))
+            event_key = match.get("ek")
+            label = match.get("k", "").split("_", 1)[-1].upper()
     
             red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
             blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
