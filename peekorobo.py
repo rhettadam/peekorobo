@@ -49,14 +49,50 @@ app = dash.Dash(
 )
 
 server = app.server
-server.secret_key = "my-dev-secret-key-123"
+server.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-placeholder-key")
 
 # -------------- LAYOUTS --------------
 
 app.layout = html.Div([
-    dcc.Location(id="url", refresh=False),
-    html.Div(id="page-content")
+    dcc.Location(id='url', refresh=False),
+    dcc.Store(id='tab-title', data='Peekorobo'),
+    html.Div(id='page-content'),
+    html.Div(id='dummy-output', style={'display': 'none'})
 ])
+
+@app.callback(
+    Output('tab-title', 'data'),
+    Input('url', 'pathname'),
+)
+def update_tab_title(pathname):
+    if pathname.startswith('/team/'):
+        team_number = pathname.split('/team/')[1].split('/')[0]
+        return f'Peekorobo - {team_number}'
+    elif pathname.startswith('/teams'):
+        return 'Peekorobo - Teams'
+    elif pathname.startswith('/event/'):
+        event_key = pathname.split('/event/')[1].split('/')[0]
+        return f'Peekorobo - {event_key}'
+    elif pathname.startswith('/events'):
+        return 'Peekorobo - Events'
+    elif pathname.startswith('/map'):
+        return 'Peekorobo - Map'
+    elif pathname.startswith('/user/'):
+        username = pathname.split('/user/')[1].split('/')[0]
+        return f'Peekorobo - {username}'
+    else:
+        return 'Peekorobo'
+
+app.clientside_callback(
+    """
+    function(title) {
+        document.title = title;
+        return '';
+    }
+    """,
+    Output('dummy-output', 'children'),
+    Input('tab-title', 'data')
+)
 
 def login_layout():
     # Optional redirect if logged in
