@@ -204,45 +204,6 @@ footer = dbc.Container(
     }
 )
 
-def login_layout():
-    # Optional redirect if logged in
-    if "user_id" in session:
-        return dcc.Location(href="/user", id="redirect-to-profile")
-
-    return html.Div([
-        topbar(),
-        dcc.Location(id="login-redirect", refresh=True),
-        dbc.Container(fluid=True, children=[
-            dbc.Row(
-                dbc.Col(
-                    html.Div([
-                        html.Img(
-                            src="/assets/dozer.gif",
-                            style={"width": "100%", "maxWidth": "400px", "marginBottom": "30px"},
-                            className="dozer-image"
-                        ),
-                        html.H3("Login or Register", style={"textAlign": "center", "marginBottom": "20px", "color": "#333"}),
-                        dbc.Input(id="username", type="text", placeholder="Username", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1rem"}),
-                        dbc.Input(id="password", type="password", placeholder="Password", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1.5rem"}),
-                        dbc.Row([
-                            dbc.Col(dbc.Button("Login", id="login-btn", style={
-                                "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%"
-                            }), width=6),
-                            dbc.Col(dbc.Button("Register", id="register-btn", style={
-                                "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%"
-                            }), width=6),
-                        ], justify="center", style={"maxWidth": "400px", "margin": "auto"}),
-                        html.Div(id="login-message", style={"textAlign": "center", "marginTop": "1rem", "color": "#333", "fontWeight": "bold"}),
-                    ], style={"textAlign": "center", "paddingTop": "50px"})
-                , width=12),
-            )
-        ], class_name="py-5", style={"backgroundColor": "white"}),
-        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-        footer
-    ])
-
 home_layout = html.Div([
     topbar(),
     dbc.Container(fluid=True, children=[

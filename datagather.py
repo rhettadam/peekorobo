@@ -4,6 +4,8 @@ import os
 import random
 import requests
 import numpy as np
+from urllib.parse import urlparse
+import psycopg2
 
 load_dotenv()
 
@@ -163,16 +165,16 @@ def get_pg_connection():
 
 def get_epa_styling(percentiles_dict):
         color_map = [
-            ("99", "#6a1b9a"),   # Deep Purple
-            ("97", "#8e24aa"),   # Medium Purple
+            ("99", "#8e24aa"),   # Deep Purple
+            ("97", "#6a1b9a"),   # Medium Purple
             ("95", "#3949ab"),   # Indigo
             ("93", "#1565c0"),   # Blue
             ("91", "#1e88e5"),   # Sky Blue
-            ("89", "#43a047"),   # Medium Green
-            ("85", "#2e7d32"),   # Dark Green
+            ("89", "#2e7d32"),   # Medium Green
+            ("85", "#43a047"),   # Dark Green
             ("80", "#c0ca33"),   # Lime
-            ("75", "#f9a825"),   # Yellow
-            ("65", "#ffb300"),   # Dark Yellow
+            ("75", "#ffb300"),   # Yellow
+            ("65", "#f9a825"),   # Dark Yellow
             ("55", "#fb8c00"),   # Orange
             ("40", "#e53935"),   # Red
             ("25", "#b71c1c"),   # Dark Red
@@ -206,6 +208,29 @@ def get_epa_styling(percentiles_dict):
 def compute_percentiles(values):
     percentiles = ["99", "97", "95", "93", "91", "89", "85", "80", "75", "65", "55", "40", "25", "10", "0"]
     return {p: np.percentile(values, int(p)) for p in percentiles} if values else {p: 0 for p in percentiles}
+
+def sort_key(filename):
+    name = filename.split('.')[0]
+    return (0, int(name)) if name.isdigit() else (1, name.lower())
+
+def get_username(user_id):
+    conn = get_pg_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0].title() if row else f"USER {user_id}"
+
+def get_available_avatars():
+        avatar_dir = "assets/avatars"
+        return [f for f in os.listdir(avatar_dir) if f.endswith(".png")]
+
+def get_contrast_text_color(hex_color):
+        """Return black or white text color based on background brightness."""
+        hex_color = hex_color.lstrip("#")
+        r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        brightness = (r * 299 + g * 587 + b * 114) / 1000
+        return "#000000" if brightness > 150 else "#FFFFFF"
 
 # locations.py
 

@@ -27,9 +27,9 @@ import pandas as pd
 
 import plotly.graph_objects as go
 
-from datagather import COUNTRIES,STATES,load_data,get_team_avatar,calculate_ranks,DISTRICT_STATES,get_pg_connection,get_epa_styling,compute_percentiles
+from datagather import COUNTRIES,STATES,load_data,get_team_avatar,calculate_ranks,DISTRICT_STATES,get_pg_connection,get_epa_styling,compute_percentiles,sort_key,get_username,get_available_avatars,get_contrast_text_color
 
-from layouts.basic import home_layout,login_layout,footer,topbar,team_link_with_avatar,blog_layout,challenges_layout,challenge_details_layout
+from layouts.basic import home_layout,footer,topbar,team_link_with_avatar,blog_layout,challenges_layout,challenge_details_layout
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -49,8 +49,53 @@ app = dash.Dash(
 )
 
 server = app.server
+server.secret_key = "my-dev-secret-key-123"
 
 # -------------- LAYOUTS --------------
+
+app.layout = html.Div([
+    dcc.Location(id="url", refresh=False),
+    html.Div(id="page-content")
+])
+
+def login_layout():
+    # Optional redirect if logged in
+    if "user_id" in session:
+        return dcc.Location(href="/user", id="redirect-to-profile")
+
+    return html.Div([
+        topbar(),
+        dcc.Location(id="login-redirect", refresh=True),
+        dbc.Container(fluid=True, children=[
+            dbc.Row(
+                dbc.Col(
+                    html.Div([
+                        html.Img(
+                            src="/assets/dozer.gif",
+                            style={"width": "100%", "maxWidth": "400px", "marginBottom": "30px"},
+                            className="dozer-image"
+                        ),
+                        html.H3("Login or Register", style={"textAlign": "center", "marginBottom": "20px", "color": "#333"}),
+                        dbc.Input(id="username", type="text", placeholder="Username", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1rem"}),
+                        dbc.Input(id="password", type="password", placeholder="Password", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1.5rem"}),
+                        dbc.Row([
+                            dbc.Col(dbc.Button("Login", id="login-btn", style={
+                                "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%"
+                            }), width=6),
+                            dbc.Col(dbc.Button("Register", id="register-btn", style={
+                                "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%"
+                            }), width=6),
+                        ], justify="center", style={"maxWidth": "400px", "margin": "auto"}),
+                        html.Div(id="login-message", style={"textAlign": "center", "marginTop": "1rem", "color": "#333", "fontWeight": "bold"}),
+                    ], style={"textAlign": "center", "paddingTop": "50px"})
+                , width=12),
+            )
+        ], class_name="py-5", style={"backgroundColor": "white"}),
+        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+        footer
+    ])
 
 def universal_profile_icon_or_toast():
     if "user_id" in session:
@@ -129,29 +174,6 @@ def universal_profile_icon_or_toast():
             "zIndex": 9999
         },
     )
-
-def sort_key(filename):
-    name = filename.split('.')[0]
-    return (0, int(name)) if name.isdigit() else (1, name.lower())
-
-def get_username(user_id):
-    conn = get_pg_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    return row[0].title() if row else f"USER {user_id}"
-
-def get_available_avatars():
-        avatar_dir = "assets/avatars"
-        return [f for f in os.listdir(avatar_dir) if f.endswith(".png")]
-
-def get_contrast_text_color(hex_color):
-        """Return black or white text color based on background brightness."""
-        hex_color = hex_color.lstrip("#")
-        r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        brightness = (r * 299 + g * 587 + b * 114) / 1000
-        return "#000000" if brightness > 150 else "#FFFFFF"
 
 def user_layout(_user_id=None, deleted_items=None):
 
@@ -874,13 +896,6 @@ def user_layout(_user_id=None, deleted_items=None):
         footer
     ])
 
-def ensure_list(value):
-    if isinstance(value, str):
-        return json.loads(value)
-    if isinstance(value, list):
-        return value
-    return []
-
 def other_user_layout(username):
     session_user_id = session.get("user_id")
     if not session_user_id:
@@ -1548,11 +1563,6 @@ def handle_login(login_clicks, register_clicks, username, password):
             return f"✅ Welcome, {username.strip()}!", redirect_url
         else:
             return message, dash.no_update
-
-app.layout = html.Div([
-    dcc.Location(id="url", refresh=False),
-    html.Div(id="page-content")
-])
 
 @app.callback(
     Output("navbar-collapse", "is_open"),
