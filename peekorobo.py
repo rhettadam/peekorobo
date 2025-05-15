@@ -1956,9 +1956,24 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
 
         def build_match_rows(matches):
             rows = []
-            comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
-            matches.sort(key=lambda m: (comp_level_order.get(m.get("cl", ""), 99), m.get("mn", 9999)))
-        
+            def parse_match_sort_key(match):
+                comp_level_order = {"qm": 0, "sf": 1, "qf": 2, "f": 3}
+                key = match.get("k", "").split("_")[-1].lower()
+                cl = match.get("cl", "").lower()
+            
+                # Extract comp level from key or cl
+                for level in comp_level_order:
+                    if key.startswith(level):
+                        # Remove the level prefix and 'm' if present, get the numeric part
+                        remainder = key[len(level):].replace("m", "")
+                        match_number = int(remainder) if remainder.isdigit() else 0
+                        return (comp_level_order[level], match_number)
+                
+                # fallback to cl and mn if no match
+                return (comp_level_order.get(cl, 99), match.get("mn", 9999))
+            
+            matches.sort(key=parse_match_sort_key)
+                    
             def format_team_list(team_str):
                 return ", ".join(f"[{t}](/team/{t})" for t in team_str.split(",") if t.strip().isdigit())
 
@@ -1971,7 +1986,13 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                 blue_str = match.get("bt", "")
                 red_score = match.get("rs", 0)
                 blue_score = match.get("bs", 0)
-                label = match.get("k", "").split("_", 1)[-1].upper()
+                label = match.get("k", "").split("_", 1)[-1]
+
+                if label.lower().startswith("sf") and "m" in label.lower():
+                    # Always work with lower and reconstruct as upper for safety
+                    label = label.lower().split("m")[0].upper()
+                else:
+                    label = label.upper()
                 
                 def get_team_epa_info(t_key):
                     t_data = epa_data.get(t_key.strip(), {})
@@ -2241,7 +2262,13 @@ def build_recent_matches_section(event_key, year, epa_data):
             red_score = match.get("rs", 0)
             blue_score = match.get("bs", 0)
             winner = match.get("wa", "")
-            label = (match.get("k", "").replace(f"{event_key}_", "")).upper()
+            label = match.get("k", "").split("_", 1)[-1]
+
+            if label.lower().startswith("sf") and "m" in label.lower():
+                # Always work with lower and reconstruct as upper for safety
+                label = label.lower().split("m")[0].upper()
+            else:
+                label = label.upper()
 
             red_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
             blue_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
@@ -4286,7 +4313,13 @@ def update_matches_table(selected_team, event_matches, epa_data):
             blue_score = match.get("bs", 0)
             winner = match.get("wa", "")
             event_key = match.get("ek")
-            label = match.get("k", "").split("_", 1)[-1].upper()
+            label = match.get("k", "").split("_", 1)[-1]
+
+            if label.lower().startswith("sf") and "m" in label.lower():
+                # Always work with lower and reconstruct as upper for safety
+                label = label.lower().split("m")[0].upper()
+            else:
+                label = label.upper()
     
             red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
             blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
