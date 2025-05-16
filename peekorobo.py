@@ -4141,7 +4141,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             textfont=dict(color="#777")  # <-- Add this line
         ))
         fig.update_layout(
-            font=dict(color="var(--text-primary)"),
+            font=dict(color="#777"),
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
             showlegend=False,
@@ -4151,8 +4151,8 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 showgrid=False,
                 zeroline=False,
                 showticklabels=False,
-                color="var(--text-primary)",  # axis ticks and label color
-                titlefont=dict(color="var(--text-primary)"),  # y-axis title color
+                color="#777",  # axis ticks and label color
+                titlefont=dict(color="#777"),  # y-axis title color
             ),
             height=1000,
         )
@@ -4963,7 +4963,7 @@ def load_teams(
             x=df.loc[df["is_match"], "x"],
             y=df.loc[df["is_match"], "y"],
             mode="markers+text",
-            marker=dict(size=8, color="var(--text-primary)", line=dict(width=2, color="black")),
+            marker=dict(size=8, color="#777", line=dict(width=2, color="black")),
             text=df.loc[df["is_match"], "label"],
             textfont=dict(size=10, color="#777"),
             textposition="top center",
