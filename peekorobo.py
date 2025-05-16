@@ -4126,7 +4126,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 zeroline=False,
                 showticklabels=False,
                 color="#777",  # axis ticks and label color
-                titlefont=dict(color="#777"),  # y-axis title color
+                title=dict(font=dict(color="#777")),  # y-axis title color
             ),
             height=1000,
         )
@@ -4956,12 +4956,12 @@ def load_teams(
             xaxis=dict(
                 showgrid=False,
                 color="#777",  # Axis ticks and label color
-                titlefont=dict(color="#777"),  # x-axis title color
+                title=dict(font=dict(color="#777")),  # x-axis title color
             ),
             yaxis=dict(
                 showgrid=False,
                 color="#777",  # Axis ticks and label color
-                titlefont=dict(color="#777"),  # y-axis title color
+                title=dict(font=dict(color="#777")),  # y-axis title color
             ),
             font=dict(color="#777"),  # Title and general font color
         )
