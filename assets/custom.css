@@ -215,6 +215,7 @@ h1, h2, h3, h4, h5, h6, p, span, div {
     border-color: var(--dropdown-border);
     box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
     z-index: 9999; /* Ensure dropdown menu is above other content */
+    transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
 }
 
 .Select-menu {
@@ -223,17 +224,23 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 
 .Select-option {
     background-color: var(--dropdown-bg);
-    color: var(--dropdown-text) !important;
+    color: var(--dropdown-text) !important; /* Added !important */
+    transition: background-color 0.3s, color 0.3s;
 }
 
 .Select-option:hover, .Select-option.is-focused {
     background-color: var(--bg-tertiary);
-    color: var(--text-primary) !important;
+    color: var(--text-primary) !important; /* Also add !important here for consistency */
 }
 
 .Select-option.is-selected {
     background-color: var(--bg-secondary);
-    color: var(--text-primary) !important;
+    color: var(--text-primary) !important; /* Also add !important here for consistency */
+}
+
+/* Force black text on dropdown options in light mode */
+[data-theme="light"] .Select-option, [data-theme="light"] .Select-value-label, [data-theme="light"] .Select-placeholder, [data-theme="light"] .Select-arrow {
+    color: #212529 !important;
 }
 
 /* Alerts */
@@ -431,24 +438,25 @@ img:hover {
     color: white !important; /* Force white text on colored backgrounds */
 }
 
-/* Custom styles for the recent events table */
 .recent-events-table .dash-cell,
 .recent-events-table .dash-cell div,
-.recent-events-table .dash-cell span {
-    color: black;
+.recent-events-table .dash-cell span,
+.recent-events-table .dash-cell strong,
+.recent-events-table .dash-cell *,
+.recent-events-table .dash-cell span *,
+.recent-events-table .dash-cell strong * {
+    color: black !important;
     font-weight: 500;
     font-size: 15px;
 }
+
 
 .recent-events-table .dash-header {
     background: var(--card-bg) !important;
     font-weight: bold;
 }
 
-/* Force white text on cells with a background color for contrast */
-.recent-events-table .dash-cell[style*="background-color"] {
-    color: white !important;
-}
+
 
 .custom-view-btn {
     color: var(--text-primary) !important;
@@ -463,5 +471,26 @@ img:hover {
 .custom-view-btn:hover {
     background-color: #ffdd00 !important;
     color: black !important;
+}
+
+/* Bootstrap Form Components Theming */
+/* General labels */
+label {
+    color: black;
+}
+
+/* Radio buttons and Checkboxes */
+.form-check-label {
+    color: var(--text-primary);
+}
+
+.form-check-input {
+    border-color: var(--input-border);
+    /* Add themed background for checked state if needed */
+}
+
+/* Add theming for dbc.RadioItems labels */
+.form-check-inline .form-check-label {
+    color: var(--text-primary);
 }
 
