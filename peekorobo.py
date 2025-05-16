@@ -3580,7 +3580,7 @@ def event_layout(event_key):
         [
             dcc.Store(id="user-session"),  # Holds user_id from session
             topbar(),
-            dbc.Store(id="event-favorites-store", storage_type="session"),
+            dcc.Store(id="event-favorites-store", storage_type="session"),
             dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
                 [
