@@ -1,108 +1,400 @@
-<style>
-    html {
-        scroll-behavior: smooth;
-    }
+/* Theme Variables */
+:root {
+    /* Base colors */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-tertiary: #e9ecef;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-tertiary: #212529;
+    --text-muted: #6c757d;
+    --border-color: #dee2e6;
+    
+    /* Component colors */
+    --navbar-bg: #353535;
+    --navbar-text: #ffffff;
+    --navbar-hover: #ffdd00;
+    --card-bg: #ffffff;
+    --card-border: #dee2e6;
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
+    --input-text: #212529;
+    --table-bg: #ffffff;
+    --table-border: #dee2e6;
+    --table-stripe: #f8f9fa;
+    --dropdown-bg: #ffffff;
+    --dropdown-border: #dee2e6;
+    --dropdown-text: #212529;
+    --alert-bg: #f8f9fa;
+    --alert-border: #dee2e6;
+    --alert-text: #212529;
+    --toast-bg: #ffffff;
+    --toast-border: #dee2e6;
+    --toast-text: #212529;
+    --modal-bg: #ffffff;
+    --modal-border: #dee2e6;
+    --modal-text: #212529;
+    --tooltip-bg: #212529;
+    --tooltip-text: #ffffff;
+}
 
-    img:hover {
-        transform: scale(1.01);
-        transition: transform 0.3s ease;
+[data-theme="dark"] {
+    /* Base colors */
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #2d2d2d;
+    --bg-tertiary: #3d3d3d;
+    --text-primary: #e9ecef;
+    --text-secondary: #adb5bd;
+    --text-tertiary: #212529;
+    --text-muted: #6c757d;
+    --border-color: #495057;
+    
+    /* Component colors */
+    --navbar-bg: #121212;
+    --navbar-text: #ffffff;
+    --navbar-hover: #ffdd00;
+    --card-bg: #2d2d2d;
+    --card-border: #495057;
+    --input-bg: #2d2d2d;
+    --input-border: #495057;
+    --input-text: #e9ecef;
+    --table-bg: #2d2d2d;
+    --table-border: #495057;
+    --table-stripe: #3d3d3d;
+    --dropdown-bg: #2d2d2d;
+    --dropdown-border: #495057;
+    --dropdown-text: #e9ecef;
+    --alert-bg: #2d2d2d;
+    --alert-border: #495057;
+    --alert-text: #e9ecef;
+    --toast-bg: #2d2d2d;
+    --toast-border: #495057;
+    --toast-text: #e9ecef;
+    --modal-bg: #2d2d2d;
+    --modal-border: #495057;
+    --modal-text: #e9ecef;
+    --tooltip-bg: #e9ecef;
+    --tooltip-text: #212529;
+}
+
+/* Global styles */
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6, p, span, div {
+    color: var(--text-primary);
+}
+
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+/* Navbar */
+.navbar {
+    background-color: var(--navbar-bg) !important;
+    box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.1);
+    padding: 10px;
+}
+
+/* Navbar links: white by default, yellow on hover */
+.custom-navlink, .custom-navlink:visited, .custom-navlink:active {
+    color: var(--navbar-text) !important;
+    background-color: transparent;
+    text-decoration: none;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.custom-navlink:hover, .custom-navlink:focus, .custom-navlink:active {
+    color: var(--navbar-hover) !important;
+}
+
+/* Resource links in navbar: white by default, yellow on hover */
+.custom-resource-link, .custom-resource-link:visited, .custom-resource-link:active {
+    color: var(--navbar-text) !important;
+    background-color: transparent;
+    text-decoration: none;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.custom-resource-link:hover, .custom-resource-link:focus, .custom-resource-link:active {
+    color: var(--navbar-hover) !important;
+}
+
+/* Cards */
+.card {
+    background-color: var(--card-bg);
+    border-color: var(--card-border);
+    color: var(--text-primary);
+}
+
+.card-header {
+    background-color: var(--bg-secondary);
+    border-bottom-color: var(--card-border);
+    color: var(--text-primary);
+}
+
+/* Forms */
+.form-control {
+    background-color: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--input-text);
+}
+
+.form-control:focus {
+    background-color: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--input-text);
+}
+
+.form-label {
+    color: var(--text-primary);
+}
+
+/* Tables */
+.table {
+    color: var(--text-primary);
+    background-color: var(--table-bg);
+    border-color: var(--table-border);
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: var(--table-stripe);
+}
+
+.table-hover tbody tr:hover {
+    background-color: var(--bg-tertiary);
+}
+
+/* Dropdowns */
+.dropdown-menu {
+    background-color: var(--dropdown-bg);
+    border-color: var(--dropdown-border);
+    color: var(--dropdown-text);
+}
+
+.dropdown-item {
+    color: var(--dropdown-text);
+}
+
+.dropdown-item:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+/* Alerts */
+.alert {
+    background-color: var(--alert-bg);
+    border-color: var(--alert-border);
+    color: var(--alert-text);
+}
+
+/* Toasts */
+.toast {
+    background-color: var(--toast-bg);
+    border-color: var(--toast-border);
+    color: var(--toast-text);
+}
+
+/* Modals */
+.modal-content {
+    background-color: var(--modal-bg);
+    border-color: var(--modal-border);
+    color: var(--modal-text);
+}
+
+.modal-header {
+    border-bottom-color: var(--modal-border);
+}
+
+.modal-footer {
+    border-top-color: var(--modal-border);
+}
+
+/* Tooltips */
+.tooltip {
+    --bs-tooltip-bg: var(--tooltip-bg);
+    --bs-tooltip-color: var(--tooltip-text);
+}
+
+/* Lists */
+.list-group-item {
+    background-color: var(--card-bg);
+    border-color: var(--card-border);
+    color: var(--text-primary);
+}
+
+/* Badges */
+.badge {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+/* Links */
+a, a:visited, a:active {
+    color: #007bff !important;
+    text-decoration: underline;
+    transition: color 0.2s;
+}
+
+a:hover, a:focus {
+    color: #339cff !important;
+    text-decoration: underline;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* Keep existing styles below */
+html {
+    scroll-behavior: smooth;
+}
+
+img:hover {
+    transform: scale(1.01);
+    transition: transform 0.3s ease;
+}
+
+/* Desktop-Specific Styles */
+@media (min-width: 768px) {
+    .navbar-nav {
+        margin: 0 auto;
     }
 
     .navbar {
-        box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.1);
-        padding: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
-
-    .custom-navlink {
-        color: white;
-        background-color: transparent;
-        text-decoration: none;
-        transition: color 0.2s, background-color 0.2s;
+    #mobile-search-input,
+    #mobile-search-button {
+        display: none;
     }
-    
-    .custom-navlink:hover,
-    .custom-navlink:focus,
-    .custom-navlink:active {
-        color: #ffdd00;
-    }
+}
 
-
-    .button {
-        border: none;
-        color: white;
-        padding: 8px 16px;
-        font-size: 16px;
-        cursor: pointer;
-        border-radius: 5px;
-        transition: all 0.3s ease-in-out;
+/* Mobile-Specific Styles */
+@media (max-width: 768px) {
+    .navbar-collapse {
+        flex-direction: column;
+        text-align: center;
     }
 
     .navbar-toggler {
-        border: none;
-        color: white;
+        margin-left: auto;
+        margin-right: 10px;
     }
 
-    /* Desktop-Specific Styles */
-    @media (min-width: 768px) {
-        .navbar-nav {
-            margin: 0 auto;
-        }
-
-        .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        #mobile-search-input,
-        #mobile-search-button {
-            display: none;
-        }
+    .navbar-brand-custom {
+        margin-right: auto;
     }
 
-    /* Mobile-Specific Styles */
-    @media (max-width: 768px) {
-        .navbar-collapse {
-            flex-direction: column;
-            text-align: center;
-        }
-
-        .navbar-toggler {
-            margin-left: auto;
-            margin-right: 10px;
-        }
-
-        .navbar-brand-custom {
-            margin-right: auto;
-        }
-
-        .ms-auto {
-            margin-left: auto !important;
-        }
-
-        .desktop-search {
-            display: none;
-        }
-
-        .container-fluid {
-            padding: 15px;
-        }
-
-        .desktop-left-section,
-        .desktop-right-section {
-            width: 100%;
-        }
-
-        .logo-search-container {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        .dozer-image {
-            margin-top: 20px;
-        }
-
-        .body {
-            font-size: 14px;
-        }
+    .ms-auto {
+        margin-left: auto !important;
     }
-</style>
+
+    .desktop-search {
+        display: none;
+    }
+
+    .container-fluid {
+        padding: 15px;
+    }
+
+    .desktop-left-section,
+    .desktop-right-section {
+        width: 100%;
+    }
+
+    .logo-search-container {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .dozer-image {
+        margin-top: 20px;
+    }
+
+    .body {
+        font-size: 14px;
+    }
+}
+
+/* Input box theming */
+.custom-input-box,
+.custom-input-box:focus {
+    color: var(--text-primary) !important;
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    box-shadow: none;
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+
+.custom-input-box::placeholder {
+    color: var(--text-secondary) !important;
+    opacity: 1;
+}
+
+/* Button theming */
+.custom-btn {
+    color: var(--text-primary) !important;
+    background-color: var(--navbar-hover) !important;
+    border: 2px solid #555 !important;
+    font-weight: bold;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.custom-btn:hover, .custom-btn:focus {
+    background-color: #ffe066 !important;
+    color: #222 !important;
+    border-color: #222 !important;
+}
+
+/* Simplify to just these rules */
+#teams-table .dash-cell {
+    color: var(--text-primary); 
+    font-weight: 500;                  
+    font-size: 15px;              
+}
+
+/* Add this to see what's happening */
+#teams-table [style*="background-color"] {
+    color: white !important; /* Force white text on colored backgrounds */
+}
+
+/* Custom styles for the recent events table */
+.recent-events-table .dash-cell,
+.recent-events-table .dash-cell div,
+.recent-events-table .dash-cell span {
+    color: black;
+    font-weight: 500;
+    font-size: 15px;
+}
+
+.recent-events-table .dash-header {
+    background: var(--card-bg) !important;
+    font-weight: bold;
+}
+
+/* Force white text on cells with a background color for contrast */
+.recent-events-table .dash-cell[style*="background-color"] {
+    color: white !important;
+}

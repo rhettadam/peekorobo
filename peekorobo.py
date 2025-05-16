@@ -43,7 +43,10 @@ app = dash.Dash(
         {'name': 'description', 'content': 'A scouting and statistics platform for FRC teams that provides detailed insights and resources'},
         {'name': 'keywords', 'content': 'FRC, Robotics, Scouting, FIRST, FIRST Robotics Competition, Statbotics, TBA, The Blue Alliance, Competition, Statistics'},
     ],
-    external_stylesheets=[dbc.themes.BOOTSTRAP],
+    external_stylesheets=[
+        dbc.themes.BOOTSTRAP,
+        'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'
+    ],
     suppress_callback_exceptions=True,
     title="Peekorobo",
 )
@@ -111,9 +114,9 @@ def login_layout():
                             style={"width": "100%", "maxWidth": "400px", "marginBottom": "30px"},
                             className="dozer-image"
                         ),
-                        html.H3("Login or Register", style={"textAlign": "center", "marginBottom": "20px", "color": "#333"}),
-                        dbc.Input(id="username", type="text", placeholder="Username", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1rem"}),
-                        dbc.Input(id="password", type="password", placeholder="Password", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1.5rem"}),
+                        html.H3("Login or Register", style={"textAlign": "center", "marginBottom": "20px", "color": "var(--text-primary)"}),
+                        dbc.Input(id="username", type="text", placeholder="Username", className="custom-input-box", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1rem"}),
+                        dbc.Input(id="password", type="password", placeholder="Password", className="custom-input-box", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1.5rem"}),
                         dbc.Row([
                             dbc.Col(dbc.Button("Login", id="login-btn", style={
                                 "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%"
@@ -126,7 +129,7 @@ def login_layout():
                     ], style={"textAlign": "center", "paddingTop": "50px"})
                 , width=12),
             )
-        ], class_name="py-5", style={"backgroundColor": "white"}),
+        ], class_name="py-5", style={"backgroundColor": "var(--bg-primary)"}),
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
         dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
@@ -504,7 +507,7 @@ def user_layout(_user_id=None, deleted_items=None):
             style={  # ✅ Custom styling applied here
                 "borderRadius": "10px",
                 "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
-                "backgroundColor": "#f9f9f9",
+                "backgroundColor": "var(--card-bg)",
                 "marginBottom": "20px"
             }
         )
@@ -522,7 +525,7 @@ def user_layout(_user_id=None, deleted_items=None):
             style={  # ← You can replace this block:
                 "borderRadius": "10px",
                 "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
-                "backgroundColor": "#f9f9f9",
+                "backgroundColor": "var(--card-bg)",
                 "marginBottom": "20px"
             }
         )
@@ -894,7 +897,7 @@ def user_layout(_user_id=None, deleted_items=None):
                                     id="profile-search-header",
                                     style={"marginTop": "10px", "fontSize": "0.95rem", "color": text_color}
                                 ),
-                                dbc.Input(id="user-search-input", placeholder="Search Users", type="text", size="sm", className="mb-2"),
+                                dbc.Input(id="user-search-input", placeholder="Search Users", type="text", size="sm", className="custom-input-box mb-2"),
                                 html.Div(id="user-search-results")
                             ], style={"marginTop": "10px", "width": "100%"}),
                             html.Button(
@@ -916,7 +919,7 @@ def user_layout(_user_id=None, deleted_items=None):
                     ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "15px"})
                 ]),
                 id="profile-card",
-                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "marginBottom": "20px", "backgroundColor": color or "#f9f9f9"}
+                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "marginBottom": "20px", "backgroundColor": color or "var(--card-bg)"}
 
             ),
             html.H3("Favorite Teams", className="mb-3"),
@@ -1014,7 +1017,7 @@ def other_user_layout(username):
             style={
                 "borderRadius": "10px",
                 "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
-                "backgroundColor": "#f9f9f9",
+                "backgroundColor": "var(--card-bg)",
                 "marginBottom": "20px"
             }
         )
@@ -1136,7 +1139,7 @@ def other_user_layout(username):
                     section
                 ]),
                 className="mb-4",
-                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "backgroundColor": "#f9f9f9"}
+                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "backgroundColor": "var(--card-bg)"}
             )
         )
 
@@ -1235,7 +1238,7 @@ def other_user_layout(username):
                     "borderRadius": "10px",
                     "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
                     "marginBottom": "20px",
-                    "backgroundColor": color or "#f9f9f9"
+                    "backgroundColor": color or "var(--card-bg)"
                 }
             ),
             html.H3("Favorite Teams", className="mb-3"),
@@ -1700,7 +1703,7 @@ def update_search_preview(desktop_value, mobile_value):
                     dbc.Col(
                         html.Div("Teams", style={"fontWeight": "bold", "padding": "5px"}),
                     ),
-                    style={"backgroundColor": "#f1f1f1"}
+                    style={"backgroundColor": "var(--card-bg)"}
                 )
             )
             for team in filtered_teams:
@@ -1725,7 +1728,7 @@ def update_search_preview(desktop_value, mobile_value):
                     dbc.Col(
                         html.Div("Events", style={"fontWeight": "bold", "padding": "5px"}),
                     ),
-                    style={"backgroundColor": "#f1f1f1", "marginTop": "5px"}
+                    style={"backgroundColor": "var(--card-bg)", "marginTop": "5px"}
                 )
             )
             for evt in filtered_events:
@@ -1759,7 +1762,7 @@ def update_search_preview(desktop_value, mobile_value):
                     dbc.Col(
                         html.Div("Users", style={"fontWeight": "bold", "padding": "5px"}),
                     ),
-                    style={"backgroundColor": "#f1f1f1", "marginTop": "5px"}
+                    style={"backgroundColor": "var(--card-bg)", "marginTop": "5px"}
                 )
             )
             for username, avatar_key in user_rows:
@@ -1921,7 +1924,7 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
             rank_str = html.Span([
                 "Rank: ",
                 html.Span(f"{rank_val}", style={"color": rank_color, "fontWeight": "bold"}),
-                html.Span(f"/{total_teams}", style={"color": "black", "fontWeight": "normal"})
+                html.Span(f"/{total_teams}", style={"color": "var(text-muted)", "fontWeight": "normal"})
             ])
         else:
             rank_str = f"Rank: {rank_val}/{total_teams}"
@@ -1975,7 +1978,7 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
             matches.sort(key=parse_match_sort_key)
                     
             def format_team_list(team_str):
-                return ", ".join(f"[{t}](/team/{t})" for t in team_str.split(",") if t.strip().isdigit())
+                return "  ".join(f"[{t}](/team/{t})" for t in team_str.split(",") if t.strip().isdigit())
 
             def sum_epa(team_str):
                 return sum(epa_data.get(t.strip(), {}).get("epa", 0) for t in team_str.split(",") if t.strip().isdigit())
@@ -2047,127 +2050,59 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
 
         match_rows = build_match_rows(matches)
 
-        table = dash_table.DataTable(
-            columns=[
-                {"name": "Video", "id": "Video", "presentation": "markdown"},
-                {"name": "Match", "id": "Match"},
-                {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
-                {"name": "Blue Teams", "id": "Blue Teams", "presentation": "markdown"},
-                {"name": "Red Score", "id": "Red Score"},
-                {"name": "Blue Score", "id": "Blue Score"},
-                {"name": "Winner", "id": "Winner"},
-                {"name": "Prediction", "id": "Prediction"},
-            ],
-            data=match_rows,
-            page_size=10,
-            style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"},
-            style_header={
-                "backgroundColor": "white",        # Match the table background
-                "fontWeight": "bold",              # Keep column labels strong
-                "textAlign": "center",
-                "borderBottom": "1px solid #ccc",  # Thin line under header only
-                "padding": "6px",                  # Reduce banner size
-                "fontSize": "13px",                # Optional: shrink text slightly
-            },
-    
-            style_cell={
-                "textAlign": "center",
-                "padding": "10px",
-                "border": "none",
-                "fontSize": "14px",
-            },
-            style_data_conditional=[
-                {
-                    "if": {"filter_query": '{Winner} = "Red"'},
-                    "backgroundColor": "#ffe6e6"
+        table = html.Div(
+            dash_table.DataTable(
+                columns=[
+                    {"name": "Video", "id": "Video", "presentation": "markdown"},
+                    {"name": "Match", "id": "Match"},
+                    {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
+                    {"name": "Blue Teams", "id": "Blue Teams", "presentation": "markdown"},
+                    {"name": "Red Score", "id": "Red Score"},
+                    {"name": "Blue Score", "id": "Blue Score"},
+                    {"name": "Winner", "id": "Winner"},
+                    {"name": "Prediction", "id": "Prediction"},
+                ],
+                data=match_rows,
+                page_size=10,
+                style_table={
+                    "overflowX": "auto", 
+                    "borderRadius": "10px", 
+                    "border": "none", 
                 },
-                {
-                    "if": {"filter_query": '{Winner} = "Blue"'},
-                    "backgroundColor": "#e6f0ff"
-                },
-                # Neutral zone (around 50%)
-                {
-                    "if": {
-                        "filter_query": "{Prediction %} >= 45 && {Prediction %} <= 55",
-                        "column_id": "Prediction"
-                    },
-                    "backgroundColor": "#ededd4",
-                    "color": "black",
+                style_header={
+                    "backgroundColor": "var(--card-bg)",
                     "fontWeight": "bold",
+                    "textAlign": "center",
+                    "borderBottom": "1px solid #ccc",
+                    "padding": "6px",
+                    "fontSize": "13px",
                 },
-                # Increasing confidence GREEN (light to dark)
-                {
-                    "if": {"filter_query": "{Prediction %} > 55 && {Prediction %} <= 65", "column_id": "Prediction"},
-                    "backgroundColor": "#d4edda",  # light green
-                    "color": "black",
-                    "fontWeight": "bold",
+                style_cell={
+                    "backgroundColor": "var(--card-bg)",
+                    "textAlign": "center",
+                    "padding": "10px",
+                    "border": "none",
+                    "fontSize": "14px",
                 },
-                {
-                    "if": {"filter_query": "{Prediction %} > 65 && {Prediction %} <= 75", "column_id": "Prediction"},
-                    "backgroundColor": "#b6dfc1",
-                    "color": "black",
-                    "fontWeight": "bold",
-                },
-                {
-                    "if": {"filter_query": "{Prediction %} > 75 && {Prediction %} <= 85", "column_id": "Prediction"},
-                    "backgroundColor": "#8fd4a8",
-                    "color": "black",
-                    "fontWeight": "bold",
-                },
-                {
-                    "if": {"filter_query": "{Prediction %} > 85 && {Prediction %} <= 95", "column_id": "Prediction"},
-                    "backgroundColor": "#68c990",
-                    "color": "white",
-                    "fontWeight": "bold",
-                },
-                {
-                    "if": {"filter_query": "{Prediction %} > 95", "column_id": "Prediction"},
-                    "backgroundColor": "#41be77",  # dark green
-                    "color": "white",
-                    "fontWeight": "bold",
-                },
-                
-                # Increasing confidence RED (light to dark)
-                {
-                    "if": {"filter_query": "{Prediction %} < 45 && {Prediction %} >= 35", "column_id": "Prediction"},
-                    "backgroundColor": "#f8d7da",  # light red
-                    "color": "black",
-                    "fontWeight": "bold",
-                },
-                {
-                    "if": {"filter_query": "{Prediction %} < 35 && {Prediction %} >= 25", "column_id": "Prediction"},
-                    "backgroundColor": "#f1bfc2",
-                    "color": "black",
-                    "fontWeight": "bold",
-                },
-                {
-                    "if": {"filter_query": "{Prediction %} < 25 && {Prediction %} >= 15", "column_id": "Prediction"},
-                    "backgroundColor": "#eaa7aa",
-                    "color": "black",
-                    "fontWeight": "bold",
-                },
-                {
-                    "if": {"filter_query": "{Prediction %} < 15 && {Prediction %} >= 5", "column_id": "Prediction"},
-                    "backgroundColor": "#e39091",
-                    "color": "white",
-                    "fontWeight": "bold",
-                },
-                {
-                    "if": {"filter_query": "{Prediction %} < 5", "column_id": "Prediction"},
-                    "backgroundColor": "#dc7878",  # dark red
-                    "color": "white",
-                    "fontWeight": "bold",
-                },
-
-                {
-                    "if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Score"},
-                    "borderBottom": "1px solid black"
-                },
-                {
-                    "if": {"filter_query": '{team_alliance} = "Blue"', "column_id": "Blue Score"},
-                    "borderBottom": "1px solid black"
-                },
-            ]
+                style_data_conditional=[
+                    {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "#ffe6e6"},
+                    {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
+                    {"if": {"filter_query": "{Prediction %} >= 45 && {Prediction %} <= 55", "column_id": "Prediction"}, "backgroundColor": "#ededd4", "fontWeight": "bold"},
+                    {"if": {"filter_query": "{Prediction %} > 55 && {Prediction %} <= 65", "column_id": "Prediction"}, "backgroundColor": "#d4edda", "fontWeight": "bold"},
+                    {"if": {"filter_query": "{Prediction %} > 65 && {Prediction %} <= 75", "column_id": "Prediction"}, "backgroundColor": "#b6dfc1", "fontWeight": "bold"},
+                    {"if": {"filter_query": "{Prediction %} > 75 && {Prediction %} <= 85", "column_id": "Prediction"}, "backgroundColor": "#8fd4a8", "fontWeight": "bold"},
+                    {"if": {"filter_query": "{Prediction %} > 85 && {Prediction %} <= 95", "column_id": "Prediction"}, "backgroundColor": "#68c990", "fontWeight": "bold"},
+                    {"if": {"filter_query": "{Prediction %} > 95", "column_id": "Prediction"}, "backgroundColor": "#41be77", "fontWeight": "bold"},
+                    {"if": {"filter_query": "{Prediction %} < 45 && {Prediction %} >= 35", "column_id": "Prediction"}, "backgroundColor": "#f8d7da", "fontWeight": "bold"},
+                    {"if": {"filter_query": "{Prediction %} < 35 && {Prediction %} >= 25", "column_id": "Prediction"}, "backgroundColor": "#f1bfc2", "fontWeight": "bold"},
+                    {"if": {"filter_query": "{Prediction %} < 25 && {Prediction %} >= 15", "column_id": "Prediction"}, "backgroundColor": "#eaa7aa", "fontWeight": "bold"},
+                    {"if": {"filter_query": "{Prediction %} < 15 && {Prediction %} >= 5", "column_id": "Prediction"}, "backgroundColor": "#e39091", "fontWeight": "bold"},
+                    {"if": {"filter_query": "{Prediction %} < 5", "column_id": "Prediction"}, "backgroundColor": "#dc7878", "fontWeight": "bold"},
+                    {"if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Score"}, "borderBottom": "1px solid black"},
+                    {"if": {"filter_query": '{team_alliance} = "Blue"', "column_id": "Blue Score"}, "borderBottom": "1px solid black"},
+                ]
+            ),
+            className="recent-events-table"
         )
 
         recent_rows.append(
@@ -2178,7 +2113,7 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
         )
 
     return html.Div([
-        html.H3("Recent Events", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
+        html.H3("Recent Events", style={"marginTop": "2rem", "color": "var(--text-secondary)", "fontWeight": "bold"}),
         html.Div(recent_rows)
     ])
 
@@ -2312,7 +2247,7 @@ def build_recent_matches_section(event_key, year, epa_data):
 
     style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"}
     style_header={
-        "backgroundColor": "white",        # Match the table background
+        "backgroundColor": "var(--card-bg)",        # Match the table background
         "fontWeight": "bold",              # Keep column labels strong
         "textAlign": "center",
         "borderBottom": "1px solid #ccc",  # Thin line under header only
@@ -2579,7 +2514,7 @@ def team_layout(team_number, year):
                     [
                         dbc.Col(
                             [
-                                html.H2(f"Team {team_number}: {nickname}", style={"color": "#333", "fontWeight": "bold"}),
+                                html.H2(f"Team {team_number}: {nickname}", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
                                 *badges,
                                 html.P([html.I(className="bi bi-geo-alt-fill"), f"📍 {city}, {state}, {country}"]),
                                 html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
@@ -2631,34 +2566,21 @@ def team_layout(team_number, year):
             "marginBottom": "20px",
             "borderRadius": "10px",
             "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
-            "backgroundColor": "#f9f9f9"
+            "backgroundColor": "var(--card-bg)"
         },
     )
 
     wins = selected_team.get("wins")
     losses = selected_team.get("losses")
-    avg_score = selected_team.get("average_match_score")
     
     wins_str = str(wins) if wins is not None else "N/A"
     losses_str = str(losses) if losses is not None else "N/A"
-    avg_score_str = f"{avg_score:.2f}" if avg_score is not None else "N/A"
     
     win_loss_ratio = html.Span([
         html.Span(wins_str, style={"color": "green", "fontWeight": "bold"}),
         html.Span(" / ", style={"color": "#333", "fontWeight": "bold"}),
         html.Span(losses_str, style={"color": "red", "fontWeight": "bold"})
     ])
-
-    perf = html.H5(
-        f"{performance_year} Performance Metrics",
-        style={
-            "textAlign": "center",
-            "color": "#444",
-            "fontSize": "1.3rem",
-            "fontWeight": "bold",
-            "marginBottom": "10px",
-        }
-    )
     def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state):
         def rank_card(label, rank, href):
             return dbc.Card(
@@ -2675,7 +2597,7 @@ def team_layout(team_number, year):
                     "textAlign": "center",
                     "borderRadius": "10px",
                     "boxShadow": "0px 2px 6px rgba(0,0,0,0.1)",
-                    "backgroundColor": "white",
+                    "backgroundColor": "var(--card-bg)",
                     "padding": "15px",
                 }
             )
@@ -2825,9 +2747,9 @@ def team_layout(team_number, year):
         ],
         data=events_data,
         page_size=5,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"},
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
         style_header={
-            "backgroundColor": "white",        # Match the table background
+            "backgroundColor": "var(--card-bg)",        # Match the table background
             "fontWeight": "bold",              # Keep column labels strong
             "textAlign": "center",
             "borderBottom": "1px solid #ccc",  # Thin line under header only
@@ -2836,6 +2758,7 @@ def team_layout(team_number, year):
         },
 
         style_cell={
+            "backgroundColor": "var(--card-bg)",
             "textAlign": "center",
             "padding": "10px",
             "border": "none",
@@ -2871,9 +2794,9 @@ def team_layout(team_number, year):
         ],
         data=awards_data,
         page_size=5,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"},
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
         style_header={
-            "backgroundColor": "white",        # Match the table background
+            "backgroundColor": "var(--card-bg)",        # Match the table background
             "fontWeight": "bold",              # Keep column labels strong
             "textAlign": "center",
             "borderBottom": "1px solid #ccc",  # Thin line under header only
@@ -2882,6 +2805,7 @@ def team_layout(team_number, year):
         },
 
         style_cell={
+            "backgroundColor": "var(--card-bg)",
             "textAlign": "center",
             "padding": "10px",
             "border": "none",
@@ -2947,7 +2871,7 @@ def team_layout(team_number, year):
                 style={"display": "flex", "flexWrap": "wrap", "justifyContent": "center", "gap": "10px"},
             ),
         ],
-        style={"marginBottom": "15px", "borderRadius": "8px", "backgroundColor": "white", "padding": "10px"},
+        style={"marginBottom": "15px", "borderRadius": "8px", "backgroundColor": "var(--card-bg)", "padding": "10px"},
     )
 
     
@@ -2962,15 +2886,13 @@ def team_layout(team_number, year):
                     performance_metrics_card,  # ← new
                     html.Hr(),
                     build_recent_events_section(team_key, team_number, epa_data, performance_year),
-                    html.H3("Events", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
+                    html.H3("Events", style={"marginTop": "2rem", "color": "var(--text-secondary)", "fontWeight": "bold"}),
                     events_table,
-                    html.H3("Awards", style={"marginTop": "2rem", "color": "#333", "fontWeight": "bold"}),
+                    html.H3("Awards", style={"marginTop": "2rem", "color": "var(--text-secondary)", "fontWeight": "bold"}),
                     awards_table,
                     # rank_tabs,
                     blue_banner_section,
                     html.Br(),
-                    dbc.Button("Go Back", id="btn-go-back", color="secondary", href="/", external_link=True, 
-                               style={"borderRadius": "5px", "padding": "10px 20px", "marginTop": "20px"}),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
@@ -3610,7 +3532,6 @@ def event_layout(event_key):
         style={"borderRadius": "10px"}
     )
 
-
     # Determine last match and thumbnail
     last_match = None
     if event_matches:
@@ -3659,7 +3580,7 @@ def event_layout(event_key):
         [
             dcc.Store(id="user-session"),  # Holds user_id from session
             topbar(),
-            dcc.Store(id="event-favorites-store", storage_type="session"),
+            dbc.Store(id="event-favorites-store", storage_type="session"),
             dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
                 [
@@ -3714,7 +3635,7 @@ def create_team_card_spotlight(team, epa_data, event_year):
                     "width": "100%",
                     "height": "150px",
                     "objectFit": "contain",
-                    "backgroundColor": "#fff",
+                    "backgroundColor": "transparent",
                     "padding": "5px"
                 }
             )
@@ -3825,7 +3746,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
     # === Shared styles ===
     common_style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"}
     common_style_header={
-        "backgroundColor": "white",        # Match the table background
+        "backgroundColor": "var(--card-bg)",        # Match the table background
         "fontWeight": "bold",              # Keep column labels strong
         "textAlign": "center",
         "borderBottom": "1px solid #ccc",  # Thin line under header only
@@ -3834,6 +3755,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
     }
 
     common_style_cell={
+        "backgroundColor": "var(--card-bg)", 
         "textAlign": "center",
         "padding": "10px",
         "border": "none",
@@ -4192,12 +4114,13 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 data=alliance_table_data,
                 style_table=common_style_table,
                 style_header={
-                    "backgroundColor": "white",
+                    "backgroundColor": "var(--card-bg)",
                     "fontWeight": "bold",
                     "padding": "6px",
                     "fontSize": "13px",
                 },
                 style_cell={
+                    "backgroundColor": "var(--card-bg)", 
                     "padding": "8px",
                     "fontSize": "14px",
                     "textAlign": "center"  # Default to center for safety
@@ -4321,11 +4244,11 @@ def update_matches_table(selected_team, event_matches, epa_data):
             else:
                 label = label.upper()
     
-            red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
-            blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
+            red_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
+            blue_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
 
     
-            p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
+            p_red, p_blue = predict_win_probability(red_info, blue_info)
             if p_red == 0.5 and p_blue == 0.5:
                 pred_str = "N/A"
             else:
@@ -4366,9 +4289,10 @@ def update_matches_table(selected_team, event_matches, epa_data):
         {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
     ]
 
-    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"}
+    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "color": "var(--text-tertiary) !important"}
     style_header={
-        "backgroundColor": "white",        # Match the table background
+        "backgroundColor": "var(--card-bg)",        # Match the table background
+        "color": "var(--text-tertiary) !important",
         "fontWeight": "bold",              # Keep column labels strong
         "textAlign": "center",
         "borderBottom": "1px solid #ccc",  # Thin line under header only
@@ -4377,6 +4301,8 @@ def update_matches_table(selected_team, event_matches, epa_data):
     }
 
     style_cell={
+        "backgroundColor": "var(--card-bg)", 
+        "color": "var(--text-tertiary) !important",
         "textAlign": "center",
         "padding": "10px",
         "border": "none",
@@ -4644,9 +4570,10 @@ def teams_layout(default_year=2025):
         ],
         data=[],
         page_size=50,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"},
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
         style_header={
-            "backgroundColor": "white",        # Match the table background
+            "backgroundColor": "var(--card-bg)",        # Match the table background
+            "color": "var(--text)",
             "fontWeight": "bold",              # Keep column labels strong
             "textAlign": "center",
             "borderBottom": "1px solid #ccc",  # Thin line under header only
@@ -4659,6 +4586,7 @@ def teams_layout(default_year=2025):
             "padding": "10px",
             "border": "none",
             "fontSize": "14px",
+            "backgroundColor": "var(--card-bg)",
         },
         style_data_conditional=[
             {
@@ -5215,6 +5143,68 @@ def display_page(pathname):
         return challenge_details_layout(year)
 
     return wrap_with_toast_or_star(home_layout)
+
+# Theme switching callbacks
+app.clientside_callback(
+    """
+    function(n_clicks, current_theme) {
+        if (!n_clicks) {
+            return window.dash_clientside.no_update;
+        }
+        
+        const new_theme = current_theme === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', new_theme);
+        
+        // Update theme toggle icon
+        const themeIcon = document.querySelector('#theme-toggle i');
+        if (themeIcon) {
+            themeIcon.className = new_theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+        }
+        
+        return new_theme;
+    }
+    """,
+    Output("theme-store", "data"),
+    Input("theme-toggle", "n_clicks"),
+    State("theme-store", "data"),
+    prevent_initial_call=True
+)
+
+# Initialize theme on page load
+app.clientside_callback(
+    """
+    function() {
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        
+        // Update theme toggle icon
+        const themeIcon = document.querySelector('#theme-toggle i');
+        if (themeIcon) {
+            themeIcon.className = savedTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+        }
+        
+        return savedTheme;
+    }
+    """,
+    Output("theme-store", "data", allow_duplicate=True),
+    Input("url", "pathname"),
+    prevent_initial_call=True
+)
+
+# Save theme preference
+app.clientside_callback(
+    """
+    function(theme) {
+        if (theme) {
+            localStorage.setItem('theme', theme);
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("theme-store", "data", allow_duplicate=True),
+    Input("theme-store", "data"),
+    prevent_initial_call=True
+)
 
 
 if __name__ == "__main__":

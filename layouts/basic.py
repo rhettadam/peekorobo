@@ -19,7 +19,7 @@ def team_link_with_avatar(team):
             f"{team_number} | {nickname}"
         ], style={"display": "flex", "alignItems": "center"}),
         href=f"/team/{team_number}",
-        style={"textDecoration": "none", "color": "black"}
+        style={"textDecoration": "none", "color": "var(--text-primary)"}
     )
 
 def topbar():
@@ -27,6 +27,7 @@ def topbar():
         dbc.Container(
             [
                 dcc.Store(id="login-state-ready", data=False),
+                dcc.Store(id="theme-store", data="light"),  # Store for theme preference
 
                 dbc.Row(
                     [
@@ -48,13 +49,13 @@ def topbar():
                                     [
                                         dbc.Input(id="mobile-search-input", placeholder="Search", type="text"),
                                         dbc.Button("🔎", id="mobile-search-button", color="primary", style={
-                                            "backgroundColor": "#FFDD00", "border": "none", "color": "black",
+                                            "backgroundColor": "#FFDD00", "border": "none", "color": "#222",
                                         }),
                                     ],
                                     style={"width": "180px"},
                                 ),
                                 html.Div(id="mobile-search-preview", style={
-                                    "backgroundColor": "white",
+                                    "backgroundColor": "var(--card-bg)",
                                     "border": "1px solid #ddd",
                                     "borderRadius": "8px",
                                     "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
@@ -116,6 +117,14 @@ def topbar():
                                             dbc.DropdownMenuItem("Peekorobo", href="https://www.peekorobo.com/", target="_blank"),
                                         ]
                                     ),
+                                    dbc.NavItem(
+                                        dbc.Button(
+                                            html.I(className="fas fa-moon"),
+                                            id="theme-toggle",
+                                            className="custom-navlink",
+                                            style={"background": "none", "border": "none", "padding": "0.5rem 1rem"},
+                                        )
+                                    ),
                                 ],
                                 navbar=True,
                                 className="justify-content-center",
@@ -132,14 +141,14 @@ def topbar():
                     [
                         dbc.InputGroup(
                             [
-                                dbc.Input(id="desktop-search-input", placeholder="Search Teams or Events", type="text"),
+                                dbc.Input(id="desktop-search-input", placeholder="Search Teams or Events", type="text", className="custom-input-box"),
                                 dbc.Button("🔎", id="desktop-search-button", color="primary", style={
-                                    "backgroundColor": "#FFDD00", "border": "none", "color": "black",
+                                    "backgroundColor": "#FFDD00", "border": "none", "color": "#222",
                                 }),
                             ]
                         ),
                         html.Div(id="desktop-search-preview", style={
-                            "backgroundColor": "white",
+                            "backgroundColor": "var(--card-bg)",
                             "border": "1px solid #ddd",
                             "borderRadius": "8px",
                             "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
@@ -161,7 +170,7 @@ def topbar():
                     style={"position": "relative"},
                 ),
             ],
-            fluid=True  # ✅ This belongs here
+            fluid=True
         ),
         color="#353535",
         dark=True,
@@ -187,7 +196,7 @@ footer = dbc.Container(
                 ],
                 style={
                     "textAlign": "center",
-                    "color": "#353535",
+                    "color": "var(--text-primary)",
                     "fontSize": "12px",
                     "margin": "0",  # Minimized margin
                     "padding": "0",  # Minimized padding
@@ -197,7 +206,7 @@ footer = dbc.Container(
     ], style={"margin": "0"}),  # Ensure no margin in rows
     fluid=True,
     style={
-        "backgroundColor": "white",
+        "backgroundColor": "var(--card-bg)",
         "padding": "10px 0px",
         "boxShadow": "0px -1px 2px rgba(0, 0, 0, 0.1)",
         "margin": "0",  # Eliminate default container margin
@@ -226,7 +235,7 @@ home_layout = html.Div([
                                     "Search for any FRC Team",
                                     style={
                                         "fontSize": "1.5rem",
-                                        "color": "#555",
+                                        "color": "var(--text-primary)",
                                         "textAlign": "center",
                                         "marginBottom": "20px"
                                     },
@@ -265,7 +274,7 @@ home_layout = html.Div([
                                     style={
                                         "backgroundColor": "#ffdd00ff",
                                         "border": "2px solid #555",
-                                        "color": "black",
+                                        "color": "#222",
                                         "marginTop": "10px",
                                         "width": "50%",
                                     },
@@ -314,7 +323,7 @@ home_layout = html.Div([
             align="center",
             style={"height": "78vh"}
         ),
-    ], class_name="py-5", style={"backgroundColor": "white"}),
+    ], class_name="py-5", style={"backgroundColor": "var(--bg-primary)"}),
     footer
 ])
 
@@ -337,7 +346,7 @@ delta = decay * (K / (1 + M)) * ((actual - epa) - M * (opponent_score - epa))
 
 # Update EPA:
 epa += delta
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "#f8f9fa", "padding": "10px"})
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
             ])
         ], className="my-3"),
 
@@ -350,12 +359,12 @@ epa += delta
                 html.Pre("""
 decay = 0.95 ** match_index
 importance = {"qm": 1.2, "qf": 1.0, "sf": 1.0, "f": 1.0}
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "#f8f9fa", "padding": "10px"})
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
             ])
         ], className="my-3"),
 
         html.H4("EPA Component Breakdown"),
-        html.P("Each team’s total EPA is the sum of their estimated Auto, Teleop, and Endgame contributions. These are computed separately and updated using the same delta mechanism."),
+        html.P("Each team's total EPA is the sum of their estimated Auto, Teleop, and Endgame contributions. These are computed separately and updated using the same delta mechanism."),
 
         html.H4("Auto EPA Estimation"),
         html.P("Auto EPA estimates scoring using reef row counts. To reduce inflation, the algorithm trims the top 25% of scores and caps the result."),
@@ -369,12 +378,12 @@ def estimate_consistent_auto(breakdowns, team_count):
     cutoff = int(len(scores) * 0.75)
     trimmed = scores[:cutoff]
     return round(min(statistics.mean(trimmed), 30), 2)
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "#f8f9fa", "padding": "10px"})
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
             ])
         ], className="my-3"),
 
         html.H4("Statistical Notes on Auto EPA"),
-        html.P("The trimming method approximates a robust mean, reducing influence from occasional hot autos. It’s a simplified Winsorized mean. The cap of 30 points is based on expected maximum scoring in auto under typical match constraints."),
+        html.P("The trimming method approximates a robust mean, reducing influence from occasional hot autos. It's a simplified Winsorized mean. The cap of 30 points is based on expected maximum scoring in auto under typical match constraints."),
 
         html.H4("Confidence Weighting (ACE)"),
         html.P("ACE = EPA × Confidence. Confidence is computed from three components: consistency, rookie bonus, and carry factor."),
@@ -388,7 +397,7 @@ rookie_bonus = 1.0 if veteran else 0.6
 carry = min(1.0, team_epa / (avg_teammate_epa + ε))
 confidence = (consistency + rookie_bonus + carry) / 3
 ACE = EPA × confidence
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "#f8f9fa", "padding": "10px"})
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
             ])
         ], className="my-3"),
 
@@ -400,12 +409,12 @@ ACE = EPA × confidence
             dbc.CardBody([
                 html.Pre("""
 consistency = 1 - (statistics.stdev(scores) / statistics.mean(scores))
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "#f8f9fa", "padding": "10px"})
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
             ])
         ], className="my-3"),
 
         html.H4("Rookie Bonus"),
-        html.P("Veteran teams start with a higher confidence (1.0 vs 0.6) because they’ve historically performed more predictably."),
+        html.P("Veteran teams start with a higher confidence (1.0 vs 0.6) because they've historically performed more predictably."),
 
         html.H4("Carry Factor"),
         html.P("This measures whether a team is likely benefiting from stronger alliance partners. A team well below its average teammates gets a lower confidence score."),
@@ -444,13 +453,13 @@ def challenges_layout():
                                         html.A(
                                             f"{game['name']} ({year})",
                                             href=f"/challenge/{year}",
-                                            style={"textDecoration": "none", "color": "#007BFF"},
+                                            style={"textDecoration": "none", "color": "var(--text-primary)"},
                                         ),
                                         className="mb-1",
                                     ),
                                     html.P(
                                         game.get("summary", "No summary available."),
-                                        style={"color": "#555", "marginBottom": "5px", "fontSize": "0.9rem"},
+                                        style={"color": "var(--text-primary)", "marginBottom": "5px", "fontSize": "0.9rem"},
                                     ),
                                 ],
                                 width=True,
@@ -508,7 +517,7 @@ def challenge_details_layout(year):
                     html.P(
                         game.get("summary", "No summary available."),
                         className="text-center mb-4",
-                        style={"fontSize": "1rem", "lineHeight": "1.5", "color": "#555"},
+                        style={"fontSize": "1rem", "lineHeight": "1.5", "color": "var(--text-primary)"},
                     ),
                     # Game Manual Button
                     html.Div(
@@ -518,7 +527,7 @@ def challenge_details_layout(year):
                             target="_blank",
                             style={"marginBottom": "20px",
                                   "backgroundColor": "#ffdd00ff",
-                                  "color": "black",
+                                  "color": "#222",
                                   "border": "2px solid #555"},
                         ),
                         className="text-center",

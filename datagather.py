@@ -197,8 +197,7 @@ def get_epa_styling(percentiles_dict):
                         "column_id": col
                     },
                     "backgroundColor": color,
-                    "color": "white",
-                    "fontWeight": "bold",
+                    "color": "white !important",
                     "borderRadius": "6px",
                     "padding": "4px 6px",
                 })
