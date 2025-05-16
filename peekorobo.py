@@ -2216,7 +2216,7 @@ def build_recent_matches_section(event_key, year, epa_data):
             if p_red == 0.5 and p_blue == 0.5:
                 prediction = "N/A"
             else:
-                prediction = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
+                prediction = f"🔴 {p_red:.0%} vs 🔵 {p_blue:.0%}"
 
             yid = match.get("yt")
             video_link = f"[Watch](https://youtube.com/watch?v={yid})" if yid else "N/A"
@@ -2303,9 +2303,10 @@ def build_recent_matches_section(event_key, year, epa_data):
     ]
 
     return html.Div([
-        *qual_table,
-        *playoff_table
+        html.Div(qual_table, className="recent-events-table"),
+        html.Div(playoff_table, className="recent-events-table")
     ])
+
 
 def team_layout(team_number, year):
 
@@ -3038,7 +3039,7 @@ def events_layout(year=2025):
             "padding": "10px 0",
         }
     )
-    tab_style = {"color": "var(--text-primary)", "backgroundColor": "var(--card-bg)"}
+    tab_style = {"color": "var(--text-primary)", "backgroundColor": "transparent"}
     return html.Div(
         [
             topbar(),
@@ -3579,7 +3580,7 @@ def event_layout(event_key):
         className="mb-4"
     )
 
-    tab_style = {"color": "var(--text-primary)", "backgroundColor": "var(--card-bg)"}
+    tab_style = {"color": "var(--text-primary)", "backgroundColor": "transparent"}
     data_tabs = dbc.Tabs(
         [
             dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
@@ -3993,7 +3994,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
         return html.Div([
             html.Div(
                 [
-                    html.Label("Filter by Team:", style={"fontWeight": "bold"}),
+                    html.Label("Filter by Team:", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
                     dcc.Dropdown(
                         id="team-filter",
                         options=[{"label": "All Teams", "value": "ALL"}] + team_filter_options,
@@ -4400,7 +4401,13 @@ def update_matches_table(selected_team, event_matches, epa_data):
         dbc.Alert("No playoff matches found.", color="info"),
     ]
 
-    return html.Div(qual_table + playoff_table)
+    return html.Div(
+        [
+            html.Div(qual_table, className="recent-events-table"),
+            html.Div(playoff_table, className="recent-events-table"),
+        ]
+    )
+
 
 def epa_legend_layout():
     color_map = [
@@ -4559,7 +4566,7 @@ def teams_layout(default_year=2025):
         value="All",
         clearable=False,
         placeholder="Select District",
-        style={"width": "100%"},
+        style={"width": "100%", "color": "black"},
     )
     percentile_toggle = dbc.Checklist(
         options=[{"label": "Filter Colors", "value": "filtered"}],
@@ -4694,7 +4701,7 @@ def teams_layout(default_year=2025):
         className="d-flex flex-wrap justify-content-center",
         style={"gap": "5px", "padding": "1rem"}
     )
-    tab_style = {"color": "var(--text-primary)", "backgroundColor": "var(--card-bg)"}
+    tab_style = {"color": "var(--text-primary)", "backgroundColor": "transparent"}
     tabs = dbc.Tabs([
         dbc.Tab(label="Insights", tab_id="table-tab", active_label_style=tab_style),
         dbc.Tab(label="Avatars", tab_id="avatars-tab", active_label_style=tab_style),
@@ -5022,43 +5029,6 @@ def load_teams(
         return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, query_string, style_data_conditional
 
     return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string, style_data_conditional
-
-@callback(
-    Output("teams-year-dropdown", "value"),
-    Output("country-dropdown", "value"),
-    Output("state-dropdown", "value"),
-    Output("district-dropdown", "value"),
-    Output("x-axis-dropdown", "value"),
-    Output("y-axis-dropdown", "value"),
-    Output("percentile-toggle", "value"),  # ← ADD THIS
-    Input("teams-url", "href"),
-    prevent_initial_call=True,
-)
-def apply_url_filters(href):
-    if not href or "?" not in href:
-        return 2025, "All", "All", "All", "teleop_epa", "auto+endgame", []
-
-
-    query = href.split("?", 1)[1]
-    params = parse_qs(query)
-
-    def get_param(name, default):
-        val = params.get(name, [default])
-        if isinstance(val, list):
-            val = val[0]
-        return val if val not in ("[]", "['']") else default
-    
-        
-
-    return (
-        int(get_param("year", 2025)),
-        get_param("country", "All"),
-        get_param("state", "All"),
-        get_param("district", "All"),
-        get_param("x", "teleop_epa"),
-        get_param("y", "auto+endgame"),
-        ["filtered"] if get_param("percentile", "") == "filtered" else [],
-    )
 
 @callback(
     Output("axis-dropdown-container", "style"),
