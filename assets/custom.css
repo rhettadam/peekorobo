@@ -188,14 +188,15 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 /* Specific styles for dcc.Dropdown (react-select based) */
 .Select-control {
     background-color: var(--input-bg);
-    border-color: var(--input-border);
     color: var(--input-text);
-    box-shadow: none; /* Remove default focus box-shadow */
 }
 
 .Select-control:hover, .Select-control.is-focused {
      border-color: var(--input-border);
-     box-shadow: none;
+}
+
+.Select-value {
+    background-color: var(--card-bg) !important; /* Ensure selected value text is themed */
 }
 
 .Select-value-label {

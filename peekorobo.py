@@ -2971,7 +2971,8 @@ def events_layout(year=2025):
         value=["all"],
         multi=True,
         placeholder="Filter by Event Type",
-        clearable=False
+        clearable=False,
+        className="custom-input-box"
     )
     week_dropdown = dcc.Dropdown(
         id="week-dropdown",
@@ -2988,7 +2989,8 @@ def events_layout(year=2025):
         options=[],
         placeholder="District",
         value="all",
-        clearable=False
+        clearable=False,
+        className="custom-input-box"
     )
     sort_toggle = dcc.RadioItems(
         id="sort-mode-toggle",
@@ -3002,7 +3004,8 @@ def events_layout(year=2025):
             # Apply basic styling here, leave theme to CSS
             "padding": "4px 8px",
             "borderRadius": "6px"
-        }
+        },
+        className="custom-input-box"
     )
     search_input = dbc.Input(
         id="search-input",
@@ -3354,8 +3357,13 @@ def create_event_card(event, favorited=False):
                     html.P(location, className="card-text"),
                     html.P(f"Dates: {start} - {end}", className="card-text"),
                     html.P(f"Type: {event_type}", className="card-text"),
-                    dbc.Button("View Details", href=event_url, target="_blank",
-                               color="warning", className="mt-2 me-2"),
+                    dbc.Button(
+                        "View Details",
+                        href=event_url,
+                        color="warning",
+                        outline=True,
+                        className="custom-view-btn mt-3",
+                    ),
                     dbc.Button(
                         "★" if favorited else "☆",
                         id={"type": "favorite-event-btn", "key": event_key},
@@ -4401,12 +4409,10 @@ def update_matches_table(selected_team, event_matches, epa_data):
         dbc.Alert("No playoff matches found.", color="info"),
     ]
 
-    return html.Div(
-        [
-            html.Div(qual_table, className="recent-events-table"),
-            html.Div(playoff_table, className="recent-events-table"),
-        ]
-    )
+    return html.Div([
+        html.Div(qual_table, className="recent-events-table"),
+        html.Div(playoff_table, className="recent-events-table"),
+    ])
 
 
 def epa_legend_layout():
@@ -4534,6 +4540,7 @@ def teams_layout(default_year=2025):
         clearable=False,
         placeholder="Select Year",
         style={"width": "100%"},
+        className="custom-input-box"
     )
 
     country_dropdown = dcc.Dropdown(
@@ -4543,6 +4550,7 @@ def teams_layout(default_year=2025):
         clearable=False,
         placeholder="Select Country",
         style={"width": "100%"},
+        className="custom-input-box"
     )
 
     state_dropdown = dcc.Dropdown(
@@ -4552,6 +4560,7 @@ def teams_layout(default_year=2025):
         clearable=False,
         placeholder="Select State/Province",
         style={"width": "100%"},
+        className="custom-input-box"
     )
 
     district_dropdown = dcc.Dropdown(
@@ -4566,7 +4575,8 @@ def teams_layout(default_year=2025):
         value="All",
         clearable=False,
         placeholder="Select District",
-        style={"width": "100%", "color": "black"},
+        style={"width": "100%"},
+        className="custom-input-box"
     )
     percentile_toggle = dbc.Checklist(
         options=[{"label": "Filter Colors", "value": "filtered"}],
@@ -4589,7 +4599,8 @@ def teams_layout(default_year=2025):
         ],
         value="teleop_epa",
         clearable=False,
-        style={"width": "130px"}
+        style={"width": "130px"},
+        className="custom-input-box"
     )
 
     y_axis_dropdown = dcc.Dropdown(
@@ -4605,7 +4616,8 @@ def teams_layout(default_year=2025):
         ],
         value="auto+endgame",
         clearable=False,
-        style={"width": "130px"}
+        style={"width": "130px"},
+        className="custom-input-box"
     )
 
     axis_dropdowns = html.Div(
@@ -4649,8 +4661,6 @@ def teams_layout(default_year=2025):
             "padding": "6px 8px",
         }
     )
-
-
 
     teams_table = dash_table.DataTable(
         id="teams-table",
