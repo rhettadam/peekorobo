@@ -17,7 +17,7 @@ def team_link_with_avatar(team):
                 "verticalAlign": "middle"
             }),
             f"{team_number} | {nickname}"
-        ], style={"display": "flex", "alignItems": "center"}),
+        ], style={"display": "flex", "alignItems": "center", "color": "black"}),
         href=f"/team/{team_number}",
         style={"textDecoration": "none", "color": "var(--text-primary)"}
     )
@@ -149,7 +149,7 @@ def topbar():
                         ),
                         html.Div(id="desktop-search-preview", style={
                             "backgroundColor": "var(--card-bg)",
-                            "color": "var(--text-primary)",
+                            
                             "border": "1px solid #ddd",
                             "borderRadius": "8px",
                             "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",

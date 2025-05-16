@@ -1719,7 +1719,7 @@ def update_search_preview(desktop_value, mobile_value):
 
                 row_el = dbc.Row(
                     dbc.Col(team_link_with_avatar(team)),
-                    style={"padding": "5px", "backgroundColor": background_color},
+                    style={"padding": "5px", "backgroundColor": background_color, "color": "black"},
                 )
 
                 children.append(row_el)
@@ -1739,11 +1739,10 @@ def update_search_preview(desktop_value, mobile_value):
                 e_name = evt.get("n", "")
                 start_date = evt.get("sd", "")
                 e_year = start_date[:4] if len(start_date) >= 4 else ""
-                background_color = "white"
+                background_color = "var(--card-bg)"
 
                 if closest_event and event_key == closest_event.get("k"):
                     background_color = "#FFDD00"
-                    color = "black"
 
                 display_text = f"{event_key} | {e_year} {e_name}"
                 row_el = dbc.Row(
@@ -1755,7 +1754,7 @@ def update_search_preview(desktop_value, mobile_value):
                         ),
                         width=True,
                     ),
-                    style={"padding": "5px", "backgroundColor": background_color, "color": color},
+                    style={"padding": "5px", "backgroundColor": background_color},
                 )
                 children.append(row_el)
 
@@ -3039,7 +3038,7 @@ def events_layout(year=2025):
             "padding": "10px 0",
         }
     )
-
+    tab_style = {"color": "var(--text-primary)", "backgroundColor": "var(--card-bg)"}
     return html.Div(
         [
             topbar(),
@@ -3056,8 +3055,8 @@ def events_layout(year=2025):
                         id="events-tabs",
                         active_tab="cards-tab",
                         children=[
-                            dbc.Tab(label="Cards", tab_id="cards-tab"),
-                            dbc.Tab(label="Event Insights", tab_id="table-tab"),
+                            dbc.Tab(label="Cards", tab_id="cards-tab", active_label_style=tab_style),
+                            dbc.Tab(label="Event Insights", tab_id="table-tab", active_label_style=tab_style),
                         ],
                         className="mb-4",
                     ),
@@ -3580,7 +3579,7 @@ def event_layout(event_key):
         className="mb-4"
     )
 
-    tab_style = {"color": "#3b3b3b"}
+    tab_style = {"color": "var(--text-primary)", "backgroundColor": "var(--card-bg)"}
     data_tabs = dbc.Tabs(
         [
             dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
@@ -3643,9 +3642,43 @@ def create_team_card_spotlight(team, epa_data, event_year):
     avatar_url = get_team_avatar(t_num, event_year)
     team_url = f"/team/{t_num}/{event_year}"
 
-    card_elems = []
+    card_body = dbc.CardBody(
+        [
+            html.H5(f"#{t_num} | {nickname}", className="card-title", style={
+                "fontSize": "1.1rem",
+                "textAlign": "center",
+                "marginBottom": "0.5rem"
+            }),
+            html.P(f"Location: {location_str}", className="card-text", style={
+                "fontSize": "0.9rem",
+                "textAlign": "center",
+                "marginBottom": "0.5rem"
+            }),
+            html.P(f"ACE: {epa_display} (Global Rank: {epa_rank})", className="card-text", style={
+                "fontSize": "0.9rem",
+                "textAlign": "center",
+                "marginBottom": "auto"
+            }),
+            dbc.Button(
+                "View Team",
+                href=team_url,
+                color="warning",
+                outline=True,
+                className="custom-view-btn mt-3",
+            ),
+        ],
+        style={
+            "display": "flex",
+            "flexDirection": "column",
+            "flexGrow": "1",
+            "justifyContent": "space-between",
+            "padding": "1rem"
+        }
+    )
+
+    card_elements = []
     if avatar_url:
-        card_elems.append(
+        card_elements.append(
             dbc.CardImg(
                 src=avatar_url,
                 top=True,
@@ -3654,34 +3687,24 @@ def create_team_card_spotlight(team, epa_data, event_year):
                     "height": "150px",
                     "objectFit": "contain",
                     "backgroundColor": "transparent",
-                    "padding": "5px"
+                    "padding": "0.5rem"
                 }
             )
         )
 
-    card_elems.append(
-        dbc.CardBody(
-            [
-                html.H5(f"#{t_num} | {nickname}", className="card-title mb-3"),
-                html.P(f"Location: {location_str}", className="card-text"),
-                html.P(f"ACE: {epa_display} (Global Rank: {epa_rank})", className="card-text"),
-                dbc.Button("View", href=team_url, color="warning", className="mt-2", style={
-                    "color": "black"
-                }),
-            ]
-        )
-    )
+    card_elements.append(card_body)
 
     return dbc.Card(
-        card_elems,
-        className="m-2 shadow",
+        card_elements,
+        className="m-2 shadow-sm",
         style={
             "width": "18rem",
-            "height": "26rem",
+            "height": "22rem",
             "display": "flex",
             "flexDirection": "column",
-            "justifyContent": "start",
+            "justifyContent": "space-between",
             "alignItems": "stretch",
+            "borderRadius": "12px"
         },
     )
 
@@ -4381,28 +4404,28 @@ def update_matches_table(selected_team, event_matches, epa_data):
 
 def epa_legend_layout():
     color_map = [
-        ("≥ 99%", "#8e24aa"),   # Deep Purple
-        ("≥ 97%", "#6a1b9a"),
-        ("≥ 95%", "#3949ab"),
-        ("≥ 93%", "#1565c0"),
-        ("≥ 91%", "#1e88e5"),
-        ("≥ 89%", "#2e7d32"),
-        ("≥ 85%", "#43a047"),
-        ("≥ 80%", "#c0ca33"),
-        ("≥ 75%", "#ffb300"),
-        ("≥ 65%", "#f9a825"),
-        ("≥ 55%", "#fb8c00"),
-        ("≥ 40%", "#e53935"),
-        ("≥ 25%", "#b71c1c"),
-        ("≥ 10%", "#7b0000"),
-        ("< 10%", "#4d0000"),
+        ("≥ 99%", "#8e24aa99"),   # Deep Purple
+        ("≥ 97%", "#6a1b9a99"),
+        ("≥ 95%", "#3949ab99"),
+        ("≥ 93%", "#1565c099"),
+        ("≥ 91%", "#1e88e599"),
+        ("≥ 89%", "#2e7d3299"),
+        ("≥ 85%", "#43a04799"),
+        ("≥ 80%", "#c0ca3399"),
+        ("≥ 75%", "#ffb30099"),
+        ("≥ 65%", "#f9a82599"),
+        ("≥ 55%", "#fb8c0099"),
+        ("≥ 40%", "#e5393599"),
+        ("≥ 25%", "#b71c1c99"),
+        ("≥ 10%", "#7b000099"),
+        ("< 10%", "#4d000099"),
     ]
     blocks = [
         html.Div(
             label,
             style={
                 "backgroundColor": color,
-                "color": "white",
+                "color": "#fff",
                 "padding": "2px 6px",
                 "borderRadius": "4px",
                 "fontSize": "0.7rem",
@@ -4442,25 +4465,56 @@ def create_team_card(team, year, avatar_url, epa_ranks):
             dbc.CardImg(
                 src=avatar_url,
                 top=True,
-                style={"objectFit": "contain", "height": "150px", "padding": "0.5rem", "backgroundColor": "transparent"}
+                style={
+                    "objectFit": "contain",
+                    "height": "150px",
+                    "padding": "0.5rem",
+                    "backgroundColor": "transparent"
+                }
             ),
-            html.Div([
-                dbc.CardBody([
-                    html.H5(f"#{team_number} | {nickname}", className="card-title", style={"fontSize": "1.1rem"}),
-                    html.P(f"Location: {location}", className="card-text", style={"fontSize": "0.9rem"}),
-                    html.P(f"ACE: {epa_display} (Global Rank: {rank})", className="card-text", style={"fontSize": "0.9rem"}),
-                    dbc.Button("View", href=f"/team/{team_number}/{year}", color="warning", className="mt-auto", style={
-                        "color": "black"
+            dbc.CardBody(
+                [
+                    html.H5(f"#{team_number} | {nickname}", className="card-title", style={
+                        "fontSize": "1.1rem",
+                        "textAlign": "center",
+                        "marginBottom": "0.5rem"
                     }),
-                ], style={"display": "flex", "flexDirection": "column", "flexGrow": "1"})
-            ], style={"position": "relative"})
+                    html.P(f"Location: {location}", className="card-text", style={
+                        "fontSize": "0.9rem",
+                        "textAlign": "center",
+                        "marginBottom": "0.5rem"
+                    }),
+                    html.P(f"ACE: {epa_display} (Global Rank: {rank})", className="card-text", style={
+                        "fontSize": "0.9rem",
+                        "textAlign": "center",
+                        "marginBottom": "auto"
+                    }),
+                    dbc.Button(
+                        "View Team",
+                        href=f"/team/{team_number}/{year}",
+                        color="warning",
+                        outline=True,
+                        className="custom-view-btn mt-3",
+                    )
+                ],
+                style={
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "flexGrow": "1",
+                    "justifyContent": "space-between",
+                    "padding": "1rem"
+                }
+            )
         ],
-        className="m-2 shadow",
+        className="m-2 shadow-sm",
         style={
-            "width": "18rem", "height": "22rem",
-            "display": "flex", "flexDirection": "column",
-            "justifyContent": "start", "alignItems": "stretch",
-            "borderRadius": "10px"
+            "width": "18rem",
+            "height": "22rem",
+            "display": "flex",
+            "flexDirection": "column",
+            "justifyContent": "space-between",
+            "alignItems": "stretch",
+            "borderRadius": "12px"
         }
     )
 
@@ -4508,7 +4562,7 @@ def teams_layout(default_year=2025):
         style={"width": "100%"},
     )
     percentile_toggle = dbc.Checklist(
-        options=[{"label": "Filter Percentiles", "value": "filtered"}],
+        options=[{"label": "Filter Colors", "value": "filtered"}],
         value=[],  # Empty means global by default
         id="percentile-toggle",
         switch=True,
@@ -4640,11 +4694,11 @@ def teams_layout(default_year=2025):
         className="d-flex flex-wrap justify-content-center",
         style={"gap": "5px", "padding": "1rem"}
     )
-
+    tab_style = {"color": "var(--text-primary)", "backgroundColor": "var(--card-bg)"}
     tabs = dbc.Tabs([
-        dbc.Tab(label="Insights", tab_id="table-tab"),
-        dbc.Tab(label="Avatars", tab_id="avatars-tab"),
-        dbc.Tab(label="Bubble Chart", tab_id="bubble-chart-tab"),
+        dbc.Tab(label="Insights", tab_id="table-tab", active_label_style=tab_style),
+        dbc.Tab(label="Avatars", tab_id="avatars-tab", active_label_style=tab_style),
+        dbc.Tab(label="Bubble Chart", tab_id="bubble-chart-tab", active_label_style=tab_style),
     ], id="teams-tabs", active_tab="table-tab", className="mb-3")
 
     content = html.Div(id="teams-tab-content", children=[

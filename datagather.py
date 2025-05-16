@@ -165,21 +165,21 @@ def get_pg_connection():
 
 def get_epa_styling(percentiles_dict):
         color_map = [
-            ("99", "#8e24aa"),   # Deep Purple
-            ("97", "#6a1b9a"),   # Medium Purple
-            ("95", "#3949ab"),   # Indigo
-            ("93", "#1565c0"),   # Blue
-            ("91", "#1e88e5"),   # Sky Blue
-            ("89", "#2e7d32"),   # Medium Green
-            ("85", "#43a047"),   # Dark Green
-            ("80", "#c0ca33"),   # Lime
-            ("75", "#ffb300"),   # Yellow
-            ("65", "#f9a825"),   # Dark Yellow
-            ("55", "#fb8c00"),   # Orange
-            ("40", "#e53935"),   # Red
-            ("25", "#b71c1c"),   # Dark Red
-            ("10", "#7b0000"),   # Maroon
-            ("0",  "#4d0000"),   # Deep Maroon
+            ("99", "#8e24aa99"),   # Deep Purple
+            ("97", "#6a1b9a99"),   # Medium Purple
+            ("95", "#3949ab99"),   # Indigo
+            ("93", "#1565c099"),   # Blue
+            ("91", "#1e88e599"),   # Sky Blue
+            ("89", "#2e7d3299"),   # Medium Green
+            ("85", "#43a04799"),   # Dark Green
+            ("80", "#c0ca3399"),   # Lime
+            ("75", "#ffb30099"),   # Yellow
+            ("65", "#f9a82599"),   # Dark Yellow
+            ("55", "#fb8c0099"),   # Orange
+            ("40", "#e5393599"),   # Red
+            ("25", "#b71c1c99"),   # Dark Red
+            ("10", "#7b000099"),   # Maroon
+            ("0",  "#4d000099"),   # Deep Maroon
         ]
     
         style_rules = []

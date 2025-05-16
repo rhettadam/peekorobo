@@ -286,13 +286,13 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 
 /* Links */
 a, a:visited, a:active {
-    color: #007bff !important;
+    color: #007bff;
     text-decoration: underline;
     transition: color 0.2s;
 }
 
 a:hover, a:focus {
-    color: #339cff !important;
+    color: #339cff;
     text-decoration: underline;
 }
 
@@ -449,3 +449,19 @@ img:hover {
 .recent-events-table .dash-cell[style*="background-color"] {
     color: white !important;
 }
+
+.custom-view-btn {
+    color: var(--text-primary) !important;
+    border: 2px solid #777 !important;
+    border-radius: 9999px !important;
+    padding: 6px 14px !important;
+    font-size: 0.85rem !important;
+    background-color: transparent !important;
+    transition: all 0.2s ease-in-out !important;
+}
+
+.custom-view-btn:hover {
+    background-color: #ffdd00 !important;
+    color: black !important;
+}
+
