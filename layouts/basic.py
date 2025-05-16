@@ -47,7 +47,7 @@ def topbar():
                             [
                                 dbc.InputGroup(
                                     [
-                                        dbc.Input(id="mobile-search-input", placeholder="Search", type="text"),
+                                        dbc.Input(id="mobile-search-input", placeholder="Search", type="text", className="custom-input-box"),
                                         dbc.Button("🔎", id="mobile-search-button", color="primary", style={
                                             "backgroundColor": "#FFDD00", "border": "none", "color": "#222",
                                         }),
@@ -56,7 +56,7 @@ def topbar():
                                 ),
                                 html.Div(id="mobile-search-preview", style={
                                     "backgroundColor": "var(--card-bg)",
-                                    "border": "1px solid #ddd",
+                                    #"border": "1px solid var(--card-bg)",
                                     "borderRadius": "8px",
                                     "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
                                     "marginTop": "5px",
@@ -149,6 +149,7 @@ def topbar():
                         ),
                         html.Div(id="desktop-search-preview", style={
                             "backgroundColor": "var(--card-bg)",
+                            "color": "var(--text-primary)",
                             "border": "1px solid #ddd",
                             "borderRadius": "8px",
                             "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
@@ -172,7 +173,7 @@ def topbar():
             ],
             fluid=True
         ),
-        color="#353535",
+        color="var(--text-primary)",
         dark=True,
         className="mb-4",
         style={

@@ -185,6 +185,57 @@ h1, h2, h3, h4, h5, h6, p, span, div {
     color: var(--text-primary);
 }
 
+/* Specific styles for dcc.Dropdown (react-select based) */
+.Select-control {
+    background-color: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--input-text);
+    box-shadow: none; /* Remove default focus box-shadow */
+}
+
+.Select-control:hover, .Select-control.is-focused {
+     border-color: var(--input-border);
+     box-shadow: none;
+}
+
+.Select-value-label {
+    color: var(--input-text) !important; /* Ensure selected value text is themed */
+}
+
+.Select-placeholder {
+    color: var(--text-secondary) !important; /* Theme placeholder text */
+}
+
+.Select-arrow {
+     color: var(--input-text);
+}
+
+.Select-menu-outer {
+    background-color: var(--dropdown-bg);
+    border-color: var(--dropdown-border);
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+    z-index: 9999; /* Ensure dropdown menu is above other content */
+}
+
+.Select-menu {
+     background-color: var(--dropdown-bg); /* Redundant, but good for safety */
+}
+
+.Select-option {
+    background-color: var(--dropdown-bg);
+    color: var(--dropdown-text) !important;
+}
+
+.Select-option:hover, .Select-option.is-focused {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary) !important;
+}
+
+.Select-option.is-selected {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary) !important;
+}
+
 /* Alerts */
 .alert {
     background-color: var(--alert-bg);

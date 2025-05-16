@@ -2956,13 +2956,7 @@ def events_layout(year=2025):
         options=[{"label": str(yr), "value": yr} for yr in range(2000, 2026)],
         value=year,
         placeholder="Year",
-        clearable=False,
-        style={
-            "backgroundColor": "var(--input-bg)",
-            "color": "var(--input-text)",
-            "borderColor": "var(--input-border)",
-        },
-        className="custom-input-box"
+        clearable=False
     )
     event_type_dropdown = dcc.Dropdown(
         id="event-type-dropdown",
@@ -2977,12 +2971,7 @@ def events_layout(year=2025):
         value=["all"],
         multi=True,
         placeholder="Filter by Event Type",
-        style={
-            "backgroundColor": "var(--input-bg)",
-            "color": "var(--input-text)",
-            "borderColor": "var(--input-border)",
-        },
-        className="custom-input-box"
+        clearable=False
     )
     week_dropdown = dcc.Dropdown(
         id="week-dropdown",
@@ -2992,26 +2981,14 @@ def events_layout(year=2025):
         ),
         placeholder="Week",
         value="all",
-        clearable=False,
-        style={
-            "backgroundColor": "var(--input-bg)",
-            "color": "var(--input-text)",
-            "borderColor": "var(--input-border)",
-        },
-        className="custom-input-box"
+        clearable=False
     )
     district_dropdown = dcc.Dropdown(
         id="district-dropdown",
         options=[],
         placeholder="District",
         value="all",
-        clearable=False,
-        style={
-            "backgroundColor": "var(--input-bg)",
-            "color": "var(--input-text)",
-            "borderColor": "var(--input-border)",
-        },
-        className="custom-input-box"
+        clearable=False
     )
     sort_toggle = dcc.RadioItems(
         id="sort-mode-toggle",
@@ -3022,13 +2999,10 @@ def events_layout(year=2025):
         value="time",
         labelStyle={"display": "inline-block", "margin-right": "15px"},
         style={
-            "backgroundColor": "var(--input-bg)",
-            "color": "var(--input-text)",
-            "borderColor": "var(--input-border)",
+            # Apply basic styling here, leave theme to CSS
             "padding": "4px 8px",
             "borderRadius": "6px"
-        },
-        className="custom-input-box"
+        }
     )
     search_input = dbc.Input(
         id="search-input",
@@ -4670,13 +4644,13 @@ def teams_layout(default_year=2025):
     tabs = dbc.Tabs([
         dbc.Tab(label="Insights", tab_id="table-tab"),
         dbc.Tab(label="Avatars", tab_id="avatars-tab"),
-        dbc.Tab(label="Bubble Chart", tab_id="bubble-map-tab"),
+        dbc.Tab(label="Bubble Chart", tab_id="bubble-chart-tab"),
     ], id="teams-tabs", active_tab="table-tab", className="mb-3")
 
     content = html.Div(id="teams-tab-content", children=[
         html.Div(id="teams-table-container", children=[teams_table]),
         html.Div(id="avatar-gallery", className="d-flex flex-wrap justify-content-center", style={"gap": "5px", "padding": "1rem", "display": "none"}),
-        dcc.Graph(id="bubble-map", style={"display": "none", "height": "700px"})
+        dcc.Graph(id="bubble-chart", style={"display": "none", "height": "700px"})
     ])
 
     return html.Div(
@@ -4707,8 +4681,8 @@ def teams_layout(default_year=2025):
         Output("teams-table-container", "style"),
         Output("avatar-gallery", "children"),
         Output("avatar-gallery", "style"),
-        Output("bubble-map", "figure"),
-        Output("bubble-map", "style"),
+        Output("bubble-chart", "figure"),
+        Output("bubble-chart", "style"),
         Output("teams-url", "search"),
         Output("teams-table", "style_data_conditional"), 
     ],
@@ -4927,7 +4901,7 @@ def load_teams(
         return table_rows, state_options, top_teams_layout, {"display": "none"}, avatars, {"display": "flex"}, go.Figure(), {"display": "none"}, query_string, style_data_conditional
 
     # Bubble Chart Tab
-    elif active_tab == "bubble-map-tab":
+    elif active_tab == "bubble-chart-tab":
         chart_data = []
         for t in teams_data:
             x_val = get_axis_value(t, x_axis)
@@ -5008,7 +4982,8 @@ def load_teams(
 )
 def apply_url_filters(href):
     if not href or "?" not in href:
-        return 2025, "All", "All", "All", "teleop_epa", "auto+endgame"
+        return 2025, "All", "All", "All", "teleop_epa", "auto+endgame", []
+
 
     query = href.split("?", 1)[1]
     params = parse_qs(query)
@@ -5036,7 +5011,7 @@ def apply_url_filters(href):
     Input("teams-tabs", "active_tab")
 )
 def toggle_axis_dropdowns(active_tab):
-    if active_tab == "bubble-map-tab":
+    if active_tab == "bubble-chart-tab":
         return {"display": "block", "marginBottom": "15px"}
     return {"display": "none"}
 
