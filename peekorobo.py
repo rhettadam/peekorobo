@@ -172,8 +172,6 @@ def universal_profile_icon_or_toast():
     ),
     href="/user"
 )
-
-
     # Unauthenticated fallback toast
     return dbc.Toast(
         [
@@ -183,8 +181,8 @@ def universal_profile_icon_or_toast():
                 dbc.Col(
                     dbc.Button("Login", href="/login", size="sm", color="secondary", className="mt-2", style={
                         "width": "100%",
-                        "backgroundColor": "#ddd",
-                        "color": "#000",
+                        "backgroundColor": "var(--bg-secondary)",
+                        "color": "var(--text-primary)",
                         "border": "1px solid #999"
                     }),
                     width=6
@@ -192,8 +190,8 @@ def universal_profile_icon_or_toast():
                 dbc.Col(
                     dbc.Button("Register", href="/login", size="sm", color="warning", className="mt-2", style={
                         "width": "100%",
-                        "backgroundColor": "#ffdd00ff",
-                        "color": "#000",
+                        "backgroundColor": "var(--bg-secondary)",
+                        "color": "var(--text-primary)",
                         "border": "1px solid #999"
                     }),
                     width=6
@@ -205,8 +203,13 @@ def universal_profile_icon_or_toast():
         is_open=True,
         dismissable=True,
         icon="warning",
+        header_style={  # Added header_style
+            "backgroundColor": "var(--card-bg)",
+            "color": "var(--text-primary)"
+        },
         style={
             "position": "fixed",
+            "backgroundColor": "var(--card-bg)",
             "bottom": 20,
             "right": 20,
             "width": 300,
@@ -1709,7 +1712,7 @@ def update_search_preview(desktop_value, mobile_value):
             for team in filtered_teams:
                 tn = team.get("team_number", "???")
                 nm = team.get("nickname", "")
-                background_color = "white"
+                background_color = "var(--card-bg)"
                 if (closest_team_number and tn == closest_team_number["team_number"]) or \
                    (closest_team_nickname and nm == closest_team_nickname["nickname"]):
                     background_color = "#FFDD00"
@@ -1740,6 +1743,7 @@ def update_search_preview(desktop_value, mobile_value):
 
                 if closest_event and event_key == closest_event.get("k"):
                     background_color = "#FFDD00"
+                    color = "black"
 
                 display_text = f"{event_key} | {e_year} {e_name}"
                 row_el = dbc.Row(
@@ -1751,7 +1755,7 @@ def update_search_preview(desktop_value, mobile_value):
                         ),
                         width=True,
                     ),
-                    style={"padding": "5px", "backgroundColor": background_color},
+                    style={"padding": "5px", "backgroundColor": background_color, "color": color},
                 )
                 children.append(row_el)
 
@@ -1774,7 +1778,7 @@ def update_search_preview(desktop_value, mobile_value):
                             username
                         ], href=f"/user/{username}", style={"textDecoration": "none", "color": "black"}),
                     ),
-                    style={"padding": "5px", "backgroundColor": "white"},
+                    style={"padding": "5px", "backgroundColor": "transparent"},
                 )
                 children.append(row_el)
 
@@ -1784,7 +1788,8 @@ def update_search_preview(desktop_value, mobile_value):
 
         style_dict = {
             "display": "block",
-            "backgroundColor": "white",
+            "backgroundColor": "var(--card-bg)",
+            "color": "var(--text-primary)",
             "border": "1px solid #ddd",
             "borderRadius": "8px",
             "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
@@ -2951,7 +2956,13 @@ def events_layout(year=2025):
         options=[{"label": str(yr), "value": yr} for yr in range(2000, 2026)],
         value=year,
         placeholder="Year",
-        clearable=False
+        clearable=False,
+        style={
+            "backgroundColor": "var(--input-bg)",
+            "color": "var(--input-text)",
+            "borderColor": "var(--input-border)",
+        },
+        className="custom-input-box"
     )
     event_type_dropdown = dcc.Dropdown(
         id="event-type-dropdown",
@@ -2966,6 +2977,12 @@ def events_layout(year=2025):
         value=["all"],
         multi=True,
         placeholder="Filter by Event Type",
+        style={
+            "backgroundColor": "var(--input-bg)",
+            "color": "var(--input-text)",
+            "borderColor": "var(--input-border)",
+        },
+        className="custom-input-box"
     )
     week_dropdown = dcc.Dropdown(
         id="week-dropdown",
@@ -2976,6 +2993,12 @@ def events_layout(year=2025):
         placeholder="Week",
         value="all",
         clearable=False,
+        style={
+            "backgroundColor": "var(--input-bg)",
+            "color": "var(--input-text)",
+            "borderColor": "var(--input-border)",
+        },
+        className="custom-input-box"
     )
     district_dropdown = dcc.Dropdown(
         id="district-dropdown",
@@ -2983,6 +3006,12 @@ def events_layout(year=2025):
         placeholder="District",
         value="all",
         clearable=False,
+        style={
+            "backgroundColor": "var(--input-bg)",
+            "color": "var(--input-text)",
+            "borderColor": "var(--input-border)",
+        },
+        className="custom-input-box"
     )
     sort_toggle = dcc.RadioItems(
         id="sort-mode-toggle",
@@ -2992,11 +3021,25 @@ def events_layout(year=2025):
         ],
         value="time",
         labelStyle={"display": "inline-block", "margin-right": "15px"},
+        style={
+            "backgroundColor": "var(--input-bg)",
+            "color": "var(--input-text)",
+            "borderColor": "var(--input-border)",
+            "padding": "4px 8px",
+            "borderRadius": "6px"
+        },
+        className="custom-input-box"
     )
     search_input = dbc.Input(
         id="search-input",
         placeholder="Search",
+        className="custom-input-box",
         type="text",
+        style={
+            "backgroundColor": "var(--input-bg)",
+            "color": "var(--input-text)",
+            "borderColor": "var(--input-border)",
+        }
     )
 
     filters_row = html.Div(
@@ -3272,9 +3315,9 @@ def update_events_tab_content(
                 {"name": "Top 24 ACE", "id": "Top 24 ACE"},
             ],
             data=df.to_dict("records"),
-            style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"},
+            style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
             style_header={
-                "backgroundColor": "white",        # Match the table background
+                "backgroundColor": "var(--card-bg)",        # Match the table background
                 "fontWeight": "bold",              # Keep column labels strong
                 "textAlign": "center",
                 "borderBottom": "1px solid #ccc",  # Thin line under header only
@@ -3283,6 +3326,7 @@ def update_events_tab_content(
             },
     
             style_cell={
+                "backgroundColor": "var(--card-bg)",
                 "textAlign": "center",
                 "padding": "10px",
                 "border": "none",
@@ -3647,7 +3691,9 @@ def create_team_card_spotlight(team, epa_data, event_year):
                 html.H5(f"#{t_num} | {nickname}", className="card-title mb-3"),
                 html.P(f"Location: {location_str}", className="card-text"),
                 html.P(f"ACE: {epa_display} (Global Rank: {epa_rank})", className="card-text"),
-                dbc.Button("View", href=team_url, color="warning", className="mt-2"),
+                dbc.Button("View", href=team_url, color="warning", className="mt-2", style={
+                    "color": "black"
+                }),
             ]
         )
     )
@@ -4090,16 +4136,25 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
         fig.add_trace(go.Scatter(
             x=node_x, y=node_y, mode="markers+text",
             text=node_text, textposition="middle right",
-            marker=dict(size=node_size, color=node_color, line=dict(width=1, color="black")),
-            hoverinfo="text"
+            marker=dict(size=node_size, color=node_color, line=dict(width=1, color=node_color)),
+            hoverinfo="text",
+            textfont=dict(color="#777")  # <-- Add this line
         ))
         fig.update_layout(
+            font=dict(color="var(--text-primary)"),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
             showlegend=False,
             margin=dict(l=20, r=20, t=20, b=20),
             xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-2.5, 2.5]),
-            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            plot_bgcolor="white",
-            height=1600,
+            yaxis=dict(
+                showgrid=False,
+                zeroline=False,
+                showticklabels=False,
+                color="var(--text-primary)",  # axis ticks and label color
+                titlefont=dict(color="var(--text-primary)"),  # y-axis title color
+            ),
+            height=1000,
         )
     
         # === Render ===
@@ -4136,7 +4191,14 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 ],
                 page_size=8
             ),
-            dcc.Graph(figure=fig),
+            dcc.Graph(
+                figure=fig,
+                config={
+                    "staticPlot": True,  # This disables all interactivity
+                    "displayModeBar": True,  # Hide the toolbar
+                    "displaylogo": False,     # Hide the Plotly logo
+                }
+            ),
         ])
 
     return dbc.Alert("No data available.", color="warning")
@@ -4406,14 +4468,16 @@ def create_team_card(team, year, avatar_url, epa_ranks):
             dbc.CardImg(
                 src=avatar_url,
                 top=True,
-                style={"objectFit": "contain", "height": "150px", "padding": "0.5rem", "backgroundColor": "#fff"}
+                style={"objectFit": "contain", "height": "150px", "padding": "0.5rem", "backgroundColor": "transparent"}
             ),
             html.Div([
                 dbc.CardBody([
                     html.H5(f"#{team_number} | {nickname}", className="card-title", style={"fontSize": "1.1rem"}),
                     html.P(f"Location: {location}", className="card-text", style={"fontSize": "0.9rem"}),
                     html.P(f"ACE: {epa_display} (Global Rank: {rank})", className="card-text", style={"fontSize": "0.9rem"}),
-                    dbc.Button("View", href=f"/team/{team_number}/{year}", color="warning", className="mt-auto"),
+                    dbc.Button("View", href=f"/team/{team_number}/{year}", color="warning", className="mt-auto", style={
+                        "color": "black"
+                    }),
                 ], style={"display": "flex", "flexDirection": "column", "flexGrow": "1"})
             ], style={"position": "relative"})
         ],
@@ -4526,7 +4590,7 @@ def teams_layout(default_year=2025):
         id="search-bar",
         placeholder="Search",
         type="text",
-        className="mb-3",
+        className="custom-input-box",
         style={"width": "100%"},
     )
 
@@ -4890,7 +4954,7 @@ def load_teams(
             mode="markers+text",
             marker=dict(size=6, color="rgba(30, 136, 229, 0.3)", line=dict(width=0)),
             text=df.loc[~df["is_match"], "label"],
-            textfont=dict(size=9, color="black"),
+            textfont=dict(size=9, color="#777"),
             textposition="top center",
             hovertext=df.loc[~df["is_match"], "hover"],
             hoverinfo="text",
@@ -4899,9 +4963,9 @@ def load_teams(
             x=df.loc[df["is_match"], "x"],
             y=df.loc[df["is_match"], "y"],
             mode="markers+text",
-            marker=dict(size=8, color="rgba(255,0,0,0.6)", line=dict(width=2, color="black")),
+            marker=dict(size=8, color="var(--text-primary)", line=dict(width=2, color="black")),
             text=df.loc[df["is_match"], "label"],
-            textfont=dict(size=10, color="darkred"),
+            textfont=dict(size=10, color="#777"),
             textposition="top center",
             hovertext=df.loc[df["is_match"], "hover"],
             hoverinfo="text",
@@ -4912,8 +4976,20 @@ def load_teams(
             xaxis_title=x_axis.replace("_epa", " ACE").replace("epa", "Total EPA").replace("+", " + "),
             yaxis_title=y_axis.replace("_epa", " ACE").replace("epa", "Total EPA").replace("+", " + "),
             margin=dict(l=40, r=40, t=40, b=40),
-            plot_bgcolor="white",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
             showlegend=False,
+            xaxis=dict(
+                showgrid=False,
+                color="#777",  # Axis ticks and label color
+                titlefont=dict(color="#777"),  # x-axis title color
+            ),
+            yaxis=dict(
+                showgrid=False,
+                color="#777",  # Axis ticks and label color
+                titlefont=dict(color="#777"),  # y-axis title color
+            ),
+            font=dict(color="#777"),  # Title and general font color
         )
         return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, query_string, style_data_conditional
 
