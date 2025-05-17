@@ -70,19 +70,26 @@ app.layout = html.Div([
 def update_tab_title(pathname):
     if pathname.startswith('/team/'):
         team_number = pathname.split('/team/')[1].split('/')[0]
-        return f'Peekorobo - {team_number}'
+        return f'Team {team_number} - Peekorobo'
     elif pathname.startswith('/teams'):
-        return 'Peekorobo - Teams'
+        return 'Teams - Peekorobo'
     elif pathname.startswith('/event/'):
         event_key = pathname.split('/event/')[1].split('/')[0]
-        return f'Peekorobo - {event_key}'
+        return f'{event_key} - Peekorobo'
     elif pathname.startswith('/events'):
-        return 'Peekorobo - Events'
+        return 'Events - Peekorobo'
     elif pathname.startswith('/map'):
-        return 'Peekorobo - Map'
+        return 'Map - Peekorobo'
+    elif pathname.startswith('/blog'):
+        return 'Blog - Peekorobo'
+    elif pathname.startswith('/challenges'):
+        return 'Challenges - Peekorobo'
+    elif pathname.startswith('/challenge/'):
+        challenge = pathname.split('/challenge/')[1].split('/')[0]
+        return f'{challenge} Season - Peekorobo'
     elif pathname.startswith('/user/'):
         username = pathname.split('/user/')[1].split('/')[0]
-        return f'Peekorobo - {username}'
+        return f'{username} - Peekorobo'
     else:
         return 'Peekorobo'
 
@@ -2483,7 +2490,7 @@ def team_layout(team_number, year):
                 html.Span(
                     f" {display_name} ({year_list})",
                     style={
-                        "color": "#333",
+                        "color": "var(--text-primary)",
                         "fontSize": "1.2rem",
                         "fontWeight": "bold",
                         "marginLeft": "5px"
@@ -2999,7 +3006,7 @@ def events_layout(year=2025):
             {"label": "Sort A–Z", "value": "alpha"},
         ],
         value="time",
-        labelStyle={"display": "inline-block", "margin-right": "15px"},
+        labelStyle={"display": "inline-block", "margin-right": "15px", "color": "var(--text-primary)"},
         style={
             # Apply basic styling here, leave theme to CSS
             "padding": "4px 8px",
