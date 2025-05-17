@@ -1,6 +1,6 @@
 ![logo](assets/logo.png)
 
-### **Peekorobo is a comprehensive web application for analyzing FRC team performance, leveraging detailed data from The Blue Alliance (TBA) and a custom contribution estimation model. It offers in-depth insights into team rankings, match performance, historical trends, and event dynamics.**
+### **Peekorobo is a comprehensive web application for analyzing FRC team performance, leveraging data from The Blue Alliance (TBA) and a custom contribution estimation model called the ACE algorithm. It offers insights into team rankings, match performance, historical trends, and event dynamics.**
 
 ---
 
