@@ -7,17 +7,13 @@
 ## Table of Contents
 1.  [Features](#features)
     *   [Home Page](#home-page)
-    *   [Global Search](#global-search)
     *   [Team Profiles](#team-profiles)
-    *   [Teams Dictionary](#teams-dictionary)
-    *   [Events Dictionary](#events-dictionary)
+    *   [Teams](#teams)
+    *   [Events](#events)
     *   [Event Details](#event-details)
     *   [Challenges](#challenges)
     *   [Team Map](#team-map)
-    *   [User Authentication](#user-authentication)
     *   [User Profiles](#user-profiles)
-    *   [Theme Toggle](#theme-toggle)
-    *   [Universal Profile Icon/Toast](#universal-profile-icontoast)
 2.  [ACE (Adjusted Contribution Estimate) Algorithm](#ace-adjusted-contribution-estimate-algorithm)
     *   [Core Model](#core-model)
     *   [Component Estimation](#component-estimation)
@@ -44,7 +40,7 @@ Each team has a dedicated profile page displaying detailed information for a sel
 *   **Performance Metrics**: Detailed breakdown of the team's performance based on the ACE model, including:
     *   Overall ACE and EPA (Estimated Points Added)
     *   Component breakdown: Auto ACE, Teleop ACE, Endgame ACE
-    *   Global, Country, and State/Province ranks (clickable links to the Teams Dictionary filtered view)
+    *   Global, Country, and State/Province ranks (clickable links to the Teams insights filtered view)
     *   Season win/loss/tie record.
     *   ACE component pills with color coding based on percentile rank relative to all teams in the selected year.
 *   **Recent Events**: A section showcasing the team's most recent event performances with key stats and match outcomes.
@@ -55,7 +51,7 @@ Each team has a dedicated profile page displaying detailed information for a sel
 
 ![Screenshot: Team Profile](assets/readme/team.png)
 
-### Teams Dictionary
+### Teams
 
 Explore and compare all teams within a given year.
 
@@ -67,11 +63,11 @@ Explore and compare all teams within a given year.
 *   **Avatars Gallery**: A separate tab displaying all team avatars for the filtered set of teams.
 *   **Bubble Chart**: A visual representation of team performance plotting two chosen ACE components against each other, with bubble size potentially representing overall ACE. Useful for identifying specialists (high on one axis) or well-rounded teams (balanced on both axes). Users can select which components to plot on the X and Y axes.
 
-![Screenshot: Teams Dictionary Table](assets/readme/teams.png)
-![Screenshot: Teams Dictionary Avatars](assets/readme/teams_avatars.png)
-![Screenshot: Teams Dictionary Bubble Chart](assets/readme/teams_bubble.png)
+![Screenshot: Teams Table](assets/readme/teams.png)
+![Screenshot: Teams Avatars](assets/readme/teams_avatars.png)
+![Screenshot: Teams Bubble Chart](assets/readme/teams_bubble.png)
 
-### Events Dictionary
+### Events
 
 Browse and filter FRC events across different years.
 
@@ -81,8 +77,8 @@ Browse and filter FRC events across different years.
 *   **Card View**: Displays events as interactive cards showing key details and a favorite button for logged-in users. Includes separate sections for Upcoming and Ongoing events.
 *   **Event Insights Table**: A tabular view providing insights into the competitive strength of events, showing Max ACE, Top 8 ACE, and Top 24 ACE for teams participating in each event. Color-coded based on percentiles for comparison.
 
-![Screenshot: Events Dictionary Cards](assets/readme/events.png)
-![Screenshot: Events Dictionary Insights](assets/readme/event_insights.png)
+![Screenshot: Events Cards](assets/readme/events.png)
+![Screenshot: Events Insights](assets/readme/event_insights.png)
 
 ### Event Details
 
