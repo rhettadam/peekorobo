@@ -27,7 +27,7 @@ def topbar():
         dbc.Container(
             [
                 dcc.Store(id="login-state-ready", data=False),
-                dcc.Store(id="theme-store", data="light"),  # Store for theme preference
+                dcc.Store(id="theme-store", data="dark"),  # Store for theme preference
 
                 dbc.Row(
                     [
@@ -300,7 +300,7 @@ home_layout = html.Div([
                             [
                                 html.A(
                                     html.Img(
-                                        src="/assets/dozer.gif",
+                                        src="/assets/dozer.png",
                                         style={
                                             "width": "100%",
                                             "maxWidth": "600px",
@@ -333,95 +333,109 @@ blog_layout = html.Div([
     dbc.Container([
         html.H2("ACE (Adjusted Contribution Estimate) Algorithm", className="text-center my-4"),
 
-        html.P("The EPA (Estimated Points Added) model attempts to estimate a team's contribution to a match based on detailed scoring breakdowns and long-term trends. ACE (Adjusted Contribution Estimate) extends this by incorporating consistency, alliance context, and statistical reliability.", style={"fontSize": "1.1rem"}),
+        html.P("The EPA (Estimated Points Added) model estimates a team's contribution to a match based on scoring breakdowns and trends. ACE (Adjusted Contribution Estimate) extends this by incorporating consistency, dominance, and statistical reliability.", style={"fontSize": "1.1rem"}),
 
         html.H4("Core Model", className="mt-4"),
-        html.P("EPA updates are done incrementally after each match. Auto, Teleop, and Endgame contributions are calculated, then EPA is updated using a weighted delta."),
+        html.P("EPA updates are done incrementally after each match. Auto, Teleop, and Endgame contributions are calculated separately, then EPA is updated using a weighted delta with decay."),
 
         dbc.Card([
-            dbc.CardHeader("EPA Update"),
+            dbc.CardHeader("EPA Update Formula"),
             dbc.CardBody([
                 html.Pre("""
-# Delta calculation with decay and match importance:
-delta = decay * (K / (1 + M)) * ((actual - epa) - M * (opponent_score - epa))
+# For each component (auto, teleop, endgame):
+delta = decay * K * (actual - epa)
 
-# Update EPA:
-epa += delta
+# Where:
+decay = world_champ_penalty * (match_count / total_matches)²
+K = 0.4 * match_importance * world_champ_penalty
+
+# World Championship penalties:
+Einstein: 0.95
+Division: 0.85
+Regular: 1.0
+
+# Match importance weights:
+importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
 """, style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
             ])
         ], className="my-3"),
 
-        html.H4("Decay and Match Weighting"),
-        html.P("EPA uses exponential decay so newer matches matter more. Quals are weighted more than playoffs to reduce alliance bias."),
+        html.H4("Component Estimation", className="mt-4"),
+        html.P("Each component (Auto, Teleop, Endgame) is estimated separately with adaptive trimming based on match count:"),
 
         dbc.Card([
-            dbc.CardHeader("Decay Formula"),
+            dbc.CardHeader("Adaptive Trimming"),
             dbc.CardBody([
                 html.Pre("""
-decay = 0.95 ** match_index
-importance = {"qm": 1.2, "qf": 1.0, "sf": 1.0, "f": 1.0}
+# Trimming percentages based on match count:
+< 12 matches: 0%
+< 25 matches: 3%
+< 40 matches: 5%
+< 60 matches: 8%
+< 100 matches: 10%
+≥ 100 matches: 12%
+
+# Trim from low end only:
+trimmed_scores = sorted(scores)[k:]  # k = n * trim_pct
 """, style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
             ])
         ], className="my-3"),
 
-        html.H4("EPA Component Breakdown"),
-        html.P("Each team's total EPA is the sum of their estimated Auto, Teleop, and Endgame contributions. These are computed separately and updated using the same delta mechanism."),
-
-        html.H4("Auto EPA Estimation"),
-        html.P("Auto EPA estimates scoring using reef row counts. To reduce inflation, the algorithm trims the top 25% of scores and caps the result."),
+        html.H4("Confidence Calculation", className="mt-4"),
+        html.P("ACE = EPA × Confidence. Confidence is computed from multiple weighted components:"),
 
         dbc.Card([
-            dbc.CardHeader("Auto Scoring Logic"),
+            dbc.CardHeader("Confidence Formula"),
             dbc.CardBody([
                 html.Pre("""
-def estimate_consistent_auto(breakdowns, team_count):
-    scores = sorted(score_per_breakdown(b) for b in breakdowns)
-    cutoff = int(len(scores) * 0.75)
-    trimmed = scores[:cutoff]
-    return round(min(statistics.mean(trimmed), 30), 2)
+weights = {
+    "consistency": 0.4,
+    "dominance": 0.25,
+    "record_alignment": 0.15,
+    "veteran": 0.1,
+    "events": 0.05,
+    "base": 0.05
+}
+
+# Components:
+consistency = 1 - (stdev / peak_score)
+dominance = mean(normalized_margin_scores)
+record_alignment = 1 - |expected_win_rate - actual_win_rate|
+veteran_bonus = 1.0 if veteran else 0.6
+event_boost = 1.0 if events ≥ 2 else 0.60
+
+confidence = min(1.0, sum(weight * component))
 """, style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
             ])
         ], className="my-3"),
 
-        html.H4("Statistical Notes on Auto EPA"),
-        html.P("The trimming method approximates a robust mean, reducing influence from occasional hot autos. It's a simplified Winsorized mean. The cap of 30 points is based on expected maximum scoring in auto under typical match constraints."),
-
-        html.H4("Confidence Weighting (ACE)"),
-        html.P("ACE = EPA × Confidence. Confidence is computed from three components: consistency, rookie bonus, and carry factor."),
+        html.H4("Key Components", className="mt-4"),
+        html.P("Each confidence component measures a different aspect of team performance:"),
 
         dbc.Card([
-            dbc.CardHeader("ACE Confidence Formula"),
             dbc.CardBody([
-                html.Pre("""
-consistency = 1 - (stdev / mean)
-rookie_bonus = 1.0 if veteran else 0.6
-carry = min(1.0, team_epa / (avg_teammate_epa + ε))
-confidence = (consistency + rookie_bonus + carry) / 3
-ACE = EPA × confidence
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
+                html.H6("Consistency (40%)"),
+                html.P("Measures stability of match-to-match performance. Higher when scores are more consistent relative to peak performance."),
+                
+                html.H6("Dominance (25%)"),
+                html.P("Measures how much a team outperforms opponents. Calculated from normalized margin scores across matches."),
+                
+                html.H6("Record Alignment (15%)"),
+                html.P("How well actual win rate matches expected win rate based on dominance scores."),
+                
+                html.H6("Veteran Status (10%)"),
+                html.P("Veteran teams get higher confidence (1.0 vs 0.6) due to historical predictability."),
+                
+                html.H6("Event Count (5%)"),
+                html.P("Teams with multiple events get a confidence boost (1.0 vs 0.6)."),
+                
+                html.H6("Base Confidence (5%)"),
+                html.P("Minimum confidence floor to prevent extreme penalties.")
             ])
         ], className="my-3"),
-
-        html.H4("Consistency"),
-        html.P("This measures how stable a team's match-to-match performance is. Statistically, it's computed as 1 minus the coefficient of variation (CV):"),
-
-        dbc.Card([
-            dbc.CardHeader("Consistency"),
-            dbc.CardBody([
-                html.Pre("""
-consistency = 1 - (statistics.stdev(scores) / statistics.mean(scores))
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
-            ])
-        ], className="my-3"),
-
-        html.H4("Rookie Bonus"),
-        html.P("Veteran teams start with a higher confidence (1.0 vs 0.6) because they've historically performed more predictably."),
-
-        html.H4("Carry Factor"),
-        html.P("This measures whether a team is likely benefiting from stronger alliance partners. A team well below its average teammates gets a lower confidence score."),
 
         html.Hr(),
-        html.P("The full model is continuously evolving and improving. To contribute, test ideas, or file issues, visit the GitHub repository:", className="mt-4"),
+        html.P("The model is continuously evolving. To contribute, test ideas, or file issues, visit the GitHub repository:", className="mt-4"),
         html.A("https://github.com/rhettadam/peekorobo", href="https://github.com/rhettadam/peekorobo", target="_blank")
     ], style={"maxWidth": "900px"}, className="py-4 mx-auto"),
     dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),

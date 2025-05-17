@@ -51,6 +51,31 @@ app = dash.Dash(
     title="Peekorobo",
 )
 
+# Set dark mode immediately on first page render
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <script>
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        </script>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
+
 server = app.server
 server.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-placeholder-key")
 
@@ -59,9 +84,12 @@ server.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-placeholder-key")
 app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
     dcc.Store(id='tab-title', data='Peekorobo'),
+    dcc.Store(id='theme-store'),
     html.Div(id='page-content'),
-    html.Div(id='dummy-output', style={'display': 'none'})
+    html.Div(id='dummy-output', style={'display': 'none'}),
+    html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'})  # <-- THIS is what you're missing
 ])
+
 
 @app.callback(
     Output('tab-title', 'data'),
@@ -117,7 +145,7 @@ def login_layout():
                 dbc.Col(
                     html.Div([
                         html.Img(
-                            src="/assets/dozer.gif",
+                            src="/assets/dozer.png",
                             style={"width": "100%", "maxWidth": "400px", "marginBottom": "30px"},
                             className="dozer-image"
                         ),
@@ -2030,15 +2058,15 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                     prediction = "N/A"
                     prediction_percent = None
         
-                winner = match.get("wa", "N/A").title()
+                winner = match.get("wa", "Tie").title()
                 youtube_id = match.get("yt")
                 video_link = f"[Watch](https://youtube.com/watch?v={youtube_id})" if youtube_id else "N/A"
         
                 row = {
                     "Video": video_link,
                     "Match": label,
-                    "Red Teams": format_team_list(red_str),
-                    "Blue Teams": format_team_list(blue_str),
+                    "Red Alliance": format_team_list(red_str),
+                    "Blue Alliance": format_team_list(blue_str),
                     "Red Score": red_score,
                     "Blue Score": blue_score,
                     "Winner": winner,
@@ -2066,8 +2094,8 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                 columns=[
                     {"name": "Video", "id": "Video", "presentation": "markdown"},
                     {"name": "Match", "id": "Match"},
-                    {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
-                    {"name": "Blue Teams", "id": "Blue Teams", "presentation": "markdown"},
+                    {"name": "Red Alliance", "id": "Red Alliance", "presentation": "markdown"},
+                    {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
                     {"name": "Red Score", "id": "Red Score"},
                     {"name": "Blue Score", "id": "Blue Score"},
                     {"name": "Winner", "id": "Winner"},
@@ -2089,7 +2117,7 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                     "fontSize": "13px",
                 },
                 style_cell={
-                    "backgroundColor": "var(--card-bg)",
+                    "backgroundColor": "white",
                     "textAlign": "center",
                     "padding": "10px",
                     "border": "none",
@@ -2231,8 +2259,8 @@ def build_recent_matches_section(event_key, year, epa_data):
             rows.append({
                 "Video": video_link,
                 "Match": label,
-                "Red Teams": format_teams_markdown(red_str),
-                "Blue Teams": format_teams_markdown(blue_str),
+                "Red Alliance": format_teams_markdown(red_str),
+                "Blue Alliance": format_teams_markdown(blue_str),
                 "Red Score": red_score,
                 "Blue Score": blue_score,
                 "Winner": winner.title() if winner else "N/A",
@@ -2248,8 +2276,8 @@ def build_recent_matches_section(event_key, year, epa_data):
     match_columns = [
         {"name": "Video", "id": "Video", "presentation": "markdown"},
         {"name": "Match", "id": "Match"},
-        {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
-        {"name": "Blue Teams", "id": "Blue Teams", "presentation": "markdown"},
+        {"name": "Red Alliance", "id": "Red Alliance", "presentation": "markdown"},
+        {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
         {"name": "Red Score", "id": "Red Score"},
         {"name": "Blue Score", "id": "Blue Score"},
         {"name": "Winner", "id": "Winner"},
@@ -4336,8 +4364,8 @@ def update_matches_table(selected_team, event_matches, epa_data):
             rows.append({
                 "Video": video_link,
                 "Match": label,
-                "Red Teams": format_teams_markdown(red_str),
-                "Blue Teams": format_teams_markdown(blue_str),
+                "Red Alliance": format_teams_markdown(red_str),
+                "Blue Alliance": format_teams_markdown(blue_str),
                 "Red Score": red_score,
                 "Blue Score": blue_score,
                 "Winner": winner.title() if winner else "N/A",
@@ -4351,8 +4379,8 @@ def update_matches_table(selected_team, event_matches, epa_data):
     match_columns = [
         {"name": "Video", "id": "Video", "presentation": "markdown"},
         {"name": "Match", "id": "Match"},
-        {"name": "Red Teams", "id": "Red Teams", "presentation": "markdown"},
-        {"name": "Blue Teams", "id": "Blue Teams", "presentation": "markdown"},
+        {"name": "Red Alliance", "id": "Red Alliance", "presentation": "markdown"},
+        {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
         {"name": "Red Score", "id": "Red Score"},
         {"name": "Blue Score", "id": "Blue Score"},
         {"name": "Winner", "id": "Winner"},
@@ -5266,7 +5294,7 @@ app.clientside_callback(
 app.clientside_callback(
     """
     function() {
-        const savedTheme = localStorage.getItem('theme') || 'light';
+        const savedTheme = localStorage.getItem('theme') || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
         
         // Update theme toggle icon
@@ -5279,7 +5307,7 @@ app.clientside_callback(
     }
     """,
     Output("theme-store", "data", allow_duplicate=True),
-    Input("url", "pathname"),
+    Input("page-load-trigger", "n_clicks"),
     prevent_initial_call=True
 )
 

@@ -3,7 +3,7 @@
     /* Base colors */
     --bg-primary: #ffffff;
     --bg-secondary: #f8f9fa;
-    --bg-tertiary: #e9ecef;
+    --bg-tertiary: #ffffff;
     --text-primary: #212529;
     --text-secondary: #6c757d;
     --text-tertiary: #212529;
@@ -42,7 +42,7 @@
     /* Base colors */
     --bg-primary: #1a1a1a;
     --bg-secondary: #2d2d2d;
-    --bg-tertiary: #3d3d3d;
+    --bg-tertiary: #212529;
     --text-primary: #e9ecef;
     --text-secondary: #adb5bd;
     --text-tertiary: #212529;
