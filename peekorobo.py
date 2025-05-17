@@ -2004,6 +2004,7 @@ def event_layout(event_key):
     )
 
     tab_style = {"color": "var(--text-primary)", "backgroundColor": "transparent"}
+    # Use dcc.Store to set initial tab from URL
     data_tabs = dbc.Tabs(
         [
             dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
@@ -2013,12 +2014,14 @@ def event_layout(event_key):
             dbc.Tab(label="Alliances", tab_id="alliances", label_style=tab_style, active_label_style=tab_style),
         ],
         id="event-data-tabs",
-        active_tab="teams",
+        active_tab=None,  # Will be set by callback
         className="mb-4",
     )
 
     return html.Div(
         [
+            dcc.Location(id="event-url", refresh=False),
+            dcc.Store(id="event-tab-store"),  # Store for initial tab
             dcc.Store(id="user-session"),  # Holds user_id from session
             topbar(),
             dcc.Store(id="event-favorites-store", storage_type="session"),
@@ -2046,6 +2049,28 @@ def event_layout(event_key):
             footer,
         ]
     )
+
+# Add a callback to set the event-tab-store from the URL's search string
+@app.callback(
+    Output("event-tab-store", "data"),
+    Input("url", "search"),
+)
+def set_event_tab_from_url(search):
+    from urllib.parse import parse_qs
+    if search and search.startswith("?"):
+        params = parse_qs(search[1:])
+        tab = params.get("tab", [None])[0]
+        if tab in ["teams", "rankings", "oprs", "matches", "alliances"]:
+            return tab
+    return "teams"
+
+# Add a callback to set the active_tab of event-data-tabs from event-tab-store
+@app.callback(
+    Output("event-data-tabs", "active_tab"),
+    Input("event-tab-store", "data"),
+)
+def set_event_tabs_active_tab(tab):
+    return tab
 
 def create_team_card_spotlight(team, epa_data, event_year):
     t_num = team.get("tk")  # from compressed team list
@@ -2193,17 +2218,27 @@ def update_button_icon(favorites, pathname):
 
 @app.callback(
     Output("data-display-container", "children"),
+    Output("event-url", "search"),  # NEW: update the event tab URL
     Input("event-data-tabs", "active_tab"),
     State("store-rankings", "data"),
     State("store-oprs", "data"),
     State("store-event-epa", "data"),
     State("store-event-teams", "data"),
     State("store-event-matches", "data"),
-    State("store-event-year", "data"), 
+    State("store-event-year", "data"),
+    State("url", "pathname"),  # get the event_key from the URL
 )
-def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matches, event_year):
+def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, event_matches, event_year, pathname):
+    # --- URL update logic ---
+    # Extract event_key from pathname
+    event_key = None
+    if pathname and "/event/" in pathname:
+        event_key = pathname.split("/event/")[-1].split("/")[0]
+    query_string = f"?tab={active_tab}" if active_tab and event_key else ""
+    # ... rest of the function ...
+
     if not active_tab:
-        return dbc.Alert("Select a data category above.", color="info")
+        return dbc.Alert("Select a data category above.", color="info"), query_string
 
     # === Shared styles ===
     common_style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"}
@@ -2298,7 +2333,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 style_cell=common_style_cell,
                 style_data_conditional=style_data_conditional
             )
-        ])
+        ]), query_string
 
     # === OPRs Tab ===
     elif active_tab == "oprs":
@@ -2338,7 +2373,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
             style_header=common_style_header,
             style_cell=common_style_cell,
             style_data_conditional=style_data_conditional
-        )
+        ), query_string
 
     # === Teams Tab ===
     elif active_tab == "teams":
@@ -2399,7 +2434,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 style_cell=common_style_cell,
                 style_data_conditional=style_data_conditional
             )
-        ])
+        ]), query_string
 
 
     # === Matches Tab ===
@@ -2423,7 +2458,7 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                 style={"marginBottom": "20px"}
             ),
             html.Div(id="matches-container")
-        ])
+        ]), query_string
 
     elif active_tab == "alliances":
     
@@ -2615,9 +2650,9 @@ def update_display(active_tab, rankings, oprs, epa_data, event_teams, event_matc
                     "displaylogo": False,     # Hide the Plotly logo
                 }
             ),
-        ])
+        ]), query_string
 
-    return dbc.Alert("No data available.", color="warning")
+    return dbc.Alert("No data available.", color="warning"), query_string
 
 @app.callback(
     Output("matches-container", "children"),
