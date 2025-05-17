@@ -113,38 +113,6 @@ def get_team_avatar(team_number, year=2025):
         return f"/assets/avatars/{team_number}.png?v=1"
     return "/assets/avatars/stock.png"
 
-def calculate_ranks(team_data, selected_team):
-    global_rank = 1
-    country_rank = 1
-    state_rank = 1
-
-    # Extract selected team's information
-    selected_epa = selected_team.get("epa", 0) or 0  # Ensure selected_epa is a number
-    selected_country = (selected_team.get("country") or "").lower()
-    selected_state = (selected_team.get("state_prov") or "").lower()
-
-    for team in team_data:
-        if team.get("team_number") == selected_team.get("team_number"):
-            continue
-
-        team_epa = team.get("epa", 0) or 0  # Default to 0 if ACE is None
-        team_country = (team.get("country") or "").lower()
-        team_state = (team.get("state_prov") or "").lower()
-
-        # Global Rank
-        if team_epa > selected_epa:
-            global_rank += 1
-
-        # Country Rank
-        if team_country == selected_country and team_epa > selected_epa:
-            country_rank += 1
-
-        # State Rank
-        if team_state == selected_state and team_epa > selected_epa:
-            state_rank += 1
-
-    return global_rank, country_rank, state_rank
-
 def get_pg_connection():
     url = os.environ.get("DATABASE_URL")
     if url is None:
@@ -162,74 +130,6 @@ def get_pg_connection():
         port=result.port
     )
     return conn
-
-def get_epa_styling(percentiles_dict):
-        color_map = [
-            ("99", "#8e24aa99"),   # Deep Purple
-            ("97", "#6a1b9a99"),   # Medium Purple
-            ("95", "#3949ab99"),   # Indigo
-            ("93", "#1565c099"),   # Blue
-            ("91", "#1e88e599"),   # Sky Blue
-            ("89", "#2e7d3299"),   # Medium Green
-            ("85", "#43a04799"),   # Dark Green
-            ("80", "#c0ca3399"),   # Lime
-            ("75", "#ffb30099"),   # Yellow
-            ("65", "#f9a82599"),   # Dark Yellow
-            ("55", "#fb8c0099"),   # Orange
-            ("40", "#e5393599"),   # Red
-            ("25", "#b71c1c99"),   # Dark Red
-            ("10", "#7b000099"),   # Maroon
-            ("0",  "#4d000099"),   # Deep Maroon
-        ]
-    
-        style_rules = []
-    
-        for col, percentiles in percentiles_dict.items():
-            thresholds = {int(k): v for k, v in percentiles.items()}
-    
-            for i, (lower_str, color) in enumerate(color_map):
-                lower = thresholds.get(int(lower_str), 0)
-                upper = thresholds.get(int(color_map[i - 1][0]), float("inf")) if i > 0 else float("inf")
-    
-                style_rules.append({
-                    "if": {
-                        "filter_query": f"{{{col}}} >= {lower}" + (f" && {{{col}}} < {upper}" if upper < float("inf") else ""),
-                        "column_id": col
-                    },
-                    "backgroundColor": color,
-                    "color": "white !important",
-                    "borderRadius": "6px",
-                    "padding": "4px 6px",
-                })
-    
-        return style_rules
-
-def compute_percentiles(values):
-    percentiles = ["99", "97", "95", "93", "91", "89", "85", "80", "75", "65", "55", "40", "25", "10", "0"]
-    return {p: np.percentile(values, int(p)) for p in percentiles} if values else {p: 0 for p in percentiles}
-
-def sort_key(filename):
-    name = filename.split('.')[0]
-    return (0, int(name)) if name.isdigit() else (1, name.lower())
-
-def get_username(user_id):
-    conn = get_pg_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    return row[0].title() if row else f"USER {user_id}"
-
-def get_available_avatars():
-        avatar_dir = "assets/avatars"
-        return [f for f in os.listdir(avatar_dir) if f.endswith(".png")]
-
-def get_contrast_text_color(hex_color):
-        """Return black or white text color based on background brightness."""
-        hex_color = hex_color.lstrip("#")
-        r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        brightness = (r * 299 + g * 587 + b * 114) / 1000
-        return "#000000" if brightness > 150 else "#FFFFFF"
 
 # locations.py
 
