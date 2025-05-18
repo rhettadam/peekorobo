@@ -8,6 +8,7 @@ import concurrent.futures
 from dotenv import load_dotenv
 import random
 import sqlite3
+import math
 
 load_dotenv()
 
