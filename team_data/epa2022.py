@@ -320,6 +320,7 @@ def fetch_team_components(team, year, team_epa_cache=None, veteran_teams=None):
         "teleop_epa": components["teleop"] if components else None,
         "endgame_epa": components["endgame"] if components else None,
         "consistency": components["consistency"] if components else None,
+        "trend": components["trend"] if components else None,
         "average_match_score": components["average_match_score"] if components else None,
         "wins": components["wins"] if components else None,
         "losses": components["losses"] if components else None,
