@@ -182,10 +182,15 @@ def calculate_epa_components_2022(matches, team_key, year, team_epa_cache=None, 
         breakdown = (match.get("score_breakdown") or {}).get(alliance, {})
         breakdowns.append(breakdown)
 
-        actual_auto = estimate_consistent_auto(breakdowns, team_count)
-        actual_teleop = estimate_consistent_teleop(breakdowns, team_count)
-        robot_endgame_status = breakdown.get(f"endGameRobot{index}", "None")
+        # Use total points from breakdown for the current match's actual scores
+        actual_auto = breakdown.get("autoPoints", 0)
+        actual_teleop = breakdown.get("teleopCargoPoints", 0) # Or teleopPoints depending on desired granularity
+        
+        # Calculate individual robot's endgame points
+        robot_index = team_keys.index(team_key) + 1 
+        robot_endgame_status = breakdown.get(f"endgameRobot{robot_index}", "None")
         actual_endgame = {"Low": 4, "Mid": 6, "High": 10, "Traversal": 15, "None": 0}.get(robot_endgame_status, 0)
+
         actual_overall = actual_auto + actual_teleop + actual_endgame
         
         opponent_score = match["alliances"][opponent_alliance]["score"] / team_count
