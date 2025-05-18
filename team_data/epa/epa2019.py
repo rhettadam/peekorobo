@@ -8,6 +8,7 @@ import concurrent.futures
 from dotenv import load_dotenv
 import random
 import sqlite3
+import math
 
 load_dotenv()
 
@@ -78,7 +79,8 @@ def estimate_consistent_auto(breakdowns, team_count):
         # return sandstorm_bonus + explicit_auto_scored
 
         # Using simplified API fields for now
-        return sandstorm_bonus + auto_scored_points
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (sandstorm_bonus + auto_scored_points) * scaling_factor
 
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)
@@ -129,7 +131,8 @@ def estimate_consistent_teleop(breakdowns, team_count):
 
         # Total Teleop points from scoring actions
         # Note: teleopPoints field in API breakdown already sums these
-        return cargo_ship_points + rocket_points
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (cargo_ship_points + rocket_points) * scaling_factor
 
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)

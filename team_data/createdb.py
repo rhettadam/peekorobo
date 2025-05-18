@@ -10,10 +10,10 @@ import sqlite3
 import math
 import random
 
-def update_2025_epa_from_json():
-    json_file = "teams_2025.json"
+def update_2022_epa_from_json():
+    json_file = "teams_2022.json"
     db_file = "epa_teams.sqlite"
-    year = 2025
+    year = 2022
 
     if not os.path.exists(json_file):
         print(f"❌ File not found: {json_file}")
@@ -71,11 +71,11 @@ def update_2025_epa_from_json():
                 team.get("country"),
                 team.get("website"),
                 team.get("normal_epa"),
-                team.get("ace"),  # renamed from "epa" to "ace"
+                team.get("epa"), 
                 team.get("confidence"),
-                team.get("auto_ace"),
-                team.get("teleop_ace"),
-                team.get("endgame_ace"),
+                team.get("auto_epa"),
+                team.get("teleop_epa"),
+                team.get("endgame_epa"),
                 team.get("consistency"),
                 team.get("average_match_score"),
                 team.get("wins"),
@@ -83,7 +83,7 @@ def update_2025_epa_from_json():
             ))
 
         conn.commit()
-        print(f"✅ Successfully updated {len(teams)} entries for 2025 in {db_file}")
+        print(f"✅ Successfully updated {len(teams)} entries for 2022 in {db_file}")
     except Exception as e:
         conn.rollback()
         print(f"❌ Error during database update: {e}")
@@ -91,4 +91,4 @@ def update_2025_epa_from_json():
         conn.close()
 
 if __name__ == "__main__":
-    update_2025_epa_from_json()
+    update_2022_epa_from_json()
