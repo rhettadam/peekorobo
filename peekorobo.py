@@ -3400,6 +3400,8 @@ def update_tab_title(pathname):
         return 'Events - Peekorobo'
     elif pathname.startswith('/map'):
         return 'Map - Peekorobo'
+    elif pathname.startswith('/compare'):
+        return 'Compare - Peekorobo'
     elif pathname.startswith('/blog'):
         return 'Blog - Peekorobo'
     elif pathname.startswith('/challenges'):

@@ -248,6 +248,11 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 .Select-option {
     background-color: var(--dropdown-bg) !important;
     color: var(--dropdown-text) !important;
+    /* Ensure text does not overlap in options */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 10px; /* Add some padding to prevent text touching the edge */
 }
 
 .Select-option:hover,

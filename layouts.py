@@ -2207,11 +2207,11 @@ def compare_layout():
                 dbc.Col([
                     html.Label("Teams", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
                     team_dropdown
-                ], width=4),
+                ], width=7),
                 dbc.Col([
                     html.Label("Year", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
                     year_dropdown
-                ], width=2),
+                ], width=3),
             ], className="mb-4 justify-content-center"),
             html.Hr(),
             html.Div(id="compare-output-section", children=[]) # Make this div initially empty
