@@ -832,9 +832,9 @@ def teams_layout(default_year=2025):
         id="axis-dropdown-container",
         children=[
             dbc.Row([
-                dbc.Col(html.Label("X Axis:"), width="auto"),
+                dbc.Col(html.Label("X Axis:", style={"color": "var(--text-primary)"}), width="auto"),
                 dbc.Col(x_axis_dropdown, width=3),
-                dbc.Col(html.Label("Y Axis:"), width="auto"),
+                dbc.Col(html.Label("Y Axis:", style={"color": "var(--text-primary)"}), width="auto"),
                 dbc.Col(y_axis_dropdown, width=3),
             ], className="align-items-center")
         ],
