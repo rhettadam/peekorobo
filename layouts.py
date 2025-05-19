@@ -80,25 +80,36 @@ def topbar():
                                     dbc.NavItem(dbc.NavLink("Map", href="/map", className="custom-navlink")),
                                     dbc.NavItem(dbc.NavLink("Events", href="/events", className="custom-navlink")),
                                     dbc.NavItem(dbc.NavLink("Challenges", href="/challenges", className="custom-navlink")),
-                                    dbc.NavItem(dbc.NavLink("Blog", href="/blog", className="custom-navlink")),
                                     dbc.DropdownMenu(
-                                        label="Resources",
+                                        label="Misc",
                                         nav=True,
                                         in_navbar=True,
                                         className="custom-navlink",
                                         children=[
-                                            dbc.DropdownMenuItem("Chief Delphi", href="https://www.chiefdelphi.com/", target="_blank"),
-                                            dbc.DropdownMenuItem("The Blue Alliance", href="https://www.thebluealliance.com/", target="_blank"),
-                                            dbc.DropdownMenuItem("FRC Subreddit", href="https://www.reddit.com/r/FRC/", target="_blank"),
-                                            dbc.DropdownMenuItem("FRC Discord", href="https://discord.com/invite/frc", target="_blank"),
+                                            dbc.DropdownMenuItem("Blog", href="/blog"),
+                                            dbc.DropdownMenuItem("Compare", href="/compare"),
                                             dbc.DropdownMenuItem(divider=True),
-                                            dbc.DropdownMenuItem("FIRST Technical Resources", href="https://www.firstinspires.org/resource-library/frc/technical-resources", target="_blank"),
-                                            dbc.DropdownMenuItem("FRCDesign", href="https://www.frcdesign.org/learning-course/", target="_blank"),
-                                            dbc.DropdownMenuItem("OnShape4FRC", href="https://onshape4frc.com/", target="_blank"),
-                                            dbc.DropdownMenuItem(divider=True),
-                                            dbc.DropdownMenuItem("Statbotics", href="https://www.statbotics.io/", target="_blank"),
-                                            dbc.DropdownMenuItem("ScoutRadioz", href="https://scoutradioz.com/", target="_blank"),
-                                            dbc.DropdownMenuItem("Peekorobo", href="https://www.peekorobo.com/", target="_blank"),
+                                            dbc.DropdownMenu(
+                                                label="Resources",
+                                                nav=False,  # This is a nested dropdown, not a main nav item
+                                                in_navbar=False, # Not a main nav item
+                                                direction="end", # Open to the right
+                                                toggleClassName='nested-dropdown-toggle', # Added custom class
+                                                children=[
+                                                    dbc.DropdownMenuItem("Chief Delphi", href="https://www.chiefdelphi.com/", target="_blank"),
+                                                    dbc.DropdownMenuItem("The Blue Alliance", href="https://www.thebluealliance.com/", target="_blank"),
+                                                    dbc.DropdownMenuItem("FRC Subreddit", href="https://www.reddit.com/r/FRC/", target="_blank"),
+                                                    dbc.DropdownMenuItem("FRC Discord", href="https://discord.com/invite/frc", target="_blank"),
+                                                    dbc.DropdownMenuItem(divider=True),
+                                                    dbc.DropdownMenuItem("FIRST Technical Resources", href="https://www.firstinspires.org/resource-library/frc/technical-resources", target="_blank"),
+                                                    dbc.DropdownMenuItem("FRCDesign", href="https://www.frcdesign.org/learning-course/", target="_blank"),
+                                                    dbc.DropdownMenuItem("OnShape4FRC", href="https://onshape4frc.com/", target="_blank"),
+                                                    dbc.DropdownMenuItem(divider=True),
+                                                    dbc.DropdownMenuItem("Statbotics", href="https://www.statbotics.io/", target="_blank"),
+                                                    dbc.DropdownMenuItem("ScoutRadioz", href="https://scoutradioz.com/", target="_blank"),
+                                                    dbc.DropdownMenuItem("Peekorobo", href="https://www.peekorobo.com/", target="_blank"),
+                                                ]
+                                            ),
                                         ]
                                     ),
                                     dbc.NavItem(
@@ -2164,3 +2175,49 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
             footer,
         ]
     )
+
+def compare_layout():
+    # Team options will be filled by callback or server-side, so use empty list for now
+    team_dropdown = dcc.Dropdown(
+        id="compare-teams",
+        options=[],
+        placeholder="Select teams to compare",
+        className="custom-input-box",
+        style={"width": "100%"},
+        searchable=True,
+        multi=True,
+        value=[1323, 2056] # Set default teams
+    )
+
+    year_dropdown = dcc.Dropdown(
+        id="compare-year",
+        options=[{"label": str(y), "value": y} for y in range(1992, 2026)],
+        value=2025,
+        clearable=False,
+        placeholder="Select Year",
+        className="custom-input-box",
+        style={"width": "100%"},
+    )
+
+    return html.Div([
+        topbar(),
+        dbc.Container([
+            html.H2("Compare Teams", className="text-center my-4"),
+            dbc.Row([
+                dbc.Col([
+                    html.Label("Teams", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
+                    team_dropdown
+                ], width=4),
+                dbc.Col([
+                    html.Label("Year", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
+                    year_dropdown
+                ], width=2),
+            ], className="mb-4 justify-content-center"),
+            html.Hr(),
+            html.Div(id="compare-output-section", children=[]) # Make this div initially empty
+        ], style={"maxWidth": "1000px", "margin": "0 auto", "padding": "20px", "flexGrow": "1"}),
+        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+        footer
+    ])

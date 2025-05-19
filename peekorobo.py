@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 
 from datagather import COUNTRIES,STATES,load_data,get_team_avatar,DISTRICT_STATES,get_pg_connection
 
-from layouts import home_layout,footer,topbar,team_layout,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, build_recent_matches_section
+from layouts import home_layout,footer,topbar,team_layout,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, build_recent_matches_section, compare_layout
 
 from utils import predict_win_probability,calculate_single_rank,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_username,get_available_avatars,get_contrast_text_color,parse_event_key,get_user_epa_color,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card
 
@@ -3378,6 +3378,9 @@ def display_page(pathname):
             year = None
         return challenge_details_layout(year)
 
+    if pathname == "/compare":
+        return wrap_with_toast_or_star(compare_layout())
+
     return wrap_with_toast_or_star(home_layout)
 
 @app.callback(
@@ -3420,6 +3423,187 @@ app.clientside_callback(
     Output('dummy-output', 'children'),
     Input('tab-title', 'data')
 )
+
+@app.callback(
+    Output("compare-teams", "options"),
+    Input("compare-year", "value")
+)
+def update_compare_team_dropdowns(year):
+    year = year or 2025
+    teams = TEAM_DATABASE.get(year, {})
+    options = [
+        {"label": f"{t['team_number']} | {t.get('nickname', '')}", "value": t["team_number"]}
+        for t in teams.values()
+    ]
+    return options
+
+@app.callback(
+    Output("compare-output-section", "children"),
+    Input("compare-teams", "value"), # Change trigger to team dropdown value
+    Input("compare-year", "value"), # Also trigger on year change
+    # Removed prevent_initial_call=True so it runs on page load with defaults
+)
+def compare_multiple_teams(team_ids, year): # Update function signature
+    import plotly.graph_objects as go
+    from dash import html
+    import dash_bootstrap_components as dbc
+
+    if not team_ids or len(team_ids) < 2:
+        # Provide a message prompting the user to select teams
+        return dbc.Alert("Select at least 2 teams to compare.", color="info", className="text-center my-4")
+
+    year = year or 2025
+    
+    # Check if data for the selected year is available
+    if not TEAM_DATABASE.get(year):
+        return html.Div(f"Loading data for year {year}...", className="text-center my-4", style={"color": "var(--text-secondary)"})
+
+    teams = TEAM_DATABASE.get(year, {})
+    selected = [teams.get(int(tid)) for tid in team_ids if tid and int(tid) in teams]
+
+    if not all(selected) or len(selected) < 2:
+        return dbc.Alert("Please select valid teams for the chosen year.", color="warning", className="text-center my-4")
+
+    def pill(label, value, color):
+        return html.Span(f"{label}: {value}", style={
+            "backgroundColor": color,
+            "borderRadius": "6px",
+            "padding": "4px 10px",
+            "color": "white",
+            "fontWeight": "bold",
+            "fontSize": "0.85rem",
+            "marginRight": "6px",
+            "display": "inline-block",
+            "marginBottom": "4px"
+        })
+
+    # Color palette for pills
+    colors = {
+        "ACE": "#673ab7",
+        "EPA": "#d32f2f",
+        "Auto": "#1976d2",
+        "Teleop": "#fb8c00",
+        "Endgame": "#388e3c",
+        "Confidence": "#555"
+    }
+
+    # Import get_team_avatar
+    from datagather import get_team_avatar
+
+    def team_card(t, year):
+        team_number = t['team_number']
+        nickname = t.get('nickname', '')
+        avatar_url = get_team_avatar(team_number)
+
+        return dbc.Card([
+            dbc.CardBody([
+                dbc.Row([
+                    dbc.Col( # Avatar column
+                        html.Img(
+                            src=avatar_url,
+                            style={
+                                "height": "60px",
+                                "width": "60px",
+                                "borderRadius": "50%",
+                                "objectFit": "contain",
+                                "marginRight": "15px",
+                                "backgroundColor": "transparent"
+                            }
+                        ) if avatar_url else html.Div(), # Show empty div if no avatar
+                        width="auto",
+                        className="d-flex align-items-center"
+                    ),
+                    dbc.Col( # Team Info and Stats Column
+                        html.Div([
+                            # Make team name/number clickable link
+                            html.A(
+                                html.H4(f"#{team_number} | {nickname}", style={"fontWeight": "bold", "color": "var(--text-primary)", "marginBottom": "8px"}),
+                                href=f"/team/{team_number}/{year}", # Link to team page
+                                style={"textDecoration": "none"} # Remove underline
+                            ),
+                            html.Div([
+                                pill("Auto", f"{t.get('auto_epa', 'N/A'):.2f}", colors["Auto"]),
+                                pill("Teleop", f"{t.get('teleop_epa', 'N/A'):.2f}", colors["Teleop"]),
+                                pill("Endgame", f"{t.get('endgame_epa', 'N/A'):.2f}", colors["Endgame"]),
+                                pill("EPA", f"{t.get('normal_epa', 'N/A'):.2f}", colors["EPA"]),
+                                pill("Confidence", f"{t.get('confidence', 'N/A'):.2f}", colors["Confidence"]),
+                                pill("ACE", f"{t.get('epa', 'N/A'):.2f}", colors["ACE"]),
+                            ], style={"display": "flex", "flexWrap": "wrap", "gap": "4px", "marginBottom": "10px"}),
+                            html.Div([
+                                html.Span("Record: ", style={"fontWeight": "bold"}),
+                                html.Span(str(t.get('wins', 0)), style={"color": "green", "fontWeight": "bold"}),
+                                html.Span("-"),
+                                html.Span(str(t.get('losses', 0)), style={"color": "red", "fontWeight": "bold"}),
+                                html.Span("-"),
+                                html.Span(str(t.get('ties', 0)), style={"color": "#777", "fontWeight": "bold"}),
+                            ], style={"marginBottom": "6px"}),
+                        ]),
+                        width=True, # Take remaining width
+                    )
+                ], className="g-0"), # Remove gutter for tighter layout
+            ])
+        ], style={
+            "borderRadius": "12px",
+            "boxShadow": "0px 4px 12px rgba(0,0,0,0.10)",
+            "backgroundColor": "var(--card-bg)",
+            "marginBottom": "16px",
+            "minWidth": "280px", # Increased min-width to accommodate avatar
+            "maxWidth": "350px", # Increased max-width slightly
+            "marginLeft": "auto",
+            "marginRight": "auto"
+        })
+
+    # Radar chart - RESTORED
+    categories = ["ACE", "Auto", "Teleop", "Endgame", "Confidence"]
+    fig = go.Figure()
+    for t in selected:
+        fig.add_trace(go.Scatterpolar(
+            r=[
+                t.get("epa", 0),
+                t.get("auto_epa", 0),
+                t.get("teleop_epa", 0),
+                t.get("endgame_epa", 0),
+                t.get("confidence", 0)
+            ],
+            theta=categories,
+            fill='toself',
+            name=f"{t['team_number']}"
+        ))
+    fig.update_layout(
+        polar=dict(radialaxis=dict(visible=True)),
+        showlegend=True,
+        margin=dict(l=80, r=80, t=80, b=80), # Increased margins to prevent clipping
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#999")
+    )
+
+    # Container for team cards using Flexbox for wrapping
+    cards_container = html.Div([
+        team_card(t, year) for t in selected
+    ], style={
+        "display": "flex",
+        "flexWrap": "wrap",
+        "gap": "12px", # Space between cards
+        "justifyContent": "center" # Center cards in the container
+    })
+
+    return html.Div([
+        dbc.Row([ # Main row for cards and graph
+            dbc.Col( # Column for team cards container
+                cards_container, # Use the flex container here
+                md=7, # Allocate more space for cards
+                xs=12, # Stack vertically on extra small screens
+                className="mb-4" # Add bottom margin when stacked
+            ),
+            dbc.Col( # Column for the radar chart
+                dcc.Graph(figure=fig, config={"displayModeBar": False}, style={"height": "475px", "width": "450px"}), # Added style for height
+                md=5, # Allocate less space for the graph
+                xs=12, # Stack vertically on extra small screens
+                className="mb-4" # Add bottom margin when stacked
+            ),
+        ], className="justify-content-center"), # Center the main row
+    ], style={"padding": "10px 0"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  

@@ -196,6 +196,32 @@ h1, h2, h3, h4, h5, h6, p, span, div {
     color: var(--text-primary);
 }
 
+/* Style for links within dropdown menu items */
+.dropdown-menu .dropdown-item > a,
+.dropdown-menu .dropdown-item > a:visited,
+.dropdown-menu .dropdown-item > a:active,
+.dropdown-menu .dropdown-item > a:hover {
+    color: var(--text-primary) !important; /* Ensure links match dropdown text color */
+    text-decoration: none; /* Remove underline */
+    background-color: transparent !important; /* Prevent background color on hover from link */
+}
+
+/* Style for nested dropdown toggle within a dropdown menu using custom class */
+.dropdown-menu .nested-dropdown-toggle {
+    background-color: transparent !important; /* Remove button background */
+    border: none !important; /* Remove button border */
+    box-shadow: none !important; /* Remove button shadow */
+    color: var(--dropdown-text) !important; /* Match parent dropdown text color */
+    padding: .25rem 1rem !important; /* Match dropdown item padding */
+    width: 100%; /* Ensure it takes full width like other items */
+    text-align: inherit; /* Align text like other items */
+}
+
+.dropdown-menu .nested-dropdown-toggle:hover {
+     background-color: var(--bg-tertiary) !important; /* Match dropdown item hover background */
+     color: var(--text-primary) !important; /* Match dropdown item hover text color */
+}
+
 /* Specific styles for dcc.Dropdown (react-select based) */
 .Select-control,
 .Select-control:hover,
@@ -544,4 +570,11 @@ label {
 }
 
 /* Note: General link color rule removed as more specific rules are used. */
+
+/* Add custom styles here */
+
+/* Style for team links in compare cards */
+.compare-team-link:hover {
+    text-decoration: underline !important;
+}
 
