@@ -254,7 +254,9 @@ def user_event_card(body_elements, delete_button=None):
 def team_link_with_avatar(team):
     team_number = team.get("team_number", "???")
     nickname = team.get("nickname", "")
-    avatar_url = f"/assets/avatars/{team_number}.png"
+    # Construct avatar URL, ensuring default if not found
+    avatar_path = f"assets/avatars/{team_number}.png"
+    avatar_url = f"/assets/avatars/{team_number}.png?v=1" if os.path.exists(avatar_path) else "/assets/avatars/stock.png"
 
     return html.A(
         html.Div([
@@ -263,12 +265,25 @@ def team_link_with_avatar(team):
                 "width": "20px",
                 "marginRight": "8px",
                 "objectFit": "contain",
-                "verticalAlign": "middle"
+                "verticalAlign": "middle",
+                "borderRadius": "50%", # Ensure avatars are round
             }),
-            f"{team_number} | {nickname}"
-        ], style={"display": "flex", "alignItems": "center", "color": "black"}),
+            html.Span(f"{team_number} | {nickname}", style={
+                # Remove inline color style from span
+                # "color": text_color
+            })
+        ], style={
+            "display": "flex",
+            "alignItems": "center",
+            # Remove inline color style from div
+            # "color": "black"
+        }),
         href=f"/team/{team_number}",
-        style={"textDecoration": "none", "color": "var(--text-primary)"}
+        style={
+            "textDecoration": "none",
+            # Remove inline color style from A
+            # "color": text_color
+        }
     )
 
 def universal_profile_icon_or_toast():
@@ -347,7 +362,7 @@ def universal_profile_icon_or_toast():
             "backgroundColor": "var(--card-bg)",
             "bottom": 20,
             "right": 20,
-            "width": 300,
+            "width": 250,
             "zIndex": 9999
         },
     )

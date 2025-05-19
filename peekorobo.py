@@ -1377,8 +1377,9 @@ def toggle_navbar(n_clicks, is_open):
     [Output("desktop-search-preview", "children"), Output("desktop-search-preview", "style"),
      Output("mobile-search-preview", "children"), Output("mobile-search-preview", "style")],
     [Input("desktop-search-input", "value"), Input("mobile-search-input", "value")],
+    [State("theme-store", "data")] # Add theme state
 )
-def update_search_preview(desktop_value, mobile_value):
+def update_search_preview(desktop_value, mobile_value, current_theme):
     desktop_value = (desktop_value or "").strip().lower()
     mobile_value = (mobile_value or "").strip().lower()
 
@@ -1456,6 +1457,9 @@ def update_search_preview(desktop_value, mobile_value):
 
         children = []
 
+        # Determine default text color based on theme
+        default_text_color = "white" if current_theme == "dark" else "black"
+
         # Teams section
         if filtered_teams:
             children.append(
@@ -1470,13 +1474,34 @@ def update_search_preview(desktop_value, mobile_value):
                 tn = team.get("team_number", "???")
                 nm = team.get("nickname", "")
                 background_color = "var(--card-bg)"
+                is_highlighted = False
                 if (closest_team_number and tn == closest_team_number["team_number"]) or \
                    (closest_team_nickname and nm == closest_team_nickname["nickname"]):
-                    background_color = "#FFDD00"
+                    background_color = "#FFDD0080"
+                    is_highlighted = True
+
+                # Create the team link element (without inline color from function)
+                team_link_element = team_link_with_avatar(team)
+
+                # Determine the correct text color based on highlight and theme
+                if is_highlighted:
+                    link_text_color = "black" # Always black on yellow background
+                else:
+                    # White in dark mode, Black in light mode for non-highlighted
+                    link_text_color = "white" if current_theme == "dark" else "black"
+
+                # Explicitly set the color on the A tag using inline style
+                if hasattr(team_link_element, 'style'):
+                     team_link_element.style['color'] = link_text_color
 
                 row_el = dbc.Row(
-                    dbc.Col(team_link_with_avatar(team)),
-                    style={"padding": "5px", "backgroundColor": background_color, "color": "black"},
+                    dbc.Col(team_link_element), # Use the modified link element
+                    style={
+                        "padding": "5px",
+                        "backgroundColor": background_color,
+                        # Remove any explicit color setting here
+                        # "color": "",
+                    },
                 )
 
                 children.append(row_el)
@@ -1499,7 +1524,7 @@ def update_search_preview(desktop_value, mobile_value):
                 background_color = "var(--card-bg)"
 
                 if closest_event and event_key == closest_event.get("k"):
-                    background_color = "#FFDD00"
+                    background_color = "#FFDD0080"
 
                 display_text = f"{event_key} | {e_year} {e_name}"
                 row_el = dbc.Row(
@@ -1507,15 +1532,22 @@ def update_search_preview(desktop_value, mobile_value):
                         html.A(
                             display_text,
                             href=f"/event/{event_key}",
-                            style={"lineHeight": "20px", "textDecoration": "none", "color": "black"},
+                            style={
+                                "lineHeight": "20px",
+                                "textDecoration": "none",
+                                "color": "black" if background_color == "#FFDD00" else default_text_color, # Conditional color
+                            },
                         ),
                         width=True,
                     ),
-                    style={"padding": "5px", "backgroundColor": background_color},
+                    style={
+                        "padding": "5px",
+                        "backgroundColor": background_color
+                    },
                 )
                 children.append(row_el)
 
-                # Users section
+        # Users section
         if user_rows:
             children.append(
                 dbc.Row(
@@ -1532,7 +1564,10 @@ def update_search_preview(desktop_value, mobile_value):
                         html.A([
                             html.Img(src=avatar_src, style={"height": "20px", "width": "20px", "borderRadius": "50%", "marginRight": "8px"}),
                             username
-                        ], href=f"/user/{username}", style={"textDecoration": "none", "color": "black"}),
+                        ], href=f"/user/{username}", style={
+                            "textDecoration": "none",
+                            "color": default_text_color # Apply default text color
+                            }),
                     ),
                     style={"padding": "5px", "backgroundColor": "transparent"},
                 )
@@ -1545,7 +1580,7 @@ def update_search_preview(desktop_value, mobile_value):
         style_dict = {
             "display": "block",
             "backgroundColor": "var(--card-bg)",
-            "color": "var(--text-primary)",
+            "color": "var(--text-primary)", # Use CSS variable for consistency
             "border": "1px solid #ddd",
             "borderRadius": "8px",
             "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
@@ -2024,7 +2059,6 @@ def event_layout(event_key):
             dcc.Store(id="event-tab-store"),  # Store for initial tab
             dcc.Store(id="user-session"),  # Holds user_id from session
             topbar(),
-            dcc.Store(id="event-favorites-store", storage_type="session"),
             dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
                 [

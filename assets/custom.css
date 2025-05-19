@@ -14,7 +14,7 @@
     --navbar-bg: #353535;
     --navbar-text: #ffffff;
     --navbar-hover: #ffdd00;
-    --card-bg: #ffffff;
+    --card-bg: #f8f9fa;
     --card-border: #dee2e6;
     --input-bg: #ffffff;
     --input-border: #ced4da;
@@ -78,10 +78,21 @@
 }
 
 /* Global styles */
+html, body {
+    height: 100%; /* Ensure html and body take full height */
+    margin: 0; /* Remove default body margin */
+}
+
 body {
     background-color: var(--bg-primary);
     color: var(--text-primary);
     transition: background-color 0.3s ease, color 0.3s ease;
+    display: flex; /* Enable flexbox */
+    flex-direction: column; /* Stack children vertically */
+}
+
+#page-content {
+    flex-grow: 1; /* Allow the main content area to take up available space */
 }
 
 /* Typography */
@@ -257,6 +268,19 @@ h1, h2, h3, h4, h5, h6, p, span, div {
     background-color: var(--toast-bg);
     border-color: var(--toast-border);
     color: var(--toast-text);
+}
+
+/* Default (Light Mode) Close Button */
+.toast .btn-close {
+    color: var(--text-primary) !important; /* Should be black in light mode */
+    opacity: 1;
+    filter: none !important; /* Ensure no conflicting filters */
+}
+
+/* Dark Mode Close Button */
+[data-theme="dark"] .toast .btn-close {
+    color: var(--text-primary) !important; /* Should be white in dark mode */
+    filter: invert(1) grayscale(100%) brightness(200%) !important; /* Explicitly make it white */
 }
 
 /* Modals */
@@ -495,4 +519,29 @@ label {
 .form-check-inline .form-check-label {
     color: var(--text-primary);
 }
+
+/* Search Preview Link Colors */
+/* Removed rules as color is now controlled by team_link_with_avatar */
+
+/* Search Preview Highlighted Link Color - Force black on yellow */
+#desktop-search-preview .dbc-row[style*="background-color: #ffdd00"] a,
+#mobile-search-preview .dbc-row[style*="background-color: #ffdd00"] a {
+    color: black !important; /* Force black text on yellow highlight */
+}
+
+/* Search Preview Non-Highlighted Link Color (targeting A and Span) - Ensure text follows theme */
+#desktop-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a,
+#desktop-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a span,
+#mobile-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a,
+#mobile-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a span {
+    color: var(--text-primary) !important; /* Ensure both link and span inherit theme text color */
+}
+
+/* Search Preview Non-Highlighted Text Color - Ensure span text follows theme */
+#desktop-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a span,
+#mobile-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a span {
+    color: var(--text-primary) !important; /* Span text should inherit theme text color */
+}
+
+/* Note: General link color rule removed as more specific rules are used. */
 

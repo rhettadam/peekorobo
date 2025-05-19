@@ -308,7 +308,10 @@ home_layout = html.Div([
             align="center",
             style={"height": "78vh"}
         ),
-    ], class_name="py-5", style={"backgroundColor": "var(--bg-primary)"}),
+    ], class_name="py-5", style={
+        "backgroundColor": "var(--bg-primary)",
+        "flexGrow": "1" # Added flex-grow
+        }),
     footer
 ])
 
@@ -421,7 +424,10 @@ confidence = min(1.0, sum(weight * component))
         html.Hr(),
         html.P("The model is continuously evolving. To contribute, test ideas, or file issues, visit the GitHub repository:", className="mt-4"),
         html.A("https://github.com/rhettadam/peekorobo", href="https://github.com/rhettadam/peekorobo", target="_blank")
-    ], style={"maxWidth": "900px"}, className="py-4 mx-auto"),
+    ], style={
+        "maxWidth": "900px",
+        "flexGrow": "1" # Added flex-grow
+        }, className="py-4 mx-auto"),
     dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
     dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
     dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
@@ -484,7 +490,11 @@ def challenges_layout():
                     ),
                     *challenges,
                 ],
-                style={"maxWidth": "900px", "margin": "0 auto"},
+                style={
+                    "maxWidth": "900px",
+                    "margin": "0 auto",
+                    "flexGrow": "1" # Added flex-grow
+                },
             ),
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
@@ -553,7 +563,12 @@ def challenge_details_layout(year):
                         className="text-center",
                     ),
                 ],
-                style={"maxWidth": "800px", "margin": "0 auto", "padding": "20px"},
+                style={
+                    "maxWidth": "800px",
+                    "margin": "0 auto",
+                    "padding": "20px",
+                    "flexGrow": "1" # Added flex-grow
+                },
             ),
             
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
@@ -576,7 +591,10 @@ def teams_map_layout():
                     style={"width": "100%", "height": "1050px", "border": "none"},
                 ),
             ],
-            fluid=True
+            fluid=True,
+            style={
+                "flexGrow": "1", # Added flex-grow
+            }
         ),
         footer,
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
@@ -598,12 +616,12 @@ def login_layout():
                     html.Div([
                         html.Img(
                             src="/assets/dozer.png",
-                            style={"width": "100%", "maxWidth": "400px", "marginBottom": "30px"},
+                            style={"width": "100%", "maxWidth": "500px", "marginBottom": "30px"},
                             className="dozer-image"
                         ),
                         html.H3("Login or Register", style={"textAlign": "center", "marginBottom": "20px", "color": "var(--text-primary)"}),
-                        dbc.Input(id="username", type="text", placeholder="Username", className="custom-input-box", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1rem"}),
-                        dbc.Input(id="password", type="password", placeholder="Password", className="custom-input-box", style={"width": "100%", "maxWidth": "400px", "margin": "auto", "marginBottom": "1.5rem"}),
+                        dbc.Input(id="username", type="text", placeholder="Username", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1rem"}),
+                        dbc.Input(id="password", type="password", placeholder="Password", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1.5rem"}),
                         dbc.Row([
                             dbc.Col(dbc.Button("Login", id="login-btn", style={
                                 "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%"
@@ -611,12 +629,15 @@ def login_layout():
                             dbc.Col(dbc.Button("Register", id="register-btn", style={
                                 "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%"
                             }), width=6),
-                        ], justify="center", style={"maxWidth": "400px", "margin": "auto"}),
+                        ], justify="center", style={"maxWidth": "500px", "margin": "auto"}),
                         html.Div(id="login-message", style={"textAlign": "center", "marginTop": "1rem", "color": "#333", "fontWeight": "bold"}),
                     ], style={"textAlign": "center", "paddingTop": "50px"})
                 , width=12),
             )
-        ], class_name="py-5", style={"backgroundColor": "var(--bg-primary)"}),
+        ], class_name="py-5", style={
+            "backgroundColor": "var(--bg-primary)",
+            "flexGrow": "1" # Added flex-grow
+            }),
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
         dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
@@ -850,23 +871,26 @@ def teams_layout(default_year=2025):
     )
 
     filters_row = html.Div(
-        dbc.Row(
-            [
-                dbc.Col(teams_year_dropdown, sm=2),
-                dbc.Col(country_dropdown, sm=2),
-                dbc.Col(state_dropdown, sm=2),
-                dbc.Col(district_dropdown, sm=2),
-                dbc.Col(percentile_toggle, sm=2),
-                dbc.Col(search_input, sm=2),
-            ],
-            className="gx-2 gy-2 justify-content-center",
-            style={"margin": "0 auto", "maxWidth": "1000px"},
-        ),
+        [
+            html.Div(teams_year_dropdown, style={"flex": "0 0 80px", "minWidth": "80px"}),
+            html.Div(country_dropdown, style={"flex": "1 1 120px", "minWidth": "120px"}),
+            html.Div(state_dropdown, style={"flex": "1 1 120px", "minWidth": "120px"}),
+            html.Div(district_dropdown, style={"flex": "1 1 120px", "minWidth": "120px"}),
+            html.Div(percentile_toggle, style={"flex": "0 0 120px", "minWidth": "120px", "display": "flex", "alignItems": "center"}),
+            html.Div(search_input, style={"flex": "2 1 200px", "minWidth": "150px"}),
+        ],
         style={
+            "display": "flex",
+            "flexWrap": "wrap",
+            "justifyContent": "center",
+            "gap": "12px", # Add space between items
+            "rowGap": "16px", # Add space between rows when wrapped
+            "margin": "0 auto",
+            "maxWidth": "1200px",
             "top": "60px",
             "zIndex": 10,
             "backgroundColor": "transparent",
-            "padding": "6px 8px",
+            "padding": "10px 0", # Add vertical padding
         }
     )
 
@@ -887,7 +911,13 @@ def teams_layout(default_year=2025):
         ],
         data=[],
         page_size=50,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
+        style_table={
+            "overflowX": "auto", 
+            "borderRadius": "10px", 
+            "border": "none", 
+            "backgroundColor": "var(--card-bg)",
+            "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)" # Added shadow
+        },
         style_header={
             "backgroundColor": "var(--card-bg)",        # Match the table background
             "color": "var(--text)",
@@ -938,13 +968,18 @@ def teams_layout(default_year=2025):
             dcc.Store(id="user-session"),
             topbar(),
             dbc.Container([
-                dbc.Row(id="top-teams-container", className="gx-4 gy-4 justify-content-center mb-5", justify="center"),
+                dbc.Row(id="top-teams-container", className="gx-4 gy-4 justify-content-center mb-5 d-none d-md-flex", justify="center"),
                 filters_row,
                 axis_dropdowns,
                 epa_legend_layout(),
                 tabs,
                 content,
-            ], style={"padding": "10px", "maxWidth": "1200px", "margin": "0 auto"}),
+            ], style={
+                "padding": "10px",
+                "maxWidth": "1200px",
+                "margin": "0 auto",
+                "flexGrow": "1" # Added flex-grow
+                }),
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
@@ -1068,7 +1103,12 @@ def events_layout(year=2025):
                     ),
                     html.Div(id="events-tab-content"),
                 ],
-                style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
+                style={
+                    "padding": "20px",
+                    "maxWidth": "1200px",
+                    "margin": "0 auto",
+                    "flexGrow": "1" # Added flex-grow
+                },
             ),
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
@@ -1306,6 +1346,7 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                     "overflowX": "auto", 
                     "borderRadius": "10px", 
                     "border": "none", 
+                    "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)" # Added shadow
                 },
                 style_header={
                     "backgroundColor": "var(--card-bg)",
@@ -1461,7 +1502,7 @@ def build_recent_matches_section(event_key, year, epa_data, EVENT_MATCHES):
         {"name": "Prediction", "id": "Prediction", "presentation": "markdown"},
     ]
 
-    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none"}
+    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"}
     style_header={
         "backgroundColor": "var(--card-bg)",        # Match the table background
         "fontWeight": "bold",              # Keep column labels strong
@@ -1963,7 +2004,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
         ],
         data=events_data,
         page_size=5,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"},
         style_header={
             "backgroundColor": "var(--card-bg)",        # Match the table background
             "fontWeight": "bold",              # Keep column labels strong
@@ -2010,7 +2051,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
         ],
         data=awards_data,
         page_size=5,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"},
         style_header={
             "backgroundColor": "var(--card-bg)",        # Match the table background
             "fontWeight": "bold",              # Keep column labels strong
@@ -2110,7 +2151,12 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
                     blue_banner_section,
                     html.Br(),
                 ],
-                style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
+                style={
+                    "padding": "20px",
+                    "maxWidth": "1200px",
+                    "margin": "0 auto",
+                    "flexGrow": "1" # Added flex-grow
+                },
             ),
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
