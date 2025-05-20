@@ -3527,10 +3527,8 @@ def compare_multiple_teams(team_ids, year): # Update function signature
                                 pill("Auto", f"{t.get('auto_epa', 'N/A'):.2f}", colors["Auto"]),
                                 pill("Teleop", f"{t.get('teleop_epa', 'N/A'):.2f}", colors["Teleop"]),
                                 pill("Endgame", f"{t.get('endgame_epa', 'N/A'):.2f}", colors["Endgame"]),
-                                pill("EPA", f"{t.get('normal_epa', 'N/A'):.2f}", colors["EPA"]),
-                                pill("Confidence", f"{t.get('confidence', 'N/A'):.2f}", colors["Confidence"]),
                                 pill("ACE", f"{t.get('epa', 'N/A'):.2f}", colors["ACE"]),
-                            ], style={"display": "flex", "flexWrap": "wrap", "gap": "4px", "marginBottom": "10px"}),
+                            ], style={"display": "flex", "flexWrap": "wrap", "gap": "4px", "marginBottom": "6px"}), # Reduced margin
                             html.Div([
                                 html.Span("Record: ", style={"fontWeight": "bold"}),
                                 html.Span(str(t.get('wins', 0)), style={"color": "green", "fontWeight": "bold"}),
@@ -3538,7 +3536,7 @@ def compare_multiple_teams(team_ids, year): # Update function signature
                                 html.Span(str(t.get('losses', 0)), style={"color": "red", "fontWeight": "bold"}),
                                 html.Span("-"),
                                 html.Span(str(t.get('ties', 0)), style={"color": "#777", "fontWeight": "bold"}),
-                            ], style={"marginBottom": "6px"}),
+                            ], style={"marginBottom": "0px"}), # Removed margin
                         ]),
                         width=True, # Take remaining width
                     )
@@ -3549,32 +3547,93 @@ def compare_multiple_teams(team_ids, year): # Update function signature
             "boxShadow": "0px 4px 12px rgba(0,0,0,0.10)",
             "backgroundColor": "var(--card-bg)",
             "marginBottom": "16px",
-            "minWidth": "280px", # Increased min-width to accommodate avatar
-            "maxWidth": "350px", # Increased max-width slightly
+            "minWidth": "280px",
+            "maxWidth": "350px",
             "marginLeft": "auto",
-            "marginRight": "auto"
+            "marginRight": "auto",
+            "padding": "8px" # Reduced padding
         })
 
-    # Radar chart - RESTORED
-    categories = ["ACE", "Auto", "Teleop", "Endgame", "Confidence"]
+    # Radar chart - NORMALIZED SPIDER WEB
+    categories = ["ACE", "Auto", "Teleop", "Endgame", "Confidence", "EPA", "Avg Score"]
+    stat_keys = ["epa", "auto_epa", "teleop_epa", "endgame_epa", "confidence", "normal_epa", "average_match_score"]
+
+    # Compute min/max for each stat across selected teams
+    def get_stat(t, k):
+        v = t.get(k, 0)
+        try:
+            return float(v) if v is not None else 0.0 # Handle None values
+        except Exception:
+            return 0.0
+
+    # Calculate global min/max for the selected year
+    all_teams_in_year = TEAM_DATABASE.get(year, {}).values()
+    if not all_teams_in_year:
+        # Fallback if no data for the year
+        mins = {k: 0.0 for k in stat_keys}
+        maxs = {k: 1.0 for k in stat_keys} # Use a dummy range if no data
+    else:
+        mins = {k: min(get_stat(t, k) for t in all_teams_in_year) for k in stat_keys}
+        maxs = {k: max(get_stat(t, k) for t in all_teams_in_year) for k in stat_keys}
+
+    def normalize(val, min_val, max_val):
+        if max_val == min_val:
+            return 0.5  # Avoid division by zero, return middle value
+        return (val - min_val) / (max_val - min_val)
+
     fig = go.Figure()
-    for t in selected:
+
+    # Define a palette of semi-transparent colors
+    colors_rgba = [
+        'rgba(31, 119, 180, 0.3)',  # Blue
+        'rgba(255, 127, 14, 0.3)',   # Orange
+        'rgba(44, 160, 44, 0.3)',    # Green
+        'rgba(214, 39, 40, 0.3)',    # Red
+        'rgba(148, 103, 189, 0.3)',  # Purple
+        'rgba(140, 86, 75, 0.3)',    # Brown
+        'rgba(227, 119, 194, 0.3)',  # Pink
+        'rgba(127, 127, 127, 0.3)',  # Gray
+    ]
+
+    for i, t in enumerate(selected): # Use enumerate to get an index
+        r_norm = [
+            normalize(get_stat(t, k), mins[k], maxs[k]) for k in stat_keys
+        ]
+        r_actual = [get_stat(t, k) for k in stat_keys]
         fig.add_trace(go.Scatterpolar(
-            r=[
-                t.get("epa", 0),
-                t.get("auto_epa", 0),
-                t.get("teleop_epa", 0),
-                t.get("endgame_epa", 0),
-                t.get("confidence", 0)
-            ],
+            r=r_norm,
             theta=categories,
             fill='toself',
-            name=f"{t['team_number']}"
+            fillcolor=colors_rgba[i % len(colors_rgba)], # Assign color from palette
+            line=dict(color=colors_rgba[i % len(colors_rgba)].replace(', 0.6', ', 1.0'), width=2), # Thicker, opaque line
+            name=f"#{t['team_number']} | {t.get('nickname', 'Unknown')}", # Add nickname to legend/hover name
+            hovertemplate='<b>%{theta}</b><br>Normalized: %{r:.2f}<br>Actual: %{customdata:.2f}<extra>Team ' + str(t['team_number']) + '</extra>',
+            customdata=r_actual,
         ))
+
     fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True)),
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 1],
+                tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1],
+                ticktext=["0", "20", "40", "60", "80", "100"],
+                gridcolor="#bbb",
+                gridwidth=1,
+                linecolor="#888",
+                linewidth=1,
+                rangemode="tozero", # Ensure the radial axis starts at the center
+            ),
+            angularaxis=dict(
+                gridcolor="#bbb",
+                gridwidth=1,
+                linecolor="#888",
+                linewidth=1,
+            ),
+            bgcolor="rgba(0,0,0,0)",
+        ),
         showlegend=True,
-        margin=dict(l=80, r=80, t=80, b=80), # Increased margins to prevent clipping
+        margin=dict(l=80, r=80, t=80, b=80),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#999")
@@ -3594,13 +3653,13 @@ def compare_multiple_teams(team_ids, year): # Update function signature
         dbc.Row([ # Main row for cards and graph
             dbc.Col( # Column for team cards container
                 cards_container, # Use the flex container here
-                md=7, # Allocate more space for cards
+                md=4, # Allocate more space for cards
                 xs=12, # Stack vertically on extra small screens
                 className="mb-4" # Add bottom margin when stacked
             ),
             dbc.Col( # Column for the radar chart
-                dcc.Graph(figure=fig, config={"displayModeBar": False}, style={"height": "475px", "width": "450px"}), # Added style for height
-                md=5, # Allocate less space for the graph
+                dcc.Graph(figure=fig, config={"displayModeBar": False}, style={"height": "475px"}), # Added style for height
+                md=8, # Allocate more space for the graph
                 xs=12, # Stack vertically on extra small screens
                 className="mb-4" # Add bottom margin when stacked
             ),
