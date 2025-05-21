@@ -702,7 +702,7 @@ DISTRICT_STATES = {
     "ISR": ["Israel"],
     "CHS": ["Maryland", "Virginia", "District of Columbia"],
     "FIT": ["Texas", "New Mexico"],
-    "PCH": ["Georgia", "South Carolina"],
+    "PCH": ["Georgia"],
     "PNW": ["Washington", "Oregon"],
     "FIM": ["Michigan"],
     "FSC": ["South Carolina"],
