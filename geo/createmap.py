@@ -1,5 +1,5 @@
 import folium
-from folium.plugins import MarkerCluster, Search, HeatMap
+from folium.plugins import MarkerCluster, Search, HeatMap, AntPath
 import json
 import os
 import numpy as np
@@ -154,8 +154,16 @@ def get_state_geojson():
     for feature in data['features']:
         state_name = feature['properties']['name']
         if state_name in district_states:
+            # Add district information to properties
+            for district, states in DISTRICT_STATES.items():
+                if state_name in states:
+                    feature['properties']['district'] = district
+                    break
             filtered_features.append(feature)
-    
+        # Include features that are countries but not in district_states, like Israel
+        # Note: This might require more sophisticated logic if you have other non-state/province districts
+        # For now, we'll focus on getting district states working correctly.
+
     # Create new GeoJSON with only the filtered features
     filtered_geojson = {
         'type': 'FeatureCollection',
@@ -196,6 +204,27 @@ def highlight_district(feature):
         'weight': 2
     }
 
+def get_event_teams(event_key):
+    """Get list of teams that attended a specific event"""
+    conn = sqlite3.connect("../team_data/events.sqlite")
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT tk, nn 
+        FROM et 
+        WHERE ek = ?
+        ORDER BY tk
+    """, (event_key,))
+    teams = cursor.fetchall()
+    conn.close()
+    return teams
+
+def get_team_location(team_number, teams_data):
+    """Get the location of a team from the teams data"""
+    for team in teams_data:
+        if str(team.get('team_number')) == str(team_number):
+            return team.get('lat'), team.get('lng')
+    return None, None
+
 def generate_team_event_map(output_file="teams_map.html"):
     teams_data = load_team_data()
     map_teams = [t for t in teams_data if t.get("lat") and t.get("lng")]
@@ -218,11 +247,30 @@ def generate_team_event_map(output_file="teams_map.html"):
             style_function=style_district,
             highlight_function=highlight_district,
             tooltip=folium.GeoJsonTooltip(
-                fields=['name'],
-                aliases=['State/Province:'],
+                fields=['name', 'district'],
+                aliases=['State/Province:', 'District:'],
                 style=("background-color: white; color: #333333; font-family: arial; font-size: 12px; padding: 10px;")
             )
         ).add_to(districts_layer)
+
+    # Add a special circle for Israel if needed (this was removed, adding back simplified)
+    israel_teams = [t for t in map_teams if t.get('country') == 'Israel']
+    if israel_teams:
+        # Calculate center of Israel teams
+        israel_lats = [t['lat'] for t in israel_teams]
+        israel_lngs = [t['lng'] for t in israel_teams]
+        if israel_lats and israel_lngs:
+             israel_center = [sum(israel_lats)/len(israel_lats), sum(israel_lngs)/len(israel_lngs)]
+             folium.Circle(
+                 location=israel_center,
+                 radius=50000,  # 50km radius
+                 color=DISTRICT_COLORS.get('ISR', '#2ca02c'),
+                 fill=True,
+                 fill_color=DISTRICT_COLORS.get('ISR', '#2ca02c'),
+                 fill_opacity=0.3,
+                 popup="Israel (ISR)",
+                 tooltip="Israel (ISR)"
+             ).add_to(districts_layer)
 
     # --- Teams Layer ---
     teams_layer = folium.FeatureGroup(name="Teams", show=True)
@@ -252,7 +300,6 @@ def generate_team_event_map(output_file="teams_map.html"):
             icon_anchor=(20, 20)
         )
         popup_html = f"""
-<img src=\"{avatar_path}\" alt=\"Team Avatar\" style=\"width: 100px; border-radius: 50%;\">
 <b>Team {team['team_number']}:</b> {team.get('nickname', '')}<br>
 <b>Location:</b> {team.get('city', '')}, {team.get('state_prov', '')}, {team.get('country', '')}<br>
 <b>Global Rank:</b> #{team.get('global_rank', 'N/A')}<br>
@@ -288,6 +335,7 @@ def generate_team_event_map(output_file="teams_map.html"):
         lat, lng = event["lat"], event["lng"]
         etype = event.get("event_type_string", "Unknown")
         color = get_event_marker_color(event)
+        
         popup_html = f"""
 <b>{event['name']}</b><br>
 {event.get('city', '')}, {event.get('state_prov', '')}, {event.get('country', '')}<br>
@@ -297,25 +345,29 @@ def generate_team_event_map(output_file="teams_map.html"):
 """.strip()
         iframe = IFrame(popup_html, width=350, height=150)
         popup = folium.Popup(iframe, max_width=500)
-        folium.Marker(
+        
+        # Create marker
+        marker = folium.Marker(
             location=[lat, lng],
             popup=popup,
             tooltip=event['name'],
             icon=folium.Icon(color=color, icon="star")
-        ).add_to(event_cluster)
+        )
+        
+        marker.add_to(event_cluster)
 
         # Add invisible searchable marker for events
         search_label = f"Event {event.get('event_code', '')}: {event['name']} - {event.get('city', '')}, {event.get('state_prov', '')}"
-        marker = folium.CircleMarker(
+        search_marker = folium.CircleMarker(
             location=[lat, lng],
             radius=0.0001,
             fill=True,
             fill_opacity=0,
             opacity=0,
-            popup=popup_html
+            popup=popup_html # Using raw html string for search marker consistency
         )
-        marker.add_to(search_layer)
-        marker.options.update({"name": search_label})
+        search_marker.add_to(search_layer)
+        search_marker.options.update({"name": search_label})
 
     # --- Heatmap Layer ---
     heatmap_layer = folium.FeatureGroup(name="Team Density Heatmap", show=False)
