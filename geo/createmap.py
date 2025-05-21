@@ -345,19 +345,6 @@ def generate_team_event_map(output_file="teams_map.html"):
     </style>
     """))
 
-    # Add legend for event marker colors
-    legend_html = '''
-     <div style="position: fixed; bottom: 40px; left: 40px; z-index:9999; background: white; border:2px solid #444; padding: 10px; border-radius: 8px; font-size: 14px;">
-     <b>Event Marker Colors</b><br>
-     <i class="fa fa-star" style="color: blue"></i> Regional<br>
-     <i class="fa fa-star" style="color: green"></i> District<br>
-     <i class="fa fa-star" style="color: orange"></i> Championship<br>
-     <i class="fa fa-star" style="color: gray"></i> Offseason<br>
-     <i class="fa fa-star" style="color: red"></i> Preseason<br>
-     </div>
-    '''
-    m.get_root().html.add_child(folium.Element(legend_html))
-
     output_dir = os.path.dirname(output_file)
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
