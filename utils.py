@@ -111,8 +111,8 @@ def calculate_all_ranks(year, data):
 
 def get_epa_styling(percentiles_dict):
         color_map = [
-            ("99", "#8e24aa99"),   # Deep Purple
-            ("97", "#6a1b9a99"),   # Medium Purple
+            ("99", "#6a1b9a99"),   # Deep Purple
+            ("97", "#8e24aa99"),   # Medium Purple
             ("95", "#3949ab99"),   # Indigo
             ("93", "#1565c099"),   # Blue
             ("91", "#1e88e599"),   # Sky Blue
