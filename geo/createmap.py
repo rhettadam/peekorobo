@@ -5,7 +5,7 @@ import os
 import numpy as np
 import sqlite3
 from dotenv import load_dotenv
-from folium.features import GeoJson  
+from folium.features import GeoJson, CustomIcon
 from folium import IFrame
 import requests
 
@@ -209,7 +209,7 @@ def generate_team_event_map(output_file="teams_map.html"):
     m = folium.Map(location=[39.8283, -98.5795], zoom_start=4)
 
     # --- Districts Layer ---
-    districts_layer = folium.FeatureGroup(name="FRC Districts", show=False)
+    districts_layer = folium.FeatureGroup(name="Districts", show=False)
     state_geojson = get_state_geojson()
     if state_geojson:
         GeoJson(
@@ -225,7 +225,7 @@ def generate_team_event_map(output_file="teams_map.html"):
         ).add_to(districts_layer)
 
     # --- Teams Layer ---
-    teams_layer = folium.FeatureGroup(name="FRC Teams", show=True)
+    teams_layer = folium.FeatureGroup(name="Teams", show=True)
     cluster = MarkerCluster(name="Team Clusters").add_to(teams_layer)
     search_layer = folium.FeatureGroup(name="Search Layer", show=False)
 
@@ -243,7 +243,16 @@ def generate_team_event_map(output_file="teams_map.html"):
         lat, lng = team["lat"], team["lng"]
         label = f"{team['team_number']} {team.get('nickname', '')} ({team.get('city', '')}, {team.get('state_prov', '')}, {team.get('country', '')})".strip()
 
+        avatar_path = f"../assets/avatars/{team['team_number']}.png"
+        if not os.path.exists(avatar_path):
+            avatar_path = "../assets/avatars/stock.png"
+        icon = CustomIcon(
+            avatar_path,
+            icon_size=(40, 40),  # Adjust size as needed
+            icon_anchor=(20, 20)
+        )
         popup_html = f"""
+<img src=\"{avatar_path}\" alt=\"Team Avatar\" style=\"width: 100px; border-radius: 50%;\">
 <b>Team {team['team_number']}:</b> {team.get('nickname', '')}<br>
 <b>Location:</b> {team.get('city', '')}, {team.get('state_prov', '')}, {team.get('country', '')}<br>
 <b>Global Rank:</b> #{team.get('global_rank', 'N/A')}<br>
@@ -252,16 +261,12 @@ def generate_team_event_map(output_file="teams_map.html"):
 """.strip()
         iframe = IFrame(popup_html, width=350, height=150)
         popup = folium.Popup(iframe, max_width=500)
-
-        color = get_marker_color(team.get("epa"), percentiles)
-
         folium.Marker(
             location=[lat, lng],
             popup=popup,
             tooltip=label,
-            icon=folium.Icon(color=color, icon="info-sign")
+            icon=icon
         ).add_to(cluster)
-
         # Invisible searchable marker for teams
         search_label = f"Team {team['team_number']}: {team.get('nickname', '')} - {team.get('city', '')}, {team.get('state_prov', '')}"
         marker = folium.CircleMarker(
@@ -276,7 +281,8 @@ def generate_team_event_map(output_file="teams_map.html"):
         marker.options.update({"name": search_label})
 
     # --- Events Layer ---
-    events_layer = folium.FeatureGroup(name="FRC Events", show=True)
+    events_layer = folium.FeatureGroup(name="Events", show=True)
+    event_cluster = MarkerCluster(name="Event Clusters").add_to(events_layer)
     
     for event in map_events:
         lat, lng = event["lat"], event["lng"]
@@ -296,7 +302,7 @@ def generate_team_event_map(output_file="teams_map.html"):
             popup=popup,
             tooltip=event['name'],
             icon=folium.Icon(color=color, icon="star")
-        ).add_to(events_layer)
+        ).add_to(event_cluster)
 
         # Add invisible searchable marker for events
         search_label = f"Event {event.get('event_code', '')}: {event['name']} - {event.get('city', '')}, {event.get('state_prov', '')}"
@@ -316,11 +322,17 @@ def generate_team_event_map(output_file="teams_map.html"):
     heat_data = [[t["lat"], t["lng"]] for t in map_teams if t.get("lat") and t.get("lng")]
     HeatMap(heat_data, radius=16, blur=12, min_opacity=0.3, max_zoom=12).add_to(heatmap_layer)
 
+    # --- Event Density Heatmap Layer ---
+    event_heatmap_layer = folium.FeatureGroup(name="Event Density Heatmap", show=False)
+    event_heat_data = [[e["lat"], e["lng"]] for e in map_events if e.get("lat") and e.get("lng")]
+    HeatMap(event_heat_data, radius=16, blur=12, min_opacity=0.3, max_zoom=12).add_to(event_heatmap_layer)
+
     # Add all layers to map
     teams_layer.add_to(m)
     search_layer.add_to(m)
     events_layer.add_to(m)
     heatmap_layer.add_to(m)
+    event_heatmap_layer.add_to(m)
     districts_layer.add_to(m)
 
     # Add combined search bar
