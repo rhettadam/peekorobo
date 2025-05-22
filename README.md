@@ -235,7 +235,7 @@ The full model is continuously evolving and improving. To contribute, test ideas
 
 You can visit Peekorobo here:
 
-https://peekorobo.com
+https://www.peekorobo.com/
 
 ---
 
