@@ -1899,73 +1899,6 @@ def update_events_tab_content(
         html.Div(all_event_cards, className="d-flex flex-wrap justify-content-center"),
     ]), district_options
 
-@callback(
-    [
-        Output("favorite-event-alert", "children"),
-        Output("favorite-event-alert", "is_open"),
-        Output("event-favorites-store", "data"),
-    ],
-    Input({"type": "favorite-event-btn", "key": ALL}, "n_clicks"),
-    State({"type": "favorite-event-btn", "key": ALL}, "id"),
-    State("event-favorites-store", "data"),
-    State("url", "pathname"),
-    prevent_initial_call=True,
-)
-def toggle_favorite_event(n_clicks_list, id_list, store_data, pathname):
-    if "user_id" not in session:
-        return "Please log in to favorite events.", True, dash.no_update
-
-    triggered = ctx.triggered_id
-    if not triggered or "key" not in triggered:
-        return dash.no_update, False, dash.no_update
-
-    index = next((i for i, id_ in enumerate(id_list) if id_["key"] == triggered["key"]), None)
-    if index is None or n_clicks_list[index] is None or n_clicks_list[index] == 0:
-        return dash.no_update, False, dash.no_update
-
-    user_id = session["user_id"]
-    event_key = triggered["key"]
-    store_data = store_data or []
-
-    conn = get_pg_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT id FROM saved_items
-        WHERE user_id = %s AND item_type = 'event' AND item_key = %s
-    """, (user_id, event_key))
-    existing = cursor.fetchone()
-
-    if existing:
-        cursor.execute("""
-            DELETE FROM saved_items
-            WHERE user_id = %s AND item_type = 'event' AND item_key = %s
-        """, (user_id, event_key))
-        conn.commit()
-        new_store = [k for k in store_data if k != event_key]
-        result = ("Event removed from favorites.", True, new_store)
-    else:
-        cursor.execute("""
-            INSERT INTO saved_items (user_id, item_type, item_key)
-            VALUES (%s, 'event', %s)
-        """, (user_id, event_key))
-        conn.commit()
-        result = ("Event added to favorites.", True, store_data + [event_key])
-
-    conn.close()
-    return result
-
-@callback(
-    Output({"type": "favorite-event-btn", "key": MATCH}, "children"),
-    Input("event-favorites-store", "data"),
-    State({"type": "favorite-event-btn", "key": MATCH}, "id")
-)
-def update_button_icon(favorites, button_id):
-    if not favorites:
-        return "☆"
-    event_key = button_id["key"]
-    return "★" if event_key in favorites else "☆"
-
 def event_layout(event_key):
     parsed_year, _ = parse_event_key(event_key)
     event = EVENT_DATABASE.get(parsed_year, {}).get(event_key)
@@ -2082,6 +2015,7 @@ def event_layout(event_key):
             dcc.Location(id="event-url", refresh=False),
             dcc.Store(id="event-tab-store"),  # Store for initial tab
             dcc.Store(id="user-session"),  # Holds user_id from session
+            dcc.Store(id="event-favorites-store", storage_type="session"),  # Add this line
             topbar(),
             dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
@@ -3754,6 +3688,73 @@ def toggle_favorite_team(n_clicks_list, id_list, session_data):
     except Exception as e:
         print(f"Error toggling team favorite: {e}")
         return "Error updating favorites.", True, [dash.no_update]
+    finally:
+        conn.close()
+
+@callback(
+    Output({"type": "team-favorites-popover-body", "team_number": MATCH}, "children"),
+    Input({"type": "team-favorites-popover", "team_number": MATCH}, "is_open"),
+    State("url", "pathname"), # Keep pathname state to double check team number if needed
+    prevent_initial_call=True
+)
+def update_team_favorites_popover_content(is_open, pathname):
+    # Extract team number from the triggered input ID
+    triggered = ctx.triggered_id
+    if not triggered or not triggered.get("team_number"):
+        return "Error: Could not determine team number."
+        
+    team_number_str = triggered["team_number"]
+    
+    if not is_open:
+        return "Loading..." # Reset content when popover closes
+
+    # team_number_str is already validated from the ID, just convert
+    try:
+        team_number = int(team_number_str)
+    except ValueError:
+         # This case should theoretically not happen with MATCH if ID is set correctly
+        return "Error: Invalid team number in ID."
+
+    conn = get_pg_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT user_id FROM saved_items
+            WHERE item_type = 'team' AND item_key = %s
+        """, (str(team_number),))
+        favorited_user_ids = [row[0] for row in cursor.fetchall()]
+
+        if not favorited_user_ids:
+            return "No users have favorited this team yet."
+
+        # Get usernames and avatars for these user IDs
+        user_details = []
+        # Use IN clause for efficiency
+        # Ensure favorited_user_ids is not empty before executing IN query
+        if not favorited_user_ids:
+             return "No users have favorited this team yet."
+
+        format_strings = ','.join(['%s'] * len(favorited_user_ids))
+        cursor.execute("SELECT id, username, avatar_key FROM users WHERE id IN (%s)" % format_strings, tuple(favorited_user_ids))
+        user_rows = cursor.fetchall()
+
+        user_list_items = []
+        for uid, username, avatar_key in user_rows:
+            avatar_src = get_user_avatar(avatar_key or "stock")
+            user_list_items.append(html.Li([
+                html.Img(src=avatar_src, height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
+                html.A(username, href=f"/user/{username}", style={"textDecoration": "none", "color": "#007bff"})
+            ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"}))
+
+        return html.Ul(user_list_items, style={
+            "listStyleType": "none",
+            "paddingLeft": "0",
+            "marginBottom": "0"
+        })
+
+    except Exception as e:
+        print(f"Error fetching favoriting users: {e}")
+        return "Error loading favoriting users."
     finally:
         conn.close()
 

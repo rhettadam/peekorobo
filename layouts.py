@@ -1656,6 +1656,21 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
     team_number = int(team_number)
     team_key = f"frc{team_number}"
 
+        # Get total favorites count for this team
+    conn = get_pg_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT COUNT(*) FROM saved_items WHERE item_type = 'team' AND item_key = %s",
+            (str(team_number),)
+        )
+        favorites_count = cursor.fetchone()[0]
+    except Exception as e:
+        print(f"Error getting favorites count: {e}")
+        favorites_count = 0
+    finally:
+        conn.close()
+
     # Separate handling for performance year (used for ACE/stats) vs. awards/events year
     is_history = not year or str(year).lower() == "history"
 
@@ -1802,7 +1817,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
             display_name = INCLUDED_CATEGORIES[category]
             year_list = ", ".join(str(y) for y in sorted(set(info["years"])))
             children = [
-                html.Span("🏆", style={"fontSize": "1.2rem"}),
+                html.Img(src="/assets/trophy.png", style={"height": "1.2em", "verticalAlign": "middle", "marginRight": "5px"}),
                 html.Span(
                     f" {display_name} ({year_list})",
                     style={
@@ -1844,7 +1859,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
                             [
                                 html.H2(f"Team {team_number}: {nickname}", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
                                 *badges,
-                                html.P([html.I(className="bi bi-geo-alt-fill"), f"📍 {city}, {state}, {country}"]),
+                                html.P([html.Img(src="/assets/pin.png", style={"height": "1.5em", "verticalAlign": "middle", "marginRight": "5px"}), f" {city}, {state}, {country}"]),
                                 html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
                                         html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "underline"})]),
                                 html.P([html.I(className="bi bi-award"), f" Rookie Year: {rookie_year}"]),
@@ -1858,6 +1873,24 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
                                         ),
                                     ],
                                     style={"marginBottom": "10px"},
+                                ),
+                                html.Div( # Wrapper div for positioning
+                                    id=f"team-{team_number}-favorites-popover-target", # Move ID to wrapper
+                                    style={
+                                        "position": "relative", # Establish positioning context
+                                        "display": "inline-block" # Prevent div from taking full width
+                                    },
+                                    children=[
+                                        html.P(
+                                            [
+                                                html.I(className="bi bi-star-fill", style={"color": "#ffc107"}),
+                                                f" {favorites_count} Favorites ▼"
+                                            ],
+                                            style={
+                                                "marginBottom": "0px", # Remove bottom margin on paragraph
+                                                "cursor": "pointer" # Keep cursor on text
+                                            }),
+                                    ]
                                 ),
                                 favorite_button  # ⭐ Inserted here
                             ],
@@ -2203,6 +2236,18 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
     )
 
     
+    # Add Popover for team favorites
+    favorites_popover = dbc.Popover(
+        [
+            dbc.PopoverHeader("Favorited By"),
+            dbc.PopoverBody(id={"type": "team-favorites-popover-body", "team_number": str(team_number)}, children="Loading..."), # Body to be updated by callback
+        ],
+        id={"type": "team-favorites-popover", "team_number": str(team_number)}, # Popover ID
+        target=f"team-{team_number}-favorites-popover-target", # Target the favorites count element
+        trigger="hover", # Trigger on hover
+        placement="right", # Position the popover
+    )
+
     return html.Div(
         [
             topbar(),
@@ -2229,6 +2274,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
                     "flexGrow": "1"
                 },
             ),
+            favorites_popover, # Add the popover here
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
