@@ -127,6 +127,8 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
     total_score = wins = losses = 0
     breakdowns = []
     dominance_scores = []
+    endgame_scenarios = {"DeepCage": 0, "ShallowCage": 0, "Parked": 0, "None": 0}
+    total_l4 = total_l3 = total_l2 = total_l1 = total_net = total_processor = 0
 
     for match in matches:
 
@@ -171,9 +173,29 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         breakdown = (match.get("score_breakdown") or {}).get(alliance, {})
         breakdowns.append(breakdown)
 
+        # Aggregate scoring metrics from breakdown
+        reef = breakdown.get("autoReef", {})
+        total_l4 += reef.get("tba_topRowCount", 0)
+        total_l3 += reef.get("tba_midRowCount", 0)
+        total_l2 += reef.get("tba_botRowCount", 0)
+        total_l1 += reef.get("trough", 0)
+
+        reef_teleop = breakdown.get("teleopReef", {})
+        total_l4 += reef_teleop.get("tba_topRowCount", 0)
+        total_l3 += reef_teleop.get("tba_midRowCount", 0)
+        total_l2 += reef_teleop.get("tba_botRowCount", 0)
+        total_l1 += reef_teleop.get("trough", 0)
+
+        total_net += breakdown.get("netAlgaeCount", 0)
+        total_processor += breakdown.get("wallAlgaeCount", 0)
+
+        # Track endgame scenarios
+        robot_endgame = breakdown.get(f"endGameRobot{index}", "None")
+        if robot_endgame in endgame_scenarios:
+            endgame_scenarios[robot_endgame] += 1
+
         actual_auto = estimate_consistent_auto(breakdowns, team_count)
         actual_teleop = estimate_consistent_teleop(breakdowns, team_count)
-        robot_endgame = breakdown.get(f"endGameRobot{index}", "None")
         actual_endgame = {"DeepCage": 12, "ShallowCage": 6, "Parked": 2}.get(robot_endgame, 0)
         actual_overall = actual_auto + actual_teleop + actual_endgame
         
@@ -244,7 +266,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         weights["consistency"] * consistency +
         weights["dominance"] * dominance +
         weights["record_alignment"] * record_alignment_score +
-        weights["veteran"] * (1.0 if is_veteran else 0.6) +
+        weights["veteran"] * (1.0 if is_veteran else 0.4) +
         weights["events"] * event_boost +
         weights["base"]
     )
@@ -252,6 +274,22 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
     confidence = min(1.0, raw_confidence)
 
     actual_epa = overall_epa * confidence
+
+    # Calculate averages for new metrics
+    num_matches = len(matches)
+    avg_l4 = round(total_l4 / num_matches, 2) if num_matches > 0 else 0
+    avg_l3 = round(total_l3 / num_matches, 2) if num_matches > 0 else 0
+    avg_l2 = round(total_l2 / num_matches, 2) if num_matches > 0 else 0
+    avg_l1 = round(total_l1 / num_matches, 2) if num_matches > 0 else 0
+    avg_net = round(total_net / num_matches, 2) if num_matches > 0 else 0
+    avg_processor = round(total_processor / num_matches, 2) if num_matches > 0 else 0
+
+    # Determine most common endgame scenario
+    most_common_endgame = max(endgame_scenarios, key=endgame_scenarios.get) if endgame_scenarios else "N/A"
+
+    # Algae EPA (assuming it's a combination of net and processor points)
+    # Based on scoring: Net Algae (4 pts) + Wall Algae (2.5 pts)
+    algae_epa = round(avg_net * 4 + avg_processor * 2.5, 2)
 
     print(f"\n===== DEBUG for {team_key} =====")
     print("===== EPA Component Breakdown =====")
@@ -262,7 +300,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
     print("\n===== Confidence Breakdown =====")
     print(f"→ Consistency:     {round(consistency, 3)} × 0.25 = {round(0.25 * consistency, 4)}")
     print(f"→ Record Align:    {round(record_alignment_score, 3)} × 0.15 = {round(0.15 * record_alignment_score, 4)}")
-    print(f"→ Veteran Boost:   {'1.0' if is_veteran else '0.6'} × 0.1 = {round(0.1 * (1.0 if is_veteran else 0.6), 4)}")
+    print(f"→ Veteran Boost:   {'1.0' if is_veteran else '0.4'} × 0.1 = {round(0.1 * (1.0 if is_veteran else 0.6), 4)}")
     print(f"→ Dominance:       {round(dominance, 3)} × 0.25 = {round(0.25 * dominance, 4)}")
     print(f"→ Confidence Total: {round(raw_confidence, 4)} → Capped: {round(confidence, 3)}")
     print("\n===== Final EPA Calculation =====")
@@ -279,7 +317,15 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         "actual_epa": round(actual_epa, 2),
         "average_match_score": round(average_match_score, 2),
         "wins": wins,
-        "losses": losses
+        "losses": losses,
+        "avg_l4": avg_l4,
+        "avg_l3": avg_l3,
+        "avg_l2": avg_l2,
+        "avg_l1": avg_l1,
+        "avg_net": avg_net,
+        "avg_processor": avg_processor,
+        "algae_epa": algae_epa,
+        "most_common_endgame": most_common_endgame
     }
 
 def fetch_team_components(team, year, team_epa_cache=None, veteran_teams=None):
