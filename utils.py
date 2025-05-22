@@ -411,20 +411,6 @@ def event_card(event, favorited=False):
                         outline=True,
                         className="custom-view-btn mt-3",
                     ),
-                    dbc.Button(
-                        "★" if favorited else "☆",
-                        id={"type": "favorite-event-btn", "key": event_key},
-                        color="link",
-                        className="mt-2 p-0",
-                        style={
-                            "fontSize": "1.5rem",
-                            "lineHeight": "1",
-                            "border": "none",
-                            "boxShadow": "none",
-                            "background": "none",
-                            "textDecoration": "none"
-                        }
-                    )
                 ]
             )
         ],

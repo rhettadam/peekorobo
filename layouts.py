@@ -1,6 +1,6 @@
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
-from datagather import frc_games,COUNTRIES,STATES,DISTRICT_STATES,get_team_avatar
+from datagather import frc_games,COUNTRIES,STATES,DISTRICT_STATES,get_team_avatar,get_pg_connection
 from flask import session
 from datetime import datetime, date
 from utils import predict_win_probability, calculate_single_rank, compute_percentiles
@@ -32,9 +32,24 @@ def topbar():
                                 dbc.InputGroup(
                                     [
                                         dbc.Input(id="mobile-search-input", placeholder="Search", type="text", className="custom-input-box"),
-                                        dbc.Button("🔎", id="mobile-search-button", color="primary", style={
-                                            "backgroundColor": "#FFDD00", "border": "none", "color": "#222",
-                                        }),
+                                        dbc.Button(
+                                            html.Img(src="/assets/magnifier.svg", style={
+                                                "width": "20px",
+                                                "height": "20px",
+                                                "transform": "scaleX(-1)"
+                                            }),
+                                            id="mobile-search-button",
+                                            color="primary",
+                                            style={
+                                                "backgroundColor": "#FFDD00",
+                                                "border": "none",
+                                                "color": "#222",
+                                                "display": "flex",
+                                                "alignItems": "center",
+                                                "justifyContent": "center",
+                                                "padding": "0.375rem 0.75rem"
+                                            }
+                                        ),
                                     ],
                                     style={"width": "180px"},
                                 ),
@@ -137,9 +152,24 @@ def topbar():
                         dbc.InputGroup(
                             [
                                 dbc.Input(id="desktop-search-input", placeholder="Search Teams or Events", type="text", className="custom-input-box"),
-                                dbc.Button("🔎", id="desktop-search-button", color="primary", style={
-                                    "backgroundColor": "#FFDD00", "border": "none", "color": "#222",
-                                }),
+                                dbc.Button(
+                                    html.Img(src="/assets/magnifier.svg", style={
+                                        "width": "20px",
+                                        "height": "20px",
+                                        "transform": "scaleX(-1)"
+                                    }),
+                                    id="desktop-search-button",
+                                    color="primary",
+                                    style={
+                                        "backgroundColor": "#FFDD00",
+                                        "border": "none",
+                                        "color": "#222",
+                                        "display": "flex",
+                                        "alignItems": "center",
+                                        "justifyContent": "center",
+                                        "padding": "0.375rem 0.75rem"
+                                    }
+                                ),
                             ]
                         ),
                         html.Div(id="desktop-search-preview", style={
@@ -187,8 +217,6 @@ footer = dbc.Container(
                 [
                     "Built With:  ",
                     html.A("The Blue Alliance ", href="https://www.thebluealliance.com/", target="_blank", style={"color": "#3366CC", "textDecoration": "line"}),
-                    " | ",
-                    html.A(" GitHub", href="https://github.com/rhettadam/peekorobo", target="_blank", style={"color": "#3366CC", "textDecoration": "line"})
                 ],
                 style={
                     "textAlign": "center",
@@ -1576,18 +1604,50 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
     user_id = session.get("user_id")
     is_logged_in = bool(user_id)
     
+    # Check if team is already favorited
+    is_favorited = False
+    if is_logged_in:
+        conn = get_pg_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                SELECT id FROM saved_items
+                WHERE user_id = %s AND item_type = 'team' AND item_key = %s
+            """, (user_id, str(team_number)))
+            is_favorited = bool(cursor.fetchone())
+        except Exception as e:
+            print(f"Error checking favorite status: {e}")
+        finally:
+            conn.close()
+    
     favorite_button = dbc.Button(
-        "⭐  Favorite",
-        id="favorite-team-btn",
+        "★" if is_favorited else "☆",
+        id={"type": "favorite-team-btn", "key": str(team_number)},
         href="/login" if not is_logged_in else None,
-        color="warning",
+        color="link",
+        className="p-0",
         style={
-            "marginTop": "10px",
-            "backgroundColor": "#fffff0",
-            "color": "black",
-            "border": "1px solid #555",
-            "fontWeight": "bold",
+            "position": "absolute",
+            "top": "12px",
+            "right": "16px",
+            "fontSize": "2.2rem",
+            "lineHeight": "1",
+            "border": "none",
+            "boxShadow": "none",
+            "background": "none",
+            "color": "#ffc107",  # golden star
+            "zIndex": "10",
+            "textDecoration": "none",
+            "cursor": "pointer"
         }
+    )
+
+    # Add alert component without pattern matching
+    favorite_alert = dbc.Alert(
+        id="favorite-alert",
+        is_open=False,
+        duration=3000,
+        color="warning"
     )
     
     if not team_number:
@@ -2146,19 +2206,19 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
     return html.Div(
         [
             topbar(),
+            dcc.Store(id="user-session", data={"user_id": user_id} if user_id else None),  # Add this line
             dbc.Alert(id="favorite-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
                 [
                     team_card,
-                    rank_card,  # ← new
-                    performance_metrics_card,  # ← new
+                    rank_card,
+                    performance_metrics_card,
                     html.Hr(),
                     build_recent_events_section(team_key, team_number, epa_data, performance_year,EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS),
                     html.H3("Events", style={"marginTop": "2rem", "color": "var(--text-secondary)", "fontWeight": "bold"}),
                     events_table,
                     html.H3("Awards", style={"marginTop": "2rem", "color": "var(--text-secondary)", "fontWeight": "bold"}),
                     awards_table,
-                    # rank_tabs,
                     blue_banner_section,
                     html.Br(),
                 ],
@@ -2166,7 +2226,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
                     "padding": "20px",
                     "maxWidth": "1200px",
                     "margin": "0 auto",
-                    "flexGrow": "1" # Added flex-grow
+                    "flexGrow": "1"
                 },
             ),
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),

@@ -369,14 +369,20 @@ def user_layout(_user_id=None, deleted_items=None):
         year_data = TEAM_DATABASE.get(2025, {})
 
         delete_team_btn = html.Button(
-            "🗑️",
+            html.Img(
+                src="/assets/trash.png",
+                style={
+                    "width": "20px",
+                    "height": "20px",
+                    "verticalAlign": "middle"
+                }
+            ),
             id={"type": "delete-favorite", "item_type": "team", "key": team_key},
             style={
                 "backgroundColor": "transparent",
                 "border": "none",
-                "color": "#dc3545",  # optional: red trash color
                 "cursor": "pointer",
-                "fontSize": "1.2rem"  # optional: adjust icon size
+                "padding": "4px"
             }
         )
         
@@ -530,14 +536,20 @@ def user_layout(_user_id=None, deleted_items=None):
         # ... rest of your card building logic ...
 
         delete_event_btn = html.Button(
-            "🗑️",
+            html.Img(
+                src="/assets/trash.png",
+                style={
+                    "width": "20px",
+                    "height": "20px",
+                    "verticalAlign": "middle"
+                }
+            ),
             id={"type": "delete-favorite", "item_type": "event", "key": event_key},
             style={
                 "backgroundColor": "transparent",
                 "border": "none",
-                "color": "#dc3545",  # optional: red trash color
                 "cursor": "pointer",
-                "fontSize": "1.2rem"  # optional: adjust icon size
+                "padding": "4px"
             }
         )
 
@@ -1887,7 +1899,7 @@ def update_events_tab_content(
         html.Div(all_event_cards, className="d-flex flex-wrap justify-content-center"),
     ]), district_options
 
-@app.callback(
+@callback(
     [
         Output("favorite-event-alert", "children"),
         Output("favorite-event-alert", "is_open"),
@@ -1896,11 +1908,12 @@ def update_events_tab_content(
     Input({"type": "favorite-event-btn", "key": ALL}, "n_clicks"),
     State({"type": "favorite-event-btn", "key": ALL}, "id"),
     State("event-favorites-store", "data"),
+    State("url", "pathname"),
     prevent_initial_call=True,
 )
-def toggle_favorite_event(n_clicks_list, id_list, store_data):
+def toggle_favorite_event(n_clicks_list, id_list, store_data, pathname):
     if "user_id" not in session:
-        return dash.no_update, False, dash.no_update
+        return "Please log in to favorite events.", True, dash.no_update
 
     triggered = ctx.triggered_id
     if not triggered or "key" not in triggered:
@@ -1942,6 +1955,17 @@ def toggle_favorite_event(n_clicks_list, id_list, store_data):
     conn.close()
     return result
 
+@callback(
+    Output({"type": "favorite-event-btn", "key": MATCH}, "children"),
+    Input("event-favorites-store", "data"),
+    State({"type": "favorite-event-btn", "key": MATCH}, "id")
+)
+def update_button_icon(favorites, button_id):
+    if not favorites:
+        return "☆"
+    event_key = button_id["key"]
+    return "★" if event_key in favorites else "☆"
+
 def event_layout(event_key):
     parsed_year, _ = parse_event_key(event_key)
     event = EVENT_DATABASE.get(parsed_year, {}).get(event_key)
@@ -1967,7 +1991,7 @@ def event_layout(event_key):
     header_card = dbc.Card(
         html.Div([
             dbc.Button(
-                id="favorite-event-btn",
+                id={"type": "favorite-event-btn", "key": event_key},  # Updated to match pattern
                 children="★",  # will be toggled dynamically
                 color="link",
                 className="p-0",
@@ -2240,17 +2264,6 @@ def handle_event_favorite(pathname, n_clicks, store_data):
     raise PreventUpdate
 
 @callback(
-    Output("favorite-event-btn", "children"),
-    Input("event-favorites-store", "data"),
-    State("url", "pathname")
-)
-def update_button_icon(favorites, pathname):
-    event_key = pathname.strip("/").split("/")[-1]
-    if favorites and event_key in favorites:
-        return "★"
-    return "☆"
-
-@app.callback(
     Output("data-display-container", "children"),
     Output("event-url", "search"),  # NEW: update the event tab URL
     Input("event-data-tabs", "active_tab"),
@@ -3665,6 +3678,84 @@ def compare_multiple_teams(team_ids, year): # Update function signature
             ),
         ], className="justify-content-center"), # Center the main row
     ], style={"padding": "10px 0"})
+
+@callback(
+    Output("followers-hidden", "style"),
+    Input("followers-see-more", "n_clicks"),
+    prevent_initial_call=True
+)
+def toggle_followers_list(n_clicks):
+    if n_clicks is None:
+        return dash.no_update
+    
+    # Toggle between hidden and visible
+    return {"display": "block", "marginTop": "5px", "paddingLeft": "0", "listStyleType": "none", "marginBottom": "0"}
+
+@callback(
+    Output("following-hidden", "style"),
+    Input("following-see-more", "n_clicks"),
+    prevent_initial_call=True
+)
+def toggle_following_list(n_clicks):
+    if n_clicks is None:
+        return dash.no_update
+    
+    # Toggle between hidden and visible
+    return {"display": "block", "marginTop": "5px", "paddingLeft": "0", "listStyleType": "none", "marginBottom": "0"}
+
+@callback(
+    Output("favorite-alert", "children", allow_duplicate=True),
+    Output("favorite-alert", "is_open", allow_duplicate=True),
+    Output({"type": "favorite-team-btn", "key": ALL}, "children"),
+    Input({"type": "favorite-team-btn", "key": ALL}, "n_clicks"),
+    State({"type": "favorite-team-btn", "key": ALL}, "id"),
+    State("user-session", "data"),
+    prevent_initial_call=True
+)
+def toggle_favorite_team(n_clicks_list, id_list, session_data):
+    if not session_data or "user_id" not in session_data:
+        return "Please log in to favorite teams.", True, [dash.no_update] * len(id_list)
+
+    user_id = session_data["user_id"]
+    # Only one button per team page, so we expect len(id_list) == 1
+    if not id_list or len(id_list) != 1:
+        return dash.no_update, dash.no_update, [dash.no_update]
+    button_id = id_list[0]
+    team_number = button_id["key"]
+
+    conn = get_pg_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Check if already favorited
+        cursor.execute("""
+            SELECT id FROM saved_items
+            WHERE user_id = %s AND item_type = 'team' AND item_key = %s
+        """, (user_id, team_number))
+        existing = cursor.fetchone()
+
+        if existing:
+            # Remove favorite
+            cursor.execute("""
+                DELETE FROM saved_items
+                WHERE user_id = %s AND item_type = 'team' AND item_key = %s
+            """, (user_id, team_number))
+            conn.commit()
+            return "Team removed from favorites.", True, ["☆"]
+        else:
+            # Add favorite
+            cursor.execute("""
+                INSERT INTO saved_items (user_id, item_type, item_key)
+                VALUES (%s, 'team', %s)
+            """, (user_id, team_number))
+            conn.commit()
+            return "Team added to favorites.", True, ["★"]
+
+    except Exception as e:
+        print(f"Error toggling team favorite: {e}")
+        return "Error updating favorites.", True, [dash.no_update]
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
