@@ -574,12 +574,66 @@ label {
     color: var(--text-primary) !important; /* Span text should inherit theme text color */
 }
 
-/* Note: General link color rule removed as more specific rules are used. */
-
-/* Add custom styles here */
-
-/* Style for team links in compare cards */
 .compare-team-link:hover {
     text-decoration: underline !important;
 }
+.rank-card-container {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 0 8px;
+  }
+  
+  .rank-card {
+    flex-grow: 2;
+    flex-shrink: 0;
+    flex-basis: 0;
+    max-width: 100%;         /* allows full use of container space */
+    min-width: 371px;        /* wide enough for 'Louisiana' */
+  }
 
+  /* Override on small screens */
+@media (max-width: 600px) {
+    .rank-card {
+      min-width: 105px;  /* Smaller for mobile */
+    }
+  }
+  
+  .rank-card .card-body {
+    text-align: center;
+    padding: 10px 12px;
+    background-color: var(--card-bg);
+    border-radius: 10px;
+    box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .rank-card-label {
+    font-size: 0.9rem;
+    color: #888;
+    margin-bottom: 4px;
+    line-height: 1.2;
+  }
+  
+  .rank-card-value {
+    font-size: clamp(1.1rem, 2.5vw, 1.6rem); /* scales with screen */
+    font-weight: bold;
+    color: #007BFF;
+    text-decoration: underline;
+    white-space: nowrap;
+  }
+
+  .navbar-toggler-custom {
+    padding: 0px 4px;
+    border: none;
+    background: none;
+    outline: none;
+    box-shadow: none;
+    font-size: 1.2rem;
+    line-height: 1;
+    color: white; /* or use var(--bs-navbar-color) */
+  }
+  
+  
+  

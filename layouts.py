@@ -19,7 +19,7 @@ def topbar():
                             dbc.NavbarBrand(
                                 html.Img(
                                     src="/assets/logo.png",
-                                    style={"height": "40px", "width": "auto", "marginRight": "10px"},
+                                    style={"height": "40px", "width": "auto", "marginRight": "5px"},
                                 ),
                                 href="/",
                                 className="navbar-brand-custom",
@@ -51,7 +51,7 @@ def topbar():
                                             }
                                         ),
                                     ],
-                                    style={"width": "180px"},
+                                    style={"width": "150px"},
                                 ),
                                 html.Div(id="mobile-search-preview", style={
                                     "backgroundColor": "var(--card-bg)",
@@ -59,7 +59,7 @@ def topbar():
                                     "borderRadius": "8px",
                                     "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
                                     "marginTop": "5px",
-                                    "padding": "5px",
+                                    "padding": "0px",
                                     "maxHeight": "200px",
                                     "overflowY": "auto",
                                     "overflowX": "hidden",
@@ -76,7 +76,7 @@ def topbar():
                             style={"position": "relative", "textAlign": "center"},
                         ),
                         dbc.Col(
-                            dbc.NavbarToggler(id="navbar-toggler", n_clicks=0),
+                            dbc.NavbarToggler(id="navbar-toggler", n_clicks=0, className="navbar-toggler-custom"),
                             width="auto",
                             className="d-md-none align-self-center",
                         ),
@@ -1906,7 +1906,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
                                         "width": "100%",
                                         "height": "auto",
                                         "objectFit": "contain",
-                                        "borderRadius": "10px",
+                                        "borderRadius": "0px",
                                         "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
                                         "marginLeft": "auto",
                                         "marginRight": "auto",
@@ -1943,30 +1943,26 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
         html.Span(losses_str, style={"color": "red", "fontWeight": "bold"})
     ])
     def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state):
-        def rank_card(label, rank, href):
-            return dbc.Card(
-                dbc.CardBody([
-                    html.P(label, style={"fontSize": "1rem", "color": "#888", "marginBottom": "4px"}),
-                    html.A(str(rank), href=href, style={
-                        "fontSize": "1.6rem",
-                        "fontWeight": "bold",
-                        "color": "#007BFF",
-                        "textDecoration": "none",
-                    }),
-                ]),
-                style={
-                    "textAlign": "center",
-                    "borderRadius": "10px",
-                    "boxShadow": "0px 2px 6px rgba(0,0,0,0.1)",
-                    "backgroundColor": "var(--card-bg)",
-                    "padding": "15px",
-                }
+        def rank_card(top, bottom, rank, href):
+            return html.Div(
+                dbc.Card(
+                    dbc.CardBody([
+                        html.P([
+                            html.Span(top, style={"display": "block"}),
+                            html.Span(bottom, style={"display": "block"})
+                        ], className="rank-card-label"),
+                        html.A(str(rank), href=href, className="rank-card-value")
+                    ]),
+                    className="rank-card"
+                )
             )
-    
-        return dbc.Row([
-            dbc.Col(rank_card("Global Rank", global_rank, f"/teams?year={performance_year}&sort_by=epa"), width=4),
-            dbc.Col(rank_card(f"{country} Rank", country_rank, f"/teams?year={performance_year}&country={country}&sort_by=epa"), width=4),
-            dbc.Col(rank_card(f"{state} Rank", state_rank, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa"), width=4),
+
+        return html.Div([
+            html.Div([
+                rank_card("Global", "Rank", global_rank, f"/teams?year={performance_year}&sort_by=epa"),
+                rank_card(country, "Rank", country_rank, f"/teams?year={performance_year}&country={country}&sort_by=epa"),
+                rank_card(state, "Rank", state_rank, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa"),
+            ], className="rank-card-container")
         ], className="mb-4")
 
 
@@ -1980,9 +1976,9 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
                 "fontWeight": "bold",
                 "fontSize": "0.85rem",
                 "marginRight": "6px",
+                "marginBottom": "6px",   # 👈 add vertical spacing
                 "display": "inline-block"
             })
-    
         # Fixed colors to match screenshot styling
         auto_color = "#1976d2"     # Blue
         teleop_color = "#fb8c00"   # Orange
@@ -2007,9 +2003,9 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
             html.P([
                 html.Span(f"Team {team_number} ({nickname}) had a record of ", style={"fontWeight": "bold"}),
                 html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
-                html.Span("-"),
+                html.Span("-", style={"color": "var(--text-primary)"}),
                 html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
-                html.Span("-"),
+                html.Span("-", style={"color": "var(--text-primary)"}),
                 html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
                 html.Span(f" in {performance_year}.")
             ], style={"marginBottom": "6px", "fontWeight": "bold"}),
