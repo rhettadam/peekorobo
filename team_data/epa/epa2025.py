@@ -437,7 +437,7 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         "avg_l1": avg_l1,
         "avg_net": avg_net,
         "avg_processor": avg_processor,
-        "algae_epa": algae_epa,
+        "algae_epa": round(avg_net * 4 + avg_processor * 2.5, 2),
         "most_common_endgame": most_common_endgame
     }
 
