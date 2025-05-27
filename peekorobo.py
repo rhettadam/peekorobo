@@ -1446,16 +1446,36 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
 
         # --- Filter Events (using compressed keys) ---
         filtered_events = []
+        search_terms = val.split()
+        
         for e in events_data:
             event_code = (e.get("cd") or "").lower()
-            event_name = (e.get("n") or "").lower()
+            event_key = (e.get("k") or "").lower()
+            event_name_raw = (e.get("n") or "").lower()
+            # Remove ' presented by' and everything after it for searching
+            if "presented" in event_name_raw:
+                event_name_searchable = event_name_raw.split(" presented by")[0]
+            else:
+                event_name_searchable = event_name_raw
+                
             start_date = e.get("sd", "")
             event_year = start_date[:4] if len(start_date) >= 4 else ""
-            year_name_combo = f"{event_year} {event_name}".lower()
+            
+            # Create a combined string for searching
+            searchable_text = f"{event_year} {event_name_searchable} {event_code} {event_key}".lower()
 
-            if (val in event_code) or (val in event_name) or (val in year_name_combo):
+            # Check if all search terms are present in the searchable text
+            if all(term in searchable_text for term in search_terms):
                 filtered_events.append(e)
-        filtered_events = filtered_events[:20]
+        
+        # Sort events by date, newest first
+        def parse_date_for_sort(date_str):
+            try:
+                return datetime.strptime(date_str, "%Y-%m-%d")
+            except:
+                return datetime.min # Put undateable events at the beginning
+
+        filtered_events.sort(key=lambda x: parse_date_for_sort(x.get("sd", "")), reverse=True)
 
         closest_event = None
         if filtered_events:
@@ -1748,6 +1768,9 @@ def update_events_tab_content(
                 continue
     
             full_name = event.get("n", "")
+            # Remove ' presented by' and everything after it
+            if " presented by" in full_name:
+                full_name = full_name.split(" presented by")[0]
             name = full_name.split(" presented by")[0].strip()
 
             try:
@@ -1914,6 +1937,9 @@ def event_layout(event_key):
     event_matches = [m for m in EVENT_MATCHES.get(event_year, []) if m.get("ek") == event_key]
 
     event_name = event.get("n", "Unknown Event")
+    # Remove ' presented by' and everything after it
+    if " presented by" in event_name:
+        event_name = event_name.split(" presented by")[0]
     event_location = f"{event.get('c', '')}, {event.get('s', '')}, {event.get('co', '')}"
     start_date = event.get("sd", "N/A")
     end_date = event.get("ed", "N/A")
