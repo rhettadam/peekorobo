@@ -597,7 +597,7 @@ label {
   /* Override on small screens */
 @media (max-width: 600px) {
     .rank-card {
-      min-width: 105px;  /* Smaller for mobile */
+      min-width: 115px;  /* Smaller for mobile */
     }
   }
   
@@ -634,6 +634,26 @@ label {
     line-height: 1;
     color: white; /* or use var(--bs-navbar-color) */
   }
+
+  /* Prevent navbar items from wrapping */
+.mobile-navbar-row {
+    flex-wrap: nowrap !important;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* Let columns shrink properly */
+.mobile-navbar-col {
+    min-width: 0;
+    flex-shrink: 1;
+}
+
+/* Logo and toggler stay auto-width, search takes up rest */
+.mobile-search-group {
+    flex-grow: 0;
+    min-width: 0;
+}
+
   
   
   

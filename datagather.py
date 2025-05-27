@@ -501,7 +501,7 @@ frc_games = {
                "video": "https://www.youtube.com/watch?v=9keeDyFxzY4", 
                "logo": "/assets/logos/2024.png", 
                "manual": "https://firstfrc.blob.core.windows.net/frc2024/Manual/2024GameManual.pdf",
-               "summary": "In CRESCENDO, two competing alliances score notes, amplify their speaker, harmonize onstage, and take the spotlight before time runs out. Robots collect notes and score them in their amp and speaker. Each time an alliance gets 2 notes in their amp, the human player can amplify their speaker for 10 seconds. As time runs out, robots race to get onstage and deliver notes to their traps. Harmonizing robots, i.e. robots sharing a chain, earn an added bonus. Robots earn even more points if a human player spotlights robots on a chain by scoring a note on the chain’s microphone. The alliance that earns the most points wins the match!"},
+               "summary": "In CRESCENDO SM presented by Haas, two competing alliances are invited to score notes, amplify their speaker, harmonize onstage, and take the spotlight before time runs out. Alliances earn additional rewards for meeting specific scoring thresholds and for cooperating with their opponents."},
     
         2023: {"name": "Charged Up", 
                "video": "https://www.youtube.com/watch?v=0zpflsYc4PA", 

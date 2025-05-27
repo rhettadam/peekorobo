@@ -5,6 +5,7 @@ from flask import session
 from datetime import datetime, date
 from utils import predict_win_probability, calculate_single_rank, compute_percentiles
 import json
+import os
 
 def topbar():
     return dbc.Navbar(
@@ -22,7 +23,7 @@ def topbar():
                                     style={"height": "40px", "width": "auto", "marginRight": "5px"},
                                 ),
                                 href="/",
-                                className="navbar-brand-custom",
+                                className="navbar-brand-custom mobile-navbar-col",
                             ),
                             width="auto",
                             className="align-self-center",
@@ -51,7 +52,8 @@ def topbar():
                                             }
                                         ),
                                     ],
-                                    style={"width": "150px"},
+                                    style={"width": "180px"},
+                                    className="mobile-search-group",
                                 ),
                                 html.Div(id="mobile-search-preview", style={
                                     "backgroundColor": "var(--card-bg)",
@@ -67,6 +69,7 @@ def topbar():
                                     "zIndex": "9999",
                                     "position": "absolute",
                                     "left": "0",
+                                    "right": "0",
                                     "top": "100%",
                                     "display": "none",
                                 }),
@@ -548,68 +551,101 @@ def challenge_details_layout(year):
         {"name": "Unknown Game", "video": "#", "logo": "/assets/placeholder.png", "manual": "#", "summary": "No summary available."}
     )
 
+    # Check for year-specific banner
+    banner_path = f"/assets/logos/banner.png"
+    has_banner = os.path.exists(banner_path)
+    banner_img = html.Img(
+        src=f"/{banner_path}",
+        style={
+            "width": "100%",
+            "height": "auto",
+            "objectFit": "cover",
+            "marginBottom": "20px",
+            "borderRadius": "10px" # Optional: match card corners
+        },
+        alt=f"{year} Challenge Banner",
+    ) if has_banner else None
+
     return html.Div(
         [
             topbar(),
             dbc.Container(
                 [
-                    # Title and Logo
-                    html.H2(f"{game['name']} ({year})", className="text-center mb-4"),
-                    html.Img(
-                        src=game["logo"],
-                        style={"display": "block", "margin": "0 auto", "maxWidth": "400px", "borderRadius": "10px"},
-                        alt=game["name"],
-                        className="mb-4",
-                    ),
-                    # Summary
-                    html.P(
-                        game.get("summary", "No summary available."),
-                        className="text-center mb-4",
-                        style={"fontSize": "1rem", "lineHeight": "1.5", "color": "var(--text-primary)"},
-                    ),
-                    # Game Manual Button
-                    html.Div(
-                        dbc.Button(
-                            "View Game Manual",
-                            href=game["manual"],
-                            target="_blank",
-                            style={"marginBottom": "20px",
-                                  "backgroundColor": "#ffdd00ff",
-                                  "color": "#222",
-                                  "border": "2px solid #555"},
-                        ),
-                        className="text-center",
-                    ),
-                    # Video Thumbnail
-                    html.P(
-                        "Watch the official game reveal:",
-                        className="text-center mt-4",
-                    ),
-                    html.Div(
-                        html.A(
+                    banner_img if banner_img else None, # Add banner at the top
+                    dbc.Card(
+                        dbc.CardBody([
+                            html.H2(f"{game['name']} ({year})", className="card-title text-center mb-4"),
                             html.Img(
-                                src=f"https://img.youtube.com/vi/{game['video'].split('=')[-1]}/0.jpg",
+                                src=game["logo"],
                                 style={
-                                    "maxWidth": "400px",
-                                    "borderRadius": "8px",
-                                    "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+                                    "display": "block",
+                                    "margin": "0 auto",
+                                    "maxWidth": "300px", # Adjust max-width for card
+                                    "borderRadius": "10px"
+                                },
+                                alt=game["name"],
+                                className="mb-4",
+                            ),
+                            html.P(
+                                game.get("summary", "No summary available."),
+                                className="card-text text-center mb-4",
+                                style={
+                                    "fontSize": "1rem",
+                                    "lineHeight": "1.5",
+                                    "color": "var(--text-primary)"
                                 },
                             ),
-                            href=game["video"],
-                            target="_blank",
-                            style={"display": "block", "margin": "0 auto"},
-                        ),
-                        className="text-center",
-                    ),
+                            html.Div(
+                                dbc.Button(
+                                    "View Game Manual",
+                                    href=game["manual"],
+                                    target="_blank",
+                                    style={
+                                        "backgroundColor": "#ffdd00ff",
+                                        "color": "#222",
+                                        "border": "2px solid #555"
+                                    },
+                                ),
+                                className="text-center mb-4", # Add margin below button
+                            ),
+                            html.P(
+                                "Watch the official game reveal:",
+                                className="text-center mb-3", # Adjust margin
+                            ),
+                            html.Div(
+                                html.A(
+                                    html.Img(
+                                        src=f"https://img.youtube.com/vi/{game['video'].split('=')[-1]}/0.jpg",
+                                        style={
+                                            "maxWidth": "400px",
+                                            "borderRadius": "8px",
+                                            "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+                                        },
+                                    ),
+                                    href=game["video"],
+                                    target="_blank",
+                                    style={
+                                        "display": "block",
+                                        "margin": "0 auto"
+                                    },
+                                ),
+                                className="text-center",
+                            ),
+                        ]),
+                        className="mb-4 shadow-sm", # Add shadow and bottom margin to card
+                        style={
+                           "borderRadius": "10px",
+                           "backgroundColor": "var(--card-bg)"
+                        }
+                    )
                 ],
                 style={
                     "maxWidth": "800px",
                     "margin": "0 auto",
                     "padding": "20px",
-                    "flexGrow": "1" # Added flex-grow
+                    "flexGrow": "1",
                 },
             ),
-            
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
