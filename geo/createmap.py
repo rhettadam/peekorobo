@@ -43,7 +43,7 @@ DISTRICT_COLORS = {
     "NE": "#98df8a",   # light green
 }
 
-def load_team_data(locations_file="2025_geo_teams.json", epa_db="epa_teams.sqlite"):
+def load_team_data(locations_file="2025_geo_teams.json", epa_db="../team_data/epa_teams.sqlite"):
     if not os.path.exists(locations_file) or not os.path.exists(epa_db):
         return []
     with open(locations_file, "r", encoding="utf-8") as f:
@@ -237,6 +237,9 @@ def generate_team_event_map(output_file="teams_map.html"):
 
     m = folium.Map(location=[39.8283, -98.5795], zoom_start=4)
 
+    from folium.plugins import MeasureControl
+    m.add_child(MeasureControl(primary_length_unit='kilometers'))
+
     # --- Districts Layer ---
     districts_layer = folium.FeatureGroup(name="Districts", show=False)
     state_geojson = get_state_geojson()
@@ -379,12 +382,18 @@ def generate_team_event_map(output_file="teams_map.html"):
     event_heat_data = [[e["lat"], e["lng"]] for e in map_events if e.get("lat") and e.get("lng")]
     HeatMap(event_heat_data, radius=16, blur=12, min_opacity=0.3, max_zoom=12).add_to(event_heatmap_layer)
 
+    # --- EPA Strength Heatmap ---
+    epa_weighted_heat = [[t["lat"], t["lng"], t["epa"]] for t in map_teams if t.get("epa") and t.get("lat") and t.get("lng")]
+    epa_heat_layer = folium.FeatureGroup(name="ACE Heatmap", show=False)
+    HeatMap(epa_weighted_heat, radius=20, blur=15, min_opacity=0.4, max_val=max([e[2] for e in epa_weighted_heat])).add_to(epa_heat_layer)
+
     # Add all layers to map
     teams_layer.add_to(m)
     search_layer.add_to(m)
     events_layer.add_to(m)
     heatmap_layer.add_to(m)
     event_heatmap_layer.add_to(m)
+    epa_heat_layer.add_to(m)
     districts_layer.add_to(m)
 
     # Add combined search bar
