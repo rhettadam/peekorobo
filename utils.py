@@ -205,6 +205,19 @@ def get_user_epa_color(value, all_values):
             else:
                 return "#8B4513"  # brown
             
+def pill(label, value, color):
+        return html.Span(f"{label}: {value}", style={
+            "backgroundColor": color,
+            "borderRadius": "6px",
+            "padding": "4px 10px",
+            "color": "white",
+            "fontWeight": "bold",
+            "fontSize": "0.85rem",
+            "marginRight": "6px",
+            "marginBottom": "6px",   # 👈 add vertical spacing
+            "display": "inline-block"
+        })
+            
 def user_team_card(title, body_elements, delete_button=None):
         return dbc.Card(
             dbc.CardBody([

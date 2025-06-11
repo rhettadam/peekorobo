@@ -3,7 +3,7 @@ from dash import html, dcc, dash_table
 from datagather import frc_games,COUNTRIES,STATES,DISTRICT_STATES,get_team_avatar,get_pg_connection
 from flask import session
 from datetime import datetime, date
-from utils import predict_win_probability, calculate_single_rank, compute_percentiles
+from utils import predict_win_probability, calculate_single_rank, compute_percentiles, pill
 import json
 import os
 
@@ -1198,19 +1198,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
 
     # DEBUG: Print team_epa_data at the beginning of build_recent_events_section
     #print(f"DEBUG (build_recent_events_section): team_epa_data received: {team_epa_data.get('event_epas', 'No event_epas key')}")
-
-    def pill(label, value, color):
-        return html.Span(f"{label}: {value}", style={
-            "backgroundColor": color,
-            "borderRadius": "6px",
-            "padding": "4px 10px",
-            "color": "white",
-            "fontWeight": "bold",
-            "fontSize": "0.85rem",
-            "marginRight": "6px",
-            "marginBottom": "6px",   # 👈 add vertical spacing
-            "display": "inline-block"
-        })
 
     recent_rows = []
     year = performance_year 

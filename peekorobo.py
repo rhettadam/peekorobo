@@ -26,7 +26,7 @@ from datagather import COUNTRIES,STATES,load_data,get_team_avatar,DISTRICT_STATE
 
 from layouts import home_layout,footer,topbar,team_layout,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, build_recent_matches_section, compare_layout
 
-from utils import predict_win_probability,calculate_single_rank,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_username,get_available_avatars,get_contrast_text_color,parse_event_key,get_user_epa_color,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card
+from utils import pill,predict_win_probability,calculate_single_rank,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_username,get_available_avatars,get_contrast_text_color,parse_event_key,get_user_epa_color,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -351,9 +351,11 @@ def user_layout(_user_id=None, deleted_items=None):
     epa_data = {
         str(team_num): {
             "epa": data.get("epa", 0),
+            "normal_epa": data.get("normal_epa", 0),
             "auto_epa": data.get("auto_epa", 0),
             "teleop_epa": data.get("teleop_epa", 0),
             "endgame_epa": data.get("endgame_epa", 0),
+            "confidence": data.get("confidence", 0),
         }
         for team_num, data in TEAM_DATABASE.get(2025, {}).items()
     }
@@ -393,8 +395,11 @@ def user_layout(_user_id=None, deleted_items=None):
             teleop = team_data.get("teleop_epa", 0)
             auto = team_data.get("auto_epa", 0)
             endgame = team_data.get("endgame_epa", 0)
+            confidence = team_data.get("confidence", 0)
+            normal_epa = team_data.get("normal_epa", 0)
             wins = team_data.get("wins", 0)
             losses = team_data.get("losses", 0)
+            ties = team_data.get("ties", 0)
             country = (team_data.get("country") or "").lower()
             state = (team_data.get("state_prov") or "").lower()
 
@@ -408,88 +413,33 @@ def user_layout(_user_id=None, deleted_items=None):
                         country_rank += 1
                     if (other.get("state_prov") or "").lower() == state:
                         state_rank += 1
-
-            team_data_2025 = list(TEAM_DATABASE.get(2025, {}).values())
-
-            epa_vals = [t.get("epa", 0) or 0 for t in team_data_2025]
-            auto_vals = [t.get("auto_epa", 0) or 0 for t in team_data_2025]
-            teleop_vals = [t.get("teleop_epa", 0) or 0 for t in team_data_2025]
-            endgame_vals = [t.get("endgame_epa", 0) or 0 for t in team_data_2025]
-
-
-            epa_color = get_user_epa_color(epa, epa_vals)
-            auto_color = get_user_epa_color(auto, auto_vals)
-            teleop_color = get_user_epa_color(teleop, teleop_vals)
-            endgame_color = get_user_epa_color(endgame, endgame_vals)
-
-
+            
+            auto_color = "#1976d2"     # Blue
+            teleop_color = "#fb8c00"   # Orange
+            endgame_color = "#388e3c"  # Green
+            norm_color = "#d32f2f"    # Red (for overall EPA)
+            conf_color = "#555"   
+            total_color = "#673ab7" 
+            
             metrics = html.Div([
-                html.Div("ACE", className="metric-label"),
-                html.Div(f"{epa:.2f}", className="metric-value", style={"color": epa_color, "fontWeight": "bold"}),
-            
-                html.Div("Auto", className="metric-label"),
-                html.Div(f"{auto:.2f}", className="metric-value", style={"color": auto_color, "fontWeight": "bold"}),
-            
-                html.Div("Teleop", className="metric-label"),
-                html.Div(f"{teleop:.2f}", className="metric-value", style={"color": teleop_color, "fontWeight": "bold"}),
-            
-                html.Div("Endgame", className="metric-label"),
-                html.Div(f"{endgame:.2f}", className="metric-value", style={"color": endgame_color, "fontWeight": "bold"}),
-            
-                html.Div("Global Rank", className="metric-label"),
-                    html.A(
-                        str(global_rank),
-                        href="/teams?sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
-                        className="metric-value",
-                        style={
-                            "color": "#007BFF",
-                            "fontWeight": "bold",
-                            "textDecoration": "underline",
-                            "cursor": "pointer"
-                        }
-                    ),
-
-                    
-                    html.Div(f"{country.title()} Rank", className="metric-label"),
-                    html.A(
-                        str(country_rank),
-                        href=f"/teams?country={country}&sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
-                        className="metric-value",
-                        style={
-                            "color": "#007BFF",
-                            "fontWeight": "bold",
-                            "textDecoration": "underline",
-                            "cursor": "pointer"
-                        }
-                    ),
-                    
-                    html.Div(f"{state.title()} Rank", className="metric-label"),
-                    html.A(
-                        str(state_rank),
-                        href=f"/teams?country={country}&state={state}&sort_by=epa&x=teleop_epa&y=auto%2Bendgame",
-                        className="metric-value",
-                        style={
-                            "color": "#007BFF",
-                            "fontWeight": "bold",
-                            "textDecoration": "underline",
-                            "cursor": "pointer"
-                        }
-                    ),
-            
-                html.Div([
-                    html.Span("Record", className="metric-label", style={"marginRight": "8px"}),
+                html.P([
+                    html.Span(f"Team {team_number} ({team_data.get('nickname', '')}) had a record of ", style={"fontWeight": "bold"}),
                     html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
-                    html.Span(" / "),
-                    html.Span(str(losses), style={"color": "red", "fontWeight": "bold"})
-                ], style={"gridColumn": "span 8", "display": "flex", "alignItems": "center"})
-            ], style={
-                "display": "grid",
-                "gridTemplateColumns": "repeat(8, 1fr)",
-                "gap": "4px 8px",
-                "fontSize": "0.85rem",
-                "marginTop": "10px",
-                "width": "100%"
-            })
+                    html.Span("-", style={"color": "var(--text-primary)"}),
+                    html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
+                    html.Span("-", style={"color": "var(--text-primary)"}),
+                    html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
+                    html.Span(f" in {year_data.get('year', 2025)}.")
+                ], style={"marginBottom": "6px", "fontWeight": "bold"}),
+                html.Div([
+                    pill("Auto", f"{auto:.1f}", auto_color),
+                    pill("Teleop", f"{teleop:.1f}", teleop_color),
+                    pill("Endgame", f"{endgame:.1f}", endgame_color),
+                    pill("EPA", f"{normal_epa:.2f}", norm_color),
+                    pill("Confidence", f"{confidence:.2f}", conf_color),
+                    pill("ACE", f"{epa:.1f}", total_color),
+                ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
+            ])
 
         team_cards.append(user_team_card(
             html.A(
@@ -815,6 +765,7 @@ def other_user_layout(username):
         endgame = team_data.get("endgame_epa", 0)
         wins = team_data.get("wins", 0)
         losses = team_data.get("losses", 0)
+        ties = team_data.get("ties", 0)
         country = (team_data.get("country") or "").lower()
         state = (team_data.get("state_prov") or "").lower()
 
@@ -830,45 +781,33 @@ def other_user_layout(username):
                     state_rank += 1
 
         year_data = list(TEAM_DATABASE.get(2025, {}).values())
-        epa_vals = [t.get("epa", 0) or 0 for t in year_data]
-        auto_vals = [t.get("auto_epa", 0) or 0 for t in year_data]
-        teleop_vals = [t.get("teleop_epa", 0) or 0 for t in year_data]
-        endgame_vals = [t.get("endgame_epa", 0) or 0 for t in year_data]
 
-        epa_color = get_user_epa_color(epa, epa_vals)
-        auto_color = get_user_epa_color(auto, auto_vals)
-        teleop_color = get_user_epa_color(teleop, teleop_vals)
-        endgame_color = get_user_epa_color(endgame, endgame_vals)
+        auto_color = "#1976d2"     # Blue
+        teleop_color = "#fb8c00"   # Orange
+        endgame_color = "#388e3c"  # Green
+        norm_color = "#d32f2f"    # Red (for overall EPA)
+        conf_color = "#555"   
+        total_color = "#673ab7" 
 
         metrics = html.Div([
-            html.Div("ACE", className="metric-label"),
-            html.Div(f"{epa:.2f}", className="metric-value", style={"color": epa_color, "fontWeight": "bold"}),
-            html.Div("Auto", className="metric-label"),
-            html.Div(f"{auto:.2f}", className="metric-value", style={"color": auto_color, "fontWeight": "bold"}),
-            html.Div("Teleop", className="metric-label"),
-            html.Div(f"{teleop:.2f}", className="metric-value", style={"color": teleop_color, "fontWeight": "bold"}),
-            html.Div("Endgame", className="metric-label"),
-            html.Div(f"{endgame:.2f}", className="metric-value", style={"color": endgame_color, "fontWeight": "bold"}),
-            html.Div("Global Rank", className="metric-label"),
-            html.Div(global_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
-            html.Div(f"{country} Rank", className="metric-label"),
-            html.Div(country_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
-            html.Div(f"{state} Rank", className="metric-label"),
-            html.Div(state_rank, className="metric-value", style={"color": "blue", "fontWeight": "bold"}),
-            html.Div([
-                html.Span("Record", className="metric-label", style={"marginRight": "8px"}),
+            html.P([
+                html.Span(f"Team {team_number} ({team_data.get('nickname', '')}) had a record of ", style={"fontWeight": "bold"}),
                 html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
-                html.Span(" / "),
-                html.Span(str(losses), style={"color": "red", "fontWeight": "bold"})
-            ], style={"gridColumn": "span 8", "display": "flex", "alignItems": "center"})
-        ], style={
-            "display": "grid",
-            "gridTemplateColumns": "repeat(8, 1fr)",
-            "gap": "4px 8px",
-            "fontSize": "0.85rem",
-            "marginTop": "10px",
-            "width": "100%"
-        })
+                html.Span("-", style={"color": "var(--text-primary)"}),
+                html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
+                html.Span("-", style={"color": "var(--text-primary)"}),
+                html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
+                html.Span(f" in {year_data.get('year', 2025)}.")
+            ], style={"marginBottom": "6px", "fontWeight": "bold"}),
+            html.Div([
+                pill("Auto", f"{auto:.1f}", auto_color),
+                pill("Teleop", f"{teleop:.1f}", teleop_color),
+                pill("Endgame", f"{endgame:.1f}", endgame_color),
+                pill("EPA", f"{normal_epa:.2f}", norm_color),
+                pill("Confidence", f"{confidence:.2f}", conf_color),
+                pill("ACE", f"{epa:.1f}", total_color),
+            ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
+        ])
 
         team_cards.append(user_team_card(
             html.A(
