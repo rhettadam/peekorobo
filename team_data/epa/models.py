@@ -537,6 +537,9 @@ def endgame_2020(breakdowns, team_count):
 def auto_2019(breakdowns, team_count):
     """Calculate auto score for 2019 matches."""
     def score_per_breakdown(b):
+        if not isinstance(b, dict):
+            return 0
+            
         # 2019 Auto Scoring: Sandstorm Bonus + Cargo Ship/Rocket Level 1 Scoring
         sandstorm_bonus = b.get("sandStormBonusPoints", 0)
         auto_scored_points = b.get("autoPoints", 0) - sandstorm_bonus
@@ -573,6 +576,9 @@ def auto_2019(breakdowns, team_count):
 def teleop_2019(breakdowns, team_count):
     """Calculate teleop score for 2019 matches."""
     def score_per_breakdown(b):
+        if not isinstance(b, dict):
+            return 0
+            
         # 2019 Teleop Scoring: Cargo Ship and Rocket (all levels) Scoring
         cargo_ship_points = 0
         for i in range(1, 9):
@@ -622,18 +628,31 @@ def teleop_2019(breakdowns, team_count):
 def endgame_2019(breakdowns, team_count):
     """Calculate endgame score for 2019 matches."""
     def score_per_breakdown(b):
-        # Get endgame status for each robot
-        endgame_scores = []
-        for i in range(1, 4):  # Check all three robots
-            robot_endgame_status = b.get(f"endgameRobot{i}", "None")
-            # Use 2019 HAB Climb scoring values
-            score = {"HabLevel1": 3, "HabLevel2": 6, "HabLevel3": 12, "None": 0}.get(robot_endgame_status, 0)
-            endgame_scores.append(score)
+        if not isinstance(b, dict):
+            return 0
+            
+        # Get HAB climb points directly from the breakdown
+        hab_climb_points = b.get("habClimbPoints", 0)
         
-        # Scale based on team count
-        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
-        return sum(endgame_scores) * scaling_factor
+        # If we don't have habClimbPoints, calculate from individual robot statuses
+        if hab_climb_points == 0:
+            endgame_scores = []
+            for i in range(1, 4):  # Check all three robots
+                robot_endgame_status = b.get(f"endgameRobot{i}", "None")
+                # Use 2019 HAB Climb scoring values
+                score = {"HabLevel1": 3, "HabLevel2": 6, "HabLevel3": 12, "None": 0}.get(robot_endgame_status, 0)
+                endgame_scores.append(score)
+            hab_climb_points = sum(endgame_scores)
+        
+        # For endgame, we don't scale by team count since HAB climbs are individual achievements
+        # But we do need to divide by 3 since the points are for the entire alliance
+        return hab_climb_points / 3
 
+    # Handle single breakdown case (for individual robot)
+    if isinstance(breakdowns, dict):
+        return score_per_breakdown(breakdowns)
+
+    # Handle list of breakdowns case (for alliance)
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)
 

@@ -65,7 +65,7 @@ def get_team_experience(team_number: int) -> int:
         
         # Count how many epa_YYYY tables exist for this team
         years = 0
-        for year in range(1992, 2023):  # Check from 1992 to 2024
+        for year in range(1992, 2019):  # Check from 1992 to 
             try:
                 cursor.execute(f"SELECT 1 FROM epa_{year} WHERE team_number = ? LIMIT 1", (team_number,))
                 if cursor.fetchone():
