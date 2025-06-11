@@ -320,6 +320,19 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
             "wins": 0, "losses": 0
         }
 
+    # Filter out events with no valid matches or zero EPAs
+    valid_events = [
+        epa_data for epa_data in event_epas 
+        if epa_data.get("match_count", 0) > 0 and epa_data["overall"] > 0
+    ]
+
+    if not valid_events:
+        return {
+            "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
+            "confidence": 0.0, "actual_epa": 0.0,
+            "wins": 0, "losses": 0
+        }
+
     total_overall = 0.0
     total_auto = 0.0
     total_teleop = 0.0
@@ -337,7 +350,7 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
     total_losses = 0
 
     # Use a weighted average based on match count per event
-    for epa_data in event_epas:
+    for epa_data in valid_events:
         match_count = epa_data.get("match_count", 0)
         if match_count == 0: # Skip events with no matches
             continue
@@ -373,7 +386,7 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
     avg_record_alignment = total_record_alignment / total_match_count
 
     # Calculate the weighted components for display
-    weights = event_epas[0]["weights"]  # Weights are constant across events
+    weights = valid_events[0]["weights"]  # Weights are constant across events
     consistency_component = weights["consistency"] * avg_consistency
     record_component = weights["record_alignment"] * avg_record_alignment
     veteran_component = weights["veteran"] * avg_veteran_boost

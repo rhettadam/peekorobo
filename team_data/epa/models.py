@@ -195,3 +195,131 @@ def endgame_2023(breakdowns, team_count):
     median_charge_score = statistics.median(charge_scores) if charge_scores else 0
     estimated_endgame = median_charge_score / team_count
     return estimated_endgame
+
+def auto_2022(breakdowns, team_count):
+    def score_per_breakdown(b):
+        # 2022 Auto Scoring
+        # autoTaxiPoints is typically 6 if all taxis succeed
+        auto_taxi = b.get("autoTaxiPoints", 0)
+        
+        # Sum cargo from all sources (near, far, blue, red) for lower and upper hubs
+        auto_cargo_lower = b.get("autoCargoLowerNear", 0) + b.get("autoCargoLowerFar", 0) + b.get("autoCargoLowerBlue", 0) + b.get("autoCargoLowerRed", 0)
+        auto_cargo_upper = b.get("autoCargoUpperNear", 0) + b.get("autoCargoUpperFar", 0) + b.get("autoCargoUpperBlue", 0) + b.get("autoCargoUpperRed", 0)
+        
+        # Points per cargo: Lower = 2, Upper = 4
+        auto_cargo_points = (auto_cargo_lower * 2) + (auto_cargo_upper * 4)
+
+        # Total Auto points for the alliance from scoring actions
+        # Note: autoPoints field in API breakdown already sums these, but calculating explicitly mirrors rules
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (auto_taxi + auto_cargo_points) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in teleop
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def teleop_2022(breakdowns, team_count):
+    def score_per_breakdown(b):
+        # 2022 Teleop Scoring
+        # Sum cargo from all sources (near, far, blue, red) for lower and upper hubs
+        teleop_cargo_lower = b.get("teleopCargoLowerNear", 0) + b.get("teleopCargoLowerFar", 0) + b.get("teleopCargoLowerBlue", 0) + b.get("teleopCargoLowerRed", 0)
+        teleop_cargo_upper = b.get("teleopCargoUpperNear", 0) + b.get("teleopCargoUpperFar", 0) + b.get("teleopCargoUpperBlue", 0) + b.get("teleopCargoUpperRed", 0)
+
+        # Points per cargo: Lower = 1, Upper = 2
+        teleop_cargo_points = (teleop_cargo_lower * 1) + (teleop_cargo_upper * 2)
+
+        # Total Teleop points for the alliance from scoring actions
+        # Note: teleopCargoPoints field in API breakdown already sums these, but calculating explicitly mirrors rules
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return teleop_cargo_points * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Smoothed trimming based on match count
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]  # trim from low-end only
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def endgame_2022(breakdowns, team_count):
+    """Calculate endgame score for 2022 matches."""
+    def score_per_breakdown(b):
+        # Get endgame status for each robot
+        endgame_scores = []
+        for i in range(1, 4):  # Check all three robots
+            robot_endgame_status = b.get(f"endgameRobot{i}", "None")
+            # Use 2022 scoring values
+            score = {"Low": 4, "Mid": 6, "High": 10, "Traversal": 15, "None": 0}.get(robot_endgame_status, 0)
+            endgame_scores.append(score)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return sum(endgame_scores) * scaling_factor
+
+    # Handle single breakdown case (for individual robot)
+    if isinstance(breakdowns, dict):
+        return score_per_breakdown(breakdowns)
+
+    # Handle list of breakdowns case (for alliance)
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
