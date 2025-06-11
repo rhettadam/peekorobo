@@ -6,6 +6,7 @@ import requests
 import numpy as np
 from urllib.parse import urlparse
 import psycopg2
+import json
 
 load_dotenv()
 
@@ -26,21 +27,43 @@ def tba_get(endpoint: str):
 def load_data():
 
     def compress_dict(d):
-        """Remove any None or empty string values."""
-        return {k: v for k, v in d.items() if v not in (None, "", [], {}, ())}
+        """Remove any None or empty string values. Keep empty lists and dictionaries."""
+        return {k: v for k, v in d.items() if v not in (None, "")}
 
     # === Load team ACE data ===
     team_conn = sqlite3.connect(os.path.join("team_data", "epa_teams.sqlite"))
     team_cursor = team_conn.cursor()
-    team_cursor.execute("SELECT * FROM epa_history")
-    team_columns = [desc[0] for desc in team_cursor.description]
+    
+    # Get list of all year tables
+    team_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'epa_%'")
+    year_tables = [row[0] for row in team_cursor.fetchall()]
+    
     team_data = {}
+    
+    # Load data from each year table
+    for table in year_tables:
+        year = int(table.split('_')[1])  # Extract year from table name (epa_YYYY)
+        team_cursor.execute(f"SELECT * FROM {table}")
+        team_columns = [desc[0] for desc in team_cursor.description]
+        
+        for row in team_cursor.fetchall():
+            raw_team_data = dict(zip(team_columns, row))
+            number = raw_team_data["team_number"]
+            
+            # For 2025 data, parse event_epas from JSON string
+            if year == 2025 and "event_epas" in raw_team_data:
+                if raw_team_data["event_epas"] is None:
+                    raw_team_data["event_epas"] = []
+                elif isinstance(raw_team_data["event_epas"], str):
+                    try:
+                        raw_team_data["event_epas"] = json.loads(raw_team_data["event_epas"])
+                    except json.JSONDecodeError:
+                        raw_team_data["event_epas"] = [] # Handle malformed JSON
 
-    for row in team_cursor.fetchall():
-        team = compress_dict(dict(zip(team_columns, row)))
-        year = team["year"]
-        number = team["team_number"]
-        team_data.setdefault(year, {})[number] = team
+            # Now compress the dictionary after handling event_epas
+            team = compress_dict(raw_team_data)
+
+            team_data.setdefault(year, {})[number] = team
 
     team_conn.close()
 
@@ -549,7 +572,7 @@ frc_games = {
                "video": "https://www.youtube.com/watch?v=VqOKzoHJDjA", 
                "logo": "/assets/logos/2016.png", 
                "manual": "https://firstfrc.blob.core.windows.net/frc2016manuals/GameManual/FRC-2016-game-manual.pdf",
-               "summary": "FIRST Stronghold was played by two alliances of up to three teams each, and involves breaching the opponents’ defenses, known as outer work as well as capturing their tower by first firing boulders (small foam balls) at it, and then surrounding or scaling the tower using a singular rung on the tower wall. Points were scored by crossing elements of the tower's outer works, shooting boulders into the opposing tower's five goals in order to lower the tower strength, and by surrounding and scaling the tower."},
+               "summary": "FIRST Stronghold was played by two alliances of up to three teams each, and involves breaching the opponents' defenses, known as outer work as well as capturing their tower by first firing boulders (small foam balls) at it, and then surrounding or scaling the tower using a singular rung on the tower wall. Points were scored by crossing elements of the tower's outer works, shooting boulders into the opposing tower's five goals in order to lower the tower strength, and by surrounding and scaling the tower."},
     
         2015: {"name": "Recycle Rush", 
                "video": "https://www.youtube.com/watch?v=W6UYFKNGHJ8", 
@@ -597,7 +620,7 @@ frc_games = {
                "video": "https://www.youtube.com/watch?v=D5oL7aLH0T4", 
                "logo": "/assets/logos/2008.png", 
                "manual": "https://www.firstinspires.org/sites/default/files/uploads/resource_library/frc/game-and-season-info/archive/2008/2008-overdrive-manual.pdf",
-               "summary": "In the 2008 game, “FIRST Overdrive,” students’ robots are designed to race around a track knocking down 40 inch inflated Trackballs and moving them around the track, passing them either over or under a 6.5 foot overpass. Extra points are scored by robots positioning the Trackballs back on the overpass before the end of the 2 minute and 15 second match."},
+               "summary": "In the 2008 game, FIRST Overdrive, students' robots are designed to race around a track knocking down 40 inch inflated Trackballs and moving them around the track, passing them either over or under a 6.5 foot overpass. Extra points are scored by robots positioning the Trackballs back on the overpass before the end of the 2 minute and 15 second match."},
     
         2007: {"name": "Rack 'N' Roll", 
                "video": "https://www.youtube.com/watch?v=khTGSKvDyS4", 
@@ -627,7 +650,7 @@ frc_games = {
                "video": "https://www.youtube.com/watch?v=lEefJljqyQU", 
                "logo": "/assets/logos/2003.png", 
                "manual": "https://www.firstinspires.org/sites/default/files/uploads/resource_library/frc/game-and-season-info/archive/2003/2003-the-game.pdf",
-               "summary": "The game for the 2003 season requires robots to collect and stack plastic storage containers on their side of the playing field. The location of the robots and containers and the height of the stacks at the end of the match determine each team’s score for the round."},
+               "summary": "The game for the 2003 season requires robots to collect and stack plastic storage containers on their side of the playing field. The location of the robots and containers and the height of the stacks at the end of the match determine each team's score for the round."},
     
         2002: {"name": "Zone Zeal", 
                "video": "https://www.youtube.com/watch?v=GkgDoF0hnrI", 
@@ -639,7 +662,7 @@ frc_games = {
                "video": "https://www.youtube.com/watch?v=m1vkEKM7wKE", 
                "logo": "/assets/logos/2001.png", 
                "manual": "Not Available", 
-               "summary": "A four-team alliances tries to achieve as high a score as possible in each match. Points are scored by placing balls in their goal, and by positioning their robots and goals in designated areas at the end of each match. At the start of each match, the alliance station contains twenty small balls. In addition there are twenty small balls and four large balls on the far side of the field which may be used to score points. At the end of the two minute match, the alliance will receive one point for each small ball in the goal and not in contact with a robot, and ten points for each large ball in the goal and not in contact with a robot. Each alliance will receive ten points for each robot that is in the End Zone. An additional ten points will be added if the stretcher is in the End Zone. The alliance doubles its score if the bridge is balanced. The alliance multiplies its score by a factor of up to three by ending the match before the two minute time limit. Each team receives the alliance score. A team multiplies its’ score by 1.1 if its large ball is on top of a goal. Scores are rounded up to the nearest whole point after applying all applicable multipliers."},
+               "summary": "A four-team alliances tries to achieve as high a score as possible in each match. Points are scored by placing balls in their goal, and by positioning their robots and goals in designated areas at the end of each match. At the start of each match, the alliance station contains twenty small balls. In addition there are twenty small balls and four large balls on the far side of the field which may be used to score points. At the end of the two minute match, the alliance will receive one point for each small ball in the goal and not in contact with a robot, and ten points for each large ball in the goal and not in contact with a robot. Each alliance will receive ten points for each robot that is in the End Zone. An additional ten points will be added if the stretcher is in the End Zone. The alliance doubles its score if the bridge is balanced. The alliance multiplies its score by a factor of up to three by ending the match before the two minute time limit. Each team receives the alliance score. A team multiplies its' score by 1.1 if its large ball is on top of a goal. Scores are rounded up to the nearest whole point after applying all applicable multipliers."},
     
         2000: {"name": "Co-opertition FIRST", 
                "video": "https://www.youtube.com/watch?v=_FJFbvHRyco", 
@@ -651,7 +674,7 @@ frc_games = {
                "video": "https://www.youtube.com/watch?v=Q0CDop_IwW8", 
                "logo": "/assets/logos/1999.png", 
                "manual": "Not Available", 
-               "summary": "Points are scored by positioning floppies, robots, and the puck on the playing field. Floppies are light weight, pillow-like objects with Velcro-loop material located in the center and around the perimeter. Each alliance has ten color coded floppies located on the playing field and at the player stations. At the end of each two minute match, points are awarded as follows: Each two-team alliance will receive one point for each of its floppies that is at least 2 inches over and not touching the playing field surface, and less than eight feet above the surface of the playing field. Each alliance will receive three points for each of its floppies eight feet or higher over the surface of the playing field. Any robot that climbs onto the puck will multiply its alliance’s score by three."},
+               "summary": "Points are scored by positioning floppies, robots, and the puck on the playing field. Floppies are light weight, pillow-like objects with Velcro-loop material located in the center and around the perimeter. Each alliance has ten color coded floppies located on the playing field and at the player stations. At the end of each two minute match, points are awarded as follows: Each two-team alliance will receive one point for each of its floppies that is at least 2 inches over and not touching the playing field surface, and less than eight feet above the surface of the playing field. Each alliance will receive three points for each of its floppies eight feet or higher over the surface of the playing field. Any robot that climbs onto the puck will multiply its alliance's score by three."},
     
         1998: {"name": "Ladder Logic", 
                "video": "https://www.youtube.com/watch?v=GKcxG8tIXSY", 
@@ -687,7 +710,7 @@ frc_games = {
                "video": "https://www.youtube.com/watch?v=1rZyU9Xu8GE", 
                "logo": "/assets/logos/1993.png", 
                "manual": "Not Available", 
-               "summary": "Contestants attempt to collect balls from either the playing field or their opponents’ goals, place them in their own goals, and defend them. There are five large air-filled kick balls each worth five points, and twenty smaller water-filled balls worth one point each. The winner is the team with the highest total point value of balls within their foal at the conclusion of a two minute match. In the case of a tie, the team with the most large balls wins. If still a tie, the team which collected their balls first wins."},
+               "summary": "Contestants attempt to collect balls from either the playing field or their opponents' goals, place them in their own goals, and defend them. There are five large air-filled kick balls each worth five points, and twenty smaller water-filled balls worth one point each. The winner is the team with the highest total point value of balls within their foal at the conclusion of a two minute match. In the case of a tie, the team with the most large balls wins. If still a tie, the team which collected their balls first wins."},
     
         1992: {"name": "Maize Craze", 
                "video": "https://www.youtube.com/watch?v=0-m1QBOxsfg", 

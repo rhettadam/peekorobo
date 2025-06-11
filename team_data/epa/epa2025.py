@@ -17,6 +17,31 @@ TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
 
 API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 
+# Confidence calculation constants
+CONFIDENCE_WEIGHTS = {
+    "consistency": 0.35,
+    "dominance": 0.35,
+    "record_alignment": 0.10,
+    "veteran": 0.10,
+    "events": 0.10,
+}
+
+CONFIDENCE_THRESHOLDS = {
+    "high": 0.85,  # Lower threshold for high confidence boost
+    "low": 0.65,   # Higher threshold for low confidence reduction
+}
+
+CONFIDENCE_MULTIPLIERS = {
+    "high_boost": 1.1,  # Reduced multiplier for high confidence
+    "low_reduction": 0.9  # Increased multiplier for low confidence
+}
+
+EVENT_BOOSTS = {
+    1: 0.5,   # Single event
+    2: 0.9,  # Two events
+    3: 1.0    # Three or more events
+}
+
 @retry(stop=stop_never, wait=wait_exponential(min=0.5, max=5), retry=retry_if_exception_type(Exception))
 def tba_get(endpoint: str):
     api_key = random.choice(API_KEYS)
@@ -117,39 +142,88 @@ def estimate_consistent_teleop(breakdowns, team_count):
 
     return round(statistics.mean(trimmed_scores), 2)
 
-def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veteran_teams=None):
+def get_team_experience(team_number: int) -> int:
+    """
+    Determine how many years a team has competed.
+    Returns the number of years of experience (1 for first year, 2 for second year, etc.)
+    """
+    try:
+        conn = sqlite3.connect("epa_teams.sqlite")
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(DISTINCT year) FROM epa_history WHERE team_number = ?", (team_number,))
+        years = cursor.fetchone()[0]
+        conn.close()
+        return years
+    except Exception as e:
+        print(f"Failed to get team experience: {e}")
+        return 1  # Default to first year if we can't determine
 
+def get_veteran_boost(years: int) -> float:
+    """
+    Calculate veteran boost based on years of experience.
+    First year: 0.2
+    Second year: 0.4
+    Third year: 0.6
+    Fourth year and beyond: 1.0
+    """
+    if years <= 1:
+        return 0.2
+    elif years == 2:
+        return 0.4
+    elif years == 3:
+        return 0.6
+    else:
+        return 1.0
+
+def calculate_confidence(consistency: float, dominance: float, is_veteran: bool, event_boost: float, team_number: int, wins: int = 0, losses: int = 0) -> tuple[float, float, float]:
+    """
+    Calculate confidence score using universal parameters.
+    Returns (raw_confidence, capped_confidence, record_alignment)
+    """
+    years = get_team_experience(team_number)
+    veteran_boost = get_veteran_boost(years)
+    
+    # Calculate record alignment based on win-loss record
+    total_matches = wins + losses
+    if total_matches > 0:
+        win_rate = wins / total_matches
+        # Scale win rate to be between 0.7 and 1.0
+        # 0% win rate = 0.7, 50% win rate = 0.85, 100% win rate = 1.0
+        record_alignment = 0.7 + (win_rate * 0.3)
+    else:
+        record_alignment = 0.7  # Default to middle value if no matches
+    
+    raw_confidence = (
+        CONFIDENCE_WEIGHTS["consistency"] * consistency +
+        CONFIDENCE_WEIGHTS["dominance"] * dominance +
+        CONFIDENCE_WEIGHTS["record_alignment"] * record_alignment +
+        CONFIDENCE_WEIGHTS["veteran"] * veteran_boost +
+        CONFIDENCE_WEIGHTS["events"] * event_boost
+    )
+    
+    # Apply non-linear scaling
+    if raw_confidence > CONFIDENCE_THRESHOLDS["high"]:
+        raw_confidence = CONFIDENCE_THRESHOLDS["high"] + (raw_confidence - CONFIDENCE_THRESHOLDS["high"]) * CONFIDENCE_MULTIPLIERS["high_boost"]
+    elif raw_confidence < CONFIDENCE_THRESHOLDS["low"]:
+        raw_confidence = raw_confidence * CONFIDENCE_MULTIPLIERS["low_reduction"]
+    
+    capped_confidence = max(0.0, min(1.0, raw_confidence))
+    return raw_confidence, capped_confidence, record_alignment
+
+def calculate_event_epa(matches: List[Dict], team_key: str, veteran_teams: Optional[set] = None) -> Dict:
     importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
     matches = sorted(matches, key=lambda m: m.get("time") or 0)
 
     match_count = 0
     overall_epa = auto_epa = teleop_epa = endgame_epa = None
     contributions, teammate_epas = [], []
-    total_score = wins = losses = 0
     breakdowns = []
     dominance_scores = []
     endgame_scenarios = {"DeepCage": 0, "ShallowCage": 0, "Parked": 0, "None": 0}
-    total_l4 = total_l3 = total_l2 = total_l1 = total_net = total_processor = 0
+    event_wins = 0
+    event_losses = 0
 
     for match in matches:
-
-        event_key = match.get("event_key", "")
-        division_keys = {
-            "2025hop", "2025gal", "2025new", "2025arc",
-            "2025dal", "2025cur", "2025mil", "2025joh"
-        }
-
-        is_division = event_key in division_keys
-        is_einstein = event_key == "2025cmptx"
-
-        if is_einstein:
-            world_champ_penalty = 0.95  # Optional bonus for Einstein
-        elif is_division:
-            world_champ_penalty = 0.85  # Slight penalty (less than 0.7)
-        else:
-            world_champ_penalty = 1.0  # Regular events
-        
-        # Skip matches where the team did not play
         if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
             continue
 
@@ -157,28 +231,20 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
         opponent_alliance = "blue" if alliance == "red" else "red"
 
+        # Track wins/losses
+        winning_alliance = match.get("winning_alliance", "")
+        if winning_alliance == alliance:
+            event_wins += 1
+        elif winning_alliance and winning_alliance != alliance:
+            event_losses += 1
+
         team_keys = match["alliances"][alliance].get("team_keys", [])
         team_count = len(team_keys)
         index = team_keys.index(team_key) + 1
-        
-        alliance_score = match["alliances"][alliance]["score"]
-        total_score += alliance_score
-
-        # Count wins and losses based on the winning alliance
-        winning_alliance = match.get("winning_alliance", "")
-        if winning_alliance == alliance:
-            wins += 1
-        elif winning_alliance and winning_alliance != alliance:
-            losses += 1
 
         breakdown = (match.get("score_breakdown") or {}).get(alliance, {})
         breakdowns.append(breakdown)
-
-        # Aggregate scoring metrics from breakdown
-        reef = breakdown.get("autoReef", {})
-        reef_teleop = breakdown.get("teleopReef", {})
         
-        # Track endgame scenarios
         robot_endgame = breakdown.get(f"endGameRobot{index}", "None")
         if robot_endgame in endgame_scenarios:
             endgame_scenarios[robot_endgame] += 1
@@ -191,15 +257,15 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         opponent_score = match["alliances"][opponent_alliance]["score"] / team_count
         margin = actual_overall - opponent_score
         scaled_margin = margin / (opponent_score + 1e-6)
-        norm_margin = (scaled_margin + 1) / 1.3  # maps [-1, 1] → [0, 1]
+        norm_margin = (scaled_margin + 1) / 1.3
         dominance_scores.append(min(1.0, max(0.0, norm_margin)))
 
         match_importance = importance.get(match.get("comp_level", "qm"), 1.0)
-        total_matches = sum(1 for m in matches if team_key in m["alliances"]["red"]["team_keys"] or team_key in m["alliances"]["blue"]["team_keys"])
 
-        decay = world_champ_penalty * (match_count / len(matches)) ** 2
+        # Decay simplified for event-specific EPA
+        decay = 1.0 
 
-        if overall_epa is None:
+        if overall_epa is None: # Initial EPA for the event
             overall_epa = actual_overall
             auto_epa = actual_auto
             endgame_epa = actual_endgame
@@ -207,12 +273,11 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
             continue
 
         K = 0.4
+        K *= match_importance * decay
 
-        K *= match_importance * world_champ_penalty
-
-        delta_auto = decay * K * (actual_auto - auto_epa)
-        delta_teleop = decay * K * (actual_teleop - teleop_epa)
-        delta_endgame = decay * K * (actual_endgame - endgame_epa)
+        delta_auto = K * (actual_auto - auto_epa)
+        delta_teleop = K * (actual_teleop - teleop_epa)
+        delta_endgame = K * (actual_endgame - endgame_epa)
 
         auto_epa += delta_auto
         teleop_epa += delta_teleop
@@ -229,226 +294,202 @@ def calculate_epa_components(matches, team_key, year, team_epa_cache=None, veter
         consistency = 1.0
         
     is_veteran = veteran_teams and team_key in veteran_teams
-    teammate_avg_epa = statistics.mean(teammate_epas) if teammate_epas else overall_epa
-    dominance = min(1., statistics.mean(dominance_scores))
+    dominance = min(1., statistics.mean(dominance_scores)) if dominance_scores else 0.0
 
-    event_count = len({match["event_key"] for match in matches})
-    event_boost = 1.0 if event_count >= 2 else 0.60
+    # Get total number of events for this team
+    conn = sqlite3.connect("../events.sqlite")
+    cursor = conn.cursor()
+    team_number = int(team_key[3:])
+    cursor.execute("SELECT COUNT(DISTINCT ek) FROM et WHERE tk = ? AND ek LIKE '2025%'", (team_number,))
+    total_events = cursor.fetchone()[0]
+    conn.close()
+
+    # Calculate event boost based on number of events
+    event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])
     
-    win_rate = wins / match_count if match_count else 0
+    # Calculate confidence using universal function
+    raw_confidence, confidence, record_alignment = calculate_confidence(consistency, dominance, is_veteran, event_boost, team_number, event_wins, event_losses)
+    actual_epa = (overall_epa * confidence) if overall_epa is not None else 0.0
 
-    average_match_score = total_score / match_count if match_count else 0
+    # Get years of experience for display
+    years = get_team_experience(team_number)
+    veteran_boost = get_veteran_boost(years)
 
-    expected_win_rate = dominance  # roughly aligned
-    record_alignment_score = 1.0 - abs(expected_win_rate - win_rate)
-
-    weights = {
-        "consistency": 0.35,
-        "dominance": 0.35,
-        "record_alignment": 0.15,
-        "veteran": 0.10,
-        "events": 0.05,
+    return {
+        "overall": round(overall_epa, 2) if overall_epa is not None else 0.0,
+        "auto": round(auto_epa, 2) if auto_epa is not None else 0.0,
+        "teleop": round(teleop_epa, 2) if teleop_epa is not None else 0.0,
+        "endgame": round(endgame_epa, 2) if endgame_epa is not None else 0.0,
+        "confidence": round(confidence, 2),
+        "actual_epa": round(actual_epa, 2),
+        "match_count": match_count,
+        "raw_confidence": raw_confidence,
+        "consistency": consistency,
+        "dominance": dominance,
+        "is_veteran": is_veteran,
+        "event_boost": event_boost,
+        "veteran_boost": veteran_boost,
+        "years_experience": years,
+        "weights": CONFIDENCE_WEIGHTS,
+        "record_alignment": record_alignment,
+        "wins": event_wins,
+        "losses": event_losses
     }
+
+def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
+    if not event_epas:
+        return {
+            "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
+            "confidence": 0.0, "actual_epa": 0.0,
+            "wins": 0, "losses": 0
+        }
+
+    total_overall = 0.0
+    total_auto = 0.0
+    total_teleop = 0.0
+    total_endgame = 0.0
+    total_actual_epa = 0.0
+    total_match_count = 0
+    total_confidence = 0.0
+    total_consistency = 0.0
+    total_dominance = 0.0
+    total_veteran_boost = 0.0
+    total_event_boost = 0.0
+    total_record_alignment = 0.0
+    total_events = 0
+    total_wins = 0
+    total_losses = 0
+
+    # Use a weighted average based on match count per event
+    for epa_data in event_epas:
+        match_count = epa_data.get("match_count", 0)
+        if match_count == 0: # Skip events with no matches
+            continue
+        
+        total_overall += epa_data["overall"] * match_count
+        total_auto += epa_data["auto"] * match_count
+        total_teleop += epa_data["teleop"] * match_count
+        total_endgame += epa_data["endgame"] * match_count
+        total_actual_epa += epa_data["actual_epa"] * match_count
+        total_match_count += match_count
+        total_confidence += epa_data["confidence"] * match_count
+        total_consistency += epa_data["consistency"] * match_count
+        total_dominance += epa_data["dominance"] * match_count
+        total_veteran_boost += epa_data["veteran_boost"] * match_count
+        total_event_boost += epa_data["event_boost"] * match_count
+        total_record_alignment += epa_data["record_alignment"] * match_count
+        total_wins += epa_data["wins"]
+        total_losses += epa_data["losses"]
+        total_events += 1
     
+    if total_match_count == 0:
+        return {
+            "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
+            "confidence": 0.0, "actual_epa": 0.0,
+            "wins": 0, "losses": 0
+        }
+
+    avg_confidence = total_confidence / total_match_count
+    avg_consistency = total_consistency / total_match_count
+    avg_dominance = total_dominance / total_match_count
+    avg_veteran_boost = total_veteran_boost / total_match_count
+    avg_event_boost = total_event_boost / total_match_count
+    avg_record_alignment = total_record_alignment / total_match_count
+
+    # Calculate the weighted components for display
+    weights = event_epas[0]["weights"]  # Weights are constant across events
+    consistency_component = weights["consistency"] * avg_consistency
+    record_component = weights["record_alignment"] * avg_record_alignment
+    veteran_component = weights["veteran"] * avg_veteran_boost
+    dominance_component = weights["dominance"] * avg_dominance
+    event_component = weights["events"] * avg_event_boost
+
+    # Calculate raw confidence from components
     raw_confidence = (
-        weights["consistency"] * consistency +
-        weights["dominance"] * dominance +
-        weights["record_alignment"] * record_alignment_score +
-        weights["veteran"] * (1.0 if is_veteran else 0.4) +
-        weights["events"] * event_boost 
+        consistency_component +
+        record_component +
+        veteran_component +
+        dominance_component +
+        event_component
     )
-    
-    # Apply non-linear scaling to create wider spread
-    if raw_confidence > 0.7:  # Boost top performers
-        raw_confidence = 0.7 + (raw_confidence - 0.7) * 1.5
-    elif raw_confidence < 0.3:  # Penalize poor performers more
-        raw_confidence = raw_confidence * 0.8
-    
-    confidence = min(1.0, raw_confidence)
 
-    actual_epa = overall_epa * confidence
-
-    # Track individual match values for each component
-    l4_values = []
-    l3_values = []
-    l2_values = []
-    l1_values = []
-    net_values = []
-    processor_values = []
+    # Apply non-linear scaling
+    if raw_confidence > CONFIDENCE_THRESHOLDS["high"]:
+        raw_confidence = CONFIDENCE_THRESHOLDS["high"] + (raw_confidence - CONFIDENCE_THRESHOLDS["high"]) * CONFIDENCE_MULTIPLIERS["high_boost"]
+    elif raw_confidence < CONFIDENCE_THRESHOLDS["low"]:
+        raw_confidence = raw_confidence * CONFIDENCE_MULTIPLIERS["low_reduction"]
     
+    final_confidence = max(0.0, min(1.0, raw_confidence))
+
+    return {
+        "overall": round(total_overall / total_match_count, 2),
+        "auto": round(total_auto / total_match_count, 2),
+        "teleop": round(total_teleop / total_match_count, 2),
+        "endgame": round(total_endgame / total_match_count, 2),
+        "confidence": round(final_confidence, 2),
+        "actual_epa": round((total_overall / total_match_count) * final_confidence, 2),
+        "wins": total_wins,
+        "losses": total_losses,
+        "avg_consistency": avg_consistency,
+        "avg_dominance": avg_dominance,
+        "avg_veteran_boost": avg_veteran_boost,
+        "avg_event_boost": avg_event_boost,
+        "avg_record_alignment": avg_record_alignment,
+        "total_events": total_events,
+        "confidence_components": {
+            "consistency": consistency_component,
+            "record": record_component,
+            "veteran": veteran_component,
+            "dominance": dominance_component,
+            "event": event_component,
+            "raw": raw_confidence
+        }
+    }
+
+def fetch_team_components(team, year, veteran_teams=None):
+    team_key = team["key"]
+    team_number = team["team_number"]
+
+    # Connect to events.sqlite
+    conn = sqlite3.connect("../events.sqlite")
+    cursor = conn.cursor()
+
+    # Find all events the team participated in for the given year
+    cursor.execute("SELECT ek FROM et WHERE tk = ? AND ek LIKE '2025%'", (team_number,))
+    event_keys = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    event_epa_results = []
+    total_wins = 0
+    total_losses = 0
+
+    for event_key in event_keys:
+        try:
+            matches = tba_get(f"team/{team_key}/event/{event_key}/matches")
+            if matches:
+                # Calculate overall wins/losses from matches
     for match in matches:
         if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
             continue
             
         alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
-        breakdown = match.get("score_breakdown", {}).get(alliance, {})
-        team_count = len(match["alliances"][alliance]["team_keys"])
-        
-        reef = breakdown.get("autoReef", {})
-        reef_teleop = breakdown.get("teleopReef", {})
-        
-        # Calculate per-team values using logarithmic scaling
-        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
-        
-        # For branch levels, apply scaling factor to get per-team contribution
-        l4_val = (reef.get("tba_topRowCount", 0) + reef_teleop.get("tba_topRowCount", 0)) * scaling_factor
-        l3_val = (reef.get("tba_midRowCount", 0) + reef_teleop.get("tba_midRowCount", 0)) * scaling_factor
-        l2_val = (reef.get("tba_botRowCount", 0) + reef_teleop.get("tba_botRowCount", 0)) * scaling_factor
-        l1_val = (reef.get("trough", 0) + reef_teleop.get("trough", 0)) * scaling_factor
-        
-        # For algae, also use scaling factor but keep max possible at 9
-        net_val = breakdown.get("netAlgaeCount", 0) * scaling_factor
-        processor_val = breakdown.get("wallAlgaeCount", 0) * scaling_factor
-        
-        # Store values for capability check
-        l4_values.append(l4_val)
-        l3_values.append(l3_val)
-        l2_values.append(l2_val)
-        l1_values.append(l1_val)
-        net_values.append(net_val)
-        processor_values.append(processor_val)
-        
-        # Add to totals
-        total_l4 += l4_val
-        total_l3 += l3_val
-        total_l2 += l2_val
-        total_l1 += l1_val
-        total_net += net_val
-        total_processor += processor_val
-        
-        # Track endgame scenarios
-        robot_endgame = breakdown.get(f"endGameRobot{index}", "None")
-        if robot_endgame in endgame_scenarios:
-            endgame_scenarios[robot_endgame] += 1
+                    winning_alliance = match.get("winning_alliance", "")
+                    if winning_alliance == alliance:
+                        total_wins += 1
+                    elif winning_alliance and winning_alliance != alliance:
+                        total_losses += 1
 
-        actual_auto = estimate_consistent_auto(breakdowns, team_count)
-        actual_teleop = estimate_consistent_teleop(breakdowns, team_count)
-        actual_endgame = {"DeepCage": 12, "ShallowCage": 6, "Parked": 2}.get(robot_endgame, 0)
-        actual_overall = actual_auto + actual_teleop + actual_endgame
-        
-        opponent_score = match["alliances"][opponent_alliance]["score"] / team_count
-        margin = actual_overall - opponent_score
-        scaled_margin = margin / (opponent_score + 1e-6)
-        norm_margin = (scaled_margin + 1) / 1.3  # maps [-1, 1] → [0, 1]
-        dominance_scores.append(min(1.0, max(0.0, norm_margin)))
+                event_epa = calculate_event_epa(matches, team_key, veteran_teams)
+                event_epa["event_key"] = event_key # Add event key to the result
+                event_epa_results.append(event_epa)
+        except Exception as e:
+            print(f"Failed to fetch matches for team {team_key} at event {event_key}: {e}")
 
-        match_importance = importance.get(match.get("comp_level", "qm"), 1.0)
-        total_matches = sum(1 for m in matches if team_key in m["alliances"]["red"]["team_keys"] or team_key in m["alliances"]["blue"]["team_keys"])
+    # Aggregate overall EPA from event-specific EPAs
+    overall_epa_data = aggregate_overall_epa(event_epa_results)
+    overall_epa_data["wins"] = total_wins
+    overall_epa_data["losses"] = total_losses
 
-        decay = world_champ_penalty * (match_count / len(matches)) ** 2
-
-        if overall_epa is None:
-            overall_epa = actual_overall
-            auto_epa = actual_auto
-            endgame_epa = actual_endgame
-            teleop_epa = actual_teleop
-            continue
-
-        K = 0.4
-        K *= match_importance * world_champ_penalty
-
-        delta_auto = decay * K * (actual_auto - auto_epa)
-        delta_teleop = decay * K * (actual_teleop - teleop_epa)
-        delta_endgame = decay * K * (actual_endgame - endgame_epa)
-
-        auto_epa += delta_auto
-        teleop_epa += delta_teleop
-        endgame_epa += delta_endgame
-        overall_epa = auto_epa + teleop_epa + endgame_epa
-
-        contributions.append(actual_overall)
-
-    # Calculate averages for new metrics
-    num_matches = len(matches)
-    # Calculate final averages, setting to 0 if team can't do the component or if average is below 1
-    avg_l4 = round(total_l4 / num_matches, 1) if l4_values and (total_l4 / num_matches) >= 1 else 0
-    avg_l3 = round(total_l3 / num_matches, 1) if l3_values and (total_l3 / num_matches) >= 1 else 0
-    avg_l2 = round(total_l2 / num_matches, 1) if l2_values and (total_l2 / num_matches) >= 1 else 0
-    avg_l1 = round(total_l1 / num_matches, 1) if l1_values and (total_l1 / num_matches) >= 1 else 0
-    avg_net = round(total_net / num_matches, 1) if net_values and (total_net / num_matches) >= 1 else 0
-    avg_processor = round(total_processor / num_matches, 1) if processor_values and (total_processor / num_matches) >= 1 else 0
-
-    # Determine most common endgame scenario
-    most_common_endgame = max(endgame_scenarios, key=endgame_scenarios.get) if endgame_scenarios else "N/A"
-
-    # Algae EPA (assuming it's a combination of net and processor points)
-    # Based on scoring: Net Algae (4 pts) + Wall Algae (2.5 pts)
-    algae_epa = round(avg_net * 4 + avg_processor * 2.5, 2)
-
-    print(f"\n===== DEBUG for {team_key} =====")
-    print("===== EPA Component Breakdown =====")
-    print(f"Auto EPA:     {round(auto_epa, 2)}")
-    print(f"Teleop EPA:   {round(teleop_epa, 2)}")
-    print(f"Endgame EPA:  {round(endgame_epa, 2)}")
-    print(f"→ Overall EPA (unweighted): {round(overall_epa, 2)}")
-    print("\n===== Confidence Breakdown =====")
-    print(f"→ Consistency:     {round(consistency, 3)} × 0.35 = {round(0.35 * consistency, 4)}")
-    print(f"→ Record Align:    {round(record_alignment_score, 3)} × 0.15 = {round(0.15 * record_alignment_score, 4)}")
-    print(f"→ Veteran Boost:   {'1.0' if is_veteran else '0.4'} × 0.05 = {round(0.05 * (1.0 if is_veteran else 0.6), 4)}")
-    print(f"→ Dominance:       {round(dominance, 3)} × 0.35 = {round(0.35 * dominance, 4)}")
-    print(f"→ Confidence Total: {round(raw_confidence, 4)} → Capped: {round(confidence, 3)}")
-    print("\n===== Final EPA Calculation =====")
-    print(f"{round(overall_epa, 2)} (overall) × {round(confidence, 3)} (confidence) = {round(actual_epa, 2)}")
-
-    # Define thresholds for considering a component as "capable"
-    THRESHOLD_MATCHES = 3  # Minimum matches needed to make a determination
-    THRESHOLD_CONSISTENCY = 0.1  # If they score this fraction of their max in this component, they can do it
-    
-    def check_component_capability(values, max_possible):
-        if len(values) < THRESHOLD_MATCHES:
-            return True  # Not enough data to make a determination
-        # Calculate what fraction of their max possible they achieved
-        max_achieved = max(values)
-        if max_achieved < max_possible * THRESHOLD_CONSISTENCY:
-            return False
-        return True
-    
-    # Check capability for each component
-    # Max possible values are now per-team maximums with scaling considered
-    can_do_l4 = check_component_capability(l4_values, 12)  # Max 12 pieces per team per match
-    can_do_l3 = check_component_capability(l3_values, 12)
-    can_do_l2 = check_component_capability(l2_values, 12)
-    can_do_l1 = check_component_capability(l1_values, 30)  # Level 1 can hold more pieces
-    can_do_net = check_component_capability(net_values, 9)  # Max 9 algae per team per match
-    can_do_processor = check_component_capability(processor_values, 9)  # Max 9 algae per team per match
-    
-    # Calculate final averages, setting to 0 if team can't do the component or if average is below 1
-    avg_l4 = round(total_l4 / num_matches, 1) if can_do_l4 and num_matches > 0 and (total_l4 / num_matches) >= 1 else 0
-    avg_l3 = round(total_l3 / num_matches, 1) if can_do_l3 and num_matches > 0 and (total_l3 / num_matches) >= 1 else 0
-    avg_l2 = round(total_l2 / num_matches, 1) if can_do_l2 and num_matches > 0 and (total_l2 / num_matches) >= 1 else 0
-    avg_l1 = round(total_l1 / num_matches, 1) if can_do_l1 and num_matches > 0 and (total_l1 / num_matches) >= 1 else 0
-    avg_net = round(total_net / num_matches, 1) if can_do_net and num_matches > 0 and (total_net / num_matches) >= 1 else 0
-    avg_processor = round(total_processor / num_matches, 1) if can_do_processor and num_matches > 0 and (total_processor / num_matches) >= 1 else 0
-
-    return {
-        "overall": round(overall_epa, 2),
-        "auto": round(auto_epa, 2),
-        "teleop": round(teleop_epa, 2),
-        "endgame": round(endgame_epa, 2),
-        "consistency": round(consistency, 2),
-        "confidence": round(confidence, 2),
-        "actual_epa": round(actual_epa, 2),
-        "average_match_score": round(average_match_score, 2),
-        "wins": wins,
-        "losses": losses,
-        "avg_l4": avg_l4,
-        "avg_l3": avg_l3,
-        "avg_l2": avg_l2,
-        "avg_l1": avg_l1,
-        "avg_net": avg_net,
-        "avg_processor": avg_processor,
-        "algae_epa": round(avg_net * 4 + avg_processor * 2.5, 2),
-        "most_common_endgame": most_common_endgame
-    }
-
-def fetch_team_components(team, year, team_epa_cache=None, veteran_teams=None):
-    team_key = team["key"]
-    try:
-        matches = tba_get(f"team/{team_key}/matches/{year}")
-        components = calculate_epa_components(matches, team_key, year, team_epa_cache, veteran_teams) if matches else None
-    except Exception as e:
-        print(f"Failed to fetch matches for team {team_key}: {e}")
-        components = None
     return {
         "team_number": team.get("team_number"),
         "nickname": team.get("nickname"),
@@ -456,16 +497,15 @@ def fetch_team_components(team, year, team_epa_cache=None, veteran_teams=None):
         "state_prov": team.get("state_prov"),
         "country": team.get("country"),
         "website": team.get("website", "N/A"),
-        "normal_epa": components["overall"] if components else None,
-        "ace": components["actual_epa"] if components else None,
-        "confidence": components["confidence"] if components else None,
-        "auto_ace": components["auto"] if components else None,
-        "teleop_ace": components["teleop"] if components else None,
-        "endgame_ace": components["endgame"] if components else None,
-        "consistency": components["consistency"] if components else None,
-        "average_match_score": components["average_match_score"] if components else None,
-        "wins": components["wins"] if components else None,
-        "losses": components["losses"] if components else None,
+        "normal_epa": overall_epa_data["overall"],
+        "confidence": overall_epa_data["confidence"],
+        "epa": overall_epa_data["actual_epa"],
+        "auto_epa": overall_epa_data["auto"],
+        "teleop_epa": overall_epa_data["teleop"],
+        "endgame_epa": overall_epa_data["endgame"],
+        "wins": overall_epa_data["wins"],
+        "losses": overall_epa_data["losses"],
+        "event_epas": event_epa_results, # List of event-specific EPA results
     }
 
 def fetch_and_store_team_data():
@@ -491,30 +531,10 @@ def fetch_and_store_team_data():
 
         print(f"Total teams found: {len(all_teams)}")
 
-        team_epa_cache = {}
-
-        def fetch_epa_for_cache(team):
-            team_key = team["key"]
-            try:
-                matches = tba_get(f"team/{team_key}/matches/{year}")
-                components = calculate_epa_components(matches, team_key, year, None, veteran_teams)
-                if components:
-                    return (team_key, components["overall"])
-            except Exception as e:
-                print(f"Initial EPA error for {team_key}: {e}")
-            return None
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(fetch_epa_for_cache, team) for team in all_teams]
-            for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Initial EPA Pass"):
-                result = future.result()
-                if result:
-                    team_epa_cache[result[0]] = result[1]
-
         combined_teams = []
 
         def fetch_team_for_final(team):
-            return fetch_team_components(team, year, team_epa_cache, veteran_teams)
+            return fetch_team_components(team, year, veteran_teams)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(fetch_team_for_final, team) for team in all_teams]
@@ -529,49 +549,94 @@ def fetch_and_store_team_data():
 
         print(f"Year {year} data combined and saved to {output_file}")
 
-def analyze_single_team(team_key: str, year: int, team_epa_cache: Optional[Dict] = None, veteran_teams: Optional[List] = None):
-    """Analyze EPA for a single team and print detailed results."""
-    # Fetch matches for the team
-    matches = tba_get(f"team/{team_key}/matches/{year}")
-    if not matches:
-        print(f"No matches found for team {team_key} in {year}")
-        return None
-    
-    # Calculate EPA components
-    result = calculate_epa_components(matches, team_key, year, team_epa_cache, veteran_teams)
-    if not result:
-        print(f"Could not calculate EPA for team {team_key}")
-        return None
-    
-    # Print detailed results
+def analyze_single_team(team_key: str, year: int, veteran_teams: Optional[set] = None):
+    # Connect to events.sqlite
+    conn = sqlite3.connect("../events.sqlite")
+    cursor = conn.cursor()
+    team_number = int(team_key[3:])
+
+    # Find all events the team participated in for the given year
+    cursor.execute("SELECT ek FROM et WHERE tk = ? AND ek LIKE '2025%'", (team_number,))
+    event_keys = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    event_epa_results = []
+    total_wins = 0
+    total_losses = 0
+
+    for event_key in event_keys:
+        try:
+            matches = tba_get(f"team/{team_key}/event/{event_key}/matches")
+            if matches:
+                # Calculate overall wins/losses from matches
+                for match in matches:
+                    if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
+                        continue
+                    
+                    alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
+                    winning_alliance = match.get("winning_alliance", "")
+                    if winning_alliance == alliance:
+                        total_wins += 1
+                    elif winning_alliance and winning_alliance != alliance:
+                        total_losses += 1
+
+                event_epa = calculate_event_epa(matches, team_key, veteran_teams)
+                event_epa["event_key"] = event_key # Add event key to the result
+                event_epa_results.append(event_epa)
+        except Exception as e:
+            print(f"Failed to fetch matches for team {team_key} at event {event_key}: {e}")
+
+    overall_epa_data = aggregate_overall_epa(event_epa_results)
+    overall_epa_data["wins"] = total_wins
+    overall_epa_data["losses"] = total_losses
+
     print(f"\n{'='*50}")
     print(f"EPA Analysis for Team {team_key} ({year})")
     print(f"{'='*50}")
-    print(f"\nOverall EPA: {result['overall']}")
-    print(f"Auto EPA: {result['auto']}")
-    print(f"Teleop EPA: {result['teleop']}")
-    print(f"Endgame EPA: {result['endgame']}")
-    print(f"\nConfidence: {result['confidence']}")
-    print(f"Consistency: {result['consistency']}")
-    print(f"Actual EPA: {result['actual_epa']}")
-    print(f"\nRecord: {result['wins']}-{result['losses']}")
-    print(f"Average Match Score: {result['average_match_score']}")
-    
-    if 'avg_l4' in result:
-        print(f"\nDetailed Metrics:")
-        print(f"Level 4 Avg: {result['avg_l4']}")
-        print(f"Level 3 Avg: {result['avg_l3']}")
-        print(f"Level 2 Avg: {result['avg_l2']}")
-        print(f"Level 1 Avg: {result['avg_l1']}")
-        print(f"Net Avg: {result['avg_net']}")
-        print(f"Processor Avg: {result['avg_processor']}")
-        print(f"Algae EPA: {result['algae_epa']}")
-        print(f"Most Common Endgame: {result['most_common_endgame']}")
-    
-    return result
+    print(f"\nOverall EPA: {overall_epa_data['overall']}")
+    print(f"Overall Confidence: {overall_epa_data['confidence']}")
+    print(f"Actual Overall EPA: {overall_epa_data['actual_epa']}")
+    print(f"Overall Record: {overall_epa_data['wins']}-{overall_epa_data['losses']}")
+
+    if event_epa_results:
+        print(f"\n{'='*50}")
+        print("Event-Specific EPA Breakdowns")
+        print(f"{'='*50}")
+        for event_epa in event_epa_results:
+            print(f"\nEvent: {event_epa['event_key']}")
+            print(f"  Overall: {event_epa['overall']}")
+            print(f"  Auto: {event_epa['auto']}")
+            print(f"  Teleop: {event_epa['teleop']}")
+            print(f"  Endgame: {event_epa['endgame']}")
+            print(f"  Confidence: {event_epa['confidence']}")
+            print(f"  Actual EPA: {event_epa['actual_epa']}")
+            print("  Confidence Breakdown:")
+            weights = event_epa["weights"]
+            print(f"    → Consistency:     {round(event_epa['consistency'], 3)} × {weights['consistency']} = {round(weights['consistency'] * event_epa['consistency'], 4)}")
+            print(f"    → Record Align:    {round(event_epa['record_alignment'], 3)} × {weights['record_alignment']} = {round(weights['record_alignment'] * event_epa['record_alignment'], 4)}")
+            print(f"    → Veteran Boost:   {round(event_epa['veteran_boost'], 3)} ({event_epa['years_experience']} years) × {weights['veteran']} = {round(weights['veteran'] * event_epa['veteran_boost'], 4)}")
+            print(f"    → Dominance:       {round(event_epa['dominance'], 3)} × {weights['dominance']} = {round(weights['dominance'] * event_epa['dominance'], 4)}")
+            print(f"    → Event Boost:     {round(event_epa['event_boost'], 3)} × {weights['events']} = {round(weights['events'] * event_epa['event_boost'], 4)}")
+            print(f"    → Confidence Total: {round(event_epa['raw_confidence'], 4)} → Capped: {round(event_epa['confidence'], 3)}")
+    else:
+        print("\nNo event-specific EPA data found for this team.")
+
+    # Calculate and print overall confidence breakdown
+    if event_epa_results:
+        weights = event_epa_results[0]["weights"]  # Weights are constant across events
+        components = overall_epa_data["confidence_components"]
+        
+        print(f"\n{'='*50}")
+        print("Overall Confidence Breakdown (Weighted Average)")
+        print(f"{'='*50}")
+        print(f"→ Consistency:     {round(overall_epa_data['avg_consistency'], 3)} × {weights['consistency']} = {round(components['consistency'], 4)}")
+        print(f"→ Record Align:    {round(overall_epa_data['avg_record_alignment'], 3)} × {weights['record_alignment']} = {round(components['record'], 4)}")
+        print(f"→ Veteran Boost:   {round(overall_epa_data['avg_veteran_boost'], 3)} × {weights['veteran']} = {round(components['veteran'], 4)}")
+        print(f"→ Dominance:       {round(overall_epa_data['avg_dominance'], 3)} × {weights['dominance']} = {round(components['dominance'], 4)}")
+        print(f"→ Event Boost:     {round(overall_epa_data['avg_event_boost'], 3)} × {weights['events']} = {round(components['event'], 4)}")
+        print(f"→ Confidence Total: {round(components['raw'], 4)} → Capped: {round(overall_epa_data['confidence'], 3)}")
 
 def main():
-    """Main function to handle user input and process EPA calculations."""
     print("\nEPA Calculator 2025")
     print("="*20)
     
@@ -594,17 +659,12 @@ def main():
             if not team_key.startswith('frc'):
                 team_key = f"frc{team_key}"
             
-            # Load veteran teams if available
             veteran_teams = load_veteran_teams()
+            analyze_single_team(team_key, year, veteran_teams)
             
-            # Analyze single team
-            analyze_single_team(team_key, year, None, veteran_teams)
-            
-        else:  # mode == '2'
-            # Original JSON processing logic
+        else:
             fetch_and_store_team_data()
         
-        # Ask if user wants to continue
         if input("\nWould you like to analyze another team? (y/n): ").lower() != 'y':
             break
 

@@ -1192,8 +1192,26 @@ def events_layout(year=2025):
         ]
     )
 
-def build_recent_events_section(team_key, team_number, epa_data, performance_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS):
-    epa_data = epa_data or {}
+def build_recent_events_section(team_key, team_number, team_epa_data, performance_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS):
+    # print(f"DEBUG: epa_data for {team_key} in {performance_year}: {team_epa_data.get('event_epas')}") # Removed old debug
+    epa_data = team_epa_data or {}
+
+    # DEBUG: Print team_epa_data at the beginning of build_recent_events_section
+    #print(f"DEBUG (build_recent_events_section): team_epa_data received: {team_epa_data.get('event_epas', 'No event_epas key')}")
+
+    def pill(label, value, color):
+        return html.Span(f"{label}: {value}", style={
+            "backgroundColor": color,
+            "borderRadius": "6px",
+            "padding": "4px 10px",
+            "color": "white",
+            "fontWeight": "bold",
+            "fontSize": "0.85rem",
+            "marginRight": "6px",
+            "marginBottom": "6px",   # 👈 add vertical spacing
+            "display": "inline-block"
+        })
+
     recent_rows = []
     year = performance_year 
     # Get the 3 most recent events by start date
@@ -1208,17 +1226,25 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
         if start_str:
             try:
                 dt = datetime.strptime(start_str, "%Y-%m-%d")
-                event_dates.append((dt, ek))
+                event_dates.append((dt, ek, ev)) # Store event data as well
             except ValueError:
                 continue
     
     # Most recent 3 events they attended
-    recent_event_keys = {ek for _, ek in sorted(event_dates, reverse=True)[:3]}
-
-    for event_key, event in EVENT_DATABASE.get(year, {}).items():
-        if event_key not in recent_event_keys:
-            continue
+    recent_events_sorted = sorted(event_dates, key=lambda x: x[0], reverse=True)[:4]
     
+    # Iterate through sorted events to build the section
+    for dt, event_key, event in recent_events_sorted:
+        # Skip if event_key is not in the filtered set (should not happen with this new structure)
+        # if event_key not in recent_event_keys:
+        #     continue
+
+        # print(f"DEBUG: Current event_key in loop: {event_key}") # Original line
+        if year == 2025:
+            # DEBUG: Print found event_epa for the current event_key
+            event_epa_found_debug = next((e for e in team_epa_data.get("event_epas", []) if e.get("event_key") == event_key), None)
+            print(f"DEBUG: Event-specific EPA data found for {event_key}: {event_epa_found_debug}")
+
         event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
     
         # Skip if team wasn't on the team list
@@ -1293,6 +1319,40 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
             html.Span(str(ties), style={"color": "gray", "fontWeight": "bold"})
         ])
 
+        # Get event-specific EPA data for 2025 events
+        event_epa_pills = None
+        if year == 2025:
+            # Access event_epas from the specific team's data within the epa_data dictionary
+            team_specific_event_epas = epa_data.get(str(team_number), {}).get("event_epas", [])
+            event_epa = next((e for e in team_specific_event_epas if str(e.get("event_key")) == str(event_key)), None)
+            if event_epa:
+                # Fixed colors to match screenshot styling for consistency
+                auto_color = "#1976d2"     # Blue
+                teleop_color = "#fb8c00"   # Orange
+                endgame_color = "#388e3c"  # Green
+                norm_color = "#d32f2f"    # Red (for overall EPA)
+                conf_color = "#555"   
+                total_color = "#673ab7"  
+                     # Gray for confidence
+                event_epa_pills = html.Div([
+                    html.Div([
+                        pill("Auto", f"{event_epa['auto']:.1f}", auto_color),
+                        pill("Teleop", f"{event_epa['teleop']:.1f}", teleop_color),
+                        pill("Endgame", f"{event_epa['endgame']:.1f}", endgame_color),
+                        pill("EPA", f"{event_epa['overall']:.1f}", norm_color),
+                        pill("Conf", f"{event_epa['confidence']:.2f}", conf_color),
+                        pill("ACE", f"{event_epa['actual_epa']:.2f}", total_color),
+                        
+                    ], style={
+                        "display": "flex", 
+                        "alignItems": "center", 
+                        "flexWrap": "wrap", 
+                        "marginBottom": "5px"
+                    }),
+                ], style={"marginBottom": "10px"})
+        else:
+            event_epa_pills = html.Div() # Ensure it's an empty div if no data, not None
+
         header = html.Div([
             html.A(str(year) + " " + event_name, href=event_url, style={"fontWeight": "bold", "fontSize": "1.1rem"}),
             html.Div(loc),
@@ -1301,6 +1361,7 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                 html.Span("Record: ", style={"marginRight": "5px"}),
                 record,
                 html.Div(awards_line),
+                event_epa_pills if event_epa_pills else None,
             ]),
         ], style={"marginBottom": "10px"})
 
@@ -1352,6 +1413,17 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                 
                 def get_team_epa_info(t_key):
                     t_data = epa_data.get(t_key.strip(), {})
+                    # Try to get event-specific EPA data first
+                    event_epa = next((e for e in t_data.get("event_epas", []) if e.get("event_key") == event_key), None)
+                    if event_epa:
+                        print(f"DEBUG: Using event_epa for {t_key} in {event_key}: EPA={event_epa['overall']:.2f}, Conf={event_epa['confidence']:.2f}, Cons={event_epa['consistency']:.2f}")
+                        return {
+                            "epa": event_epa["overall"],
+                            "confidence": event_epa["confidence"],
+                            "consistency": event_epa["consistency"]
+                        }
+                    # Fall back to overall EPA data if no event-specific data
+                    print(f"DEBUG: Using overall epa for {t_key}: EPA={t_data.get('epa', 0):.2f}, Conf={t_data.get('confidence', 0):.2f}, Cons={t_data.get('consistency', 0):.2f}. Full t_data: {t_data}")
                     return {
                         "epa": t_data.get("epa", 0),
                         "confidence": t_data.get("confidence", 0),
@@ -1363,7 +1435,11 @@ def build_recent_events_section(team_key, team_number, epa_data, performance_yea
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
                 
                 if red_team_info and blue_team_info:
+                    # Debugging the input to predict_win_probability
+                    print(f"DEBUG: Input for predict_win_probability (Red): {red_team_info}")
+                    print(f"DEBUG: Input for predict_win_probability (Blue): {blue_team_info}")
                     p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
+                    print(f"DEBUG: Predicted probabilities: Red={p_red:.2f}, Blue={p_blue:.2f}")
                     is_red = str(team_number) in red_str
                     team_prob = p_red if is_red else p_blue
                     prediction = f"{team_prob:.0%}"
@@ -1735,19 +1811,11 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
     if not selected_team:
         return dbc.Alert(f"Team {team_number} not found in the data for {performance_year}.", color="danger")
 
+    # DEBUG: Print selected_team data
+    print(f"DEBUG (team_layout): selected_team for {team_number}: {selected_team}")
+
     # Calculate Rankings
     global_rank, country_rank, state_rank = calculate_single_rank(list(year_data.values()), selected_team)
-
-    # ACE Display
-    epa_value = selected_team.get("epa", None)
-    epa_display = f"{epa_value:.2f}" if epa_value is not None else "N/A"
-
-    auto_epa = selected_team.get("auto_epa", None)
-    teleop_epa = selected_team.get("teleop_epa", None)
-    endgame_epa = selected_team.get("endgame_epa", None)
-    auto_epa_display = f"{auto_epa:.2f}" if auto_epa is not None else "N/A"
-    teleop_epa_display = f"{teleop_epa:.2f}" if teleop_epa is not None else "N/A"
-    endgame_epa_display = f"{endgame_epa:.2f}" if endgame_epa is not None else "N/A"
 
     epa_data = {
         str(team_num): {
@@ -1755,6 +1823,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
             "auto_epa": data.get("auto_epa", 0),
             "teleop_epa": data.get("teleop_epa", 0),
             "endgame_epa": data.get("endgame_epa", 0),
+            "event_epas": data.get("event_epas", []) # Include event_epas
         }
         for team_num, data in year_data.items()
     }

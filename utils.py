@@ -18,10 +18,8 @@ def effective_epa(team_infos):
         for t in team_infos:
             epa = t["epa"]
             conf = t["confidence"]
-            cons = t["consistency"]
-            reliability = 0.5 * conf + 0.5 * cons
-            weight = 0.5 + 0.5 * reliability
-            weighted_epas.append(epa * weight)
+            reliability = 1.0 * conf
+            weighted_epas.append(epa * reliability)
         
         return np.mean(weighted_epas)
     
