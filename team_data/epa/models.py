@@ -323,3 +323,338 @@ def endgame_2022(breakdowns, team_count):
     trimmed_scores = sorted(scores)[k:]
 
     return round(statistics.mean(trimmed_scores), 2)
+
+def auto_2021(breakdowns, team_count):
+    """Calculate auto score for 2020 matches."""
+    def score_per_breakdown(b):
+        # Get auto points directly from breakdown
+        auto_points = b.get("autoPoints", 0)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return auto_points * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def teleop_2021(breakdowns, team_count):
+    """Calculate teleop score for 2020 matches."""
+    def score_per_breakdown(b):
+        # Calculate teleop points by subtracting endgame from total teleop
+        teleop_points = b.get("teleopPoints", 0) - b.get("endgamePoints", 0)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return teleop_points * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def endgame_2021(breakdowns, team_count):
+    """Calculate endgame score for 2020 matches."""
+    def score_per_breakdown(b):
+        # Get endgame points directly from breakdown
+        endgame_points = b.get("endgamePoints", 0)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return endgame_points * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def auto_2020(breakdowns, team_count):
+    """Calculate auto score for 2020 matches."""
+    def score_per_breakdown(b):
+        # Get auto points directly from breakdown
+        auto_points = b.get("autoPoints", 0)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return auto_points * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def teleop_2020(breakdowns, team_count):
+    """Calculate teleop score for 2020 matches."""
+    def score_per_breakdown(b):
+        # Calculate teleop points by subtracting endgame from total teleop
+        teleop_points = b.get("teleopPoints", 0) - b.get("endgamePoints", 0)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return teleop_points * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def endgame_2020(breakdowns, team_count):
+    """Calculate endgame score for 2020 matches."""
+    def score_per_breakdown(b):
+        # Get endgame points directly from breakdown
+        endgame_points = b.get("endgamePoints", 0)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return endgame_points * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def auto_2019(breakdowns, team_count):
+    """Calculate auto score for 2019 matches."""
+    def score_per_breakdown(b):
+        # 2019 Auto Scoring: Sandstorm Bonus + Cargo Ship/Rocket Level 1 Scoring
+        sandstorm_bonus = b.get("sandStormBonusPoints", 0)
+        auto_scored_points = b.get("autoPoints", 0) - sandstorm_bonus
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (sandstorm_bonus + auto_scored_points) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def teleop_2019(breakdowns, team_count):
+    """Calculate teleop score for 2019 matches."""
+    def score_per_breakdown(b):
+        # 2019 Teleop Scoring: Cargo Ship and Rocket (all levels) Scoring
+        cargo_ship_points = 0
+        for i in range(1, 9):
+            bay_status = b.get(f"bay{i}", "None")
+            if bay_status == "Panel": cargo_ship_points += 2
+            if bay_status == "Cargo": cargo_ship_points += 3
+            if bay_status == "PanelAndCargo": cargo_ship_points += 2 + 3
+
+        rocket_points = 0
+        for level in ["low", "mid", "top"]:
+            for side in ["Left", "Right"]:
+                for location in ["Near", "Far"]:
+                    rocket_status = b.get(f"{level}{side}Rocket{location}", "None")
+                    if rocket_status == "Panel": rocket_points += 2
+                    if rocket_status == "Cargo": rocket_points += 3
+                    if rocket_status == "PanelAndCargo": rocket_points += 2 + 3
+
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (cargo_ship_points + rocket_points) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def endgame_2019(breakdowns, team_count):
+    """Calculate endgame score for 2019 matches."""
+    def score_per_breakdown(b):
+        # Get endgame status for each robot
+        endgame_scores = []
+        for i in range(1, 4):  # Check all three robots
+            robot_endgame_status = b.get(f"endgameRobot{i}", "None")
+            # Use 2019 HAB Climb scoring values
+            score = {"HabLevel1": 3, "HabLevel2": 6, "HabLevel3": 12, "None": 0}.get(robot_endgame_status, 0)
+            endgame_scores.append(score)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return sum(endgame_scores) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
