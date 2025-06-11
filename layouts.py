@@ -1227,7 +1227,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         #     continue
 
         # print(f"DEBUG: Current event_key in loop: {event_key}") # Original line
-        if year == 2025:
+        if year >= 2023:
             # DEBUG: Print found event_epa for the current event_key
             event_epa_found_debug = next((e for e in team_epa_data.get("event_epas", []) if e.get("event_key") == event_key), None)
             print(f"DEBUG: Event-specific EPA data found for {event_key}: {event_epa_found_debug}")
@@ -1308,7 +1308,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
 
         # Get event-specific EPA data for 2025 events
         event_epa_pills = None
-        if year == 2025:
+        if year >= 2023:
             # Access event_epas from the specific team's data within the epa_data dictionary
             team_specific_event_epas = epa_data.get(str(team_number), {}).get("event_epas", [])
             event_epa = next((e for e in team_specific_event_epas if str(e.get("event_key")) == str(event_key)), None)
@@ -1328,7 +1328,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                         pill("Endgame", f"{event_epa['endgame']:.1f}", endgame_color),
                         pill("EPA", f"{event_epa['overall']:.1f}", norm_color),
                         pill("Conf", f"{event_epa['confidence']:.2f}", conf_color),
-                        pill("ACE", f"{event_epa['actual_epa']:.2f}", total_color),
+                        pill("ACE", f"{event_epa['actual_epa']:.1f}", total_color),
                         
                     ], style={
                         "display": "flex", 
@@ -1534,170 +1534,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         html.Div(recent_rows)
     ])
 
-def build_recent_matches_section(event_key, year, epa_data, EVENT_MATCHES):
-    matches = [m for m in EVENT_MATCHES.get(year, []) if m.get("ek") == event_key]
-    if not matches:
-        return html.P("No matches available for this event.")
-
-    epa_data = epa_data or {}
-
-    # Sort matches by comp level and match number
-    comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
-
-    def match_sort_key(m):
-        key = m.get("k", "").split("_", 1)[-1].lower()
-
-        # Initialize defaults
-        level = 99
-        set_num = 0
-        match_num = 9999
-
-        # Try parsing the key manually
-        for prefix in ["qm", "qf", "sf", "f"]:
-            if key.startswith(prefix):
-                level = {"qm": 0, "qf": 1, "sf": 2, "f": 3}[prefix]
-                rest = key[len(prefix):]
-                if 'm' in rest:
-                    set_part, match_part = rest.split('m', 1)
-                    if match_part.isdigit():
-                        match_num = int(match_part)
-                    if set_part.isdigit():
-                        set_num = int(set_part)
-                break
-
-        return (level, set_num, match_num)
-
-    matches.sort(key=match_sort_key)
-    qual_matches = [m for m in matches if m.get("cl") == "qm"]
-    playoff_matches = [m for m in matches if m.get("cl") != "qm"]
-
-    # Utilities
-    def format_teams_markdown(team_str):
-        return ", ".join(f"[{t}](/team/{t})" for t in team_str.split(",") if t.strip().isdigit())
-
-    def get_team_epa_info(t_key):
-        info = epa_data.get(t_key.strip(), {})
-        return {
-            "epa": info.get("epa", 0),
-            "confidence": info.get("confidence", 0) / 100,  # normalize
-            "consistency": info.get("consistency", 0),
-        }
-
-
-    def build_match_rows(match_list):
-        rows = []
-        for match in match_list:
-            red_str = match.get("rt", "")
-            blue_str = match.get("bt", "")
-            red_score = match.get("rs", 0)
-            blue_score = match.get("bs", 0)
-            winner = match.get("wa", "")
-            label = match.get("k", "").split("_", 1)[-1]
-
-            if label.lower().startswith("sf") and "m" in label.lower():
-                # Always work with lower and reconstruct as upper for safety
-                label = label.lower().split("m")[0].upper()
-            else:
-                label = label.upper()
-
-            red_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
-            blue_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
-
-            p_red, p_blue = predict_win_probability(red_info, blue_info)
-            if p_red == 0.5 and p_blue == 0.5:
-                prediction = "N/A"
-            else:
-                prediction = f"🔴 {p_red:.0%} vs 🔵 {p_blue:.0%}"
-
-            yid = match.get("yt")
-            video_link = f"[Watch](https://youtube.com/watch?v={yid})" if yid else "N/A"
-
-            rows.append({
-                "Video": video_link,
-                "Match": label,
-                "Red Alliance": format_teams_markdown(red_str),
-                "Blue Alliance": format_teams_markdown(blue_str),
-                "Red Score": red_score,
-                "Blue Score": blue_score,
-                "Winner": winner.title() if winner else "N/A",
-                "Prediction": prediction,
-            })
-        return rows
-
-    # Data rows
-    qual_data = build_match_rows(qual_matches)
-    playoff_data = build_match_rows(playoff_matches)
-
-    # Columns and styling
-    match_columns = [
-        {"name": "Video", "id": "Video", "presentation": "markdown"},
-        {"name": "Match", "id": "Match"},
-        {"name": "Red Alliance", "id": "Red Alliance", "presentation": "markdown"},
-        {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
-        {"name": "Red Score", "id": "Red Score"},
-        {"name": "Blue Score", "id": "Blue Score"},
-        {"name": "Winner", "id": "Winner"},
-        {"name": "Prediction", "id": "Prediction", "presentation": "markdown"},
-    ]
-
-    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"}
-    style_header={
-        "backgroundColor": "var(--card-bg)",        # Match the table background
-        "fontWeight": "bold",              # Keep column labels strong
-        "textAlign": "center",
-        "borderBottom": "1px solid #ccc",  # Thin line under header only
-        "padding": "6px",                  # Reduce banner size
-        "fontSize": "13px",                # Optional: shrink text slightly
-    }
-
-    style_cell={
-        "textAlign": "center",
-        "padding": "10px",
-        "border": "none",
-        "fontSize": "14px",
-    }
-    row_style = [
-        {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "#ffe6e6"},
-        {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
-    ]
-
-    qual_table = [
-        html.H5("Qualification Matches", className="mb-3 mt-3"),
-        dash_table.DataTable(
-            columns=match_columns,
-            data=qual_data,
-            page_size=10,
-            style_table=style_table,
-            style_header=style_header,
-            style_cell=style_cell,
-            style_data_conditional=row_style,
-        )
-    ] if qual_data else [
-        html.H5("Qualification Matches", className="mb-3 mt-3"),
-        dbc.Alert("No qualification matches found.", color="info"),
-    ]
-
-    playoff_table = [
-        html.H5("Playoff Matches", className="mb-3 mt-5"),
-        dash_table.DataTable(
-            columns=match_columns,
-            data=playoff_data,
-            page_size=10,
-            style_table=style_table,
-            style_header=style_header,
-            style_cell=style_cell,
-            style_data_conditional=row_style,
-        )
-    ] if playoff_data else [
-        html.H5("Playoff Matches", className="mb-3 mt-5"),
-        dbc.Alert("No playoff matches found.", color="info"),
-    ]
-
-    return html.Div([
-        html.Div(qual_table, className="recent-events-table"),
-        html.Div(playoff_table, className="recent-events-table")
-    ])
-
 def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS, EVENT_TEAMS):
 
     user_id = session.get("user_id")
@@ -1810,10 +1646,11 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
             "auto_epa": data.get("auto_epa", 0),
             "teleop_epa": data.get("teleop_epa", 0),
             "endgame_epa": data.get("endgame_epa", 0),
-            "event_epas": data.get("event_epas", []) # Include event_epas
+            "event_epas": json.loads(data["event_epas"]) if isinstance(data.get("event_epas"), str) else data.get("event_epas", [])
         }
         for team_num, data in year_data.items()
     }
+
 
     epa_values = [data.get("normal_epa", 0) for data in year_data.values()]
     auto_values = [data.get("auto_epa", 0) for data in year_data.values()]
@@ -2022,18 +1859,6 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
             "backgroundColor": "var(--card-bg)"
         },
     )
-
-    wins = selected_team.get("wins")
-    losses = selected_team.get("losses")
-    
-    wins_str = str(wins) if wins is not None else "N/A"
-    losses_str = str(losses) if losses is not None else "N/A"
-    
-    win_loss_ratio = html.Span([
-        html.Span(wins_str, style={"color": "green", "fontWeight": "bold"}),
-        html.Span(" / ", style={"color": "#333", "fontWeight": "bold"}),
-        html.Span(losses_str, style={"color": "red", "fontWeight": "bold"})
-    ])
     def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state):
         def rank_card(top, bottom, rank, href):
             return html.Div(
@@ -2105,7 +1930,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
                 pill("Auto", f"{auto:.1f}", auto_color),
                 pill("Teleop", f"{teleop:.1f}", teleop_color),
                 pill("Endgame", f"{endgame:.1f}", endgame_color),
-                pill("EPA", f"{normal_epa:.2f}", norm_color),
+                pill("EPA", f"{normal_epa:.1f}", norm_color),
                 pill("Confidence", f"{confidence:.2f}", conf_color),
                 pill("ACE", f"{total:.1f}", total_color),
             ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})

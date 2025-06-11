@@ -24,9 +24,9 @@ import plotly.graph_objects as go
 
 from datagather import COUNTRIES,STATES,load_data,get_team_avatar,DISTRICT_STATES,get_pg_connection
 
-from layouts import home_layout,footer,topbar,team_layout,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, build_recent_matches_section, compare_layout
+from layouts import home_layout,footer,topbar,team_layout,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, compare_layout
 
-from utils import pill,predict_win_probability,calculate_single_rank,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_username,get_available_avatars,get_contrast_text_color,parse_event_key,get_user_epa_color,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card
+from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_username,get_available_avatars,get_contrast_text_color,parse_event_key,get_user_epa_color,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -387,9 +387,6 @@ def user_layout(_user_id=None, deleted_items=None):
                 "padding": "4px"
             }
         )
-        
-
-
         if team_data:
             epa = team_data.get("epa", 0)
             teleop = team_data.get("teleop_epa", 0)
@@ -400,19 +397,6 @@ def user_layout(_user_id=None, deleted_items=None):
             wins = team_data.get("wins", 0)
             losses = team_data.get("losses", 0)
             ties = team_data.get("ties", 0)
-            country = (team_data.get("country") or "").lower()
-            state = (team_data.get("state_prov") or "").lower()
-
-            global_rank = 1
-            country_rank = 1
-            state_rank = 1
-            for other in TEAM_DATABASE.get(2025, {}).values():
-                if (other.get("epa", 0) or 0) > epa:
-                    global_rank += 1
-                    if (other.get("country") or "").lower() == country:
-                        country_rank += 1
-                    if (other.get("state_prov") or "").lower() == state:
-                        state_rank += 1
             
             auto_color = "#1976d2"     # Blue
             teleop_color = "#fb8c00"   # Orange
@@ -420,7 +404,7 @@ def user_layout(_user_id=None, deleted_items=None):
             norm_color = "#d32f2f"    # Red (for overall EPA)
             conf_color = "#555"   
             total_color = "#673ab7" 
-            
+
             metrics = html.Div([
                 html.P([
                     html.Span(f"Team {team_number} ({team_data.get('nickname', '')}) had a record of ", style={"fontWeight": "bold"}),
@@ -429,13 +413,13 @@ def user_layout(_user_id=None, deleted_items=None):
                     html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
                     html.Span("-", style={"color": "var(--text-primary)"}),
                     html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
-                    html.Span(f" in {year_data.get('year', 2025)}.")
+                    html.Span(f" in 2025.")
                 ], style={"marginBottom": "6px", "fontWeight": "bold"}),
                 html.Div([
                     pill("Auto", f"{auto:.1f}", auto_color),
                     pill("Teleop", f"{teleop:.1f}", teleop_color),
                     pill("Endgame", f"{endgame:.1f}", endgame_color),
-                    pill("EPA", f"{normal_epa:.2f}", norm_color),
+                    pill("EPA", f"{normal_epa:.1f}", norm_color),
                     pill("Confidence", f"{confidence:.2f}", conf_color),
                     pill("ACE", f"{epa:.1f}", total_color),
                 ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
@@ -542,12 +526,10 @@ def user_layout(_user_id=None, deleted_items=None):
                             "cursor": "pointer"
                         }
                     ),
-                    delete_event_btn
                 ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"}),
         
                 html.Div(location, style={"fontSize": "0.85rem", "color": "#666", "marginBottom": "0.5rem"}),
                 html.Hr(),
-                build_recent_matches_section(event_key, year, epa_data, EVENT_MATCHES)
             ]
         ))
 
@@ -573,7 +555,7 @@ def user_layout(_user_id=None, deleted_items=None):
                                     style={"margin": 0, "fontSize": "1.5rem", "color": text_color}
                                 ),
                                 html.Div(
-                                    f"{len(team_keys)} favorite teams | {len(event_keys)} favorite events",
+                                    f"{len(team_keys)} favorite teams",
                                     id="profile-subheader",
                                     style={"fontSize": "0.85rem", "color": text_color}
                                 ),
@@ -694,8 +676,6 @@ def user_layout(_user_id=None, deleted_items=None):
             html.H3("Favorite Teams", className="mb-3"),
             *team_cards,
             html.Hr(),
-            html.H3("Favorite Events", className="mb-3"),
-            *event_cards,
 
         ], style={"padding": "20px", "maxWidth": "1000px"}),
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
@@ -741,9 +721,11 @@ def other_user_layout(username):
     epa_data = {
         str(team_num): {
             "epa": data.get("epa", 0),
+            "normal_epa": data.get("normal_epa", 0),
             "auto_epa": data.get("auto_epa", 0),
             "teleop_epa": data.get("teleop_epa", 0),
             "endgame_epa": data.get("endgame_epa", 0),
+            "confidence": data.get("confidence", 0),
         }
         for team_num, data in TEAM_DATABASE.get(2025, {}).items()
     }
@@ -760,6 +742,8 @@ def other_user_layout(username):
             continue
 
         epa = team_data.get("epa", 0)
+        normal_epa = team_data.get("normal_epa", 0)
+        confidence = team_data.get("confidence", 0)
         teleop = team_data.get("teleop_epa", 0)
         auto = team_data.get("auto_epa", 0)
         endgame = team_data.get("endgame_epa", 0)
@@ -797,7 +781,7 @@ def other_user_layout(username):
                 html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
                 html.Span("-", style={"color": "var(--text-primary)"}),
                 html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
-                html.Span(f" in {year_data.get('year', 2025)}.")
+                html.Span(f" in {year_data[0].get('year', 2025) if year_data else 2025}.")
             ], style={"marginBottom": "6px", "fontWeight": "bold"}),
             html.Div([
                 pill("Auto", f"{auto:.1f}", auto_color),
@@ -924,7 +908,7 @@ def other_user_layout(username):
                             ),
                             html.Div([
                                 html.H2(f"{username.title()}", style={"margin": 0, "fontSize": "1.5rem", "color": text_color}),
-                                html.Div(f"{len(team_keys)} favorite teams | {len(event_keys)} favorite events", style={"fontSize": "0.85rem", "color": text_color}),
+                                html.Div(f"{len(team_keys)} favorite teams", style={"fontSize": "0.85rem", "color": text_color}),
                                 profile_display,
                             ]),
                         ], style={"display": "flex", "alignItems": "center"}),
@@ -959,8 +943,6 @@ def other_user_layout(username):
             html.H3("Favorite Teams", className="mb-3"),
             *team_cards,
             html.Hr(),
-            html.H3("Favorite Events", className="mb-3"),
-            *event_cards,
         ], style={"padding": "20px", "maxWidth": "1000px"}),
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
@@ -1867,13 +1849,43 @@ def event_layout(event_key):
     if not event:
         return dbc.Alert("Event details could not be found.", color="danger")
 
-    _, epa_data = calculate_all_ranks(parsed_year, TEAM_DATABASE)
-    event_year = parsed_year
-    event_teams = EVENT_TEAMS.get(event_year, {}).get(event_key, [])
-    rankings = EVENT_RANKINGS.get(event_year, {}).get(event_key, {})
+    # Get event-specific EPA data for teams at this event
+    event_teams = EVENT_TEAMS.get(parsed_year, {}).get(event_key, [])
+    event_epa_data = {}
+    
+    for team in event_teams:
+        team_num = team.get("tk")
+        team_data = TEAM_DATABASE.get(parsed_year, {}).get(team_num, {})
+        if team_data:
+            # Handle event_epas whether it's a string or list
+            event_epas = team_data.get("event_epas", [])
+            if isinstance(event_epas, str):
+                try:
+                    event_epas = json.loads(event_epas)
+                except json.JSONDecodeError:
+                    event_epas = []
+            
+            # Find event-specific EPA data for this team at this event
+            event_specific_epa = next(
+                (e for e in event_epas if e.get("event_key") == event_key),
+                None
+            )
+            if event_specific_epa:
+                event_epa_data[str(team_num)] = {
+                    "epa": event_specific_epa.get("actual_epa", 0),
+                    "auto_epa": event_specific_epa.get("auto", 0),
+                    "teleop_epa": event_specific_epa.get("teleop", 0),
+                    "endgame_epa": event_specific_epa.get("endgame", 0),
+                    "confidence": event_specific_epa.get("confidence", 0),
+                    "consistency": event_specific_epa.get("consistency", 0),
+                    "dominance": event_specific_epa.get("dominance", 0),
+                }
 
-    # Compressed match keys
-    event_matches = [m for m in EVENT_MATCHES.get(event_year, []) if m.get("ek") == event_key]
+    # Calculate rankings based on event-specific EPA
+    rankings = EVENT_RANKINGS.get(parsed_year, {}).get(event_key, {})
+
+    # Get event matches
+    event_matches = [m for m in EVENT_MATCHES.get(parsed_year, []) if m.get("ek") == event_key]
 
     event_name = event.get("n", "Unknown Event")
     # Remove ' presented by' and everything after it
@@ -1888,28 +1900,8 @@ def event_layout(event_key):
     # Header card
     header_card = dbc.Card(
         html.Div([
-            dbc.Button(
-                id={"type": "favorite-event-btn", "key": event_key},  # Updated to match pattern
-                children="★",  # will be toggled dynamically
-                color="link",
-                className="p-0",
-                style={
-                    "position": "absolute",
-                    "top": "12px",
-                    "right": "16px",
-                    "fontSize": "2.2rem",
-                    "lineHeight": "1",
-                    "border": "none",
-                    "boxShadow": "none",
-                    "background": "none",
-                    "color": "#ffc107",  # golden star
-                    "zIndex": "10",
-                    "textDecoration": "none",
-                    "cursor": "pointer"
-                }
-            ),
             dbc.CardBody([
-                html.H2(f"{event_name} ({event_year})", className="card-title mb-3", style={"fontWeight": "bold"}),
+                html.H2(f"{event_name} ({parsed_year})", className="card-title mb-3", style={"fontWeight": "bold"}),
                 html.P(f"Location: {event_location}", className="card-text"),
                 html.P(f"Dates: {start_date} - {end_date}", className="card-text"),
                 html.P(f"Type: {event_type}", className="card-text"),
@@ -1980,21 +1972,19 @@ def event_layout(event_key):
             dcc.Location(id="event-url", refresh=False),
             dcc.Store(id="event-tab-store"),  # Store for initial tab
             dcc.Store(id="user-session"),  # Holds user_id from session
-            dcc.Store(id="event-favorites-store", storage_type="session"),  # Add this line
             topbar(),
-            dbc.Alert(id="favorite-event-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
                 [
                     header_layout,
                     data_tabs,
-                    dcc.Store(id="store-event-epa", data=epa_data),
+                    dcc.Store(id="store-event-epa", data=event_epa_data),
                     dcc.Store(id="store-event-teams", data=event_teams),
                     dcc.Store(id="store-rankings", data=rankings),
                     dcc.Store(id="store-event-matches", data=event_matches),
-                    dcc.Store(id="store-event-year", data=event_year),
+                    dcc.Store(id="store-event-year", data=parsed_year),
                     dcc.Store(
                         id="store-oprs",
-                        data={"oprs": EVENT_OPRS.get(event_year, {}).get(event_key, {})}
+                        data={"oprs": EVENT_OPRS.get(parsed_year, {}).get(event_key, {})}
                     ),
                     html.Div(id="data-display-container"),
                 ],
@@ -2029,7 +2019,7 @@ def set_event_tab_from_url(search):
 def set_event_tabs_active_tab(tab):
     return tab
 
-def create_team_card_spotlight(team, epa_data, event_year):
+def create_team_card_spotlight(team, event_year):
     t_num = team.get("tk")  # from compressed team list
     team_data = TEAM_DATABASE.get(event_year, {}).get(t_num, {})
 
@@ -2039,15 +2029,25 @@ def create_team_card_spotlight(team, epa_data, event_year):
     country = team_data.get("country", "")
     location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
 
-    # ACE info
-    t_key_str = str(t_num)
-    epa_rank = epa_data.get(t_key_str, {}).get("rank", "N/A")
-    epa_display = epa_data.get(t_key_str, {}).get("epa_display", "N/A")
+    # === EPA & Rank Calculation (standalone) ===
+    all_teams = TEAM_DATABASE.get(event_year, {})
+    team_epas = [
+        (tnum, data.get("epa", 0))
+        for tnum, data in all_teams.items()
+        if isinstance(data, dict)
+    ]
+    team_epas.sort(key=lambda x: x[1], reverse=True)
+    rank_map = {tnum: i + 1 for i, (tnum, _) in enumerate(team_epas)}
 
-    # Avatar and team link
+    team_epa = team_data.get("epa", 0)
+    epa_display = f"{team_epa:.1f}"
+    epa_rank = rank_map.get(t_num, "N/A")
+
+    # === Avatar and link ===
     avatar_url = get_team_avatar(t_num, event_year)
     team_url = f"/team/{t_num}/{event_year}"
 
+    # === Card Layout ===
     card_body = dbc.CardBody(
         [
             html.H5(f"#{t_num} | {nickname}", className="card-title", style={
@@ -2115,54 +2115,6 @@ def create_team_card_spotlight(team, epa_data, event_year):
     )
 
 @callback(
-    Output("event-favorites-store", "data", allow_duplicate=True),
-    Output("favorite-event-alert", "children", allow_duplicate=True),
-    Output("favorite-event-alert", "is_open", allow_duplicate=True),
-    Input("url", "pathname"),
-    Input("favorite-event-btn", "n_clicks"),
-    State("event-favorites-store", "data"),
-    prevent_initial_call=True
-)
-def handle_event_favorite(pathname, n_clicks, store_data):
-
-    if "user_id" not in session:
-        raise PreventUpdate
-
-    user_id = session["user_id"]
-    event_key = pathname.strip("/").split("/")[-1]
-    store_data = store_data or []
-
-    # Case: user clicked star
-    if ctx.triggered_id == "favorite-event-btn":
-        conn = get_pg_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM saved_items WHERE user_id = %s AND item_type = 'event' AND item_key = %s", (user_id, event_key))
-        existing = cursor.fetchone()
-
-        if existing:
-            cursor.execute("DELETE FROM saved_items WHERE user_id = %s AND item_type = 'event' AND item_key = %s", (user_id, event_key))
-            conn.commit()
-            conn.close()
-            new_store = [k for k in store_data if k != event_key]
-            return new_store, "Removed from favorites", True
-        else:
-            cursor.execute("INSERT INTO saved_items (user_id, item_type, item_key) VALUES (%s, 'event', %s)", (user_id, event_key))
-            conn.commit()
-            conn.close()
-            return store_data + [event_key], "Added to favorites", True
-
-    # Case: just loading the page (preload from DB)
-    if ctx.triggered_id == "url":
-        conn = get_pg_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1 FROM saved_items WHERE user_id = %s AND item_type = 'event' AND item_key = %s", (user_id, event_key))
-        favorited = cursor.fetchone()
-        conn.close()
-        return ([event_key] if favorited else []), dash.no_update, dash.no_update
-
-    raise PreventUpdate
-
-@callback(
     Output("data-display-container", "children"),
     Output("event-url", "search"),  # NEW: update the event tab URL
     Input("event-data-tabs", "active_tab"),
@@ -2181,7 +2133,6 @@ def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, even
     if pathname and "/event/" in pathname:
         event_key = pathname.split("/event/")[-1].split("/")[0]
     query_string = f"?tab={active_tab}" if active_tab and event_key else ""
-    # ... rest of the function ...
 
     if not active_tab:
         return dbc.Alert("Select a data category above.", color="info"), query_string
@@ -2209,22 +2160,26 @@ def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, even
         try: return int(val)
         except: return 999999
 
-    event_team_keys = {t["tk"] for t in event_teams}
-    full_teams = [t for t in TEAM_DATABASE.get(event_year, {}).values() if t.get("team_number") in event_team_keys]
+    team_epas = []
+    for tnum, team_data in TEAM_DATABASE.get(event_year, {}).items():
+        if team_data:
+            team_epas.append((tnum, team_data.get("epa", 0)))
+        
+    # Sort by EPA to calculate ranks
+    team_epas.sort(key=lambda x: x[1], reverse=True)
+    rank_map = {tnum: i+1 for i, (tnum, _) in enumerate(team_epas)}
 
-
-    extract_valid = lambda key: [t[key] for t in full_teams if key in t and t[key] is not None]
-
-    overall_percentiles = compute_percentiles(extract_valid("epa"))
-    auto_percentiles = compute_percentiles(extract_valid("auto_epa"))
-    teleop_percentiles = compute_percentiles(extract_valid("teleop_epa"))
-    endgame_percentiles = compute_percentiles(extract_valid("endgame_epa"))
+    # Get all EPA values for percentile calculations
+    epa_values = [data.get("epa", 0) for data in epa_data.values()]
+    auto_values = [data.get("auto_epa", 0) for data in epa_data.values()]
+    teleop_values = [data.get("teleop_epa", 0) for data in epa_data.values()]
+    endgame_values = [data.get("endgame_epa", 0) for data in epa_data.values()]
 
     percentiles_dict = {
-        "ACE": overall_percentiles,
-        "Auto ACE": auto_percentiles,
-        "Teleop ACE": teleop_percentiles,
-        "Endgame ACE": endgame_percentiles,
+        "ACE": compute_percentiles(epa_values),
+        "Auto ACE": compute_percentiles(auto_values),
+        "Teleop ACE": compute_percentiles(teleop_values),
+        "Endgame ACE": compute_percentiles(endgame_values),
     }
         
     style_data_conditional = get_epa_styling(percentiles_dict)
@@ -2234,9 +2189,6 @@ def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, even
         data_rows = []
         for team_num, rank_info in (rankings or {}).items():
             tstr = str(team_num)
-
-            epa_rank = epa_data.get(tstr, {}).get("rank", "N/A")
-            epa_display = epa_data.get(tstr, {}).get("epa_display", "N/A")
 
             try:
                 team_data = TEAM_DATABASE.get(event_year, {}).get(int(team_num), {})
@@ -2251,7 +2203,7 @@ def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, even
                 "Losses": rank_info.get("l", "N/A"),
                 "Ties": rank_info.get("t", "N/A"),
                 "DQ": rank_info.get("dq", "N/A"),
-                "ACE Rank": epa_rank,
+                "ACE Rank": rank_map.get(int(tstr), "N/A"),
                 "ACE": epa_data.get(tstr, {}).get("epa", "N/A"),
             })
 
@@ -2290,12 +2242,11 @@ def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, even
             tnum_str = str(team_num)
             team_data = year_teams.get(int(team_num), {})
             nickname = team_data.get("nickname", "Unknown")
-            epa_rank = epa_data.get(tnum_str, {}).get("rank", "N/A")
     
             data.append({
                 "Team": f"[{tnum_str} | {nickname}](/team/{tnum_str})",
                 "OPR": opr_val,
-                "ACE Rank": epa_rank,
+                "ACE Rank": rank_map.get(int(tnum_str), "N/A"),
                 "ACE": epa_data.get(tnum_str, {}).get("epa", "N/A"),
             })
     
@@ -2323,16 +2274,16 @@ def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, even
 
     # === Teams Tab ===
     elif active_tab == "teams":
-
-        # Sort by global ACE rank
+        # Sort teams by overall EPA from TEAM_DATABASE
         sorted_teams = sorted(
             event_teams,
-            key=lambda t: safe_int(epa_data.get(str(t.get("tk")), {}).get("rank")),
+            key=lambda t: TEAM_DATABASE.get(event_year, {}).get(int(t.get("tk")), {}).get("epa", 0),
+            reverse=True
         )
         top_3 = sorted_teams[:3]
 
         spotlight_cards = [
-            dbc.Col(create_team_card_spotlight(t, epa_data, event_year), width="auto")
+            dbc.Col(create_team_card_spotlight(t, event_year), width="auto")
             for t in top_3
         ]
         spotlight_layout = dbc.Row(spotlight_cards, className="justify-content-center mb-4")
@@ -2341,21 +2292,21 @@ def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, even
         for t in event_teams:
             tnum = t.get("tk")
             tstr = str(tnum)
-            full_data = next((team for team in full_teams if team.get("team_number") == tnum), {})
-            epa_rank = epa_data.get(tstr, {}).get("rank", "N/A")
-            epa_disp = epa_data.get(tstr, {}).get("epa_display", "N/A")
-
+            # Convert team number to integer for TEAM_DATABASE lookup
+            team_data = TEAM_DATABASE.get(event_year, {}).get(int(tnum), {})
+            
             rows.append({
-                "ACE Rank": epa_rank,
-                "ACE": epa_data.get(tstr, {}).get("epa", "N/A"),
-                "Auto ACE": round(full_data.get("auto_epa", 0), 2),
-                "Teleop ACE": round(full_data.get("teleop_epa", 0), 2),
-                "Endgame ACE": round(full_data.get("endgame_epa", 0), 2),
+                "ACE Rank": rank_map.get(int(tnum), "N/A"),
+                "ACE": f"{team_data.get('epa', 0):.2f}",
+                "Auto ACE": f"{team_data.get('auto_epa', 0):.2f}",
+                "Teleop ACE": f"{team_data.get('teleop_epa', 0):.2f}",
+                "Endgame ACE": f"{team_data.get('endgame_epa', 0):.2f}",
                 "Team": f"[{tstr} | {t.get('nn', 'Unknown')}](/team/{tstr})",
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
 
-        rows.sort(key=lambda r: safe_int(r["ACE Rank"]))
+        # Sort by overall EPA value
+        rows.sort(key=lambda r: float(r["ACE"]) if r["ACE"] != "N/A" else 0, reverse=True)
 
         columns = [
             {"name": "ACE Rank", "id": "ACE Rank"},
@@ -2382,7 +2333,6 @@ def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, even
             )
         ]), query_string
 
-
     # === Matches Tab ===
     elif active_tab == "matches":
         team_filter_options = [
@@ -2407,7 +2357,6 @@ def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, even
         ]), query_string
 
     elif active_tab == "alliances":
-    
         # === Extract alliance picks ===
         def extract_alliance_picks(teams, rankings=None):
             teams = [t for t in teams if t.strip()] + ["?", "?", "?"]
@@ -2648,11 +2597,11 @@ def update_matches_table(selected_team, event_matches, epa_data):
         return ", ".join(f"[{t}](/team/{t})" for t in team_list_str.split(",") if t.strip().isdigit())
 
     def get_team_epa_info(t_key):
-        info = epa_data.get(t_key.strip(), {})
+        info = epa_data.get(str(t_key.strip()), {})
         return {
             "epa": info.get("epa", 0),
-            "confidence": info.get("confidence", 0) / 100,  # normalize to 0–1
-            "consistency": info.get("consistency", 0),      # already normalized
+            "confidence": info.get("confidence", 0),  # already normalized
+            "consistency": info.get("consistency", 0),  # already normalized
         }
     
     def build_match_rows(matches):
@@ -2675,13 +2624,15 @@ def update_matches_table(selected_team, event_matches, epa_data):
             red_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
             blue_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
 
-    
             p_red, p_blue = predict_win_probability(red_info, blue_info)
             if p_red == 0.5 and p_blue == 0.5:
-                pred_str = "N/A"
+                pred_red = "50%"
+                pred_blue = "50%"
+                pred_winner = "Tie"
             else:
-                pred_str = f"🔴 **{p_red:.0%}** vs 🔵 **{p_blue:.0%}**"
-
+                pred_red = f"{p_red:.0%}"
+                pred_blue = f"{p_blue:.0%}"
+                pred_winner = "Red" if p_red > p_blue else "Blue"
 
             yid = match.get("yt")
             video_link = f"[Watch](https://www.youtube.com/watch?v={yid})" if yid else "N/A"
@@ -2693,8 +2644,12 @@ def update_matches_table(selected_team, event_matches, epa_data):
                 "Blue Alliance": format_teams_markdown(blue_str),
                 "Red Score": red_score,
                 "Blue Score": blue_score,
-                "Winner": winner.title() if winner else "N/A",
-                "Prediction": pred_str,
+                "Winner": winner.title() if winner else "Tie",
+                "Pred Winner": pred_winner,
+                "Red Pred": pred_red,
+                "Blue Pred": pred_blue,
+                "Red Prediction %": p_red * 100,  # For conditional styling
+                "Blue Prediction %": p_blue * 100,  # For conditional styling
             })
         return rows
 
@@ -2709,15 +2664,45 @@ def update_matches_table(selected_team, event_matches, epa_data):
         {"name": "Red Score", "id": "Red Score"},
         {"name": "Blue Score", "id": "Blue Score"},
         {"name": "Winner", "id": "Winner"},
-        {"name": "Prediction", "id": "Prediction", "presentation": "markdown"},
+        {"name": "Pred Winner", "id": "Pred Winner"},
+        {"name": "Red Pred", "id": "Red Pred"},
+        {"name": "Blue Pred", "id": "Blue Pred"},
     ]
 
     row_style = [
         {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "#ffe6e6"},
         {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
+        # Red prediction styling
+        {"if": {"filter_query": "{Red Prediction %} >= 45 && {Red Prediction %} <= 55", "column_id": "Red Pred"}, "backgroundColor": "#ededd4", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} > 55 && {Red Prediction %} <= 65", "column_id": "Red Pred"}, "backgroundColor": "#d4edda", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} > 65 && {Red Prediction %} <= 75", "column_id": "Red Predn"}, "backgroundColor": "#b6dfc1", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} > 75 && {Red Prediction %} <= 85", "column_id": "Red Pred"}, "backgroundColor": "#8fd4a8", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} > 85 && {Red Prediction %} <= 95", "column_id": "Red Pred"}, "backgroundColor": "#68c990", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} > 95", "column_id": "Red Prediction"}, "backgroundColor": "#41be77", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} < 45 && {Red Prediction %} >= 35", "column_id": "Red Pred"}, "backgroundColor": "#f8d7da", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} < 35 && {Red Prediction %} >= 25", "column_id": "Red Pred"}, "backgroundColor": "#f1bfc2", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} < 25 && {Red Prediction %} >= 15", "column_id": "Red Pred"}, "backgroundColor": "#eaa7aa", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} < 15 && {Red Prediction %} >= 5", "column_id": "Red Pred"}, "backgroundColor": "#e39091", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} < 5", "column_id": "Red Prediction"}, "backgroundColor": "#dc7878", "color": "black"},
+        # Blue prediction styling
+        {"if": {"filter_query": "{Blue Prediction %} >= 45 && {Blue Prediction %} <= 55", "column_id": "Blue Pred"}, "backgroundColor": "#ededd4", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} > 55 && {Blue Prediction %} <= 65", "column_id": "Blue Pred"}, "backgroundColor": "#d4edda", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} > 65 && {Blue Prediction %} <= 75", "column_id": "Blue Pred"}, "backgroundColor": "#b6dfc1", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} > 75 && {Blue Prediction %} <= 85", "column_id": "Blue Pred"}, "backgroundColor": "#8fd4a8", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} > 85 && {Blue Prediction %} <= 95", "column_id": "Blue Pred"}, "backgroundColor": "#68c990", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} > 95", "column_id": "Blue Prediction"}, "backgroundColor": "#41be77", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} < 45 && {Blue Prediction %} >= 35", "column_id": "Blue Pred"}, "backgroundColor": "#f8d7da", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} < 35 && {Blue Prediction %} >= 25", "column_id": "Blue Pred"}, "backgroundColor": "#f1bfc2", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} < 25 && {Blue Prediction %} >= 15", "column_id": "Blue Pred"}, "backgroundColor": "#eaa7aa", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} < 15 && {Blue Prediction %} >= 5", "column_id": "Blue Pred"}, "backgroundColor": "#e39091", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} < 5", "column_id": "Blue Prediction"}, "backgroundColor": "#dc7878", "color": "black"},
+        # Predicted Winner styling
+        {"if": {"filter_query": '{Pred Winner} = "Red"', "column_id": "Pred Winner"}, "backgroundColor": "#ffe6e6", "color": "black"},
+        {"if": {"filter_query": '{Pred Winner} = "Blue"', "column_id": "Pred Winner"}, "backgroundColor": "#e6f0ff", "color": "black"},
+        {"if": {"filter_query": '{Pred Winner} = "Tie"', "column_id": "Pred Winner"}, "backgroundColor": "#f8f9fa", "color": "black"},
     ]
 
-    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "color": "var(--text-tertiary) !important"}
+    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "color": "var(--text-tertiary) !important", "backgroundColor": "white" }
     style_header={
         "backgroundColor": "var(--card-bg)",        # Match the table background
         "color": "var(--text-tertiary) !important",
@@ -2729,7 +2714,7 @@ def update_matches_table(selected_team, event_matches, epa_data):
     }
 
     style_cell={
-        "backgroundColor": "var(--card-bg)", 
+        "backgroundColor": "white", 
         "color": "var(--text-tertiary) !important",
         "textAlign": "center",
         "padding": "10px",
