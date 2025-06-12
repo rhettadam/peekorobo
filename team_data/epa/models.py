@@ -677,3 +677,371 @@ def endgame_2019(breakdowns, team_count):
     trimmed_scores = sorted(scores)[k:]
 
     return round(statistics.mean(trimmed_scores), 2)
+
+def auto_2018(breakdowns, team_count):
+    """Calculate auto score for 2018 matches."""
+    def score_per_breakdown(b):
+        if not isinstance(b, dict):
+            return 0
+            
+        # 2018 Auto Scoring: Ownership Points + Run Points
+        auto_ownership = b.get("autoOwnershipPoints", 0)
+        auto_run = b.get("autoRunPoints", 0)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (auto_ownership + auto_run) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def teleop_2018(breakdowns, team_count):
+    """Calculate teleop score for 2018 matches."""
+    def score_per_breakdown(b):
+        if not isinstance(b, dict):
+            return 0
+            
+        # 2018 Teleop Scoring: Ownership Points + Vault Points
+        teleop_ownership = b.get("teleopOwnershipPoints", 0)
+        vault_points = b.get("vaultPoints", 0)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (teleop_ownership + vault_points) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def endgame_2018(breakdowns, team_count):
+    """Calculate endgame score for 2018 matches."""
+    def score_per_breakdown(b):
+        if not isinstance(b, dict):
+            return 0
+            
+        # 2018 Endgame Scoring: Endgame Points + Face The Boss Bonus
+        endgame_points = b.get("endgamePoints", 0)
+        face_the_boss = 5 if b.get("faceTheBossRankingPoint", False) else 0
+        
+        # For endgame, we don't scale by team count since these are alliance achievements
+        return endgame_points + face_the_boss
+
+    # Handle single breakdown case (for individual robot)
+    if isinstance(breakdowns, dict):
+        return score_per_breakdown(breakdowns)
+
+    # Handle list of breakdowns case (for alliance)
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def auto_2017(breakdowns, team_count):
+    """Calculate auto score for 2017 matches."""
+    def score_per_breakdown(b):
+        if not isinstance(b, dict):
+            return 0
+            
+        # 2017 Auto Scoring: Mobility + Rotor + Fuel Points
+        mobility_points = b.get("autoMobilityPoints", 0)
+        rotor_points = b.get("autoRotorPoints", 0)
+        fuel_points = b.get("autoFuelPoints", 0)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (mobility_points + rotor_points + fuel_points) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def teleop_2017(breakdowns, team_count):
+    """Calculate teleop score for 2017 matches."""
+    def score_per_breakdown(b):
+        if not isinstance(b, dict):
+            return 0
+            
+        # 2017 Teleop Scoring: Rotor + Fuel Points
+        rotor_points = b.get("teleopRotorPoints", 0)
+        fuel_points = b.get("teleopFuelPoints", 0)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (rotor_points + fuel_points) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def endgame_2017(breakdowns, team_count):
+    """Calculate endgame score for 2017 matches."""
+    def score_per_breakdown(b):
+        if not isinstance(b, dict):
+            return 0
+            
+        # 2017 Endgame Scoring: Takeoff Points
+        takeoff_points = b.get("teleopTakeoffPoints", 0)
+        
+        # Divide by team count for per-team contribution, and apply 0.5 scaling
+        # based on user feedback that score is consistently too high by factor of 2
+        return (takeoff_points / team_count) * 0.5
+
+    # Handle single breakdown case (for individual robot)
+    if isinstance(breakdowns, dict):
+        # For a single breakdown (e.g., from an individual robot's perspective, if applicable),
+        # we still divide by team_count to normalize it as a team's contribution to the alliance's score
+        return score_per_breakdown(breakdowns)
+
+    # Handle list of breakdowns case (for alliance)
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def auto_2016(breakdowns, team_count):
+    """Calculate auto score for 2016 matches."""
+    def score_per_breakdown(b):
+        if not isinstance(b, dict):
+            return 0
+            
+        # 2016 Auto Scoring: Boulder Points + Crossing Points
+        auto_boulders = b.get("autoBoulderPoints", 0)
+        auto_crossing = b.get("autoCrossingPoints", 0)
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (auto_boulders + auto_crossing) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def teleop_2016(breakdowns, team_count):
+    """Calculate teleop score for 2016 matches."""
+    def score_per_breakdown(b):
+        if not isinstance(b, dict):
+            return 0
+            
+        # 2016 Teleop Scoring: Boulder Points + Crossing Points + Breach Bonus
+        teleop_boulders = b.get("teleopBoulderPoints", 0)
+        teleop_crossing = b.get("teleopCrossingPoints", 0)
+        
+        # Breach points are applied per alliance and then divided per team in epa2016.py
+        breach_bonus = 20 if b.get("breachPoints", 0) else 0
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (teleop_boulders + teleop_crossing + breach_bonus / team_count) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def endgame_2016(breakdowns, team_count):
+    """Calculate endgame score for 2016 matches."""
+    def score_per_breakdown(b):
+        if not isinstance(b, dict):
+            return 0
+            
+        # 2016 Endgame Scoring: Challenge Points + Scale Points + Capture Bonus
+        teleop_challenge = b.get("teleopChallengePoints", 0)
+        teleop_scale = b.get("teleopScalePoints", 0)
+        
+        # Capture points are applied per alliance and then divided per team in epa2016.py
+        capture_bonus = 25 if b.get("capturePoints", 0) else 0
+        
+        # Scale based on team count
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (teleop_challenge + teleop_scale + capture_bonus / team_count) * scaling_factor
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Trim low outliers like in other functions
+    if n < 12:
+        trim_pct = 0.0
+    elif n < 25:
+        trim_pct = 0.03
+    elif n < 40:
+        trim_pct = 0.05
+    elif n < 60:
+        trim_pct = 0.08
+    elif n < 100:
+        trim_pct = 0.1
+    else:
+        trim_pct = 0.12
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)

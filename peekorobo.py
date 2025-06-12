@@ -1839,7 +1839,9 @@ def update_events_tab_content(
     
     return html.Div([
         upcoming_section,
+        html.Br(),
         ongoing_section,
+        html.Br(),
         html.Div(all_event_cards, className="d-flex flex-wrap justify-content-center"),
     ]), district_options
 
@@ -3109,23 +3111,37 @@ def handle_navigation(
         return dash.no_update
 
     search_value = search_value.strip().lower()
-    selected_year = int(year_value) if year_value and year_value.isdigit() else 2025
-    year_data = TEAM_DATABASE.get(selected_year)
-
-    # --- TEAM SEARCH ---
-    if year_data:
-        matching_team = next(
-            (
-                team for team in year_data.values()
-                if str(team.get("team_number", "")).lower() == search_value
-                or search_value in (team.get("nickname", "") or "").lower()
-            ),
-            None
-        )
-
-        if matching_team:
-            team_number = matching_team.get("team_number", "")
-            return f"/team/{team_number}/{selected_year}"
+    selected_year = int(year_value) if year_value and year_value.isdigit() else None
+    
+    # Search through all years if no specific year selected
+    if selected_year is None:
+        for year in TEAM_DATABASE.keys():
+            year_data = TEAM_DATABASE[year]
+            matching_team = next(
+                (
+                    team for team in year_data.values()
+                    if str(team.get("team_number", "")).lower() == search_value
+                    or search_value in (team.get("nickname", "") or "").lower()
+                ),
+                None
+            )
+            if matching_team:
+                team_number = matching_team.get("team_number", "")
+                return f"/team/{team_number}"
+    else:
+        year_data = TEAM_DATABASE.get(selected_year)
+        if year_data:
+            matching_team = next(
+                (
+                    team for team in year_data.values()
+                    if str(team.get("team_number", "")).lower() == search_value
+                    or search_value in (team.get("nickname", "") or "").lower()
+                ),
+                None
+            )
+            if matching_team:
+                team_number = matching_team.get("team_number", "")
+                return f"/team/{team_number}/{selected_year}"
 
     # --- EVENT SEARCH ---
     matching_events = []
@@ -3710,5 +3726,5 @@ def update_team_favorites_popover_content(is_open, pathname):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=True)
 

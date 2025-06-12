@@ -1227,7 +1227,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         #     continue
 
         # print(f"DEBUG: Current event_key in loop: {event_key}") # Original line
-        if year >= 2022:
+        if year >= 2015:
             # DEBUG: Print found event_epa for the current event_key
             event_epa_found_debug = next((e for e in team_epa_data.get("event_epas", []) if e.get("event_key") == event_key), None)
             print(f"DEBUG: Event-specific EPA data found for {event_key}: {event_epa_found_debug}")
@@ -1308,7 +1308,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
 
         # Get event-specific EPA data for 2025 events
         event_epa_pills = None
-        if year >= 2022:
+        if year >= 2015:
             # Access event_epas from the specific team's data within the epa_data dictionary
             team_specific_event_epas = epa_data.get(str(team_number), {}).get("event_epas", [])
             event_epa = next((e for e in team_specific_event_epas if str(e.get("event_key")) == str(event_key)), None)

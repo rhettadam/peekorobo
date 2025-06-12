@@ -65,7 +65,7 @@ def get_team_experience(team_number: int) -> int:
         
         # Count how many epa_YYYY tables exist for this team
         years = 0
-        for year in range(1992, 2019):  # Check from 1992 to 
+        for year in range(1992, 2017):  # Check from 1992 to 
             try:
                 cursor.execute(f"SELECT 1 FROM epa_{year} WHERE team_number = ? LIMIT 1", (team_number,))
                 if cursor.fetchone():
@@ -207,9 +207,9 @@ def calculate_event_epa(matches: List[Dict], team_key: str) -> Dict:
             actual_teleop = teleop_func(breakdowns, team_count)
             
             # Handle endgame differently based on year
-            if year == "2023":
+            if year == "2023" or year == "2017" or year == "2016": # Add 2016 to the list of years expecting breakdowns and team_count
                 actual_endgame = endgame_func(breakdowns, team_count)
-            else:  # 2024, 2025, etc.
+            else:  # 2024, 2025, etc. still expect alliance_breakdown and index
                 actual_endgame = endgame_func(alliance_breakdown, index)
                 
             actual_overall = actual_auto + actual_teleop + actual_endgame
