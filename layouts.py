@@ -1193,7 +1193,7 @@ def events_layout(year=2025):
     )
 
 def build_recent_events_section(team_key, team_number, team_epa_data, performance_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS):
-    # print(f"DEBUG: epa_data for {team_key} in {performance_year}: {team_epa_data.get('event_epas')}") # Removed old debug
+    #print(f"DEBUG: epa_data for {team_key} in {performance_year}: {team_epa_data.get('event_epas')}") # Removed old debug
     epa_data = team_epa_data or {}
 
     # DEBUG: Print team_epa_data at the beginning of build_recent_events_section
@@ -1388,12 +1388,12 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 def get_team_epa_info(t_key):
                     t_data = epa_data.get(t_key.strip(), {})
                     event_epa = next((e for e in t_data.get("event_epas", []) if e.get("event_key") == event_key), None)
-                    print(f"\n[get_team_epa_info] t_key={t_key}, event_key={event_key}")
-                    print(f"  event_epa: {event_epa}")
-                    print(f"  t_data: {t_data}")
+                    #print(f"\n[get_team_epa_info] t_key={t_key}, event_key={event_key}")
+                    #print(f"  event_epa: {event_epa}")
+                    #print(f"  t_data: {t_data}")
                     # Use event_epa only if at least one value is nonzero
                     if event_epa and any(event_epa.get(k, 0) not in (None, 0, "") for k in ["overall", "confidence", "consistency"]):
-                        print("  Using event_epa for prediction!")
+                        #print("  Using event_epa for prediction!")
                         return {
                             "epa": event_epa.get("overall", 0),
                             "confidence": event_epa.get("confidence", 0),
@@ -1401,7 +1401,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                         }
                     # Otherwise, fall back to overall EPA data if available (only require epa, use default confidence if missing)
                     if t_data.get("epa") not in (None, ""):
-                        print("  Using overall EPA for prediction!")
+                        #print("  Using overall EPA for prediction!")
                         epa_val = t_data.get("epa", 0)
                         conf_val = t_data.get("confidence", 0.7)  # Default confidence if missing
                         return {
@@ -1409,7 +1409,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                             "confidence": conf_val,
                             "consistency": t_data.get("consistency", 0)
                         }
-                    print("  Using zeros for prediction!")
+                    #print("  Using zeros for prediction!")
                     return {
                         "epa": 0,
                         "confidence": 0,
@@ -1419,18 +1419,18 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 # Gather info for all teams
                 red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
-                print(f"[build_match_rows] Match {label}: Red team info: {red_team_info}")
-                print(f"[build_match_rows] Match {label}: Blue team info: {blue_team_info}")
+                #(f"[build_match_rows] Match {label}: Red team info: {red_team_info}")
+                #print(f"[build_match_rows] Match {label}: Blue team info: {blue_team_info}")
                 if red_team_info and blue_team_info:
                     p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
-                    print(f"[build_match_rows] Match {label}: p_red={p_red}, p_blue={p_blue}")
+                    #print(f"[build_match_rows] Match {label}: p_red={p_red}, p_blue={p_blue}")
                     is_red = str(team_number) in red_str
                     team_prob = p_red if is_red else p_blue
-                    print(f"[build_match_rows] Match {label}: team_prob={team_prob}, is_red={is_red}")
+                    #print(f"[build_match_rows] Match {label}: team_prob={team_prob}, is_red={is_red}")
                     prediction = f"{team_prob:.0%}"
                     prediction_percent = round(team_prob * 100)
                 else:
-                    print(f"[build_match_rows] Match {label}: No team info for prediction!")
+                    #print(f"[build_match_rows] Match {label}: No team info for prediction!")
                     prediction = "N/A"
                     prediction_percent = None
         
