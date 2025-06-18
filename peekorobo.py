@@ -1854,7 +1854,6 @@ def event_layout(event_key):
     # Get event-specific EPA data for teams at this event
     event_teams = EVENT_TEAMS.get(parsed_year, {}).get(event_key, [])
     event_epa_data = {}
-    
     for team in event_teams:
         team_num = team.get("tk")
         team_data = TEAM_DATABASE.get(parsed_year, {}).get(team_num, {})
@@ -1866,13 +1865,13 @@ def event_layout(event_key):
                     event_epas = json.loads(event_epas)
                 except json.JSONDecodeError:
                     event_epas = []
-            
             # Find event-specific EPA data for this team at this event
             event_specific_epa = next(
                 (e for e in event_epas if e.get("event_key") == event_key),
                 None
             )
-            if event_specific_epa:
+            # Fallback to overall EPA/confidence/consistency if event-specific is missing
+            if event_specific_epa and any(event_specific_epa.get(k, 0) not in (None, 0, "") for k in ["overall", "confidence", "consistency"]):
                 event_epa_data[str(team_num)] = {
                     "epa": event_specific_epa.get("actual_epa", 0),
                     "auto_epa": event_specific_epa.get("auto", 0),
@@ -1881,6 +1880,17 @@ def event_layout(event_key):
                     "confidence": event_specific_epa.get("confidence", 0),
                     "consistency": event_specific_epa.get("consistency", 0),
                     "dominance": event_specific_epa.get("dominance", 0),
+                }
+            else:
+                # Use overall EPA/confidence/consistency from TEAM_DATABASE
+                event_epa_data[str(team_num)] = {
+                    "epa": team_data.get("epa", 0),
+                    "auto_epa": team_data.get("auto_epa", 0),
+                    "teleop_epa": team_data.get("teleop_epa", 0),
+                    "endgame_epa": team_data.get("endgame_epa", 0),
+                    "confidence": team_data.get("confidence", 0.7),
+                    "consistency": team_data.get("consistency", 0),
+                    "dominance": team_data.get("dominance", 0),
                 }
 
     # Calculate rankings based on event-specific EPA
@@ -2600,10 +2610,19 @@ def update_matches_table(selected_team, event_matches, epa_data):
 
     def get_team_epa_info(t_key):
         info = epa_data.get(str(t_key.strip()), {})
+        # If event_epa_data is missing or all zeros, fallback to TEAM_DATABASE
+        if not info or all(info.get(k, 0) in (None, 0, "") for k in ["epa", "confidence"]):
+            # Fallback to TEAM_DATABASE
+            team_data = TEAM_DATABASE.get(event_year, {}).get(int(t_key), {})
+            return {
+                "epa": team_data.get("epa", 0),
+                "confidence": team_data.get("confidence", 0.7),
+                "consistency": team_data.get("consistency", 0),
+            }
         return {
             "epa": info.get("epa", 0),
-            "confidence": info.get("confidence", 0),  # already normalized
-            "consistency": info.get("consistency", 0),  # already normalized
+            "confidence": info.get("confidence", 0),
+            "consistency": info.get("consistency", 0),
         }
     
     def build_match_rows(matches):

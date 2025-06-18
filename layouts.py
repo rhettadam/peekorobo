@@ -1222,15 +1222,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
     
     # Iterate through sorted events to build the section
     for dt, event_key, event in recent_events_sorted:
-        # Skip if event_key is not in the filtered set (should not happen with this new structure)
-        # if event_key not in recent_event_keys:
-        #     continue
-
-        # print(f"DEBUG: Current event_key in loop: {event_key}") # Original line
-        if year >= 2015:
-            # DEBUG: Print found event_epa for the current event_key
-            event_epa_found_debug = next((e for e in team_epa_data.get("event_epas", []) if e.get("event_key") == event_key), None)
-            print(f"DEBUG: Event-specific EPA data found for {event_key}: {event_epa_found_debug}")
 
         event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
     
@@ -1380,10 +1371,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     
             def format_team_list(team_str):
                 return "  ".join(f"[{t}](/team/{t})" for t in team_str.split(",") if t.strip().isdigit())
-
-            def sum_epa(team_str):
-                return sum(epa_data.get(t.strip(), {}).get("epa", 0) for t in team_str.split(",") if t.strip().isdigit())
-
         
             for match in matches:
                 red_str = match.get("rt", "")
@@ -1400,38 +1387,50 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 
                 def get_team_epa_info(t_key):
                     t_data = epa_data.get(t_key.strip(), {})
-                    # Try to get event-specific EPA data first
                     event_epa = next((e for e in t_data.get("event_epas", []) if e.get("event_key") == event_key), None)
-                    if event_epa:
-                        print(f"DEBUG: Using event_epa for {t_key} in {event_key}: EPA={event_epa['overall']:.2f}, Conf={event_epa['confidence']:.2f}, Cons={event_epa['consistency']:.2f}")
+                    print(f"\n[get_team_epa_info] t_key={t_key}, event_key={event_key}")
+                    print(f"  event_epa: {event_epa}")
+                    print(f"  t_data: {t_data}")
+                    # Use event_epa only if at least one value is nonzero
+                    if event_epa and any(event_epa.get(k, 0) not in (None, 0, "") for k in ["overall", "confidence", "consistency"]):
+                        print("  Using event_epa for prediction!")
                         return {
-                            "epa": event_epa["overall"],
-                            "confidence": event_epa["confidence"],
-                            "consistency": event_epa["consistency"]
+                            "epa": event_epa.get("overall", 0),
+                            "confidence": event_epa.get("confidence", 0),
+                            "consistency": event_epa.get("consistency", 0)
                         }
-                    # Fall back to overall EPA data if no event-specific data
-                    print(f"DEBUG: Using overall epa for {t_key}: EPA={t_data.get('epa', 0):.2f}, Conf={t_data.get('confidence', 0):.2f}, Cons={t_data.get('consistency', 0):.2f}. Full t_data: {t_data}")
+                    # Otherwise, fall back to overall EPA data if available (only require epa, use default confidence if missing)
+                    if t_data.get("epa") not in (None, ""):
+                        print("  Using overall EPA for prediction!")
+                        epa_val = t_data.get("epa", 0)
+                        conf_val = t_data.get("confidence", 0.7)  # Default confidence if missing
+                        return {
+                            "epa": epa_val,
+                            "confidence": conf_val,
+                            "consistency": t_data.get("consistency", 0)
+                        }
+                    print("  Using zeros for prediction!")
                     return {
-                        "epa": t_data.get("epa", 0),
-                        "confidence": t_data.get("confidence", 0),
-                        "consistency": t_data.get("consistency", 0)
+                        "epa": 0,
+                        "confidence": 0,
+                        "consistency": 0
                     }
                 
                 # Gather info for all teams
                 red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
-                
+                print(f"[build_match_rows] Match {label}: Red team info: {red_team_info}")
+                print(f"[build_match_rows] Match {label}: Blue team info: {blue_team_info}")
                 if red_team_info and blue_team_info:
-                    # Debugging the input to predict_win_probability
-                    print(f"DEBUG: Input for predict_win_probability (Red): {red_team_info}")
-                    print(f"DEBUG: Input for predict_win_probability (Blue): {blue_team_info}")
                     p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
-                    print(f"DEBUG: Predicted probabilities: Red={p_red:.2f}, Blue={p_blue:.2f}")
+                    print(f"[build_match_rows] Match {label}: p_red={p_red}, p_blue={p_blue}")
                     is_red = str(team_number) in red_str
                     team_prob = p_red if is_red else p_blue
+                    print(f"[build_match_rows] Match {label}: team_prob={team_prob}, is_red={is_red}")
                     prediction = f"{team_prob:.0%}"
                     prediction_percent = round(team_prob * 100)
                 else:
+                    print(f"[build_match_rows] Match {label}: No team info for prediction!")
                     prediction = "N/A"
                     prediction_percent = None
         
@@ -1635,7 +1634,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
         return dbc.Alert(f"Team {team_number} not found in the data for {performance_year}.", color="danger")
 
     # DEBUG: Print selected_team data
-    print(f"DEBUG (team_layout): selected_team for {team_number}: {selected_team}")
+    #print(f"DEBUG (team_layout): selected_team for {team_number}: {selected_team}")
 
     # Calculate Rankings
     global_rank, country_rank, state_rank = calculate_single_rank(list(year_data.values()), selected_team)
