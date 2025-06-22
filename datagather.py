@@ -30,7 +30,7 @@ def load_data():
         return {k: v for k, v in d.items() if v not in (None, "")}
 
     # === Load team ACE data ===
-    with sqlite3.connect(os.path.join("team_data", "epa_teams.sqlite")) as team_conn:
+    with sqlite3.connect(os.path.join("data", "epa_teams.sqlite")) as team_conn:
         team_conn.execute("PRAGMA cache_size = -2000")  # 2MB cache
         team_conn.execute("PRAGMA mmap_size = 30000000000")  # 30GB memory map
         team_cursor = team_conn.cursor()
@@ -76,7 +76,7 @@ def load_data():
                 team_data.setdefault(year, {}).update(dict(current_batch))
 
     # === Load compressed event data ===
-    with sqlite3.connect(os.path.join("team_data", "events.sqlite")) as event_conn:
+    with sqlite3.connect(os.path.join("data", "events.sqlite")) as event_conn:
         event_conn.execute("PRAGMA cache_size = -2000")  # 2MB cache
         event_conn.execute("PRAGMA mmap_size = 30000000000")  # 30GB memory map
         event_cursor = event_conn.cursor()

@@ -1713,7 +1713,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
     # Estimate rookie year just like before
     rookie_year = years_participated[0] if years_participated else year or 2025
     
-    with open("team_data/notables_by_year.json", "r") as f:
+    with open("data/notables_by_year.json", "r") as f:
         NOTABLES_DB = json.load(f)
     
     INCLUDED_CATEGORIES = {
