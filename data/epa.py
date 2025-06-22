@@ -624,6 +624,7 @@ def fetch_team_components(team, year):
     overall_epa_data["wins"] = total_wins
     overall_epa_data["losses"] = total_losses
 
+    # Always return a result, even if no events were found
     return {
         "team_number": team.get("team_number"),
         "nickname": team.get("nickname"),
@@ -631,14 +632,14 @@ def fetch_team_components(team, year):
         "state_prov": team.get("state_prov"),
         "country": team.get("country"),
         "website": team.get("website", "N/A"),
-        "normal_epa": overall_epa_data["overall"],
-        "confidence": overall_epa_data["confidence"],
-        "epa": overall_epa_data["actual_epa"],
-        "auto_epa": overall_epa_data["auto"],
-        "teleop_epa": overall_epa_data["teleop"],
-        "endgame_epa": overall_epa_data["endgame"],
-        "wins": overall_epa_data["wins"],
-        "losses": overall_epa_data["losses"],
+        "normal_epa": overall_epa_data.get("overall", 0),
+        "confidence": overall_epa_data.get("confidence", 0),
+        "epa": overall_epa_data.get("actual_epa", 0),
+        "auto_epa": overall_epa_data.get("auto", 0),
+        "teleop_epa": overall_epa_data.get("teleop", 0),
+        "endgame_epa": overall_epa_data.get("endgame", 0),
+        "wins": overall_epa_data.get("wins", 0),
+        "losses": overall_epa_data.get("losses", 0),
         "event_epas": event_epa_results, # List of event-specific EPA results
     }
 
