@@ -1045,3 +1045,58 @@ def endgame_2016(breakdowns, team_count):
     trimmed_scores = sorted(scores)[k:]
 
     return round(statistics.mean(trimmed_scores), 2)
+
+def auto_2015(breakdowns, team_count):
+    # Each breakdown is an alliance dict
+    def score_per_breakdown(b):
+        score = 0
+        if b.get("robot_set"):
+            score += 4
+        if b.get("tote_set"):
+            score += 6
+        if b.get("container_set"):
+            score += 8
+        if b.get("tote_stack"):
+            score += 20
+        return score
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    # Divide by team count for per-team contribution
+    return round(sum(scores) / (len(scores) * team_count), 2) if scores else 0.0
+
+def teleop_2015(breakdowns, team_count):
+    # Each breakdown is an alliance dict
+    def score_per_breakdown(b):
+        # Use the API's summed values
+        tote_points = b.get("tote_points", 0)
+        container_points = b.get("container_points", 0)
+        litter_points = b.get("litter_points", 0)
+        return tote_points + container_points + litter_points
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    # Divide by team count for per-team contribution
+    return round(sum(scores) / (len(scores) * team_count), 2) if scores else 0.0
+
+def endgame_2015(breakdown, index):
+    # No endgame in 2015
+    return 0.0
+
+def auto_legacy(breakdowns, team_count):
+    # No separate auto score available, so return 0
+    return 0.0
+
+def teleop_legacy(breakdowns, team_count):
+    # Use the total alliance score as the teleop score
+    def score_per_breakdown(b):
+        return b.get("score", 0)
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    # Divide by team count for per-team contribution
+    return round(sum(scores) / (len(scores) * team_count), 2) if scores else 0.0
+
+def endgame_legacy(breakdown, index):
+    # No endgame in these years
+    return 0.0
+
+# Aliases for each year 1992-2014
+for y in range(1992, 2015):
+    globals()[f"auto_{y}"] = auto_legacy
+    globals()[f"teleop_{y}"] = teleop_legacy
+    globals()[f"endgame_{y}"] = endgame_legacy

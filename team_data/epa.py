@@ -6,6 +6,7 @@ from tenacity import retry, stop_never, wait_exponential, retry_if_exception_typ
 import requests
 import os
 import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 import sqlite3
 import random
@@ -18,6 +19,152 @@ load_dotenv()
 TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
 
 API_KEYS = os.getenv("TBA_API_KEYS").split(',')
+
+def create_event_db(year):
+    """Create and populate the events database for the specified year."""
+    print(f"\n🧹 Creating events database for {year}...")
+    events_db_path = os.path.join(os.path.dirname(__file__), "events.sqlite")
+    conn = sqlite3.connect(events_db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=OFF")
+    conn.execute("PRAGMA temp_store=MEMORY")
+    conn.execute("PRAGMA page_size=4096")
+    c = conn.cursor()
+
+    # Create optimized schema if not exists
+    c.executescript("""
+    CREATE TABLE IF NOT EXISTS e (
+        k TEXT PRIMARY KEY,
+        n TEXT, y INT, sd TEXT, ed TEXT,
+        et TEXT, c TEXT, s TEXT, co TEXT, w TEXT
+    ) WITHOUT ROWID;
+
+    CREATE TABLE IF NOT EXISTS et (
+        ek TEXT, tk INT,
+        nn TEXT, c TEXT, s TEXT, co TEXT,
+        PRIMARY KEY (ek, tk)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE IF NOT EXISTS r (
+        ek TEXT, tk INT, rk INT,
+        w INT, l INT, t INT, dq INT
+    );
+
+    CREATE TABLE IF NOT EXISTS o (
+        ek TEXT, tk INT, opr REAL
+    );
+
+    CREATE TABLE IF NOT EXISTS m (
+        k TEXT PRIMARY KEY,
+        ek TEXT, cl TEXT, mn INT, sn INT,
+        rt TEXT, bt TEXT,
+        rs INT, bs INT, wa TEXT, yt TEXT
+    ) WITHOUT ROWID;
+
+    CREATE TABLE IF NOT EXISTS a (
+        ek TEXT, tk INT, an TEXT, y INT
+    );
+    """)
+    conn.commit()
+
+    # Delete all data for this year before rebuilding
+    print(f"🧹 Deleting existing {year} data...")
+    c.execute("DELETE FROM e WHERE y = ?", (year,))
+    c.execute("DELETE FROM et WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
+    c.execute("DELETE FROM r WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
+    c.execute("DELETE FROM o WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
+    c.execute("DELETE FROM m WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
+    c.execute("DELETE FROM a WHERE y = ?", (year,))
+    conn.commit()
+
+    try:
+        events = tba_get(f"events/{year}")
+    except Exception as e:
+        print(f"❌ Failed to load events for {year}: {e}")
+        conn.close()
+        return
+
+    def fetch(event):
+        key = event["key"]
+        data = {
+            "event": (
+                key, event.get("name"), year,
+                event.get("start_date"), event.get("end_date"),
+                event.get("event_type_string"), event.get("city"),
+                event.get("state_prov"), event.get("country"),
+                event.get("website")
+            ),
+            "teams": [], "rankings": [], "oprs": [], "matches": [], "awards": []
+        }
+        try:
+            teams = tba_get(f"event/{key}/teams")
+            for t in teams:
+                t_num = t.get("team_number")
+                data["teams"].append((key, t_num, t.get("nickname"),
+                                      t.get("city"), t.get("state_prov"), t.get("country")))
+        except:
+            pass
+        try:
+            ranks = tba_get(f"event/{key}/rankings")
+            for r in ranks.get("rankings", []):
+                record = r.get("record", {})
+                t_num = int(r.get("team_key", "frc0")[3:])
+                data["rankings"].append((key, t_num, r.get("rank"),
+                                         record.get("wins"), record.get("losses"),
+                                         record.get("ties"), r.get("dq")))
+        except:
+            pass
+        try:
+            oprs = tba_get(f"event/{key}/oprs").get("oprs", {})
+            for t_key, opr in oprs.items():
+                t_num = int(t_key[3:])
+                data["oprs"].append((key, t_num, opr))
+        except:
+            pass
+        try:
+            matches = tba_get(f"event/{key}/matches")
+            for m in matches:
+                data["matches"].append((
+                    m["key"], key, m["comp_level"], m["match_number"],
+                    m["set_number"],
+                    ",".join(str(int(t[3:])) for t in m["alliances"]["red"]["team_keys"]),
+                    ",".join(str(int(t[3:])) for t in m["alliances"]["blue"]["team_keys"]),
+                    m["alliances"]["red"]["score"], m["alliances"]["blue"]["score"],
+                    m.get("winning_alliance"),
+                    next((v["key"] for v in m.get("videos", []) if v["type"] == "youtube"), None)
+                ))
+        except:
+            pass
+        try:
+            awards = tba_get(f"event/{key}/awards")
+            for aw in awards:
+                for r in aw.get("recipient_list", []):
+                    if r.get("team_key"):
+                        t_num = int(r["team_key"][3:])
+                        data["awards"].append((key, t_num, aw.get("name"), year))
+        except:
+            pass
+        return data
+
+    all_data = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(fetch, ev) for ev in events]
+        for f in tqdm(as_completed(futures), total=len(events), desc=f"Updating {year}"):
+            try:
+                all_data.append(f.result())
+            except Exception as e:
+                print(f"❌ Error processing: {e}")
+
+    for d in all_data:
+        c.execute("INSERT OR REPLACE INTO e VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d["event"])
+        c.executemany("INSERT OR REPLACE INTO et VALUES (?, ?, ?, ?, ?, ?)", d["teams"])
+        c.executemany("INSERT INTO r VALUES (?, ?, ?, ?, ?, ?, ?)", d["rankings"])
+        c.executemany("INSERT INTO o VALUES (?, ?, ?)", d["oprs"])
+        c.executemany("INSERT OR REPLACE INTO m VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d["matches"])
+        c.executemany("INSERT INTO a VALUES (?, ?, ?, ?)", d["awards"])
+    conn.commit()
+    conn.close()
+    print(f"\n✅ {year} events rebuilt and database saved: events.sqlite")
 
 # Confidence calculation constants
 CONFIDENCE_WEIGHTS = {
@@ -54,25 +201,22 @@ def tba_get(endpoint: str):
         return r.json()
     return None
 
-def get_team_experience(team_number: int) -> int:
+def get_team_experience(team_number: int, up_to_year: int) -> int:
     """
-    Determine how many years a team has competed.
+    Determine how many years a team has competed up to and including up_to_year.
     Returns the number of years of experience (1 for first year, 2 for second year, etc.)
     """
     try:
         conn = sqlite3.connect("epa_teams.sqlite")
         cursor = conn.cursor()
-        
-        # Count how many epa_YYYY tables exist for this team
         years = 0
-        for year in range(1992, 2017):  # Check from 1992 to 
+        for y in range(1992, up_to_year + 1):
             try:
-                cursor.execute(f"SELECT 1 FROM epa_{year} WHERE team_number = ? LIMIT 1", (team_number,))
+                cursor.execute(f"SELECT 1 FROM epa_{y} WHERE team_number = ? LIMIT 1", (team_number,))
                 if cursor.fetchone():
                     years += 1
             except sqlite3.OperationalError:
                 continue  # Skip if table doesn't exist
-        
         conn.close()
         return years
     except Exception as e:
@@ -96,12 +240,12 @@ def get_veteran_boost(years: int) -> float:
     else:
         return 1.0
 
-def calculate_confidence(consistency: float, dominance: float, event_boost: float, team_number: int, wins: int = 0, losses: int = 0) -> tuple[float, float, float]:
+def calculate_confidence(consistency: float, dominance: float, event_boost: float, team_number: int, wins: int = 0, losses: int = 0, year: int = None) -> tuple[float, float, float]:
     """
     Calculate confidence score using universal parameters.
     Returns (raw_confidence, capped_confidence, record_alignment)
     """
-    years = get_team_experience(team_number)
+    years = get_team_experience(team_number, year) if year is not None else get_team_experience(team_number, 2025)
     veteran_boost = get_veteran_boost(years)
     
     # Calculate record alignment based on win-loss record
@@ -200,8 +344,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str) -> Dict:
         
         try:
             # Debug print the breakdown structure
-            print(f"\nProcessing match {match.get('key', 'unknown')}")
-            print(f"Breakdown keys: {list(alliance_breakdown.keys())}")
+            #print(f"\nProcessing match {match.get('key', 'unknown')}")
+            #print(f"Breakdown keys: {list(alliance_breakdown.keys())}")
             
             actual_auto = auto_func(breakdowns, team_count)
             actual_teleop = teleop_func(breakdowns, team_count)
@@ -247,10 +391,6 @@ def calculate_event_epa(matches: List[Dict], team_key: str) -> Dict:
             contributions.append(actual_overall)
         except Exception as e:
             print(f"Warning: Error processing match {match.get('key', 'unknown')}: {str(e)}")
-            if isinstance(e, AttributeError):
-                print(f"Breakdown type: {type(breakdown)}, Alliance breakdown type: {type(alliance_breakdown)}")
-                print(f"Breakdown content: {alliance_breakdown}")
-            continue
 
     if not match_count:
         return {
@@ -274,7 +414,7 @@ def calculate_event_epa(matches: List[Dict], team_key: str) -> Dict:
     dominance = min(1., statistics.mean(dominance_scores)) if dominance_scores else 0.0
 
     # Get total number of events for this team
-    conn = sqlite3.connect("../events.sqlite")
+    conn = sqlite3.connect("events.sqlite")
     cursor = conn.cursor()
     team_number = int(team_key[3:])
     cursor.execute("SELECT COUNT(DISTINCT ek) FROM et WHERE tk = ? AND ek LIKE ?", (team_number, f"{year}%"))
@@ -285,11 +425,11 @@ def calculate_event_epa(matches: List[Dict], team_key: str) -> Dict:
     event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])
     
     # Calculate confidence using universal function
-    raw_confidence, confidence, record_alignment = calculate_confidence(consistency, dominance, event_boost, team_number, event_wins, event_losses)
+    raw_confidence, confidence, record_alignment = calculate_confidence(consistency, dominance, event_boost, team_number, event_wins, event_losses, int(year))
     actual_epa = (overall_epa * confidence) if overall_epa is not None else 0.0
 
     # Get years of experience for display
-    years = get_team_experience(team_number)
+    years = get_team_experience(team_number, int(year))
     veteran_boost = get_veteran_boost(years)
 
     return {
@@ -440,7 +580,7 @@ def fetch_team_components(team, year):
     team_number = team["team_number"]
 
     # Connect to events.sqlite
-    conn = sqlite3.connect("../events.sqlite")
+    conn = sqlite3.connect("events.sqlite")
     cursor = conn.cursor()
 
     # Find all events the team participated in for the given year
@@ -499,7 +639,35 @@ def fetch_team_components(team, year):
         "event_epas": event_epa_results, # List of event-specific EPA results
     }
 
+def create_year_table(cur, year):
+    """Create a table for a specific year if it doesn't exist"""
+    cur.execute(f"DROP TABLE IF EXISTS epa_{year}")
+    cur.execute(f"""
+    CREATE TABLE epa_{year} (
+        team_number INTEGER PRIMARY KEY,
+        nickname TEXT,
+        city TEXT,
+        state_prov TEXT,
+        country TEXT,
+        website TEXT,
+        normal_epa REAL,
+        epa REAL,
+        confidence REAL,
+        auto_epa REAL,
+        teleop_epa REAL,
+        endgame_epa REAL,
+        wins INTEGER,
+        losses INTEGER,
+        event_epas TEXT
+    )
+    """)
+
+def get_epa_db_conn():
+    return sqlite3.connect("epa_teams.sqlite")
+
 def fetch_and_store_team_data(year):
+    # Ensure events.sqlite is created and populated before running the teams model
+    create_event_db(year)
     print(f"\nProcessing year {year}...")
     section_count = 0
     all_teams = []
@@ -520,27 +688,61 @@ def fetch_and_store_team_data(year):
 
     print(f"Total teams found: {len(all_teams)}")
 
-    combined_teams = []
+    # Open DB connection and create table
+    conn = get_epa_db_conn()
+    cur = conn.cursor()
+    create_year_table(cur, year)
+    cur.execute(f"DELETE FROM epa_{year}")
+    conn.commit()
 
     def fetch_team_for_final(team):
         return fetch_team_components(team, year)
 
+    inserted = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(fetch_team_for_final, team) for team in all_teams]
         for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Final EPA Pass"):
             result = future.result()
             if result:
-                combined_teams.append(result)
-
-    output_file = f"teams_{year}.json"
-    with open(output_file, "w") as f:
-        json.dump(combined_teams, f, indent=4)
-
-    print(f"Year {year} data combined and saved to {output_file}")
+                # Filter event_epas to only allowed keys
+                allowed_keys = ["overall", "auto", "teleop", "endgame", "confidence", "actual_epa", "wins", "losses"]
+                filtered_event_epas = []
+                for event_epa in result.get("event_epas", []):
+                    filtered_event_epas.append({k: event_epa[k] for k in allowed_keys if k in event_epa})
+                event_epas_json = json.dumps(filtered_event_epas)
+                cur.execute(f"""
+                INSERT OR REPLACE INTO epa_{year} (
+                    team_number, nickname, city, state_prov, country, website,
+                    normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+                    wins, losses, event_epas
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    result.get("team_number"),
+                    result.get("nickname"),
+                    result.get("city"),
+                    result.get("state_prov"),
+                    result.get("country"),
+                    result.get("website"),
+                    result.get("normal_epa"),
+                    result.get("epa"),
+                    result.get("confidence"),
+                    result.get("auto_epa"),
+                    result.get("teleop_epa"),
+                    result.get("endgame_epa"),
+                    result.get("wins"),
+                    result.get("losses"),
+                    event_epas_json
+                ))
+                inserted += 1
+                if inserted % 100 == 0:
+                    conn.commit()
+    conn.commit()
+    print(f"✅ Successfully updated {inserted} entries for {year} in epa_teams.sqlite")
+    conn.close()
 
 def analyze_single_team(team_key: str, year: int):
     # Connect to events.sqlite
-    conn = sqlite3.connect("../events.sqlite")
+    conn = sqlite3.connect("events.sqlite")
     cursor = conn.cursor()
     team_number = int(team_key[3:])
 
