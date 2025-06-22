@@ -29,190 +29,190 @@ def load_data():
         """Remove any None or empty string values. Keep empty lists and dictionaries."""
         return {k: v for k, v in d.items() if v not in (None, "")}
 
-    # === Load team ACE data ===
-    with sqlite3.connect(os.path.join("data", "epa_teams.sqlite")) as team_conn:
-        team_conn.execute("PRAGMA cache_size = -2000")  # 2MB cache
-        team_conn.execute("PRAGMA mmap_size = 30000000000")  # 30GB memory map
-        team_cursor = team_conn.cursor()
+    # === Load team EPA data from PostgreSQL ===
+    conn = get_pg_connection()
+    team_cursor = conn.cursor()
+    
+    # Get all team EPA data
+    team_cursor.execute("""
+        SELECT team_number, year, nickname, city, state_prov, country, website,
+               normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+               wins, losses, event_epas
+        FROM team_epas
+        ORDER BY year, team_number
+    """)
+    
+    team_data = {}
+    for row in team_cursor.fetchall():
+        team_number, year, nickname, city, state_prov, country, website, \
+        normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
+        wins, losses, event_epas = row
         
-        # Get list of all year tables
-        team_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'epa_%'")
-        year_tables = [row[0] for row in team_cursor.fetchall()]
+        raw_team_data = {
+            "team_number": team_number,
+            "year": year,
+            "nickname": nickname,
+            "city": city,
+            "state_prov": state_prov,
+            "country": country,
+            "website": website,
+            "normal_epa": normal_epa,
+            "epa": epa,
+            "confidence": confidence,
+            "auto_epa": auto_epa,
+            "teleop_epa": teleop_epa,
+            "endgame_epa": endgame_epa,
+            "wins": wins,
+            "losses": losses,
+            "event_epas": event_epas
+        }
         
-        team_data = {}
-        batch_size = 1000  # Process teams in batches
+        # Parse event_epas from JSON if it's a string
+        if raw_team_data["event_epas"] is None:
+            raw_team_data["event_epas"] = []
+        elif isinstance(raw_team_data["event_epas"], str):
+            try:
+                raw_team_data["event_epas"] = json.loads(raw_team_data["event_epas"])
+            except json.JSONDecodeError:
+                raw_team_data["event_epas"] = []
         
-        # Load data from each year table
-        for table in year_tables:
-            year = int(table.split('_')[1])  # Extract year from table name (epa_YYYY)
-            team_cursor.execute(f"SELECT * FROM {table}")
-            team_columns = [desc[0] for desc in team_cursor.description]
-            
-            current_batch = []
-            for row in team_cursor.fetchall():
-                raw_team_data = dict(zip(team_columns, row))
-                number = raw_team_data["team_number"]
-                
-                # For 2025 data, parse event_epas from JSON string
-                if year == 2025 and "event_epas" in raw_team_data:
-                    if raw_team_data["event_epas"] is None:
-                        raw_team_data["event_epas"] = []
-                    elif isinstance(raw_team_data["event_epas"], str):
-                        try:
-                            raw_team_data["event_epas"] = json.loads(raw_team_data["event_epas"])
-                        except json.JSONDecodeError:
-                            raw_team_data["event_epas"] = []
+        # Compress the dictionary
+        team = compress_dict(raw_team_data)
+        team_data.setdefault(year, {})[team_number] = team
 
-                # Now compress the dictionary after handling event_epas
-                team = compress_dict(raw_team_data)
-                current_batch.append((number, team))
-                
-                if len(current_batch) >= batch_size:
-                    team_data.setdefault(year, {}).update(dict(current_batch))
-                    current_batch = []
-            
-            # Process remaining items in the batch
-            if current_batch:
-                team_data.setdefault(year, {}).update(dict(current_batch))
+    # === Load event data from PostgreSQL ===
+    # Events
+    event_cursor = conn.cursor()
+    event_cursor.execute("""
+        SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website
+        FROM events
+        ORDER BY year, event_key
+    """)
+    
+    event_data = {}
+    flat_event_list = []
+    for row in event_cursor.fetchall():
+        event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website = row
+        ev = compress_dict({
+            "k": event_key,
+            "n": name,
+            "y": year,
+            "sd": start_date,
+            "ed": end_date,
+            "et": event_type,
+            "c": city,
+            "s": state_prov,
+            "co": country,
+            "w": website
+        })
+        event_data.setdefault(year, {})[event_key] = ev
+        flat_event_list.append(ev)
 
-    # === Load compressed event data ===
-    with sqlite3.connect(os.path.join("data", "events.sqlite")) as event_conn:
-        event_conn.execute("PRAGMA cache_size = -2000")  # 2MB cache
-        event_conn.execute("PRAGMA mmap_size = 30000000000")  # 30GB memory map
-        event_cursor = event_conn.cursor()
+    # Event Teams
+    event_cursor.execute("""
+        SELECT event_key, team_number, nickname, city, state_prov, country
+        FROM event_teams
+        ORDER BY event_key, team_number
+    """)
+    
+    EVENT_TEAMS = {}
+    for row in event_cursor.fetchall():
+        event_key, team_number, nickname, city, state_prov, country = row
+        year = int(event_key[:4])
+        team = compress_dict({
+            "ek": event_key,
+            "tk": team_number,
+            "nn": nickname,
+            "c": city,
+            "s": state_prov,
+            "co": country
+        })
+        EVENT_TEAMS.setdefault(year, {}).setdefault(event_key, []).append(team)
 
-        def fetch_all(query):
-            event_cursor.execute(query)
-            cols = [d[0] for d in event_cursor.description]
-            return [compress_dict(dict(zip(cols, r))) for r in event_cursor.fetchall()]
+    # Rankings
+    event_cursor.execute("""
+        SELECT event_key, team_number, rank, wins, losses, ties, dq
+        FROM event_rankings
+        ORDER BY event_key, team_number
+    """)
+    
+    EVENT_RANKINGS = {}
+    for row in event_cursor.fetchall():
+        event_key, team_number, rank, wins, losses, ties, dq = row
+        year = int(event_key[:4])
+        ranking = compress_dict({
+            "ek": event_key,
+            "tk": team_number,
+            "rk": rank,
+            "w": wins,
+            "l": losses,
+            "t": ties,
+            "dq": dq
+        })
+        EVENT_RANKINGS.setdefault(year, {}).setdefault(event_key, {})[team_number] = ranking
 
-        # Events - Process in batches
-        event_data = {}
-        flat_event_list = []
-        batch_size = 1000
-        
-        event_cursor.execute("SELECT * FROM e")
-        cols = [d[0] for d in event_cursor.description]
-        current_batch = []
-        
-        for row in event_cursor.fetchall():
-            ev = compress_dict(dict(zip(cols, row)))
-            year = ev["y"]
-            ek = ev["k"]
-            current_batch.append((year, ek, ev))
-            
-            if len(current_batch) >= batch_size:
-                for y, k, e in current_batch:
-                    event_data.setdefault(y, {})[k] = e
-                    flat_event_list.append(e)
-                current_batch = []
-        
-        # Process remaining events
-        for y, k, e in current_batch:
-            event_data.setdefault(y, {})[k] = e
-            flat_event_list.append(e)
+    # Awards
+    event_cursor.execute("""
+        SELECT event_key, team_number, award_name, year
+        FROM event_awards
+        ORDER BY year, event_key, team_number
+    """)
+    
+    EVENTS_AWARDS = []
+    for row in event_cursor.fetchall():
+        event_key, team_number, award_name, year = row
+        award = compress_dict({
+            "ek": event_key,
+            "tk": team_number,
+            "an": award_name,
+            "y": year
+        })
+        EVENTS_AWARDS.append(award)
 
-        # Event Teams - Process in batches
-        EVENT_TEAMS = {}
-        event_cursor.execute("SELECT * FROM et")
-        cols = [d[0] for d in event_cursor.description]
-        current_batch = []
-        
-        for row in event_cursor.fetchall():
-            t = compress_dict(dict(zip(cols, row)))
-            year = int(t["ek"][:4])
-            ek = t["ek"]
-            current_batch.append((year, ek, t))
-            
-            if len(current_batch) >= batch_size:
-                for y, k, team in current_batch:
-                    EVENT_TEAMS.setdefault(y, {}).setdefault(k, []).append(team)
-                current_batch = []
-        
-        # Process remaining teams
-        for y, k, team in current_batch:
-            EVENT_TEAMS.setdefault(y, {}).setdefault(k, []).append(team)
+    # Matches
+    event_cursor.execute("""
+        SELECT match_key, event_key, comp_level, match_number, set_number, 
+               red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key
+        FROM event_matches
+        ORDER BY event_key, match_number
+    """)
+    
+    EVENT_MATCHES = {}
+    for row in event_cursor.fetchall():
+        match_key, event_key, comp_level, match_number, set_number, \
+        red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key = row
+        year = int(event_key[:4])
+        match_data = compress_dict({
+            "k": match_key,
+            "ek": event_key,
+            "cl": comp_level,
+            "mn": match_number,
+            "sn": set_number,
+            "rt": red_teams,
+            "bt": blue_teams,
+            "rs": red_score,
+            "bs": blue_score,
+            "wa": winning_alliance,
+            "yt": youtube_key
+        })
+        EVENT_MATCHES.setdefault(year, []).append(match_data)
 
-        # Rankings - Process in batches
-        EVENT_RANKINGS = {}
-        event_cursor.execute("SELECT * FROM r")
-        cols = [d[0] for d in event_cursor.description]
-        current_batch = []
-        
-        for row in event_cursor.fetchall():
-            r = compress_dict(dict(zip(cols, row)))
-            year = int(r["ek"][:4])
-            ek = r["ek"]
-            tk = r["tk"]
-            current_batch.append((year, ek, tk, r))
-            
-            if len(current_batch) >= batch_size:
-                for y, k, t, rank in current_batch:
-                    EVENT_RANKINGS.setdefault(y, {}).setdefault(k, {})[t] = rank
-                current_batch = []
-        
-        # Process remaining rankings
-        for y, k, t, rank in current_batch:
-            EVENT_RANKINGS.setdefault(y, {}).setdefault(k, {})[t] = rank
+    # OPRs
+    event_cursor.execute("""
+        SELECT event_key, team_number, opr
+        FROM event_oprs
+        ORDER BY event_key, team_number
+    """)
+    
+    EVENT_OPRS = {}
+    for row in event_cursor.fetchall():
+        event_key, team_number, opr = row
+        year = int(event_key[:4])
+        EVENT_OPRS.setdefault(year, {}).setdefault(event_key, {})[team_number] = opr
 
-        # Awards - Process in batches
-        EVENTS_AWARDS = []
-        event_cursor.execute("SELECT * FROM a")
-        cols = [d[0] for d in event_cursor.description]
-        current_batch = []
-        
-        for row in event_cursor.fetchall():
-            award = compress_dict(dict(zip(cols, row)))
-            current_batch.append(award)
-            
-            if len(current_batch) >= batch_size:
-                EVENTS_AWARDS.extend(current_batch)
-                current_batch = []
-        
-        # Process remaining awards
-        EVENTS_AWARDS.extend(current_batch)
-
-        # Matches - Process in batches
-        EVENT_MATCHES = {}
-        event_cursor.execute("SELECT * FROM m")
-        cols = [d[0] for d in event_cursor.description]
-        current_batch = []
-        
-        for row in event_cursor.fetchall():
-            m = compress_dict(dict(zip(cols, row)))
-            year = int(m["ek"][:4])
-            current_batch.append((year, m))
-            
-            if len(current_batch) >= batch_size:
-                for y, match in current_batch:
-                    EVENT_MATCHES.setdefault(y, []).append(match)
-                current_batch = []
-        
-        # Process remaining matches
-        for y, match in current_batch:
-            EVENT_MATCHES.setdefault(y, []).append(match)
-
-        # OPRs - Process in batches
-        EVENT_OPRS = {}
-        event_cursor.execute("SELECT * FROM o")
-        cols = [d[0] for d in event_cursor.description]
-        current_batch = []
-        
-        for row in event_cursor.fetchall():
-            o = compress_dict(dict(zip(cols, row)))
-            year = int(o["ek"][:4])
-            ek = o["ek"]
-            tk = o["tk"]
-            current_batch.append((year, ek, tk, o["opr"]))
-            
-            if len(current_batch) >= batch_size:
-                for y, k, t, opr in current_batch:
-                    EVENT_OPRS.setdefault(y, {}).setdefault(k, {})[t] = opr
-                current_batch = []
-        
-        # Process remaining OPRs
-        for y, k, t, opr in current_batch:
-            EVENT_OPRS.setdefault(y, {}).setdefault(k, {})[t] = opr
+    event_cursor.close()
+    team_cursor.close()
+    conn.close()
 
     return team_data, event_data, flat_event_list, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES, EVENT_OPRS
 

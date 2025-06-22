@@ -8,20 +8,33 @@ import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
 import os
+from auth import get_pg_connection
+
+# Define database paths relative to this script's location
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+EVENTS_DB_PATH = os.path.join(SCRIPT_DIR, "events.sqlite")
+EPA_TEAMS_DB_PATH = os.path.join(SCRIPT_DIR, "epa_teams.sqlite")
 
 def effective_epa(team_infos):
-        if not team_infos:
-            return 0
-        
-        weighted_epas = []
-        for t in team_infos:
-            epa = t["epa"]
-            conf = t["confidence"]
-            reliability = 1.0 * conf
-            weighted_epas.append(epa)
-        
-        return np.mean(weighted_epas)
+    """Calculate effective EPA for a list of teams."""
+    if not team_infos:
+        return 0.0
     
+    total_epa = 0.0
+    total_confidence = 0.0
+    
+    for team_info in team_infos:
+        epa = team_info.get('epa', 0.0)
+        confidence = team_info.get('confidence', 0.0)
+        
+        total_epa += epa * confidence
+        total_confidence += confidence
+    
+    if total_confidence == 0:
+        return 0.0
+    
+    return total_epa / total_confidence
+
 def predict_win_probability(red_info, blue_info):
     red_eff = effective_epa(red_info)
     blue_eff = effective_epa(blue_info)
@@ -35,52 +48,66 @@ def predict_win_probability(red_info, blue_info):
 
 
 def load_team_epas(year: int) -> Dict[str, Dict]:
-    """Load all team EPAs from the epa_teams.sqlite database for a specific year."""
+    """Load all team EPAs from PostgreSQL for a specific year."""
     team_epas = {}
     try:
-        conn = sqlite3.connect("epa_teams.sqlite")
+        conn = get_pg_connection()
         cursor = conn.cursor()
         
-        # Debug: Print available tables
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = cursor.fetchall()
-        print(f"\nAvailable tables in database: {[t[0] for t in tables]}")
+        cursor.execute("""
+            SELECT team_number, nickname, city, state_prov, country, website,
+                   normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+                   wins, losses, event_epas
+            FROM team_epas
+            WHERE year = %s
+            ORDER BY team_number
+        """, (year,))
         
-        # Get all teams and their event EPAs for the specified year
-        table_name = f"epa_{year}"
-        print(f"\nAttempting to query table: {table_name}")
+        for row in cursor.fetchall():
+            team_number, nickname, city, state_prov, country, website, \
+            normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
+            wins, losses, event_epas = row
+            
+            # Parse event_epas from JSON if it's a string
+            if event_epas is None:
+                event_epas = []
+            elif isinstance(event_epas, str):
+                try:
+                    event_epas = json.loads(event_epas)
+                except json.JSONDecodeError:
+                    event_epas = []
+            
+            team_epas[str(team_number)] = {
+                'team_number': team_number,
+                'nickname': nickname,
+                'city': city,
+                'state_prov': state_prov,
+                'country': country,
+                'website': website,
+                'normal_epa': normal_epa,
+                'epa': epa,
+                'confidence': confidence,
+                'auto_epa': auto_epa,
+                'teleop_epa': teleop_epa,
+                'endgame_epa': endgame_epa,
+                'wins': wins,
+                'losses': losses,
+                'event_epas': event_epas
+            }
         
-        cursor.execute(f"SELECT team_number, event_epas FROM {table_name}")
-        rows = cursor.fetchall()
-        print(f"Found {len(rows)} rows in {table_name}")
-        
-        for team_number, event_epas_json in rows:
-            try:
-                event_epas = json.loads(event_epas_json)
-                # Store event-specific EPAs with confidence
-                team_epas[str(team_number)] = {
-                    "event_epas": {
-                        event["event_key"]: {
-                            "epa": event["actual_epa"],
-                            "confidence": event["confidence"]
-                        } for event in event_epas
-                    }
-                }
-            except json.JSONDecodeError as e:
-                print(f"Error parsing JSON for team {team_number}: {e}")
-                continue
-                
+        cursor.close()
         conn.close()
-        return team_epas
+        
     except Exception as e:
-        print(f"Error loading team EPAs for {year}: {e}")
-        return {}
+        print(f"Error loading team EPAs: {e}")
+    
+    return team_epas
 
 def get_matches_for_year(year: int) -> List[Dict]:
     """Get all matches for a specific year from the events.sqlite database."""
     matches = []
     try:
-        conn = sqlite3.connect("../events.sqlite")
+        conn = sqlite3.connect(EVENTS_DB_PATH)
         cursor = conn.cursor()
         
         # Get all matches for the specified year

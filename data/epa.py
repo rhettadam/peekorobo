@@ -13,9 +13,11 @@ import random
 from typing import Dict, List, Optional, Union
 
 from models import *
+from pg_epa import *
 
 load_dotenv()
 
+# Keep SQLite paths for backward compatibility during transition
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 EVENTS_DB_PATH = os.path.join(SCRIPT_DIR, "events.sqlite")
 EPA_TEAMS_DB_PATH = os.path.join(SCRIPT_DIR, "epa_teams.sqlite")
@@ -27,64 +29,17 @@ API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 def create_event_db(year):
     """Create and populate the events database for the specified year."""
     print(f"\n🧹 Creating events database for {year}...")
-    conn = sqlite3.connect(EVENTS_DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=OFF")
-    conn.execute("PRAGMA temp_store=MEMORY")
-    conn.execute("PRAGMA page_size=4096")
-    c = conn.cursor()
-
-    # Create optimized schema if not exists
-    c.executescript("""
-    CREATE TABLE IF NOT EXISTS e (
-        k TEXT PRIMARY KEY,
-        n TEXT, y INT, sd TEXT, ed TEXT,
-        et TEXT, c TEXT, s TEXT, co TEXT, w TEXT
-    ) WITHOUT ROWID;
-
-    CREATE TABLE IF NOT EXISTS et (
-        ek TEXT, tk INT,
-        nn TEXT, c TEXT, s TEXT, co TEXT,
-        PRIMARY KEY (ek, tk)
-    ) WITHOUT ROWID;
-
-    CREATE TABLE IF NOT EXISTS r (
-        ek TEXT, tk INT, rk INT,
-        w INT, l INT, t INT, dq INT
-    );
-
-    CREATE TABLE IF NOT EXISTS o (
-        ek TEXT, tk INT, opr REAL
-    );
-
-    CREATE TABLE IF NOT EXISTS m (
-        k TEXT PRIMARY KEY,
-        ek TEXT, cl TEXT, mn INT, sn INT,
-        rt TEXT, bt TEXT,
-        rs INT, bs INT, wa TEXT, yt TEXT
-    ) WITHOUT ROWID;
-
-    CREATE TABLE IF NOT EXISTS a (
-        ek TEXT, tk INT, an TEXT, y INT
-    );
-    """)
-    conn.commit()
-
-    # Delete all data for this year before rebuilding
-    print(f"🧹 Deleting existing {year} data...")
-    c.execute("DELETE FROM e WHERE y = ?", (year,))
-    c.execute("DELETE FROM et WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
-    c.execute("DELETE FROM r WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
-    c.execute("DELETE FROM o WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
-    c.execute("DELETE FROM m WHERE ek IN (SELECT k FROM e WHERE y = ?)", (year,))
-    c.execute("DELETE FROM a WHERE y = ?", (year,))
-    conn.commit()
+    
+    # Create PostgreSQL tables if they don't exist
+    create_epa_tables()
+    
+    # Clear existing data for this year
+    clear_year_data(year)
 
     try:
         events = tba_get(f"events/{year}")
     except Exception as e:
         print(f"❌ Failed to load events for {year}: {e}")
-        conn.close()
         return
 
     def fetch(event):
@@ -158,16 +113,9 @@ def create_event_db(year):
             except Exception as e:
                 print(f"❌ Error processing: {e}")
 
-    for d in all_data:
-        c.execute("INSERT OR REPLACE INTO e VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d["event"])
-        c.executemany("INSERT OR REPLACE INTO et VALUES (?, ?, ?, ?, ?, ?)", d["teams"])
-        c.executemany("INSERT INTO r VALUES (?, ?, ?, ?, ?, ?, ?)", d["rankings"])
-        c.executemany("INSERT INTO o VALUES (?, ?, ?)", d["oprs"])
-        c.executemany("INSERT OR REPLACE INTO m VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d["matches"])
-        c.executemany("INSERT INTO a VALUES (?, ?, ?, ?)", d["awards"])
-    conn.commit()
-    conn.close()
-    print(f"\n✅ {year} events rebuilt and database saved: events.sqlite")
+    # Insert all data into PostgreSQL
+    insert_event_data(all_data, year)
+    print(f"\n✅ {year} events rebuilt and saved to PostgreSQL")
 
 # Confidence calculation constants
 CONFIDENCE_WEIGHTS = {
@@ -199,10 +147,22 @@ def tba_get(endpoint: str):
     api_key = random.choice(API_KEYS)
     headers = {"X-TBA-Auth-Key": api_key}
     url = f"{TBA_BASE_URL}/{endpoint}"
-    r = requests.get(url, headers=headers)
-    if r.status_code == 200:
-        return r.json()
-    return None
+    try:
+        r = requests.get(url, headers=headers, timeout=30)  # Add 30 second timeout
+        if r.status_code == 200:
+            return r.json()
+        else:
+            print(f"TBA API error for {endpoint}: {r.status_code}")
+            return None
+    except requests.exceptions.Timeout:
+        print(f"Timeout for {endpoint}")
+        raise  # Let retry handle it
+    except requests.exceptions.RequestException as e:
+        print(f"Request error for {endpoint}: {e}")
+        raise  # Let retry handle it
+    except Exception as e:
+        print(f"Unexpected error for {endpoint}: {e}")
+        raise  # Let retry handle it
 
 def get_team_experience(team_number: int, up_to_year: int) -> int:
     """
@@ -210,18 +170,7 @@ def get_team_experience(team_number: int, up_to_year: int) -> int:
     Returns the number of years of experience (1 for first year, 2 for second year, etc.)
     """
     try:
-        conn = sqlite3.connect(EPA_TEAMS_DB_PATH)
-        cursor = conn.cursor()
-        years = 0
-        for y in range(1992, up_to_year + 1):
-            try:
-                cursor.execute(f"SELECT 1 FROM epa_{y} WHERE team_number = ? LIMIT 1", (team_number,))
-                if cursor.fetchone():
-                    years += 1
-            except sqlite3.OperationalError:
-                continue  # Skip if table doesn't exist
-        conn.close()
-        return years
+        return get_team_experience_pg(team_number, up_to_year)
     except Exception as e:
         print(f"Failed to get team experience: {e}")
         return 1  # Default to first year if we can't determine
@@ -417,12 +366,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str) -> Dict:
     dominance = min(1., statistics.mean(dominance_scores)) if dominance_scores else 0.0
 
     # Get total number of events for this team
-    conn = sqlite3.connect(EVENTS_DB_PATH)
-    cursor = conn.cursor()
-    team_number = int(team_key[3:])
-    cursor.execute("SELECT COUNT(DISTINCT ek) FROM et WHERE tk = ? AND ek LIKE ?", (team_number, f"{year}%"))
-    total_events = cursor.fetchone()[0]
-    conn.close()
+    event_keys = get_team_events(team_number, int(year))
+    total_events = len(event_keys)
 
     # Calculate event boost based on number of events
     event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])
@@ -582,14 +527,8 @@ def fetch_team_components(team, year):
     team_key = team["key"]
     team_number = team["team_number"]
 
-    # Connect to events.sqlite
-    conn = sqlite3.connect(EVENTS_DB_PATH)
-    cursor = conn.cursor()
-
-    # Find all events the team participated in for the given year
-    cursor.execute("SELECT ek FROM et WHERE tk = ? AND ek LIKE ?", (team_number, f"{year}%"))
-    event_keys = [row[0] for row in cursor.fetchall()]
-    conn.close()
+    # Get team events from PostgreSQL
+    event_keys = get_team_events(team_number, year)
 
     event_epa_results = []
     total_wins = 0
@@ -643,121 +582,59 @@ def fetch_team_components(team, year):
         "event_epas": event_epa_results, # List of event-specific EPA results
     }
 
-def create_year_table(cur, year):
-    """Create a table for a specific year if it doesn't exist"""
-    cur.execute(f"DROP TABLE IF EXISTS epa_{year}")
-    cur.execute(f"""
-    CREATE TABLE epa_{year} (
-        team_number INTEGER PRIMARY KEY,
-        nickname TEXT,
-        city TEXT,
-        state_prov TEXT,
-        country TEXT,
-        website TEXT,
-        normal_epa REAL,
-        epa REAL,
-        confidence REAL,
-        auto_epa REAL,
-        teleop_epa REAL,
-        endgame_epa REAL,
-        wins INTEGER,
-        losses INTEGER,
-        event_epas TEXT
-    )
-    """)
-
-def get_epa_db_conn():
-    return sqlite3.connect(EPA_TEAMS_DB_PATH)
-
 def fetch_and_store_team_data(year):
     # Ensure events.sqlite is created and populated before running the teams model
     create_event_db(year)
     print(f"\nProcessing year {year}...")
 
-    # Get all teams directly from the events database we just built
-    conn = sqlite3.connect(EVENTS_DB_PATH)
-    cur = conn.cursor()
-    cur.execute("SELECT tk, nn, c, s, co FROM et WHERE ek LIKE ?", (f"{year}%",))
-    rows = cur.fetchall()
-    conn.close()
-
-    unique_teams = {}
-    for team_number, nickname, city, state_prov, country in rows:
-        if team_number not in unique_teams:
-            unique_teams[team_number] = {
-                "key": f"frc{team_number}",
-                "team_number": team_number,
-                "nickname": nickname,
-                "city": city,
-                "state_prov": state_prov,
-                "country": country,
-            }
-
-    all_teams = list(unique_teams.values())
+    # Get all teams directly from PostgreSQL
+    all_teams = get_teams_for_year(year)
     print(f"Total unique teams found from events: {len(all_teams)}")
-
-    # Open DB connection and create table
-    conn = get_epa_db_conn()
-    cur = conn.cursor()
-    create_year_table(cur, year)
-    cur.execute(f"DELETE FROM epa_{year}")
-    conn.commit()
 
     def fetch_team_for_final(team):
         return fetch_team_components(team, year)
 
     inserted = 0
+    failed_teams = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(fetch_team_for_final, team) for team in all_teams]
         for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Final EPA Pass"):
-            result = future.result()
-            if result:
-                # Filter event_epas to only allowed keys
-                allowed_keys = ["overall", "auto", "teleop", "endgame", "confidence", "actual_epa", "wins", "losses"]
-                filtered_event_epas = []
-                for event_epa in result.get("event_epas", []):
-                    filtered_event_epas.append({k: event_epa[k] for k in allowed_keys if k in event_epa})
-                event_epas_json = json.dumps(filtered_event_epas)
-                cur.execute(f"""
-                INSERT OR REPLACE INTO epa_{year} (
-                    team_number, nickname, city, state_prov, country, website,
-                    normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                    wins, losses, event_epas
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    result.get("team_number"),
-                    result.get("nickname"),
-                    result.get("city"),
-                    result.get("state_prov"),
-                    result.get("country"),
-                    result.get("website"),
-                    result.get("normal_epa"),
-                    result.get("epa"),
-                    result.get("confidence"),
-                    result.get("auto_epa"),
-                    result.get("teleop_epa"),
-                    result.get("endgame_epa"),
-                    result.get("wins"),
-                    result.get("losses"),
-                    event_epas_json
-                ))
-                inserted += 1
-                if inserted % 100 == 0:
-                    conn.commit()
-    conn.commit()
-    print(f"✅ Successfully updated {inserted} entries for {year} in epa_teams.sqlite")
-    conn.close()
+            try:
+                result = future.result()
+                if result:
+                    # Insert team EPA data into PostgreSQL
+                    insert_team_epa(result, year)
+                    inserted += 1
+                    if inserted % 100 == 0:
+                        print(f"Processed {inserted} teams so far...")
+                else:
+                    # This shouldn't happen anymore with our fix, but let's track it
+                    failed_teams.append("Unknown team (result was None)")
+            except Exception as e:
+                # Get the team info from the future if possible
+                team_info = "Unknown team"
+                try:
+                    # Try to get the team info from the future's args
+                    if hasattr(future, '_args') and future._args:
+                        team_info = f"Team {future._args[0].get('team_number', 'Unknown')}"
+                except:
+                    pass
+                failed_teams.append(f"{team_info}: {str(e)}")
+                print(f"Failed to process {team_info}: {e}")
+                continue
+    
+    print(f"✅ Successfully updated {inserted} entries for {year} in PostgreSQL")
+    if failed_teams:
+        print(f"❌ Failed to process {len(failed_teams)} teams:")
+        for failed in failed_teams[:10]:  # Show first 10 failures
+            print(f"  - {failed}")
+        if len(failed_teams) > 10:
+            print(f"  ... and {len(failed_teams) - 10} more")
 
 def analyze_single_team(team_key: str, year: int):
-    # Connect to events.sqlite
-    conn = sqlite3.connect(EVENTS_DB_PATH)
-    cursor = conn.cursor()
+    # Get team events from PostgreSQL
     team_number = int(team_key[3:])
-
-    # Find all events the team participated in for the given year
-    cursor.execute("SELECT ek FROM et WHERE tk = ? AND ek LIKE ?", (team_number, f"{year}%"))
-    event_keys = [row[0] for row in cursor.fetchall()]
-    conn.close()
+    event_keys = get_team_events(team_number, year)
 
     event_epa_results = []
     total_wins = 0

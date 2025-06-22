@@ -8,23 +8,24 @@ from dotenv import load_dotenv
 from folium.features import GeoJson, CustomIcon
 from folium import IFrame
 import requests
+from auth import get_pg_connection
+
+# Define database paths relative to the data directory
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+DATA_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "data")
+EVENTS_DB_PATH = os.path.join(DATA_DIR, "events.sqlite")
+EPA_TEAMS_DB_PATH = os.path.join(DATA_DIR, "epa_teams.sqlite")
 
 load_dotenv()
 
-# District to state/province mapping
+# FRC District definitions
 DISTRICT_STATES = {
-    "ONT": ["Ontario"],
-    "FMA": ["Delaware", "New Jersey", "Pennsylvania"],
-    "ISR": ["Israel"],
-    "CHS": ["Maryland", "Virginia", "District of Columbia"],
-    "FIT": ["Texas", "New Mexico"],
-    "PCH": ["Georgia"],
-    "PNW": ["Washington", "Oregon"],
-    "FIM": ["Michigan"],
-    "FSC": ["South Carolina"],
-    "FNC": ["North Carolina"],
-    "FIN": ["Indiana"],
-    "NE": ["Connecticut", "Massachusetts", "Maine", "New Hampshire", "Vermont"],
+    "NE": ["CT", "MA", "ME", "NH", "NJ", "NY", "PA", "RI", "VT"],
+    "NC": ["IL", "IN", "MI", "OH", "WI"],
+    "SE": ["AL", "FL", "GA", "LA", "MS", "NC", "SC", "TN", "VA", "WV"],
+    "SW": ["AR", "CO", "KS", "MO", "NM", "OK", "TX"],
+    "NW": ["AK", "ID", "MT", "OR", "WA", "WY"],
+    "SC": ["AZ", "CA", "HI", "NV", "UT"]
 }
 
 # District colors
@@ -43,21 +44,58 @@ DISTRICT_COLORS = {
     "NE": "#98df8a",   # light green
 }
 
-def load_team_data(locations_file="2025_geo_teams.json", epa_db="../team_data/epa_teams.sqlite"):
-    if not os.path.exists(locations_file) or not os.path.exists(epa_db):
+def load_team_data(locations_file="2025_geo_teams.json", epa_db=None):
+    if not os.path.exists(locations_file):
         return []
-    with open(locations_file, "r", encoding="utf-8") as f:
-        location_data = json.load(f)
-    conn = sqlite3.connect(epa_db)
+    
+    with open(locations_file, "r") as f:
+        locations = json.load(f)
+    
+    # Load EPA data from PostgreSQL
+    conn = get_pg_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT team_number, epa FROM epa_history WHERE year = 2025")
-    epa_rows = cursor.fetchall()
+    
+    cursor.execute("""
+        SELECT team_number, nickname, city, state_prov, country,
+               normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+               wins, losses
+        FROM team_epas
+        WHERE year = 2025
+        ORDER BY team_number
+    """)
+    
+    epa_data = {}
+    for row in cursor.fetchall():
+        team_number, nickname, city, state_prov, country, \
+        normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
+        wins, losses = row
+        epa_data[team_number] = {
+            'nickname': nickname,
+            'city': city,
+            'state_prov': state_prov,
+            'country': country,
+            'normal_epa': normal_epa,
+            'epa': epa,
+            'confidence': confidence,
+            'auto_epa': auto_epa,
+            'teleop_epa': teleop_epa,
+            'endgame_epa': endgame_epa,
+            'wins': wins,
+            'losses': losses
+        }
+    
+    cursor.close()
     conn.close()
-    epa_dict = {team_num: epa for team_num, epa in epa_rows}
-    for team in location_data:
-        team_number = team.get("team_number")
-        team["epa"] = epa_dict.get(team_number)
-    return location_data
+    
+    # Combine location and EPA data
+    teams = []
+    for team in locations:
+        team_number = team.get('team_number')
+        if team_number in epa_data:
+            team.update(epa_data[team_number])
+            teams.append(team)
+    
+    return teams
 
 def calculate_global_rankings(teams_data):
     sorted_teams = sorted(teams_data, key=lambda x: x.get("epa", 0) or 0, reverse=True)
@@ -206,7 +244,7 @@ def highlight_district(feature):
 
 def get_event_teams(event_key):
     """Get list of teams that attended a specific event"""
-    conn = sqlite3.connect("../team_data/events.sqlite")
+    conn = sqlite3.connect(EVENTS_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
         SELECT tk, nn 
