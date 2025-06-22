@@ -838,32 +838,28 @@ def main():
     print("\nEPA Calculator")
     print("="*20)
     
-    while True:
-        mode = input("\nSelect mode:\n1. Single Team Analysis\n2. Process Entire JSON\nEnter choice (1 or 2): ").strip()
+    mode = input("\nSelect mode:\n1. Single Team Analysis\n2. Process Entire JSON\nEnter choice (1 or 2): ").strip()
+    
+    if mode not in ['1', '2']:
+        print("Invalid choice. Please enter 1 or 2.")
+        return
         
-        if mode not in ['1', '2']:
-            print("Invalid choice. Please enter 1 or 2.")
-            continue
-            
-        year = input("Enter year (e.g., 2025): ").strip()
-        try:
-            year = int(year)
-        except ValueError:
-            print("Invalid year. Please enter a valid year.")
-            continue
-            
-        if mode == '1':
-            team_key = input("Enter team key (e.g., frc254): ").strip().lower()
-            if not team_key.startswith('frc'):
-                team_key = f"frc{team_key}"
-            
-            analyze_single_team(team_key, year)
-            
-        else:
-            fetch_and_store_team_data(year)
+    year = input("Enter year (e.g., 2025): ").strip()
+    try:
+        year = int(year)
+    except ValueError:
+        print("Invalid year. Please enter a valid year.")
+        return
         
-        if input("\nWould you like to analyze another team? (y/n): ").lower() != 'y':
-            break
+    if mode == '1':
+        team_key = input("Enter team key (e.g., frc254): ").strip().lower()
+        if not team_key.startswith('frc'):
+            team_key = f"frc{team_key}"
+        
+        analyze_single_team(team_key, year)
+        
+    else:
+        fetch_and_store_team_data(year)
 
 if __name__ == "__main__":
     import sys
