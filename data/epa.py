@@ -672,24 +672,28 @@ def fetch_and_store_team_data(year):
     # Ensure events.sqlite is created and populated before running the teams model
     create_event_db(year)
     print(f"\nProcessing year {year}...")
-    section_count = 0
-    all_teams = []
 
-    while True:
-        endpoint = f"teams/{year}/{section_count}"
-        try:
-            teams_data = tba_get(endpoint)
-        except Exception as e:
-            print(f"Error fetching teams for year {year}, section {section_count}: {e}")
-            break
+    # Get all teams directly from the events database we just built
+    conn = sqlite3.connect(EVENTS_DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT tk, nn, c, s, co FROM et WHERE ek LIKE ?", (f"{year}%",))
+    rows = cur.fetchall()
+    conn.close()
 
-        if not teams_data:
-            break
+    unique_teams = {}
+    for team_number, nickname, city, state_prov, country in rows:
+        if team_number not in unique_teams:
+            unique_teams[team_number] = {
+                "key": f"frc{team_number}",
+                "team_number": team_number,
+                "nickname": nickname,
+                "city": city,
+                "state_prov": state_prov,
+                "country": country,
+            }
 
-        all_teams.extend(teams_data)
-        section_count += 1
-
-    print(f"Total teams found: {len(all_teams)}")
+    all_teams = list(unique_teams.values())
+    print(f"Total unique teams found from events: {len(all_teams)}")
 
     # Open DB connection and create table
     conn = get_epa_db_conn()
