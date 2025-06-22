@@ -16,6 +16,10 @@ from models import *
 
 load_dotenv()
 
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+EVENTS_DB_PATH = os.path.join(SCRIPT_DIR, "events.sqlite")
+EPA_TEAMS_DB_PATH = os.path.join(SCRIPT_DIR, "epa_teams.sqlite")
+
 TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
 
 API_KEYS = os.getenv("TBA_API_KEYS").split(',')
@@ -23,8 +27,7 @@ API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 def create_event_db(year):
     """Create and populate the events database for the specified year."""
     print(f"\n🧹 Creating events database for {year}...")
-    events_db_path = os.path.join(os.path.dirname(__file__), "events.sqlite")
-    conn = sqlite3.connect(events_db_path)
+    conn = sqlite3.connect(EVENTS_DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=OFF")
     conn.execute("PRAGMA temp_store=MEMORY")
@@ -207,7 +210,7 @@ def get_team_experience(team_number: int, up_to_year: int) -> int:
     Returns the number of years of experience (1 for first year, 2 for second year, etc.)
     """
     try:
-        conn = sqlite3.connect("epa_teams.sqlite")
+        conn = sqlite3.connect(EPA_TEAMS_DB_PATH)
         cursor = conn.cursor()
         years = 0
         for y in range(1992, up_to_year + 1):
@@ -414,7 +417,7 @@ def calculate_event_epa(matches: List[Dict], team_key: str) -> Dict:
     dominance = min(1., statistics.mean(dominance_scores)) if dominance_scores else 0.0
 
     # Get total number of events for this team
-    conn = sqlite3.connect("events.sqlite")
+    conn = sqlite3.connect(EVENTS_DB_PATH)
     cursor = conn.cursor()
     team_number = int(team_key[3:])
     cursor.execute("SELECT COUNT(DISTINCT ek) FROM et WHERE tk = ? AND ek LIKE ?", (team_number, f"{year}%"))
@@ -580,7 +583,7 @@ def fetch_team_components(team, year):
     team_number = team["team_number"]
 
     # Connect to events.sqlite
-    conn = sqlite3.connect("events.sqlite")
+    conn = sqlite3.connect(EVENTS_DB_PATH)
     cursor = conn.cursor()
 
     # Find all events the team participated in for the given year
@@ -663,7 +666,7 @@ def create_year_table(cur, year):
     """)
 
 def get_epa_db_conn():
-    return sqlite3.connect("epa_teams.sqlite")
+    return sqlite3.connect(EPA_TEAMS_DB_PATH)
 
 def fetch_and_store_team_data(year):
     # Ensure events.sqlite is created and populated before running the teams model
@@ -742,7 +745,7 @@ def fetch_and_store_team_data(year):
 
 def analyze_single_team(team_key: str, year: int):
     # Connect to events.sqlite
-    conn = sqlite3.connect("events.sqlite")
+    conn = sqlite3.connect(EVENTS_DB_PATH)
     cursor = conn.cursor()
     team_number = int(team_key[3:])
 
