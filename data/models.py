@@ -1,15 +1,5 @@
 import statistics
 import math
-import json
-from tqdm import tqdm
-from tenacity import retry, stop_never, wait_exponential, retry_if_exception_type
-import requests
-import os
-import concurrent.futures
-from dotenv import load_dotenv
-import sqlite3
-import random
-from typing import Dict, List, Optional, Union
 
 def auto_2025(breakdowns, team_count):
     def score_per_breakdown(b):

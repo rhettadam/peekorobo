@@ -13,8 +13,6 @@ import numpy as np
 import datetime
 from datetime import datetime, date
 
-import sqlite3
-import psycopg2
 import re
 from urllib.parse import parse_qs, urlencode
 import json
@@ -26,12 +24,12 @@ from datagather import COUNTRIES,STATES,load_data,get_team_avatar,DISTRICT_STATE
 
 from layouts import home_layout,footer,topbar,team_layout,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, compare_layout
 
-from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_username,get_available_avatars,get_contrast_text_color,parse_event_key,get_user_epa_color,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card
+from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_available_avatars,get_contrast_text_color,parse_event_key,get_user_epa_color,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card
 
 from dotenv import load_dotenv
 load_dotenv()
 
-TEAM_DATABASE, EVENT_DATABASE, EVENTS_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES, EVENT_OPRS = load_data()
+TEAM_DATABASE, EVENT_DATABASE, EVENTS_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES = load_data()
 
 app = dash.Dash(
     __name__,
@@ -1871,15 +1869,13 @@ def event_layout(event_key):
                 None
             )
             # Fallback to overall EPA/confidence/consistency if event-specific is missing
-            if event_specific_epa and any(event_specific_epa.get(k, 0) not in (None, 0, "") for k in ["overall", "confidence", "consistency"]):
+            if event_specific_epa and any(event_specific_epa.get(k, 0) not in (None, 0, "") for k in ["overall", "confidence"]):
                 event_epa_data[str(team_num)] = {
                     "epa": event_specific_epa.get("actual_epa", 0),
                     "auto_epa": event_specific_epa.get("auto", 0),
                     "teleop_epa": event_specific_epa.get("teleop", 0),
                     "endgame_epa": event_specific_epa.get("endgame", 0),
                     "confidence": event_specific_epa.get("confidence", 0),
-                    "consistency": event_specific_epa.get("consistency", 0),
-                    "dominance": event_specific_epa.get("dominance", 0),
                 }
             else:
                 # Use overall EPA/confidence/consistency from TEAM_DATABASE
@@ -1889,8 +1885,6 @@ def event_layout(event_key):
                     "teleop_epa": team_data.get("teleop_epa", 0),
                     "endgame_epa": team_data.get("endgame_epa", 0),
                     "confidence": team_data.get("confidence", 0.7),
-                    "consistency": team_data.get("consistency", 0),
-                    "dominance": team_data.get("dominance", 0),
                 }
 
     # Calculate rankings based on event-specific EPA
@@ -1970,7 +1964,6 @@ def event_layout(event_key):
         [
             dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Rankings", tab_id="rankings", label_style=tab_style, active_label_style=tab_style),
-            dbc.Tab(label="OPRs", tab_id="oprs", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Matches", tab_id="matches", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Alliances", tab_id="alliances", label_style=tab_style, active_label_style=tab_style),
         ],
@@ -1994,10 +1987,6 @@ def event_layout(event_key):
                     dcc.Store(id="store-rankings", data=rankings),
                     dcc.Store(id="store-event-matches", data=event_matches),
                     dcc.Store(id="store-event-year", data=parsed_year),
-                    dcc.Store(
-                        id="store-oprs",
-                        data={"oprs": EVENT_OPRS.get(parsed_year, {}).get(event_key, {})}
-                    ),
                     html.Div(id="data-display-container"),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
@@ -2019,7 +2008,7 @@ def set_event_tab_from_url(search):
     if search and search.startswith("?"):
         params = parse_qs(search[1:])
         tab = params.get("tab", [None])[0]
-        if tab in ["teams", "rankings", "oprs", "matches", "alliances"]:
+        if tab in ["teams", "rankings", "matches", "alliances"]:
             return tab
     return "teams"
 
@@ -2131,14 +2120,13 @@ def create_team_card_spotlight(team, event_year):
     Output("event-url", "search"),  # NEW: update the event tab URL
     Input("event-data-tabs", "active_tab"),
     State("store-rankings", "data"),
-    State("store-oprs", "data"),
     State("store-event-epa", "data"),
     State("store-event-teams", "data"),
     State("store-event-matches", "data"),
     State("store-event-year", "data"),
     State("url", "pathname"),  # get the event_key from the URL
 )
-def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, event_matches, event_year, pathname):
+def update_event_display(active_tab, rankings, epa_data, event_teams, event_matches, event_year, pathname):
     # --- URL update logic ---
     # Extract event_key from pathname
     event_key = None
@@ -2244,45 +2232,6 @@ def update_event_display(active_tab, rankings, oprs, epa_data, event_teams, even
                 style_data_conditional=style_data_conditional
             )
         ]), query_string
-
-    # === OPRs Tab ===
-    elif active_tab == "oprs":
-        data = []
-        year_teams = TEAM_DATABASE.get(event_year, {})
-    
-        for team_num, opr_val in (oprs.get("oprs") or {}).items():
-            tnum_str = str(team_num)
-            team_data = year_teams.get(int(team_num), {})
-            nickname = team_data.get("nickname", "Unknown")
-    
-            data.append({
-                "Team": f"[{tnum_str} | {nickname}](/team/{tnum_str})",
-                "OPR": opr_val,
-                "ACE Rank": rank_map.get(int(tnum_str), "N/A"),
-                "ACE": epa_data.get(tnum_str, {}).get("epa", "N/A"),
-            })
-    
-        data.sort(key=lambda x: x["OPR"], reverse=True)
-        for i, row in enumerate(data):
-            row["OPR Rank"] = i + 1
-    
-        columns = [
-            {"name": "OPR Rank", "id": "OPR Rank"},
-            {"name": "Team", "id": "Team", "presentation": "markdown"},
-            {"name": "OPR", "id": "OPR"},
-            {"name": "ACE Rank", "id": "ACE Rank"},
-            {"name": "ACE", "id": "ACE"},
-        ]
-    
-        return dash_table.DataTable(
-            columns=columns,
-            data=data,
-            page_size=10,
-            style_table=common_style_table,
-            style_header=common_style_header,
-            style_cell=common_style_cell,
-            style_data_conditional=style_data_conditional
-        ), query_string
 
     # === Teams Tab ===
     elif active_tab == "teams":
@@ -2617,12 +2566,10 @@ def update_matches_table(selected_team, event_matches, epa_data):
             return {
                 "epa": team_data.get("epa", 0),
                 "confidence": team_data.get("confidence", 0.7),
-                "consistency": team_data.get("consistency", 0),
             }
         return {
             "epa": info.get("epa", 0),
             "confidence": info.get("confidence", 0),
-            "consistency": info.get("consistency", 0),
         }
     
     def build_match_rows(matches):

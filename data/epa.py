@@ -8,23 +8,304 @@ import os
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
-import sqlite3
 import random
 from typing import Dict, List, Optional, Union
 
 from models import *
-from pg_epa import *
 
 load_dotenv()
-
-# Keep SQLite paths for backward compatibility during transition
-SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
-EVENTS_DB_PATH = os.path.join(SCRIPT_DIR, "events.sqlite")
-EPA_TEAMS_DB_PATH = os.path.join(SCRIPT_DIR, "epa_teams.sqlite")
 
 TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
 
 API_KEYS = os.getenv("TBA_API_KEYS").split(',')
+
+import psycopg2
+from urllib.parse import urlparse
+
+def get_pg_connection():
+    url = os.environ.get("DATABASE_URL")
+    if url is None:
+        raise Exception("DATABASE_URL not set in environment.")
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    result = urlparse(url)
+    conn = psycopg2.connect(
+        database=result.path[1:],
+        user=result.username,
+        password=result.password,
+        host=result.hostname,
+        port=result.port,
+        connect_timeout=30,
+        options='-c statement_timeout=300000'
+    )
+    return conn
+
+def create_epa_tables():
+    """Create all necessary tables if they don't exist."""
+    schema = """
+    CREATE TABLE IF NOT EXISTS events (
+        event_key TEXT PRIMARY KEY,
+        name TEXT,
+        year INTEGER,
+        start_date TEXT,
+        end_date TEXT,
+        event_type TEXT,
+        city TEXT,
+        state_prov TEXT,
+        country TEXT,
+        website TEXT
+    );
+    CREATE TABLE IF NOT EXISTS event_teams (
+        event_key TEXT,
+        team_number INTEGER,
+        nickname TEXT,
+        city TEXT,
+        state_prov TEXT,
+        country TEXT,
+        PRIMARY KEY (event_key, team_number)
+    );
+    CREATE TABLE IF NOT EXISTS event_rankings (
+        event_key TEXT,
+        team_number INTEGER,
+        rank INTEGER,
+        wins INTEGER,
+        losses INTEGER,
+        ties INTEGER,
+        dq INTEGER,
+        PRIMARY KEY (event_key, team_number)
+    );
+    CREATE TABLE IF NOT EXISTS event_matches (
+        match_key TEXT PRIMARY KEY,
+        event_key TEXT,
+        comp_level TEXT,
+        match_number INTEGER,
+        set_number INTEGER,
+        red_teams TEXT,
+        blue_teams TEXT,
+        red_score INTEGER,
+        blue_score INTEGER,
+        winning_alliance TEXT,
+        youtube_key TEXT
+    );
+    CREATE TABLE IF NOT EXISTS event_awards (
+        event_key TEXT,
+        team_number INTEGER,
+        award_name TEXT,
+        year INTEGER,
+        PRIMARY KEY (event_key, team_number, award_name)
+    );
+    CREATE TABLE IF NOT EXISTS team_epas (
+        team_number INTEGER,
+        year INTEGER,
+        nickname TEXT,
+        city TEXT,
+        state_prov TEXT,
+        country TEXT,
+        website TEXT,
+        normal_epa REAL,
+        epa REAL,
+        confidence REAL,
+        auto_epa REAL,
+        teleop_epa REAL,
+        endgame_epa REAL,
+        wins INTEGER,
+        losses INTEGER,
+        event_epas JSONB,
+        PRIMARY KEY (team_number, year)
+    );
+    """
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    cur.execute(schema)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def clear_year_data(year):
+    """Delete all data for a specific year from all relevant tables."""
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    for table, year_col in [
+        ("events", "year"),
+        ("event_teams", "event_key"),
+        ("event_rankings", "event_key"),
+        ("event_matches", "event_key"),
+        ("event_awards", "year"),
+        ("team_epas", "year"),
+    ]:
+        if year_col == "year":
+            cur.execute(f"DELETE FROM {table} WHERE year = %s", (year,))
+        else:
+            cur.execute(f"DELETE FROM {table} WHERE LEFT({year_col}, 4) = %s", (str(year),))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def insert_event_data(all_data, year):
+    """Insert event, teams, rankings, matches, and awards into PostgreSQL."""
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    for data in all_data:
+        # Insert event
+        cur.execute("""
+            INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (event_key) DO UPDATE SET
+                name = EXCLUDED.name,
+                year = EXCLUDED.year,
+                start_date = EXCLUDED.start_date,
+                end_date = EXCLUDED.end_date,
+                event_type = EXCLUDED.event_type,
+                city = EXCLUDED.city,
+                state_prov = EXCLUDED.state_prov,
+                country = EXCLUDED.country,
+                website = EXCLUDED.website
+        """, data["event"])
+        # Insert teams
+        if data["teams"]:
+            cur.executemany("""
+                INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (event_key, team_number) DO UPDATE SET
+                    nickname = EXCLUDED.nickname,
+                    city = EXCLUDED.city,
+                    state_prov = EXCLUDED.state_prov,
+                    country = EXCLUDED.country
+            """, data["teams"])
+        # Insert rankings
+        if data["rankings"]:
+            cur.executemany("""
+                INSERT INTO event_rankings (event_key, team_number, rank, wins, losses, ties, dq)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (event_key, team_number) DO UPDATE SET
+                    rank = EXCLUDED.rank,
+                    wins = EXCLUDED.wins,
+                    losses = EXCLUDED.losses,
+                    ties = EXCLUDED.ties,
+                    dq = EXCLUDED.dq
+            """, data["rankings"])
+        # Insert matches
+        if data["matches"]:
+            cur.executemany("""
+                INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (match_key) DO UPDATE SET
+                    event_key = EXCLUDED.event_key,
+                    comp_level = EXCLUDED.comp_level,
+                    match_number = EXCLUDED.match_number,
+                    set_number = EXCLUDED.set_number,
+                    red_teams = EXCLUDED.red_teams,
+                    blue_teams = EXCLUDED.blue_teams,
+                    red_score = EXCLUDED.red_score,
+                    blue_score = EXCLUDED.blue_score,
+                    winning_alliance = EXCLUDED.winning_alliance,
+                    youtube_key = EXCLUDED.youtube_key
+            """, data["matches"])
+        # Insert awards
+        if data["awards"]:
+            cur.executemany("""
+                INSERT INTO event_awards (event_key, team_number, award_name, year)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (event_key, team_number, award_name) DO NOTHING
+            """, data["awards"])
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def insert_team_epa(result, year):
+    """Insert or update a team's EPA data for a given year."""
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO team_epas (team_number, year, nickname, city, state_prov, country, website,
+                               normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+                               wins, losses, event_epas)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (team_number, year) DO UPDATE SET
+            nickname = EXCLUDED.nickname,
+            city = EXCLUDED.city,
+            state_prov = EXCLUDED.state_prov,
+            country = EXCLUDED.country,
+            website = EXCLUDED.website,
+            normal_epa = EXCLUDED.normal_epa,
+            epa = EXCLUDED.epa,
+            confidence = EXCLUDED.confidence,
+            auto_epa = EXCLUDED.auto_epa,
+            teleop_epa = EXCLUDED.teleop_epa,
+            endgame_epa = EXCLUDED.endgame_epa,
+            wins = EXCLUDED.wins,
+            losses = EXCLUDED.losses,
+            event_epas = EXCLUDED.event_epas
+    """, (
+        result.get("team_number"),
+        year,
+        result.get("nickname"),
+        result.get("city"),
+        result.get("state_prov"),
+        result.get("country"),
+        result.get("website"),
+        result.get("normal_epa"),
+        result.get("epa"),
+        result.get("confidence"),
+        result.get("auto_epa"),
+        result.get("teleop_epa"),
+        result.get("endgame_epa"),
+        result.get("wins"),
+        result.get("losses"),
+        json.dumps(result.get("event_epas", []))
+    ))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def get_team_experience_pg(team_number, up_to_year):
+    """Return the number of years a team has competed up to and including up_to_year."""
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT COUNT(DISTINCT year) FROM team_epas
+        WHERE team_number = %s AND year <= %s
+    """, (team_number, up_to_year))
+    years = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return years if years else 1
+
+def get_team_events(team_number, year):
+    """Return a list of event keys for a team in a given year."""
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT event_key FROM event_teams
+        WHERE team_number = %s AND LEFT(event_key, 4) = %s
+    """, (team_number, str(year)))
+    events = [row[0] for row in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return events
+
+def get_teams_for_year(year):
+    """Return a list of all teams that played in a given year."""
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT DISTINCT team_number, nickname, city, state_prov, country, website
+        FROM event_teams
+        WHERE LEFT(event_key, 4) = %s
+    """, (str(year),))
+    teams = []
+    for row in cur.fetchall():
+        teams.append({
+            "team_number": row[0],
+            "nickname": row[1],
+            "city": row[2],
+            "state_prov": row[3],
+            "country": row[4],
+            "website": row[5]
+        })
+    cur.close()
+    conn.close()
+    return teams
 
 def create_event_db(year):
     """Create and populate the events database for the specified year."""
@@ -52,7 +333,7 @@ def create_event_db(year):
                 event.get("state_prov"), event.get("country"),
                 event.get("website")
             ),
-            "teams": [], "rankings": [], "oprs": [], "matches": [], "awards": []
+            "teams": [], "rankings": [],"matches": [], "awards": []
         }
         try:
             teams = tba_get(f"event/{key}/teams")
@@ -70,13 +351,6 @@ def create_event_db(year):
                 data["rankings"].append((key, t_num, r.get("rank"),
                                          record.get("wins"), record.get("losses"),
                                          record.get("ties"), r.get("dq")))
-        except:
-            pass
-        try:
-            oprs = tba_get(f"event/{key}/oprs").get("oprs", {})
-            for t_key, opr in oprs.items():
-                t_num = int(t_key[3:])
-                data["oprs"].append((key, t_num, opr))
         except:
             pass
         try:
@@ -227,7 +501,7 @@ def calculate_confidence(consistency: float, dominance: float, event_boost: floa
     capped_confidence = max(0.0, min(1.0, raw_confidence))
     return raw_confidence, capped_confidence, record_alignment
 
-def calculate_event_epa(matches: List[Dict], team_key: str) -> Dict:
+def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) -> Dict:
     importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
     matches = sorted(matches, key=lambda m: m.get("time") or 0)
 
@@ -551,7 +825,7 @@ def fetch_team_components(team, year):
                         total_losses += 1
 
                 # Calculate EPA after processing all matches
-                event_epa = calculate_event_epa(matches, team_key)
+                event_epa = calculate_event_epa(matches, team_key, team_number)
                 event_epa["event_key"] = event_key
                 event_epa_results.append(event_epa)
         except Exception as e:
@@ -583,7 +857,6 @@ def fetch_team_components(team, year):
     }
 
 def fetch_and_store_team_data(year):
-    # Ensure events.sqlite is created and populated before running the teams model
     create_event_db(year)
     print(f"\nProcessing year {year}...")
 
@@ -656,7 +929,7 @@ def analyze_single_team(team_key: str, year: int):
                     elif winning_alliance and winning_alliance != alliance:
                         total_losses += 1
 
-                event_epa = calculate_event_epa(matches, team_key)
+                event_epa = calculate_event_epa(matches, team_key, team_number)
                 event_epa["event_key"] = event_key # Add event key to the result
                 event_epa_results.append(event_epa)
         except Exception as e:

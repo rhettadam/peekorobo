@@ -1,5 +1,4 @@
 from dotenv import load_dotenv
-import sqlite3
 import os
 import random
 import requests
@@ -197,24 +196,11 @@ def load_data():
         })
         EVENT_MATCHES.setdefault(year, []).append(match_data)
 
-    # OPRs
-    event_cursor.execute("""
-        SELECT event_key, team_number, opr
-        FROM event_oprs
-        ORDER BY event_key, team_number
-    """)
-    
-    EVENT_OPRS = {}
-    for row in event_cursor.fetchall():
-        event_key, team_number, opr = row
-        year = int(event_key[:4])
-        EVENT_OPRS.setdefault(year, {}).setdefault(event_key, {})[team_number] = opr
-
     event_cursor.close()
     team_cursor.close()
     conn.close()
 
-    return team_data, event_data, flat_event_list, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES, EVENT_OPRS
+    return team_data, event_data, flat_event_list, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES
 
 def get_team_avatar(team_number, year=2025):
     """
