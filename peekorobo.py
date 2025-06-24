@@ -24,12 +24,12 @@ from datagather import COUNTRIES,STATES,load_data,get_team_avatar,DISTRICT_STATE
 
 from layouts import home_layout,footer,topbar,team_layout,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, compare_layout
 
-from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_available_avatars,get_contrast_text_color,parse_event_key,get_user_epa_color,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card
+from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_available_avatars,get_contrast_text_color,parse_event_key,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card
 
 from dotenv import load_dotenv
 load_dotenv()
 
-TEAM_DATABASE, EVENT_DATABASE, EVENTS_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES = load_data()
+TEAM_DATABASE,EVENT_DATABASE,EVENT_TEAMS,EVENT_RANKINGS,EVENT_AWARDS,EVENT_MATCHES = load_data()
 
 app = dash.Dash(
     __name__,
@@ -435,7 +435,7 @@ def user_layout(_user_id=None, deleted_items=None):
                 metrics,
                 html.Br(),
                 html.Hr(),
-                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS)
+                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
             ],
             delete_button=delete_team_btn
         ))
@@ -457,7 +457,7 @@ def user_layout(_user_id=None, deleted_items=None):
             # Check for awards
             earned_awards = any(
                 aw["tk"] == team_number and aw["ek"] == "2025cmptx" and aw["y"] == 2025
-                for aw in EVENTS_AWARDS
+                for aw in EVENT_AWARDS
             )
     
             if not played_matches and not earned_awards:
@@ -497,7 +497,7 @@ def user_layout(_user_id=None, deleted_items=None):
             
             if matched_team:
                 team_number = int(matched_team["tk"])
-                event_section = build_recent_events_section(f"frc{team_number}", team_number, epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS)
+                event_section = build_recent_events_section(f"frc{team_number}", team_number, epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
                 match_rows = event_section.children[-1].children
             else:
                 match_rows = [html.P("No favorited teams at this event.")]
@@ -802,7 +802,7 @@ def other_user_layout(username):
                 metrics,
                 html.Br(),
                 html.Hr(),
-                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS)
+                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
             ]
         ))
 
@@ -821,7 +821,7 @@ def other_user_layout(username):
 
         if matched_team:
             team_number = int(matched_team["tk"])
-            section = build_recent_events_section(f"frc{team_number}", team_number, epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS)
+            section = build_recent_events_section(f"frc{team_number}", team_number, epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
         else:
             section = html.P("No favorited teams at this event.")
 
@@ -1322,7 +1322,7 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
                 latest_teams[team_number] = team_data
     teams_data = list(latest_teams.values())
 
-    events_data = EVENTS_DATABASE  # flat list of compressed event dicts
+    events_data = [ev for year_dict in EVENT_DATABASE.values() for ev in year_dict.values()]
 
     def get_children_and_style(val):
         if not val:
@@ -2814,8 +2814,7 @@ def load_teams(
     })
 
     # Load and filter teams
-    all_teams, epa_ranks = calculate_all_ranks(selected_year, TEAM_DATABASE)
-    teams_data = all_teams.copy()
+    teams_data, epa_ranks = calculate_all_ranks(selected_year, TEAM_DATABASE)
 
     empty_style = []
     if not teams_data:
@@ -3109,9 +3108,10 @@ def handle_navigation(
                 team_number = matching_team.get("team_number", "")
                 return f"/team/{team_number}/{selected_year}"
 
+    events_data = [ev for year_dict in EVENT_DATABASE.values() for ev in year_dict.values()]
     # --- EVENT SEARCH ---
     matching_events = []
-    for event in EVENTS_DATABASE:
+    for event in events_data:
         event_key = event.get("k", "").lower()
         event_name = (event.get("n", "") or "").lower()
         event_code = (event.get("cd", "") or "").lower()
@@ -3210,7 +3210,7 @@ def display_page(pathname):
     if len(path_parts) >= 2 and path_parts[0] == "team":
         team_number = path_parts[1]
         year = path_parts[2] if len(path_parts) > 2 else None
-        return wrap_with_toast_or_star(team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS, EVENT_TEAMS))
+        return wrap_with_toast_or_star(team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS))
     
     if pathname.startswith("/event/"):
         event_key = pathname.split("/")[-1]

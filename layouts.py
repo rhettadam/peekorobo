@@ -1192,7 +1192,7 @@ def events_layout(year=2025):
         ]
     )
 
-def build_recent_events_section(team_key, team_number, team_epa_data, performance_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS):
+def build_recent_events_section(team_key, team_number, team_epa_data, performance_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS):
     #print(f"DEBUG: epa_data for {team_key} in {performance_year}: {team_epa_data.get('event_epas')}") # Removed old debug
     epa_data = team_epa_data or {}
 
@@ -1242,7 +1242,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
 
             # Check if they earned an award at Einstein
             einstein_awards = [
-                a for a in EVENTS_AWARDS
+                a for a in EVENT_AWARDS
                 if a["tk"] == team_number and a["ek"] == "2025cmptx" and a["y"] == year
             ]
     
@@ -1262,7 +1262,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
 
         # Awards
         award_names = [
-            a["an"] for a in EVENTS_AWARDS
+            a["an"] for a in EVENT_AWARDS
             if a["tk"] == team_number and a["ek"] == event_key and a["y"] == year
         ]
         awards_line = html.Div([
@@ -1533,7 +1533,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         html.Div(recent_rows)
     ])
 
-def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS, EVENT_TEAMS):
+def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS):
 
     user_id = session.get("user_id")
     is_logged_in = bool(user_id)
@@ -1973,7 +1973,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
     
                     # Check if team won an award at Einstein
                     einstein_awards = [
-                        aw for aw in EVENTS_AWARDS
+                        aw for aw in EVENT_AWARDS
                         if aw["tk"] == team_number and aw["ek"] == "2025cmptx" and aw["y"] == year_key
                     ]
     
@@ -2044,7 +2044,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
     
     # --- Awards Section ---
     team_awards = [
-        row for row in EVENTS_AWARDS
+        row for row in EVENT_AWARDS
         if row["tk"] == team_number and (not year or row["y"] == year)
     ]
     
@@ -2171,7 +2171,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
                     rank_card,
                     performance_metrics_card,
                     html.Hr(),
-                    build_recent_events_section(team_key, team_number, epa_data, performance_year,EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENTS_AWARDS, EVENT_RANKINGS),
+                    build_recent_events_section(team_key, team_number, epa_data, performance_year,EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS),
                     html.H3("Events", style={"marginTop": "2rem", "color": "var(--text-secondary)", "fontWeight": "bold"}),
                     events_table,
                     html.H3("Awards", style={"marginTop": "2rem", "color": "var(--text-secondary)", "fontWeight": "bold"}),

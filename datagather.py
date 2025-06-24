@@ -89,7 +89,6 @@ def load_data():
     """)
     
     event_data = {}
-    flat_event_list = []
     for row in event_cursor.fetchall():
         event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website = row
         ev = compress_dict({
@@ -105,7 +104,6 @@ def load_data():
             "w": website
         })
         event_data.setdefault(year, {})[event_key] = ev
-        flat_event_list.append(ev)
 
     # Event Teams
     event_cursor.execute("""
@@ -200,7 +198,7 @@ def load_data():
     team_cursor.close()
     conn.close()
 
-    return team_data, event_data, flat_event_list, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES
+    return team_data, event_data, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES
 
 def get_team_avatar(team_number, year=2025):
     """
