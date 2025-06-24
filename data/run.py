@@ -1,8 +1,7 @@
 import statistics
-import math
 import json
 from tqdm import tqdm
-from tenacity import retry, stop_never, wait_exponential, retry_if_exception_type
+from tenacity import retry, stop_never, wait_exponential, retry_if_exception_type, stop_after_attempt
 import requests
 import os
 import concurrent.futures
@@ -10,8 +9,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 import random
 from typing import Dict, List, Optional, Union
+from functools import wraps
 
-from models import *
+from epamodels import *
 
 load_dotenv()
 
@@ -22,6 +22,8 @@ API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 import psycopg2
 from urllib.parse import urlparse
 
+# Robust retry for DB connection
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
 def get_pg_connection():
     url = os.environ.get("DATABASE_URL")
     if url is None:
@@ -145,7 +147,7 @@ def insert_event_data(all_data, year):
     """Insert event, teams, rankings, matches, and awards into PostgreSQL."""
     conn = get_pg_connection()
     cur = conn.cursor()
-    for data in all_data:
+    for i, data in enumerate(tqdm(all_data, desc=f'Inserting {year} events')):
         # Insert event
         cur.execute("""
             INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website)
@@ -258,8 +260,9 @@ def insert_team_epa(result, year):
     cur.close()
     conn.close()
 
+# Robust retry for team experience
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
 def get_team_experience_pg(team_number, up_to_year):
-    """Return the number of years a team has competed up to and including up_to_year."""
     conn = get_pg_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -271,8 +274,9 @@ def get_team_experience_pg(team_number, up_to_year):
     conn.close()
     return years if years else 1
 
+# Robust retry for team events
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
 def get_team_events(team_number, year):
-    """Return a list of event keys for a team in a given year."""
     conn = get_pg_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -285,14 +289,15 @@ def get_team_events(team_number, year):
     return events
 
 def get_teams_for_year(year):
-    """Return a list of all teams that played in a given year."""
+    """Return a list of all teams that played in a given year, including website from team_epas if available."""
     conn = get_pg_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT DISTINCT team_number, nickname, city, state_prov, country, website
-        FROM event_teams
-        WHERE LEFT(event_key, 4) = %s
-    """, (str(year),))
+        SELECT DISTINCT et.team_number, et.nickname, et.city, et.state_prov, et.country, te.website
+        FROM event_teams et
+        LEFT JOIN team_epas te ON et.team_number = te.team_number AND te.year = %s
+        WHERE LEFT(et.event_key, 4) = %s
+    """, (year, str(year)))
     teams = []
     for row in cur.fetchall():
         teams.append({
@@ -301,27 +306,53 @@ def get_teams_for_year(year):
             "city": row[2],
             "state_prov": row[3],
             "country": row[4],
-            "website": row[5]
+            "website": row[5] if row[5] else "N/A",
+            "key": f"frc{row[0]}"
         })
     cur.close()
     conn.close()
     return teams
 
 def create_event_db(year):
-    """Create and populate the events database for the specified year."""
+    """Create and populate the events database for the specified year, but only update events that haven't ended yet or are new."""
     print(f"\n🧹 Creating events database for {year}...")
     
     # Create PostgreSQL tables if they don't exist
     create_epa_tables()
     
     # Clear existing data for this year
-    clear_year_data(year)
+    #clear_year_data(year)
 
     try:
         events = tba_get(f"events/{year}")
     except Exception as e:
         print(f"❌ Failed to load events for {year}: {e}")
         return
+
+    from datetime import datetime
+    conn = get_pg_connection()
+    events_to_process = []
+    for event in events:
+        event_key = event["key"]
+        cur = conn.cursor()
+        cur.execute("SELECT end_date FROM events WHERE event_key = %s", (event_key,))
+        row = cur.fetchone()
+        cur.close()
+        if not row:
+            events_to_process.append(event)  # New event, process it
+            continue
+        end_date = row[0]
+        if not end_date:
+            events_to_process.append(event)  # No end date, process it
+            continue
+        try:
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+        except Exception:
+            events_to_process.append(event)  # Bad date, process it
+            continue
+        if end_date_obj >= datetime.now():
+            events_to_process.append(event)  # Event hasn't ended, process it
+    conn.close()
 
     def fetch(event):
         key = event["key"]
@@ -380,8 +411,8 @@ def create_event_db(year):
 
     all_data = []
     with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(fetch, ev) for ev in events]
-        for f in tqdm(as_completed(futures), total=len(events), desc=f"Updating {year}"):
+        futures = [executor.submit(fetch, ev) for ev in events_to_process]
+        for f in tqdm(as_completed(futures), total=len(events_to_process), desc=f"Updating {year}"):
             try:
                 all_data.append(f.result())
             except Exception as e:
@@ -797,9 +828,29 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
         }
     }
 
+# Retry wrapper for fetch_team_components
+def retry_team_fetch(max_attempts=3):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    print(f"[Retry {attempt}/{max_attempts}] Error processing team: {e}")
+                    if attempt == max_attempts:
+                        print(f"[SKIP] Team {args[0].get('team_number', 'Unknown')} after {max_attempts} failed attempts.")
+                        return None
+        return wrapper
+    return decorator
+
+@retry_team_fetch(max_attempts=3)
 def fetch_team_components(team, year):
     team_key = team["key"]
     team_number = team["team_number"]
+
+    tba_team = tba_get(f"team/{team_key}")
+    website = tba_team.get("website", "N/A") if tba_team else "N/A"
 
     # Get team events from PostgreSQL
     event_keys = get_team_events(team_number, year)
@@ -816,7 +867,6 @@ def fetch_team_components(team, year):
                 for match in matches:
                     if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
                         continue
-                    
                     alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
                     winning_alliance = match.get("winning_alliance", "")
                     if winning_alliance == alliance:
@@ -826,7 +876,7 @@ def fetch_team_components(team, year):
 
                 # Calculate EPA after processing all matches
                 event_epa = calculate_event_epa(matches, team_key, team_number)
-                event_epa["event_key"] = event_key
+                event_epa["event_key"] = event_key  # Ensure event_key is included
                 event_epa_results.append(event_epa)
         except Exception as e:
             print(f"Failed to fetch matches for team {team_key} at event {event_key}: {e}")
@@ -837,14 +887,13 @@ def fetch_team_components(team, year):
     overall_epa_data["wins"] = total_wins
     overall_epa_data["losses"] = total_losses
 
-    # Always return a result, even if no events were found
     return {
         "team_number": team.get("team_number"),
         "nickname": team.get("nickname"),
         "city": team.get("city"),
         "state_prov": team.get("state_prov"),
         "country": team.get("country"),
-        "website": team.get("website", "N/A"),
+        "website": website,
         "normal_epa": overall_epa_data.get("overall", 0),
         "confidence": overall_epa_data.get("confidence", 0),
         "epa": overall_epa_data.get("actual_epa", 0),
@@ -930,7 +979,7 @@ def analyze_single_team(team_key: str, year: int):
                         total_losses += 1
 
                 event_epa = calculate_event_epa(matches, team_key, team_number)
-                event_epa["event_key"] = event_key # Add event key to the result
+                event_epa["event_key"] = event_key  # Ensure event_key is included
                 event_epa_results.append(event_epa)
         except Exception as e:
             print(f"Failed to fetch matches for team {team_key} at event {event_key}: {e}")
