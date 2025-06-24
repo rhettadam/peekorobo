@@ -1,1 +1,1 @@
-web: python peekorobo.py
+web: gunicorn peekorobo:server
