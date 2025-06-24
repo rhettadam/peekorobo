@@ -29,7 +29,7 @@ from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avat
 from dotenv import load_dotenv
 load_dotenv()
 
-TEAM_DATABASE, EVENT_DATABASE, _, _, _, _ = load_data(only_teams_and_events=True)
+TEAM_DATABASE,EVENT_DATABASE,EVENT_TEAMS,EVENT_RANKINGS,EVENT_AWARDS,EVENT_MATCHES = load_data()
 
 app = dash.Dash(
     __name__,
@@ -84,8 +84,6 @@ app.layout = html.Div([
 ])
 
 def user_layout(_user_id=None, deleted_items=None):
-
-    _, _, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data(year=2025)
 
     user_id = _user_id or session.get("user_id")
 
@@ -368,6 +366,7 @@ def user_layout(_user_id=None, deleted_items=None):
             continue
 
         team_data = TEAM_DATABASE.get(2025, {}).get(team_number)
+        year_data = TEAM_DATABASE.get(2025, {})
 
         delete_team_btn = html.Button(
             html.Img(
@@ -439,6 +438,97 @@ def user_layout(_user_id=None, deleted_items=None):
                 build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
             ],
             delete_button=delete_team_btn
+        ))
+
+    event_cards = []
+    for event_key in event_keys:
+        if event_key not in EVENT_DATABASE.get(2025, {}):
+            continue  # Skip deleted or invalid events
+    
+        # Skip 2025cmptx unless team actually participated
+        if event_key == "2025cmptx":
+            year = 2025
+            # Check for matches
+            played_matches = any(
+                str(team_number) in m.get("rt", "").split(",") or str(team_number) in m.get("bt", "").split(",")
+                for m in EVENT_MATCHES.get(year, [])
+                if m.get("ek") == "2025cmptx"
+            )
+            # Check for awards
+            earned_awards = any(
+                aw["tk"] == team_number and aw["ek"] == "2025cmptx" and aw["y"] == 2025
+                for aw in EVENT_AWARDS
+            )
+    
+            if not played_matches and not earned_awards:
+                continue  # skip Einstein if no participation
+    
+        year = 2025
+        matches = [m for m in EVENT_MATCHES.get(year, []) if m.get("ek") == event_key]
+        # ... rest of your card building logic ...
+
+        delete_event_btn = html.Button(
+            html.Img(
+                src="/assets/trash.png",
+                style={
+                    "width": "20px",
+                    "height": "20px",
+                    "verticalAlign": "middle"
+                }
+            ),
+            id={"type": "delete-favorite", "item_type": "event", "key": event_key},
+            style={
+                "backgroundColor": "transparent",
+                "border": "none",
+                "cursor": "pointer",
+                "padding": "4px"
+            }
+        )
+
+        match_rows = []
+        if matches:
+            match_rows = [
+                m for m in matches
+                if any(t.strip().isdigit() for t in (m.get("rt", "") + "," + m.get("bt", "")).split(","))
+            ]
+            event_teams = EVENT_TEAMS.get(2025, {}).get(event_key, [])
+            fav_team_numbers = [int(k) for k in team_keys if k.isdigit()]
+            matched_team = next((t for t in event_teams if int(t["tk"]) in fav_team_numbers), None)
+            
+            if matched_team:
+                team_number = int(matched_team["tk"])
+                event_section = build_recent_events_section(f"frc{team_number}", team_number, epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
+                match_rows = event_section.children[-1].children
+            else:
+                match_rows = [html.P("No favorited teams at this event.")]
+
+
+        event_data = EVENT_DATABASE.get(year, {}).get(event_key, {})
+        event_name = event_data.get("n", "Unknown Event")
+        event_label = f"{event_name} | {event_key}"
+        event_url = f"/event/{event_key}"
+        location = ", ".join(filter(None, [event_data.get("c", ""), event_data.get("s", ""), event_data.get("co", "")]))
+        
+
+        event_cards.append(user_event_card(
+            body_elements=[
+                html.Div([
+                    html.A(
+                        event_label,
+                        href=event_url,
+                        style={
+                            "fontWeight": "bold",
+                            "fontSize": "1.1rem",
+                            "textDecoration": "underline",
+                            "color": "#007bff",
+                            "cursor": "pointer"
+                        }
+                    ),
+                ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"}),
+        
+                html.Div(location, style={"fontSize": "0.85rem", "color": "#666", "marginBottom": "0.5rem"}),
+                html.Hr(),
+            ]
         ))
 
     return html.Div([
@@ -712,9 +802,43 @@ def other_user_layout(username):
                 metrics,
                 html.Br(),
                 html.Hr(),
-                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025, EVENT_DATABASE)
+                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
             ]
         ))
+
+    event_cards = []
+    for event_key in event_keys:
+        if event_key not in EVENT_DATABASE.get(2025, {}):
+            continue  # Skip deleted or invalid events
+        event_data = EVENT_DATABASE.get(2025, {}).get(event_key, {})
+        event_name = event_data.get("n", "Unknown Event")
+        location = ", ".join(filter(None, [event_data.get("c", ""), event_data.get("s", ""), event_data.get("co", "")]))
+
+        matches = [m for m in EVENT_MATCHES.get(2025, []) if m.get("ek") == event_key]
+        event_teams = EVENT_TEAMS.get(2025, {}).get(event_key, [])
+        fav_team_numbers = [int(k) for k in team_keys if k.isdigit()]
+        matched_team = next((t for t in event_teams if int(t["tk"]) in fav_team_numbers), None)
+
+        if matched_team:
+            team_number = int(matched_team["tk"])
+            section = build_recent_events_section(f"frc{team_number}", team_number, epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
+        else:
+            section = html.P("No favorited teams at this event.")
+
+        event_cards.append(
+            dbc.Card(
+                dbc.CardBody([
+                    html.Div([
+                        html.A(f"{event_name} | {event_key}", href=f"/event/{event_key}", style={"fontWeight": "bold", "fontSize": "1.1rem", "textDecoration": "underline", "color": "#007bff"})
+                    ], style={"display": "flex", "justifyContent": "space-between"}),
+                    html.Div(location, style={"fontSize": "0.85rem", "color": "#666", "marginBottom": "0.5rem"}),
+                    html.Hr(),
+                    section
+                ]),
+                className="mb-4",
+                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "backgroundColor": "var(--card-bg)"}
+            )
+        )
 
     follow_button = html.Button(
         "Unfollow" if is_following else "Follow",
@@ -1567,6 +1691,12 @@ def update_events_tab_content(
             if " presented by" in full_name:
                 full_name = full_name.split(" presented by")[0]
             name = full_name.split(" presented by")[0].strip()
+
+            try:
+                start_date = datetime.strptime(event.get("sd", ""), "%Y-%m-%d").date()
+                week = get_week_number(start_date)
+            except Exception:
+                week = "N/A"
     
             epa_values = []
             for t in team_entries:
@@ -1582,9 +1712,11 @@ def update_events_tab_content(
             max_epa = max(epa_values)
             top_8 = np.mean(epa_values[:8]) if len(epa_values) >= 8 else np.mean(epa_values)
             top_24 = np.mean(epa_values[:24]) if len(epa_values) >= 24 else np.mean(epa_values)
+            mean_epa = np.median(epa_values)
     
             rows.append({
                 "Name": f"[{name}](/event/{event_key})",
+                "Week": week,
                 "Event Type": event.get("et", "N/A"),
                 "District": extract_district_key(name) or "N/A",
                 "Max ACE": round(max_epa, 2),
@@ -1616,7 +1748,6 @@ def update_events_tab_content(
         events_data.sort(key=lambda x: x.get("n", "").lower())
 
     if active_tab == "table-tab":
-        _, _, EVENT_TEAMS, _, _, _ = load_data(year=selected_year)
         df = compute_event_insights_from_data(EVENT_TEAMS, EVENT_DATABASE, TEAM_DATABASE, selected_year)
     
         # Sort by "Top 8 ACE"
@@ -1655,6 +1786,7 @@ def update_events_tab_content(
             id="event-insights-table",
             columns=[
                 {"name": "Name", "id": "Name", "presentation": "markdown"},
+                {"name": "Week", "id": "Week"},
                 {"name": "Event Type", "id": "Event Type"},
                 {"name": "Max ACE", "id": "Max ACE"},
                 {"name": "Top 8 ACE", "id": "Top 8 ACE"},
@@ -1712,14 +1844,10 @@ def update_events_tab_content(
     ]), district_options
 
 def event_layout(event_key):
-
-
     parsed_year, _ = parse_event_key(event_key)
     event = EVENT_DATABASE.get(parsed_year, {}).get(event_key)
     if not event:
         return dbc.Alert("Event details could not be found.", color="danger")
-
-    _, _, EVENT_TEAMS, EVENT_RANKINGS, _, EVENT_MATCHES = load_data(year=parsed_year)
 
     # Get event-specific EPA data for teams at this event
     event_teams = EVENT_TEAMS.get(parsed_year, {}).get(event_key, [])
@@ -2948,7 +3076,7 @@ def handle_navigation(
         return dash.no_update
 
     search_value = search_value.strip().lower()
-    selected_year = int(year_value) if year_value and year_value.isdigit() else 2025
+    selected_year = int(year_value) if year_value and year_value.isdigit() else None
     
     # Search through all years if no specific year selected
     if selected_year is None:
@@ -2964,7 +3092,7 @@ def handle_navigation(
             )
             if matching_team:
                 team_number = matching_team.get("team_number", "")
-                return f"/team/{team_number}/2025"
+                return f"/team/{team_number}"
     else:
         year_data = TEAM_DATABASE.get(selected_year)
         if year_data:
@@ -3082,7 +3210,7 @@ def display_page(pathname):
     if len(path_parts) >= 2 and path_parts[0] == "team":
         team_number = path_parts[1]
         year = path_parts[2] if len(path_parts) > 2 else None
-        return wrap_with_toast_or_star(team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE))
+        return wrap_with_toast_or_star(team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS))
     
     if pathname.startswith("/event/"):
         event_key = pathname.split("/")[-1]
@@ -3565,4 +3693,3 @@ def update_team_favorites_popover_content(is_open, pathname):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
     app.run(host="0.0.0.0", port=port, debug=False)
-
