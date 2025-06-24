@@ -1,6 +1,6 @@
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
-from datagather import frc_games,COUNTRIES,STATES,DISTRICT_STATES,get_team_avatar,get_pg_connection
+from datagather import frc_games,COUNTRIES,STATES,DISTRICT_STATES,get_team_avatar,get_pg_connection,load_data
 from flask import session
 from datetime import datetime, date
 from utils import predict_win_probability, calculate_single_rank, compute_percentiles, pill
@@ -1201,6 +1201,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
 
     recent_rows = []
     year = performance_year 
+
     # Get the 3 most recent events by start date
     # Get team-attended events with start dates
     event_dates = []
@@ -1533,10 +1534,12 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         html.Div(recent_rows)
     ])
 
-def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS):
+def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE):
 
     user_id = session.get("user_id")
     is_logged_in = bool(user_id)
+
+    _, _, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data(year=year)
     
     # Check if team is already favorited
     is_favorited = False

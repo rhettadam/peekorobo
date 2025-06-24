@@ -289,7 +289,7 @@ def team_link_with_avatar(team):
             # Remove inline color style from div
             # "color": "black"
         }),
-        href=f"/team/{team_number}",
+        href=f"/team/{team_number}/2025",
         style={
             "textDecoration": "none",
             # Remove inline color style from A
