@@ -2302,8 +2302,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         ]
 
         return html.Div([
-            html.Div(
-                [
+            dbc.Row([
+                dbc.Col([
                     html.Label("Filter by Team:", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
                     dcc.Dropdown(
                         id="team-filter",
@@ -2311,9 +2311,17 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                         value="ALL",
                         clearable=False
                     )
-                ],
-                style={"marginBottom": "20px"}
-            ),
+                ], md=6),
+                dbc.Col([
+                    dbc.Button(
+                        "Create Playlist ▶︎",
+                        id="create-playlist-btn",
+                        color="warning",
+                        className="w-100",
+                        style={"marginTop": "10px"}
+                    )
+                ], md=6, className="d-flex align-items-end")
+            ], className="mb-4"),
             html.Div(id="matches-container")
         ]), query_string
 
@@ -2726,6 +2734,117 @@ def update_matches_table(selected_team, event_matches, epa_data):
         html.Div(qual_table, className="recent-events-table"),
         html.Div(playoff_table, className="recent-events-table"),
     ])
+
+# Add a client-side callback to handle opening the playlist in a new tab
+app.clientside_callback(
+    """
+    function(n_clicks, selected_team, event_matches, pathname) {
+        if (!n_clicks) return window.dash_clientside.no_update;
+        
+        // Extract event_key from pathname
+        let event_key = null;
+        if (pathname && pathname.includes('/event/')) {
+            event_key = pathname.split('/event/')[1].split('/')[0];
+        }
+        
+        if (!event_key || !event_matches) return window.dash_clientside.no_update;
+        
+        // Get event name from the first match (they all have the same event)
+        const event_name = event_matches[0]?.ek || event_key;
+        
+        // Create playlist title
+        let playlist_title = event_name;
+        if (selected_team && selected_team !== 'ALL') {
+            playlist_title = `${event_name} - Team ${selected_team}`;
+        }
+        
+        // Filter matches based on team selection
+        let filtered_matches = event_matches;
+        if (selected_team && selected_team !== 'ALL') {
+            filtered_matches = event_matches.filter(match => {
+                const redTeams = match.rt ? match.rt.split(',') : [];
+                const blueTeams = match.bt ? match.bt.split(',') : [];
+                return redTeams.includes(selected_team) || blueTeams.includes(selected_team);
+            });
+        }
+        
+        // Sort matches in correct order: quals first, then semis, then finals
+        filtered_matches.sort((a, b) => {
+            // Get competition level and match number from match key
+            const getMatchInfo = (match) => {
+                const key = match.k ? match.k.split('_').pop().toLowerCase() : '';
+                
+                // Extract comp level and match number
+                let compLevel = 'qm'; // default
+                let matchNum = 0;
+                let setNum = 0;
+                
+                if (key.startsWith('qm')) {
+                    compLevel = 'qm';
+                    matchNum = parseInt(key.replace('qm', '').replace('m', '')) || 0;
+                } else if (key.startsWith('qf')) {
+                    compLevel = 'qf';
+                    const parts = key.replace('qf', '').split('m');
+                    setNum = parseInt(parts[0]) || 0;
+                    matchNum = parseInt(parts[1]) || 0;
+                } else if (key.startsWith('sf')) {
+                    compLevel = 'sf';
+                    const parts = key.replace('sf', '').split('m');
+                    setNum = parseInt(parts[0]) || 0;
+                    matchNum = parseInt(parts[1]) || 0;
+                } else if (key.startsWith('f')) {
+                    compLevel = 'f';
+                    matchNum = parseInt(key.replace('f', '').replace('m', '')) || 0;
+                }
+                
+                return { compLevel, setNum, matchNum };
+            };
+            
+            const aInfo = getMatchInfo(a);
+            const bInfo = getMatchInfo(b);
+            
+            // Define comp level order: qm < qf < sf < f
+            const compLevelOrder = { 'qm': 0, 'qf': 1, 'sf': 2, 'f': 3 };
+            
+            // Compare by comp level first
+            if (compLevelOrder[aInfo.compLevel] !== compLevelOrder[bInfo.compLevel]) {
+                return compLevelOrder[aInfo.compLevel] - compLevelOrder[bInfo.compLevel];
+            }
+            
+            // If same comp level, compare by set number (for qf/sf)
+            if (aInfo.setNum !== bInfo.setNum) {
+                return aInfo.setNum - bInfo.setNum;
+            }
+            
+            // Finally compare by match number
+            return aInfo.matchNum - bInfo.matchNum;
+        });
+        
+        // Extract YouTube video IDs from sorted matches
+        const video_ids = filtered_matches
+            .map(match => match.yt)
+            .filter(yt => yt);
+        
+        if (video_ids.length === 0) return window.dash_clientside.no_update;
+        
+        // Create YouTube playlist URL with title
+        const playlist_url = `https://www.youtube.com/watch_videos?video_ids=${video_ids.join(',')}&title=${encodeURIComponent(playlist_title)}`;
+        
+        // Open in new tab
+        window.open(playlist_url, '_blank');
+        
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("url", "pathname", allow_duplicate=True),
+    Input("create-playlist-btn", "n_clicks"),
+    [
+        State("team-filter", "value"),
+        State("store-event-matches", "data"),
+        State("url", "pathname"),
+    ],
+    prevent_initial_call=True
+)
 
 @callback(
     [
