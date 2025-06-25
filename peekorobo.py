@@ -20,11 +20,11 @@ import pandas as pd
 
 import plotly.graph_objects as go
 
-from datagather import COUNTRIES,STATES,load_data,get_team_avatar,DISTRICT_STATES,get_pg_connection
+from datagather import COUNTRIES,STATES,load_data,get_team_avatar,DISTRICT_STATES,DISTRICT_STATES_A,get_pg_connection
 
 from layouts import home_layout,footer,topbar,team_layout,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, compare_layout
 
-from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_available_avatars,get_contrast_text_color,parse_event_key,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card
+from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_available_avatars,get_contrast_text_color,parse_event_key,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card,truncate_name
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -1629,16 +1629,28 @@ def update_events_tab_content(
     if not isinstance(selected_event_types, list):
         selected_event_types = [selected_event_types]
 
-    def extract_district_key(event_name):
-        parts = event_name.split()
-        if "District" in parts:
-            idx = parts.index("District")
-            return parts[idx - 1] if idx > 0 else None
+    def get_event_district(event):
+        """Get district for an event based on its location using DISTRICT_STATES mapping"""
+        state = event.get("s", "")  # State/province
+        country = event.get("co", "")  # Country
+        
+        # Special cases for non-US districts
+        if country == "Israel":
+            return "ISR"
+        if country == "Canada":
+            return "ONT"
+        
+        # Check US states against DISTRICT_STATES
+        for district_acronym, states in DISTRICT_STATES_A.items():
+            if state in states:
+                return district_acronym
+        
         return None
 
+    # Get all unique districts from events
     district_keys = sorted(set(
-        extract_district_key(ev["n"]) for ev in events_data
-        if "District" in ev.get("n", "")
+        get_event_district(ev) for ev in events_data
+        if get_event_district(ev) is not None
     ))
 
     district_options = [{"label": "All", "value": "all"}] + [
@@ -1648,7 +1660,7 @@ def update_events_tab_content(
     if selected_district and selected_district != "all":
         events_data = [
             ev for ev in events_data
-            if extract_district_key(ev.get("n", "")) == selected_district
+            if get_event_district(ev) == selected_district
         ]
 
     if "all" not in selected_event_types:
@@ -1672,6 +1684,9 @@ def update_events_tab_content(
         except:
             return datetime.date(1900, 1, 1)
 
+    def truncate_name(name, max_length=32):
+        return name if len(name) <= max_length else name[:max_length-3] + '...'
+
     def compute_event_insights_from_data(EVENT_TEAMS, EVENT_DATABASE, TEAM_DATABASE, selected_year, filtered_event_keys=None):
         rows = []
     
@@ -1692,11 +1707,22 @@ def update_events_tab_content(
                 full_name = full_name.split(" presented by")[0]
             name = full_name.split(" presented by")[0].strip()
 
+            # --- Week Calculation ---
             try:
                 start_date = datetime.strptime(event.get("sd", ""), "%Y-%m-%d").date()
-                week = get_week_number(start_date)
+                week_idx = get_week_number(start_date)
+                if week_idx is not None:
+                    week = f"{week_idx+1}"  # FRC weeks are 1-based
+                else:
+                    week = "N/A"
             except Exception:
                 week = "N/A"
+
+            # --- District Calculation ---
+            district = get_event_district(event) or ""
+            state = event.get("s", "")
+            country = event.get("co", "")
+            location = ", ".join([v for v in [state, country] if v])
     
             epa_values = []
             for t in team_entries:
@@ -1713,12 +1739,18 @@ def update_events_tab_content(
             top_8 = np.mean(epa_values[:8]) if len(epa_values) >= 8 else np.mean(epa_values)
             top_24 = np.mean(epa_values[:24]) if len(epa_values) >= 24 else np.mean(epa_values)
             mean_epa = np.median(epa_values)
+
+            # Tooltip with truncated name and markdown link
+            truncated = truncate_name(name)
+            # Markdown link with tooltip using title attribute
+            markdown_link = f'[{truncated}](/event/{event_key} "{name}")'
     
             rows.append({
-                "Name": f"[{name}](/event/{event_key})",
+                "Name": markdown_link,
                 "Week": week,
+                "District": district,
+                "Location": location,
                 "Event Type": event.get("et", "N/A"),
-                "District": extract_district_key(name) or "N/A",
                 "Max ACE": round(max_epa, 2),
                 "Top 8 ACE": round(top_8, 2),
                 "Top 24 ACE": round(top_24, 2),
@@ -1787,6 +1819,8 @@ def update_events_tab_content(
             columns=[
                 {"name": "Name", "id": "Name", "presentation": "markdown"},
                 {"name": "Week", "id": "Week"},
+                {"name": "District", "id": "District"},
+                {"name": "Location", "id": "Location"},
                 {"name": "Event Type", "id": "Event Type"},
                 {"name": "Max ACE", "id": "Max ACE"},
                 {"name": "Top 8 ACE", "id": "Top 8 ACE"},
@@ -3017,13 +3051,16 @@ def load_teams(
 
     table_rows = []
     for t in teams_data:
-        team_str = str(t.get("team_number"))
-        rank = epa_ranks.get(team_str, {}).get("rank", "N/A")
         team_num = t.get("team_number")
+        rank = epa_ranks.get(str(team_num), {}).get("rank", "N/A")
         record = f"{t.get('wins', 0)} - {t.get('losses', 0)} - {t.get('ties', 0)} - {t.get('dq', 0)}"
+        nickname = t.get('nickname', 'Unknown')
+        nickname_safe = nickname.replace('"', "'")
+        truncated = truncate_name(nickname)
+        team_display = f'[{team_num} | {truncated}](/team/{team_num}/{selected_year} "{nickname_safe}")'
         table_rows.append({
             "epa_rank": rank,
-            "team_display": f"[{team_num} | {t.get('nickname', 'Unknown')}](/team/{team_num}/{selected_year})",
+            "team_display": team_display,
             "epa": round(abs(t.get("normal_epa") or 0), 2),
             "confidence": t.get("confidence", 0),
             "ace": round(abs(t.get("epa") or 0), 2),

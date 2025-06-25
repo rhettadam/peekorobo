@@ -807,3 +807,18 @@ DISTRICT_STATES = {
     "FIN": ["Indiana"],
     "NE": ["Connecticut", "Massachusetts", "Maine", "New Hampshire", "Vermont"],
 }
+
+DISTRICT_STATES_A = {
+    "ONT": ["Ontario"],
+    "FMA": ["DE", "NJ", "PA"],
+    "ISR": ["Israel"],
+    "CHS": ["MD", "VA", "DC"],
+    "FIT": ["TX", "NM"],
+    "PCH": ["GA"],
+    "PNW": ["WA", "OR"],
+    "FIM": ["MI"],
+    "FSC": ["SC"],
+    "FNC": ["NC"],
+    "FIN": ["IN"],
+    "NE": ["CT", "MA", "ME", "NH", "VT"],
+}

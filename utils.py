@@ -429,3 +429,6 @@ def event_card(event, favorited=False):
         style={"width": "18rem", "height": "22rem", "margin": "10px"},
     )
 
+def truncate_name(name, max_length=32):
+        return name if len(name) <= max_length else name[:max_length-3] + '...'
+
