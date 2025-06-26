@@ -543,6 +543,7 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
     dominance_scores = []
     event_wins = 0
     event_losses = 0
+    event_ties = 0  # Add tie counter
 
     # Get the year from the first match's event key
     year = matches[0]["event_key"][:4] if matches else "2025"
@@ -566,12 +567,14 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
         opponent_alliance = "blue" if alliance == "red" else "red"
 
-        # Track wins/losses
+        # Track wins/losses/ties
         winning_alliance = match.get("winning_alliance", "")
         if winning_alliance == alliance:
             event_wins += 1
         elif winning_alliance and winning_alliance != alliance:
             event_losses += 1
+        elif not winning_alliance:  # Tie
+            event_ties += 1
 
         team_keys = match["alliances"][alliance].get("team_keys", [])
         team_count = len(team_keys)
@@ -658,7 +661,7 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             "event_boost": 0.0, "veteran_boost": 0.0,
             "years_experience": 0, "weights": CONFIDENCE_WEIGHTS,
             "record_alignment": 0.0, "wins": event_wins,
-            "losses": event_losses
+            "losses": event_losses, "ties": event_ties
         }
 
     if len(contributions) >= 2:
@@ -702,7 +705,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         "weights": CONFIDENCE_WEIGHTS,
         "record_alignment": record_alignment,
         "wins": event_wins,
-        "losses": event_losses
+        "losses": event_losses,
+        "ties": event_ties
     }
 
 def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
@@ -710,7 +714,7 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
         return {
             "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
             "confidence": 0.0, "actual_epa": 0.0,
-            "wins": 0, "losses": 0
+            "wins": 0, "losses": 0, "ties": 0
         }
 
     # Filter out events with no valid matches or zero EPAs
@@ -723,7 +727,7 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
         return {
             "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
             "confidence": 0.0, "actual_epa": 0.0,
-            "wins": 0, "losses": 0
+            "wins": 0, "losses": 0, "ties": 0
         }
 
     total_overall = 0.0
@@ -741,6 +745,7 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
     total_events = 0
     total_wins = 0
     total_losses = 0
+    total_ties = 0
 
     # Use a weighted average based on match count per event
     for epa_data in valid_events:
@@ -762,13 +767,14 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
         total_record_alignment += epa_data["record_alignment"] * match_count
         total_wins += epa_data["wins"]
         total_losses += epa_data["losses"]
+        total_ties += epa_data.get("ties", 0)
         total_events += 1
     
     if total_match_count == 0:
         return {
             "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
             "confidence": 0.0, "actual_epa": 0.0,
-            "wins": 0, "losses": 0
+            "wins": 0, "losses": 0, "ties": 0
         }
 
     avg_confidence = total_confidence / total_match_count
@@ -812,6 +818,7 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
         "actual_epa": round((total_overall / total_match_count) * final_confidence, 2),
         "wins": total_wins,
         "losses": total_losses,
+        "ties": total_ties,
         "avg_consistency": avg_consistency,
         "avg_dominance": avg_dominance,
         "avg_veteran_boost": avg_veteran_boost,
@@ -858,12 +865,13 @@ def fetch_team_components(team, year):
     event_epa_results = []
     total_wins = 0
     total_losses = 0
+    total_ties = 0
 
     for event_key in event_keys:
         try:
             matches = tba_get(f"team/{team_key}/event/{event_key}/matches")
             if matches:
-                # Calculate overall wins/losses from matches
+                # Calculate overall wins/losses/ties from matches
                 for match in matches:
                     if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
                         continue
@@ -873,6 +881,8 @@ def fetch_team_components(team, year):
                         total_wins += 1
                     elif winning_alliance and winning_alliance != alliance:
                         total_losses += 1
+                    elif not winning_alliance:
+                        total_ties += 1
 
                 # Calculate EPA after processing all matches
                 event_epa = calculate_event_epa(matches, team_key, team_number)
@@ -886,6 +896,7 @@ def fetch_team_components(team, year):
     overall_epa_data = aggregate_overall_epa(event_epa_results)
     overall_epa_data["wins"] = total_wins
     overall_epa_data["losses"] = total_losses
+    overall_epa_data["ties"] = total_ties
 
     return {
         "team_number": team.get("team_number"),
@@ -902,6 +913,7 @@ def fetch_team_components(team, year):
         "endgame_epa": overall_epa_data.get("endgame", 0),
         "wins": overall_epa_data.get("wins", 0),
         "losses": overall_epa_data.get("losses", 0),
+        "ties": overall_epa_data.get("ties", 0),
         "event_epas": event_epa_results, # List of event-specific EPA results
     }
 
@@ -961,12 +973,13 @@ def analyze_single_team(team_key: str, year: int):
     event_epa_results = []
     total_wins = 0
     total_losses = 0
+    total_ties = 0
 
     for event_key in event_keys:
         try:
             matches = tba_get(f"team/{team_key}/event/{event_key}/matches")
             if matches:
-                # Calculate overall wins/losses from matches
+                # Calculate overall wins/losses/ties from matches
                 for match in matches:
                     if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
                         continue
@@ -977,6 +990,8 @@ def analyze_single_team(team_key: str, year: int):
                         total_wins += 1
                     elif winning_alliance and winning_alliance != alliance:
                         total_losses += 1
+                    elif not winning_alliance:
+                        total_ties += 1
 
                 event_epa = calculate_event_epa(matches, team_key, team_number)
                 event_epa["event_key"] = event_key  # Ensure event_key is included
@@ -987,6 +1002,7 @@ def analyze_single_team(team_key: str, year: int):
     overall_epa_data = aggregate_overall_epa(event_epa_results)
     overall_epa_data["wins"] = total_wins
     overall_epa_data["losses"] = total_losses
+    overall_epa_data["ties"] = total_ties
 
     print(f"\n{'='*50}")
     print(f"EPA Analysis for Team {team_key} ({year})")
@@ -994,7 +1010,7 @@ def analyze_single_team(team_key: str, year: int):
     print(f"\nOverall EPA: {overall_epa_data['overall']}")
     print(f"Overall Confidence: {overall_epa_data['confidence']}")
     print(f"Actual Overall EPA: {overall_epa_data['actual_epa']}")
-    print(f"Overall Record: {overall_epa_data['wins']}-{overall_epa_data['losses']}")
+    print(f"Overall Record: {overall_epa_data['wins']}-{overall_epa_data['losses']}-{overall_epa_data['ties']}")
 
     if event_epa_results:
         print(f"\n{'='*50}")
@@ -1008,6 +1024,7 @@ def analyze_single_team(team_key: str, year: int):
             print(f"  Endgame: {event_epa['endgame']}")
             print(f"  Confidence: {event_epa['confidence']}")
             print(f"  Actual EPA: {event_epa['actual_epa']}")
+            print(f"  Record: {event_epa['wins']}-{event_epa['losses']}-{event_epa['ties']}")
             print("  Confidence Breakdown:")
             weights = event_epa["weights"]
             print(f"    → Consistency:     {round(event_epa['consistency'], 3)} × {weights['consistency']} = {round(weights['consistency'] * event_epa['consistency'], 4)}")
