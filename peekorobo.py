@@ -2667,10 +2667,7 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
             else:
                 pred_red = f"{p_red:.0%}"
                 pred_blue = f"{p_blue:.0%}"
-                if 0.47 <= p_red <= 0.53:
-                    pred_winner = "Tie"
-                else:
-                    pred_winner = "Red" if p_red > p_blue else "Blue"
+                pred_winner = "Red" if p_red > p_blue else "Blue"
 
             yid = match.get("yt")
             video_link = f"[Watch](https://www.youtube.com/watch?v={yid})" if yid else "N/A"

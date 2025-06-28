@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 import random
 from typing import Dict, List, Optional, Union
 from functools import wraps
+import signal
+import sys
+import threading
 
 from epamodels import *
 
@@ -21,6 +24,52 @@ API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 
 import psycopg2
 from urllib.parse import urlparse
+
+# Global variables for cleanup
+active_executors = []
+active_connections = []
+shutdown_event = threading.Event()
+
+def signal_handler(signum, frame):
+    """Handle Ctrl+C and other termination signals gracefully."""
+    print(f"\n🛑 Received signal {signum}. Shutting down gracefully...")
+    shutdown_event.set()
+    
+    # Cancel all running futures
+    for executor in active_executors:
+        if hasattr(executor, 'shutdown'):
+            executor.shutdown(wait=False, cancel_futures=True)
+    
+    # Close all database connections
+    for conn in active_connections:
+        try:
+            if conn and not conn.closed:
+                conn.close()
+        except Exception as e:
+            print(f"Warning: Error closing connection: {e}")
+    
+    print("✅ Cleanup complete. Exiting.")
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+def cleanup_executor(executor):
+    """Safely shutdown an executor."""
+    if executor and hasattr(executor, 'shutdown'):
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except Exception as e:
+            print(f"Warning: Error shutting down executor: {e}")
+
+def cleanup_connection(conn):
+    """Safely close a database connection."""
+    if conn and not conn.closed:
+        try:
+            conn.close()
+        except Exception as e:
+            print(f"Warning: Error closing connection: {e}")
 
 def call_reload_endpoint():
     """Call the web app's reload endpoint to refresh the data"""
@@ -43,6 +92,9 @@ def call_reload_endpoint():
 # Robust retry for DB connection
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
 def get_pg_connection():
+    if shutdown_event.is_set():
+        raise Exception("Shutdown requested")
+        
     url = os.environ.get("DATABASE_URL")
     if url is None:
         raise Exception("DATABASE_URL not set in environment.")
@@ -58,6 +110,7 @@ def get_pg_connection():
         connect_timeout=30,
         options='-c statement_timeout=300000'
     )
+    active_connections.append(conn)
     return conn
 
 def create_epa_tables():
@@ -331,16 +384,265 @@ def get_teams_for_year(year):
     conn.close()
     return teams
 
-def create_event_db(year):
-    """Create and populate the events database for the specified year, but only update events that haven't ended yet or are new."""
-    print(f"\n🧹 Creating events database for {year}...")
+def get_existing_event_data(event_key):
+    """Get existing event data from database for comparison."""
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    
+    # Get event
+    cur.execute("SELECT name, year, start_date, end_date, event_type, city, state_prov, country, website FROM events WHERE event_key = %s", (event_key,))
+    event_row = cur.fetchone()
+    
+    # Get teams
+    cur.execute("SELECT team_number, nickname, city, state_prov, country FROM event_teams WHERE event_key = %s", (event_key,))
+    teams = {row[0]: {"nickname": row[1], "city": row[2], "state_prov": row[3], "country": row[4]} for row in cur.fetchall()}
+    
+    # Get rankings
+    cur.execute("SELECT team_number, rank, wins, losses, ties, dq FROM event_rankings WHERE event_key = %s", (event_key,))
+    rankings = {row[0]: {"rank": row[1], "wins": row[2], "losses": row[3], "ties": row[4], "dq": row[5]} for row in cur.fetchall()}
+    
+    # Get matches
+    cur.execute("SELECT match_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key FROM event_matches WHERE event_key = %s", (event_key,))
+    matches = {row[0]: {"comp_level": row[1], "match_number": row[2], "set_number": row[3], "red_teams": row[4], "blue_teams": row[5], "red_score": row[6], "blue_score": row[7], "winning_alliance": row[8], "youtube_key": row[9]} for row in cur.fetchall()}
+    
+    # Get awards
+    cur.execute("SELECT team_number, award_name FROM event_awards WHERE event_key = %s", (event_key,))
+    awards = set((row[0], row[1]) for row in cur.fetchall())
+    
+    cur.close()
+    conn.close()
+    
+    return {
+        "event": event_row,
+        "teams": teams,
+        "rankings": rankings,
+        "matches": matches,
+        "awards": awards
+    }
+
+def get_existing_team_epa(team_number, year):
+    """Get existing team EPA data from database for comparison."""
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    
+    cur.execute("""
+        SELECT nickname, city, state_prov, country, website, normal_epa, epa, confidence, 
+               auto_epa, teleop_epa, endgame_epa, wins, losses, event_epas
+        FROM team_epas WHERE team_number = %s AND year = %s
+    """, (team_number, year))
+    
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    if row:
+        # Handle event_epas field - it might be a JSON string or already parsed list
+        event_epas_raw = row[13]
+        if event_epas_raw is None:
+            event_epas = []
+        elif isinstance(event_epas_raw, str):
+            try:
+                event_epas = json.loads(event_epas_raw)
+            except (json.JSONDecodeError, TypeError):
+                event_epas = []
+        elif isinstance(event_epas_raw, list):
+            event_epas = event_epas_raw
+        else:
+            event_epas = []
+        
+        return {
+            "nickname": row[0],
+            "city": row[1],
+            "state_prov": row[2],
+            "country": row[3],
+            "website": row[4],
+            "normal_epa": row[5],
+            "epa": row[6],
+            "confidence": row[7],
+            "auto_epa": row[8],
+            "teleop_epa": row[9],
+            "endgame_epa": row[10],
+            "wins": row[11],
+            "losses": row[12],
+            "event_epas": event_epas
+        }
+    return None
+
+def data_has_changed(existing, new_data, data_type):
+    """Compare existing data with new data to determine if an update is needed."""
+    if not existing:
+        return True  # No existing data, needs to be inserted
+    
+    if data_type == "event":
+        existing_event = existing["event"]
+        if not existing_event:
+            return True
+        
+        new_event = new_data["event"]
+        return (
+            existing_event[0] != new_event[1] or  # name
+            existing_event[2] != new_event[2] or  # year
+            existing_event[3] != new_event[3] or  # start_date
+            existing_event[4] != new_event[4] or  # end_date
+            existing_event[5] != new_event[5] or  # event_type
+            existing_event[6] != new_event[6] or  # city
+            existing_event[7] != new_event[7] or  # state_prov
+            existing_event[8] != new_event[8] or  # country
+            existing_event[9] != new_event[9]     # website
+        )
+    
+    elif data_type == "teams":
+        existing_teams = existing["teams"]
+        new_teams = new_data["teams"]
+        
+        # Check if team lists are different
+        existing_team_nums = set(existing_teams.keys())
+        new_team_nums = set(team[1] for team in new_teams)
+        
+        if existing_team_nums != new_team_nums:
+            return True
+        
+        # Check if any team data has changed
+        for team_data in new_teams:
+            team_num = team_data[1]
+            if team_num not in existing_teams:
+                return True
+            
+            existing_team = existing_teams[team_num]
+            if (
+                existing_team["nickname"] != team_data[2] or
+                existing_team["city"] != team_data[3] or
+                existing_team["state_prov"] != team_data[4] or
+                existing_team["country"] != team_data[5]
+            ):
+                return True
+        
+        return False
+    
+    elif data_type == "rankings":
+        existing_rankings = existing["rankings"]
+        new_rankings = new_data["rankings"]
+        
+        # Check if ranking lists are different
+        existing_team_nums = set(existing_rankings.keys())
+        new_team_nums = set(ranking[1] for ranking in new_rankings)
+        
+        if existing_team_nums != new_team_nums:
+            return True
+        
+        # Check if any ranking data has changed
+        for ranking_data in new_rankings:
+            team_num = ranking_data[1]
+            if team_num not in existing_rankings:
+                return True
+            
+            existing_ranking = existing_rankings[team_num]
+            if (
+                existing_ranking["rank"] != ranking_data[2] or
+                existing_ranking["wins"] != ranking_data[3] or
+                existing_ranking["losses"] != ranking_data[4] or
+                existing_ranking["ties"] != ranking_data[5] or
+                existing_ranking["dq"] != ranking_data[6]
+            ):
+                return True
+        
+        return False
+    
+    elif data_type == "matches":
+        existing_matches = existing["matches"]
+        new_matches = new_data["matches"]
+        
+        # Check if match lists are different
+        existing_match_keys = set(existing_matches.keys())
+        new_match_keys = set(match[0] for match in new_matches)
+        
+        if existing_match_keys != new_match_keys:
+            return True
+        
+        # Check if any match data has changed
+        for match_data in new_matches:
+            match_key = match_data[0]
+            if match_key not in existing_matches:
+                return True
+            
+            existing_match = existing_matches[match_key]
+            if (
+                existing_match["comp_level"] != match_data[2] or
+                existing_match["match_number"] != match_data[3] or
+                existing_match["set_number"] != match_data[4] or
+                existing_match["red_teams"] != match_data[5] or
+                existing_match["blue_teams"] != match_data[6] or
+                existing_match["red_score"] != match_data[7] or
+                existing_match["blue_score"] != match_data[8] or
+                existing_match["winning_alliance"] != match_data[9] or
+                existing_match["youtube_key"] != match_data[10]
+            ):
+                return True
+        
+        return False
+    
+    elif data_type == "awards":
+        existing_awards = existing["awards"]
+        new_awards = set((award[1], award[2]) for award in new_data["awards"])
+        
+        return existing_awards != new_awards
+    
+    elif data_type == "team_epa":
+        # For team EPA, we'll do a more detailed comparison
+        if not existing:
+            return True
+        
+        # Compare key EPA values with tolerance for floating point differences
+        def float_equal(a, b, tolerance=0.01):
+            return abs(a - b) < tolerance
+        
+        if (
+            not float_equal(existing["normal_epa"], new_data["normal_epa"]) or
+            not float_equal(existing["epa"], new_data["epa"]) or
+            not float_equal(existing["confidence"], new_data["confidence"]) or
+            not float_equal(existing["auto_epa"], new_data["auto_epa"]) or
+            not float_equal(existing["teleop_epa"], new_data["teleop_epa"]) or
+            not float_equal(existing["endgame_epa"], new_data["endgame_epa"]) or
+            existing["wins"] != new_data["wins"] or
+            existing["losses"] != new_data["losses"] or
+            existing["nickname"] != new_data["nickname"] or
+            existing["city"] != new_data["city"] or
+            existing["state_prov"] != new_data["state_prov"] or
+            existing["country"] != new_data["country"] or
+            existing["website"] != new_data["website"]
+        ):
+            return True
+        
+        # Compare event_epas (this is more complex)
+        existing_event_epas = {epa.get("event_key"): epa for epa in existing["event_epas"]}
+        new_event_epas = {epa.get("event_key"): epa for epa in new_data["event_epas"]}
+        
+        if set(existing_event_epas.keys()) != set(new_event_epas.keys()):
+            return True
+        
+        for event_key, new_epa in new_event_epas.items():
+            if event_key not in existing_event_epas:
+                return True
+            
+            existing_epa = existing_event_epas[event_key]
+            if (
+                not float_equal(existing_epa.get("overall", 0), new_epa.get("overall", 0)) or
+                not float_equal(existing_epa.get("confidence", 0), new_epa.get("confidence", 0)) or
+                existing_epa.get("match_count", 0) != new_epa.get("match_count", 0)
+            ):
+                return True
+        
+        return False
+    
+    return True  # Default to updating if we don't know
+
+def optimized_create_event_db(year):
+    """Create and populate the events database for the specified year, only updating what's changed."""
+    print(f"\n🧹 Optimized events database update for {year}...")
     
     # Create PostgreSQL tables if they don't exist
     create_epa_tables()
     
-    # Clear existing data for this year
-    #clear_year_data(year)
-
     try:
         events = tba_get(f"events/{year}")
     except Exception as e:
@@ -348,33 +650,54 @@ def create_event_db(year):
         return
 
     from datetime import datetime
-    conn = get_pg_connection()
     events_to_process = []
+    events_skipped = 0
+    
+    print(f"🔍 Checking {len(events)} events for updates...")
+    
     for event in events:
+        if shutdown_event.is_set():
+            print("🛑 Shutdown requested, stopping event processing...")
+            return
+            
         event_key = event["key"]
-        cur = conn.cursor()
-        cur.execute("SELECT end_date FROM events WHERE event_key = %s", (event_key,))
-        row = cur.fetchone()
-        cur.close()
-        if not row:
-            events_to_process.append(event)  # New event, process it
+        
+        # Get existing data for comparison
+        existing_data = get_existing_event_data(event_key)
+        
+        # Check if event needs updating
+        if not existing_data["event"]:
+            # New event, needs full processing
+            events_to_process.append(event)
             continue
-        end_date = row[0]
-        if not end_date:
-            events_to_process.append(event)  # No end date, process it
-            continue
-        try:
-            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
-        except Exception:
-            events_to_process.append(event)  # Bad date, process it
-            continue
-        if end_date_obj >= datetime.now():
-            events_to_process.append(event)  # Event hasn't ended, process it
-    conn.close()
+        
+        # Check if event has ended
+        end_date = existing_data["event"][4]  # end_date
+        if end_date:
+            try:
+                end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+                if end_date_obj < datetime.now():
+                    # Event has ended, skip unless it's very recent (within last 7 days)
+                    if (datetime.now() - end_date_obj).days > 7:
+                        events_skipped += 1
+                        continue
+            except Exception:
+                pass  # Bad date format, process anyway
+        
+        # For ongoing or recent events, check if data has changed
+        events_to_process.append(event)
 
-    def fetch(event):
+    print(f"📊 Processing {len(events_to_process)} events, skipping {events_skipped} completed events")
+
+    def fetch_and_compare(event):
+        if shutdown_event.is_set():
+            return None
+            
         key = event["key"]
-        data = {
+        existing_data = get_existing_event_data(key)
+        
+        # Fetch new data
+        new_data = {
             "event": (
                 key, event.get("name"), year,
                 event.get("start_date"), event.get("end_date"),
@@ -382,30 +705,36 @@ def create_event_db(year):
                 event.get("state_prov"), event.get("country"),
                 event.get("website")
             ),
-            "teams": [], "rankings": [],"matches": [], "awards": []
+            "teams": [], "rankings": [], "matches": [], "awards": []
         }
+        
+        # Fetch teams
         try:
             teams = tba_get(f"event/{key}/teams")
             for t in teams:
                 t_num = t.get("team_number")
-                data["teams"].append((key, t_num, t.get("nickname"),
-                                      t.get("city"), t.get("state_prov"), t.get("country")))
+                new_data["teams"].append((key, t_num, t.get("nickname"),
+                                          t.get("city"), t.get("state_prov"), t.get("country")))
         except:
             pass
+        
+        # Fetch rankings
         try:
             ranks = tba_get(f"event/{key}/rankings")
             for r in ranks.get("rankings", []):
                 record = r.get("record", {})
                 t_num = int(r.get("team_key", "frc0")[3:])
-                data["rankings"].append((key, t_num, r.get("rank"),
-                                         record.get("wins"), record.get("losses"),
-                                         record.get("ties"), r.get("dq")))
+                new_data["rankings"].append((key, t_num, r.get("rank"),
+                                             record.get("wins"), record.get("losses"),
+                                             record.get("ties"), r.get("dq")))
         except:
             pass
+        
+        # Fetch matches
         try:
             matches = tba_get(f"event/{key}/matches")
             for m in matches:
-                data["matches"].append((
+                new_data["matches"].append((
                     m["key"], key, m["comp_level"], m["match_number"],
                     m["set_number"],
                     ",".join(str(int(t[3:])) for t in m["alliances"]["red"]["team_keys"]),
@@ -416,29 +745,260 @@ def create_event_db(year):
                 ))
         except:
             pass
+        
+        # Fetch awards
         try:
             awards = tba_get(f"event/{key}/awards")
             for aw in awards:
                 for r in aw.get("recipient_list", []):
                     if r.get("team_key"):
                         t_num = int(r["team_key"][3:])
-                        data["awards"].append((key, t_num, aw.get("name"), year))
+                        new_data["awards"].append((key, t_num, aw.get("name"), year))
         except:
             pass
-        return data
+        
+        # Determine what needs updating
+        updates_needed = {
+            "event": data_has_changed(existing_data, new_data, "event"),
+            "teams": data_has_changed(existing_data, new_data, "teams"),
+            "rankings": data_has_changed(existing_data, new_data, "rankings"),
+            "matches": data_has_changed(existing_data, new_data, "matches"),
+            "awards": data_has_changed(existing_data, new_data, "awards")
+        }
+        
+        return {
+            "event_key": key,
+            "data": new_data,
+            "updates_needed": updates_needed,
+            "has_changes": any(updates_needed.values())
+        }
 
-    all_data = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(fetch, ev) for ev in events_to_process]
-        for f in tqdm(as_completed(futures), total=len(events_to_process), desc=f"Updating {year}"):
+    all_results = []
+    executor = None
+    try:
+        executor = ThreadPoolExecutor(max_workers=10)
+        active_executors.append(executor)
+        
+        futures = [executor.submit(fetch_and_compare, ev) for ev in events_to_process]
+        for f in tqdm(as_completed(futures), total=len(events_to_process), desc=f"Analyzing {year} events"):
+            if shutdown_event.is_set():
+                print("🛑 Shutdown requested, stopping analysis...")
+                break
+                
             try:
-                all_data.append(f.result())
+                result = f.result()
+                if result:
+                    all_results.append(result)
             except Exception as e:
-                print(f"❌ Error processing: {e}")
+                print(f"❌ Error processing event: {e}")
+    finally:
+        if executor:
+            cleanup_executor(executor)
+            if executor in active_executors:
+                active_executors.remove(executor)
 
-    # Insert all data into PostgreSQL
-    insert_event_data(all_data, year)
-    print(f"\n✅ {year} events rebuilt and saved to PostgreSQL")
+    if shutdown_event.is_set():
+        print("🛑 Shutdown requested, stopping event database update...")
+        return
+
+    # Count what needs updating
+    total_events = len(all_results)
+    events_with_changes = sum(1 for r in all_results if r["has_changes"])
+    event_updates = sum(1 for r in all_results if r["updates_needed"]["event"])
+    team_updates = sum(1 for r in all_results if r["updates_needed"]["teams"])
+    ranking_updates = sum(1 for r in all_results if r["updates_needed"]["rankings"])
+    match_updates = sum(1 for r in all_results if r["updates_needed"]["matches"])
+    award_updates = sum(1 for r in all_results if r["updates_needed"]["awards"])
+    
+    print(f"\n📈 Update Summary for {year}:")
+    print(f"  Total events processed: {total_events}")
+    print(f"  Events with changes: {events_with_changes}")
+    print(f"  Event data updates: {event_updates}")
+    print(f"  Team data updates: {team_updates}")
+    print(f"  Ranking updates: {ranking_updates}")
+    print(f"  Match updates: {match_updates}")
+    print(f"  Award updates: {award_updates}")
+
+    # Only update what's changed
+    if events_with_changes > 0:
+        optimized_insert_event_data(all_results, year)
+        print(f"\n✅ {year} events optimized update complete")
+    else:
+        print(f"\n✅ No updates needed for {year} events")
+
+def optimized_insert_event_data(results, year):
+    """Insert only the changed data into PostgreSQL."""
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    
+    for result in tqdm(results, desc="Updating changed data"):
+        if not result["has_changes"]:
+            continue
+            
+        data = result["data"]
+        updates = result["updates_needed"]
+        
+        # Update event if needed
+        if updates["event"]:
+            cur.execute("""
+                INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (event_key) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    year = EXCLUDED.year,
+                    start_date = EXCLUDED.start_date,
+                    end_date = EXCLUDED.end_date,
+                    event_type = EXCLUDED.event_type,
+                    city = EXCLUDED.city,
+                    state_prov = EXCLUDED.state_prov,
+                    country = EXCLUDED.country,
+                    website = EXCLUDED.website
+            """, data["event"])
+        
+        # Update teams if needed
+        if updates["teams"] and data["teams"]:
+            # Delete existing teams for this event and reinsert
+            cur.execute("DELETE FROM event_teams WHERE event_key = %s", (data["event"][0],))
+            cur.executemany("""
+                INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, data["teams"])
+        
+        # Update rankings if needed
+        if updates["rankings"] and data["rankings"]:
+            # Delete existing rankings for this event and reinsert
+            cur.execute("DELETE FROM event_rankings WHERE event_key = %s", (data["event"][0],))
+            cur.executemany("""
+                INSERT INTO event_rankings (event_key, team_number, rank, wins, losses, ties, dq)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, data["rankings"])
+        
+        # Update matches if needed
+        if updates["matches"] and data["matches"]:
+            # Delete existing matches for this event and reinsert
+            cur.execute("DELETE FROM event_matches WHERE event_key = %s", (data["event"][0],))
+            cur.executemany("""
+                INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, data["matches"])
+        
+        # Update awards if needed
+        if updates["awards"] and data["awards"]:
+            # Delete existing awards for this event and reinsert
+            cur.execute("DELETE FROM event_awards WHERE event_key = %s", (data["event"][0],))
+            cur.executemany("""
+                INSERT INTO event_awards (event_key, team_number, award_name, year)
+                VALUES (%s, %s, %s, %s)
+            """, data["awards"])
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def optimized_fetch_and_store_team_data(year):
+    """Fetch and store team data, only updating what's changed."""
+    optimized_create_event_db(year)
+    
+    if shutdown_event.is_set():
+        print("🛑 Shutdown requested, stopping team data processing...")
+        return
+        
+    print(f"\nProcessing year {year} teams...")
+
+    # Get all teams directly from PostgreSQL
+    all_teams = get_teams_for_year(year)
+    print(f"Total unique teams found from events: {len(all_teams)}")
+
+    def fetch_and_compare_team(team):
+        if shutdown_event.is_set():
+            return None
+            
+        team_number = team["team_number"]
+        
+        # Get existing EPA data for comparison
+        existing_epa = get_existing_team_epa(team_number, year)
+        
+        # Fetch new EPA data
+        new_epa_data = fetch_team_components(team, year)
+        
+        if not new_epa_data:
+            return None
+        
+        # Check if EPA data has changed
+        if not data_has_changed(existing_epa, new_epa_data, "team_epa"):
+            return {"team_number": team_number, "updated": False, "reason": "No changes"}
+        
+        return {"team_number": team_number, "updated": True, "data": new_epa_data}
+
+    updated_count = 0
+    skipped_count = 0
+    failed_teams = []
+    executor = None
+    
+    try:
+        executor = ThreadPoolExecutor(max_workers=10)
+        active_executors.append(executor)
+        
+        futures = [executor.submit(fetch_and_compare_team, team) for team in all_teams]
+        
+        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Analyzing team changes"):
+            if shutdown_event.is_set():
+                print("🛑 Shutdown requested, stopping team analysis...")
+                break
+                
+            try:
+                result = future.result()
+                if result is None:
+                    failed_teams.append("Unknown team (result was None)")
+                elif result["updated"]:
+                    # Insert updated team EPA data
+                    insert_team_epa(result["data"], year)
+                    updated_count += 1
+                else:
+                    skipped_count += 1
+                    
+                if (updated_count + skipped_count) % 100 == 0:
+                    print(f"Processed {updated_count + skipped_count} teams (updated: {updated_count}, skipped: {skipped_count})...")
+                    
+            except Exception as e:
+                team_info = "Unknown team"
+                try:
+                    if hasattr(future, '_args') and future._args:
+                        team_info = f"Team {future._args[0].get('team_number', 'Unknown')}"
+                except:
+                    pass
+                failed_teams.append(f"{team_info}: {str(e)}")
+                print(f"Failed to process {team_info}: {e}")
+                continue
+    finally:
+        if executor:
+            cleanup_executor(executor)
+            if executor in active_executors:
+                active_executors.remove(executor)
+    
+    if shutdown_event.is_set():
+        print("🛑 Shutdown requested, stopping team data update...")
+        return
+    
+    print(f"\n📊 Team Update Summary for {year}:")
+    print(f"  Total teams processed: {len(all_teams)}")
+    print(f"  Teams updated: {updated_count}")
+    print(f"  Teams skipped (no changes): {skipped_count}")
+    print(f"  Teams failed: {len(failed_teams)}")
+    
+    if failed_teams:
+        print(f"❌ Failed to process {len(failed_teams)} teams:")
+        for failed in failed_teams[:10]:
+            print(f"  - {failed}")
+        if len(failed_teams) > 10:
+            print(f"  ... and {len(failed_teams) - 10} more")
+    
+    # Reload the web app data
+    call_reload_endpoint()
+
+# Replace the old functions with the optimized versions
+create_event_db = optimized_create_event_db
+fetch_and_store_team_data = optimized_fetch_and_store_team_data
 
 # Confidence calculation constants
 CONFIDENCE_WEIGHTS = {
@@ -935,57 +1495,6 @@ def fetch_team_components(team, year):
         "event_epas": event_epa_results, # List of event-specific EPA results
     }
 
-def fetch_and_store_team_data(year):
-    create_event_db(year)
-    print(f"\nProcessing year {year}...")
-
-    # Get all teams directly from PostgreSQL
-    all_teams = get_teams_for_year(year)
-    print(f"Total unique teams found from events: {len(all_teams)}")
-
-    def fetch_team_for_final(team):
-        return fetch_team_components(team, year)
-
-    inserted = 0
-    failed_teams = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(fetch_team_for_final, team) for team in all_teams]
-        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Final EPA Pass"):
-            try:
-                result = future.result()
-                if result:
-                    # Insert team EPA data into PostgreSQL
-                    insert_team_epa(result, year)
-                    inserted += 1
-                    if inserted % 100 == 0:
-                        print(f"Processed {inserted} teams so far...")
-                else:
-                    # This shouldn't happen anymore with our fix, but let's track it
-                    failed_teams.append("Unknown team (result was None)")
-            except Exception as e:
-                # Get the team info from the future if possible
-                team_info = "Unknown team"
-                try:
-                    # Try to get the team info from the future's args
-                    if hasattr(future, '_args') and future._args:
-                        team_info = f"Team {future._args[0].get('team_number', 'Unknown')}"
-                except:
-                    pass
-                failed_teams.append(f"{team_info}: {str(e)}")
-                print(f"Failed to process {team_info}: {e}")
-                continue
-    
-    print(f"✅ Successfully updated {inserted} entries for {year} in PostgreSQL")
-    if failed_teams:
-        print(f"❌ Failed to process {len(failed_teams)} teams:")
-        for failed in failed_teams[:10]:  # Show first 10 failures
-            print(f"  - {failed}")
-        if len(failed_teams) > 10:
-            print(f"  ... and {len(failed_teams) - 10} more")
-    
-    # Reload the web app data
-    call_reload_endpoint()
-
 def analyze_single_team(team_key: str, year: int):
     # Get team events from PostgreSQL
     team_number = int(team_key[3:])
@@ -1076,61 +1585,88 @@ def main():
     print("\nEPA Calculator")
     print("="*20)
     
-    mode = input("\nSelect mode:\n1. Single Team Analysis\n2. Process Entire JSON\nEnter choice (1 or 2): ").strip()
-    
-    if mode not in ['1', '2']:
-        print("Invalid choice. Please enter 1 or 2.")
-        return
-        
-    year = input("Enter year (e.g., 2025): ").strip()
     try:
-        year = int(year)
-    except ValueError:
-        print("Invalid year. Please enter a valid year.")
-        return
+        mode = input("\nSelect mode:\n1. Single Team Analysis\n2. Process Entire JSON\nEnter choice (1 or 2): ").strip()
         
-    if mode == '1':
-        team_key = input("Enter team key (e.g., frc254): ").strip().lower()
-        if not team_key.startswith('frc'):
-            team_key = f"frc{team_key}"
-        
-        analyze_single_team(team_key, year)
-        
-    else:
-        fetch_and_store_team_data(year)
+        if mode not in ['1', '2']:
+            print("Invalid choice. Please enter 1 or 2.")
+            return
+            
+        year = input("Enter year (e.g., 2025): ").strip()
+        try:
+            year = int(year)
+        except ValueError:
+            print("Invalid year. Please enter a valid year.")
+            return
+            
+        if mode == '1':
+            team_key = input("Enter team key (e.g., frc254): ").strip().lower()
+            if not team_key.startswith('frc'):
+                team_key = f"frc{team_key}"
+            
+            analyze_single_team(team_key, year)
+            
+        else:
+            fetch_and_store_team_data(year)
+            
+    except KeyboardInterrupt:
+        print("\n🛑 Interrupted by user (Ctrl+C)")
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+    finally:
+        # Final cleanup
+        print("\n🧹 Performing final cleanup...")
+        for executor in active_executors:
+            cleanup_executor(executor)
+        for conn in active_connections:
+            cleanup_connection(conn)
+        print("✅ Cleanup complete.")
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) > 1:
-        # Command-line mode
-        mode = sys.argv[1]
-        if mode == '1':
-            # Single team analysis: python epa.py 1 2025 frc254
-            if len(sys.argv) < 4:
-                print("Usage: python epa.py 1 <year> <team_key>")
+    try:
+        if len(sys.argv) > 1:
+            # Command-line mode
+            mode = sys.argv[1]
+            if mode == '1':
+                # Single team analysis: python epa.py 1 2025 frc254
+                if len(sys.argv) < 4:
+                    print("Usage: python epa.py 1 <year> <team_key>")
+                    sys.exit(1)
+                try:
+                    year = int(sys.argv[2])
+                except ValueError:
+                    print("Year must be an integer.")
+                    sys.exit(1)
+                team_key = sys.argv[3].strip().lower()
+                if not team_key.startswith('frc'):
+                    team_key = f"frc{team_key}"
+                analyze_single_team(team_key, year)
+            elif mode == '2':
+                # Process all teams: python epa.py 2 2025
+                if len(sys.argv) < 3:
+                    print("Usage: python epa.py 2 <year>")
+                    sys.exit(1)
+                try:
+                    year = int(sys.argv[2])
+                except ValueError:
+                    print("Year must be an integer.")
+                    sys.exit(1)
+                fetch_and_store_team_data(year)
+            else:
+                print("Unknown mode. Use '1' for single team or '2' for all teams.")
                 sys.exit(1)
-            try:
-                year = int(sys.argv[2])
-            except ValueError:
-                print("Year must be an integer.")
-                sys.exit(1)
-            team_key = sys.argv[3].strip().lower()
-            if not team_key.startswith('frc'):
-                team_key = f"frc{team_key}"
-            analyze_single_team(team_key, year)
-        elif mode == '2':
-            # Process all teams: python epa.py 2 2025
-            if len(sys.argv) < 3:
-                print("Usage: python epa.py 2 <year>")
-                sys.exit(1)
-            try:
-                year = int(sys.argv[2])
-            except ValueError:
-                print("Year must be an integer.")
-                sys.exit(1)
-            fetch_and_store_team_data(year)
         else:
-            print("Unknown mode. Use '1' for single team or '2' for all teams.")
-            sys.exit(1)
-    else:
-        main()
+            main()
+    except KeyboardInterrupt:
+        print("\n🛑 Interrupted by user (Ctrl+C)")
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+    finally:
+        # Final cleanup
+        print("\n🧹 Performing final cleanup...")
+        for executor in active_executors:
+            cleanup_executor(executor)
+        for conn in active_connections:
+            cleanup_connection(conn)
+        print("✅ Cleanup complete.")

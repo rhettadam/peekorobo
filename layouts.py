@@ -1415,7 +1415,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 if red_team_info and blue_team_info:
                     p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
                     # Pred winner logic (47-53% = Tie)
-                    if 0.47 <= p_red <= 0.53:
+                    if 0.49 <= p_red <= 0.51:
                         pred_winner = "Tie"
                     else:
                         pred_winner = "Red" if p_red > p_blue else "Blue"
