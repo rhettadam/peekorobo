@@ -71,24 +71,6 @@ def cleanup_connection(conn):
         except Exception as e:
             print(f"Warning: Error closing connection: {e}")
 
-def call_reload_endpoint():
-    """Call the web app's reload endpoint to refresh the data"""
-    try:
-        # Get the app URL from environment or use a default
-        app_url = os.environ.get("APP_URL", "https://peekorobo-6ec491b9fec0.herokuapp.com/")
-        reload_url = f"{app_url}/reload-data"
-        
-        print(f"🔄 Calling reload endpoint: {reload_url}")
-        response = requests.get(reload_url, timeout=30)
-        
-        if response.status_code == 200:
-            print("✅ Data reloaded successfully on web app")
-        else:
-            print(f"❌ Failed to reload data on web app: {response.status_code}")
-            print(f"Response: {response.text}")
-    except Exception as e:
-        print(f"❌ Error calling reload endpoint: {e}")
-
 # Robust retry for DB connection
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
 def get_pg_connection():
@@ -993,9 +975,6 @@ def optimized_fetch_and_store_team_data(year):
         if len(failed_teams) > 10:
             print(f"  ... and {len(failed_teams) - 10} more")
     
-    # Reload the web app data
-    call_reload_endpoint()
-
 # Replace the old functions with the optimized versions
 create_event_db = optimized_create_event_db
 fetch_and_store_team_data = optimized_fetch_and_store_team_data

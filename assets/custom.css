@@ -36,6 +36,26 @@
     --modal-text: #212529;
     --tooltip-bg: #212529;
     --tooltip-text: #ffffff;
+    /* Table highlight colors for conditional formatting */
+    --table-row-red: #ffe6e6;
+    --table-row-blue: #e6f0ff;
+    --table-row-green: #d4edda;
+    --table-row-yellow: #fff9c4;
+    --table-row-pink: #f8d7da;
+    --table-row-prediction-green: #80cfa9;
+    --table-row-prediction-red: #f5a6a6;
+    --table-row-prediction-yellow: #fff9c4;
+    --table-row-prediction-neutral: #ededd4;
+    --table-row-prediction-lightgreen: #d4edda;
+    --table-row-prediction-lightergreen: #b6dfc1;
+    --table-row-prediction-lightestgreen: #8fd4a8;
+    --table-row-prediction-darkgreen: #68c990;
+    --table-row-prediction-deepgreen: #41be77;
+    --table-row-prediction-lightred: #f8d7da;
+    --table-row-prediction-lighterred: #f1bfc2;
+    --table-row-prediction-lightestred: #eaa7aa;
+    --table-row-prediction-darkred: #e39091;
+    --table-row-prediction-deepred: #dc7878;
 }
 
 [data-theme="dark"] {
@@ -75,6 +95,25 @@
     --modal-text: #e9ecef;
     --tooltip-bg: #e9ecef;
     --tooltip-text: #212529;
+    --table-row-red: #4d2323;
+    --table-row-blue: #23334d;
+    --table-row-green: #234d36;
+    --table-row-yellow: #4d4a23;
+    --table-row-pink: #4d232f;
+    --table-row-prediction-green: #1e4030;
+    --table-row-prediction-red: #402020;
+    --table-row-prediction-yellow: #403d20;
+    --table-row-prediction-neutral: #aaa155;
+    --table-row-prediction-lightgreen: #234d36;
+    --table-row-prediction-lightergreen: #1e4030;
+    --table-row-prediction-lightestgreen: #295c43;
+    --table-row-prediction-darkgreen: #1a3a2a;
+    --table-row-prediction-deepgreen: #174d36;
+    --table-row-prediction-lightred: #4d2323;
+    --table-row-prediction-lighterred: #402020;
+    --table-row-prediction-lightestred: #4d232f;
+    --table-row-prediction-darkred: #3a1a1a;
+    --table-row-prediction-deepred: #2a1a1a;
 }
 
 /* Global styles */
@@ -495,25 +534,11 @@ img:hover {
     color: white !important; /* Force white text on colored backgrounds */
 }
 
-.recent-events-table .dash-cell,
-.recent-events-table .dash-cell div,
-.recent-events-table .dash-cell span,
-.recent-events-table .dash-cell strong,
-.recent-events-table .dash-cell *,
-.recent-events-table .dash-cell span *,
-.recent-events-table .dash-cell strong * {
-    color: black !important;
-    font-weight: 500;
-    font-size: 15px;
-}
-
 
 .recent-events-table .dash-header {
     background: var(--card-bg) !important;
     font-weight: bold;
 }
-
-
 
 .custom-view-btn {
     color: var(--text-primary) !important;
@@ -708,6 +733,31 @@ label {
     background-color: var(--card-bg);
     border-radius: 10px;
     border: 1px solid var(--border-color);
+}
+
+/* Page Transition Animations */
+.fade-page {
+    opacity: 0; /* Start with opacity 0 to prevent flash */
+    transition: opacity 0.4s cubic-bezier(0.4,0,0.2,1);
+    will-change: opacity;
+    animation: fadeIn 0.4s ease-in-out forwards; /* Fade in on initial load */
+}
+
+.fade-page.fade-out {
+    opacity: 0;
+    pointer-events: none;
+    animation: none; /* Disable initial animation when fading out */
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
   

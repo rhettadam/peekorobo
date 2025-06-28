@@ -30,22 +30,7 @@ from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avat
 from dotenv import load_dotenv
 load_dotenv()
 
-# Global variables for data - will be reloaded when needed
-TEAM_DATABASE = {}
-EVENT_DATABASE = {}
-EVENT_TEAMS = {}
-EVENT_RANKINGS = {}
-EVENT_AWARDS = []
-EVENT_MATCHES = {}
-
-def reload_data():
-    """Reload all data from the database"""
-    global TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES
-    TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data()
-    print("✅ Data reloaded successfully")
-
-# Initial data load
-reload_data()
+TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data()
 
 app = dash.Dash(
     __name__,
@@ -94,9 +79,13 @@ app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
     dcc.Store(id='tab-title', data='Peekorobo'),
     dcc.Store(id='theme-store'),
-    html.Div(id='page-content'),
+    html.Div(
+        id='page-content-animated-wrapper',
+        children=html.Div(id='page-content'),
+        className='fade-page'
+    ),
     html.Div(id='dummy-output', style={'display': 'none'}),
-    html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'})  # <-- THIS is what you're missing
+    html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'})
 ])
 
 def user_layout(_user_id=None, deleted_items=None):
@@ -969,15 +958,6 @@ def other_user_layout(username):
 def logout():
     flask.session.clear()
     return flask.redirect("/login")
-
-@app.server.route("/reload-data")
-def reload_data_endpoint():
-    """Endpoint to reload data from database - called by scheduler"""
-    try:
-        reload_data()
-        return {"status": "success", "message": "Data reloaded successfully"}, 200
-    except Exception as e:
-        return {"status": "error", "message": str(e)}, 500
 
 @callback(
     Output("profile-display", "hidden"),
@@ -2706,53 +2686,53 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
 
     row_style = [
         # Row coloring for winner (these should come first)
-        {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "#ffe6e6"},
-        {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
+        {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
         # --- Cell-level prediction rules (these should come after row-level rules) ---
         # Red prediction styling
-        {"if": {"filter_query": "{Red Prediction %} >= 45 && {Red Prediction %} <= 55", "column_id": "Red Pred"}, "backgroundColor": "#ededd4", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} > 55 && {Red Prediction %} <= 65", "column_id": "Red Pred"}, "backgroundColor": "#d4edda", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} > 65 && {Red Prediction %} <= 75", "column_id": "Red Predn"}, "backgroundColor": "#b6dfc1", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} > 75 && {Red Prediction %} <= 85", "column_id": "Red Pred"}, "backgroundColor": "#8fd4a8", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} > 85 && {Red Prediction %} <= 95", "column_id": "Red Pred"}, "backgroundColor": "#68c990", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} > 95", "column_id": "Red Prediction"}, "backgroundColor": "#41be77", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} < 45 && {Red Prediction %} >= 35", "column_id": "Red Pred"}, "backgroundColor": "#f8d7da", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} < 35 && {Red Prediction %} >= 25", "column_id": "Red Pred"}, "backgroundColor": "#f1bfc2", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} < 25 && {Red Prediction %} >= 15", "column_id": "Red Pred"}, "backgroundColor": "#eaa7aa", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} < 15 && {Red Prediction %} >= 5", "column_id": "Red Pred"}, "backgroundColor": "#e39091", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} < 5", "column_id": "Red Prediction"}, "backgroundColor": "#dc7878", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} >= 45 && {Red Prediction %} <= 55", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-neutral)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Red Prediction %} > 55 && {Red Prediction %} <= 65", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightgreen)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Red Prediction %} > 65 && {Red Prediction %} <= 75", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightergreen)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Red Prediction %} > 75 && {Red Prediction %} <= 85", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightestgreen)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Red Prediction %} > 85 && {Red Prediction %} <= 95", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-darkgreen)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Red Prediction %} > 95", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-deepgreen)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Red Prediction %} < 45 && {Red Prediction %} >= 35", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightred)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Red Prediction %} < 35 && {Red Prediction %} >= 25", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lighterred)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Red Prediction %} < 25 && {Red Prediction %} >= 15", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightestred)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Red Prediction %} < 15 && {Red Prediction %} >= 5", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-darkred)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Red Prediction %} < 5", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-deepred)", "color": "var(--text-primary)"},
         # Blue prediction styling
-        {"if": {"filter_query": "{Blue Prediction %} >= 45 && {Blue Prediction %} <= 55", "column_id": "Blue Pred"}, "backgroundColor": "#ededd4", "color": "black"},
-        {"if": {"filter_query": "{Blue Prediction %} > 55 && {Blue Prediction %} <= 65", "column_id": "Blue Pred"}, "backgroundColor": "#d4edda", "color": "black"},
-        {"if": {"filter_query": "{Blue Prediction %} > 65 && {Blue Prediction %} <= 75", "column_id": "Blue Pred"}, "backgroundColor": "#b6dfc1", "color": "black"},
-        {"if": {"filter_query": "{Blue Prediction %} > 75 && {Blue Prediction %} <= 85", "column_id": "Blue Pred"}, "backgroundColor": "#8fd4a8", "color": "black"},
-        {"if": {"filter_query": "{Blue Prediction %} > 85 && {Blue Prediction %} <= 95", "column_id": "Blue Pred"}, "backgroundColor": "#68c990", "color": "black"},
-        {"if": {"filter_query": "{Blue Prediction %} > 95", "column_id": "Blue Prediction"}, "backgroundColor": "#41be77", "color": "black"},
-        {"if": {"filter_query": "{Blue Prediction %} < 45 && {Blue Prediction %} >= 35", "column_id": "Blue Pred"}, "backgroundColor": "#f8d7da", "color": "black"},
-        {"if": {"filter_query": "{Blue Prediction %} < 35 && {Blue Prediction %} >= 25", "column_id": "Blue Pred"}, "backgroundColor": "#f1bfc2", "color": "black"},
-        {"if": {"filter_query": "{Blue Prediction %} < 25 && {Blue Prediction %} >= 15", "column_id": "Blue Pred"}, "backgroundColor": "#eaa7aa", "color": "black"},
-        {"if": {"filter_query": "{Blue Prediction %} < 15 && {Blue Prediction %} >= 5", "column_id": "Blue Pred"}, "backgroundColor": "#e39091", "color": "black"},
-        {"if": {"filter_query": "{Blue Prediction %} < 5", "column_id": "Blue Pred"}, "backgroundColor": "#dc7878", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} >= 45 && {Blue Prediction %} <= 55", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-neutral)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Blue Prediction %} > 55 && {Blue Prediction %} <= 65", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightgreen)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Blue Prediction %} > 65 && {Blue Prediction %} <= 75", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightergreen)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Blue Prediction %} > 75 && {Blue Prediction %} <= 85", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightestgreen)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Blue Prediction %} > 85 && {Blue Prediction %} <= 95", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-darkgreen)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Blue Prediction %} > 95", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-deepgreen)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Blue Prediction %} < 45 && {Blue Prediction %} >= 35", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightred)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Blue Prediction %} < 35 && {Blue Prediction %} >= 25", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lighterred)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Blue Prediction %} < 25 && {Blue Prediction %} >= 15", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightestred)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Blue Prediction %} < 15 && {Blue Prediction %} >= 5", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-darkred)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": "{Blue Prediction %} < 5", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-deepred)", "color": "var(--text-primary)"},
         # Predicted Winner styling
-        {"if": {"filter_query": '{Pred Winner} = "Red"', "column_id": "Pred Winner"}, "backgroundColor": "#ffe6e6", "color": "black"},
-        {"if": {"filter_query": '{Pred Winner} = "Blue"', "column_id": "Pred Winner"}, "backgroundColor": "#e6f0ff", "color": "black"},
-        {"if": {"filter_query": '{Pred Winner} = "Tie"', "column_id": "Pred Winner"}, "backgroundColor": "#f8f9fa", "color": "black"},
+        {"if": {"filter_query": '{Pred Winner} = "Red"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": '{Pred Winner} = "Blue"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
+        {"if": {"filter_query": '{Pred Winner} = "Tie"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-yellow)", "color": "var(--text-primary)"},
     ]
 
-    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "color": "var(--text-tertiary) !important", "backgroundColor": "white" }
+    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "color": "var(--text-primary)", "backgroundColor": "transparent" }
     style_header={
         "backgroundColor": "var(--card-bg)",        # Match the table background
-        "color": "var(--text-tertiary) !important",
+        "color": "var(--text-primary)",
         "fontWeight": "bold",              # Keep column labels strong
         "textAlign": "center",
-        "borderBottom": "1px solid #ccc",  # Thin line under header only
+        "borderBottom": "1px solid var(--border-color)",  # Thin line under header only
         "padding": "6px",                  # Reduce banner size
         "fontSize": "13px",                # Optional: shrink text slightly
     }
 
     style_cell={
-        "backgroundColor": "white", 
-        "color": "var(--text-tertiary) !important",
+        "backgroundColor": "#181a1b", 
+        "color": "var(--text-primary)",
         "textAlign": "center",
         "padding": "10px",
         "border": "none",
@@ -2819,77 +2799,8 @@ app.clientside_callback(
             playlist_title = `${event_name} - Team ${selected_team}`;
         }
         
-        // Filter matches based on team selection
-        let filtered_matches = event_matches;
-        if (selected_team && selected_team !== 'ALL') {
-            filtered_matches = event_matches.filter(match => {
-                const redTeams = match.rt ? match.rt.split(',') : [];
-                const blueTeams = match.bt ? match.bt.split(',') : [];
-                return redTeams.includes(selected_team) || blueTeams.includes(selected_team);
-            });
-        }
-        
-        // Sort matches in correct order: quals first, then semis, then finals
-        filtered_matches.sort((a, b) => {
-            // Get competition level and match number from match key
-            const getMatchInfo = (match) => {
-                const key = match.k ? match.k.split('_').pop().toLowerCase() : '';
-                
-                // Extract comp level and match number
-                let compLevel = 'qm'; // default
-                let matchNum = 0;
-                let setNum = 0;
-                
-                if (key.startsWith('qm')) {
-                    compLevel = 'qm';
-                    matchNum = parseInt(key.replace('qm', '').replace('m', '')) || 0;
-                } else if (key.startsWith('qf')) {
-                    compLevel = 'qf';
-                    const parts = key.replace('qf', '').split('m');
-                    setNum = parseInt(parts[0]) || 0;
-                    matchNum = parseInt(parts[1]) || 0;
-                } else if (key.startsWith('sf')) {
-                    compLevel = 'sf';
-                    const parts = key.replace('sf', '').split('m');
-                    setNum = parseInt(parts[0]) || 0;
-                    matchNum = parseInt(parts[1]) || 0;
-                } else if (key.startsWith('f')) {
-                    compLevel = 'f';
-                    matchNum = parseInt(key.replace('f', '').replace('m', '')) || 0;
-                }
-                
-                return { compLevel, setNum, matchNum };
-            };
-            
-            const aInfo = getMatchInfo(a);
-            const bInfo = getMatchInfo(b);
-            
-            // Define comp level order: qm < qf < sf < f
-            const compLevelOrder = { 'qm': 0, 'qf': 1, 'sf': 2, 'f': 3 };
-            
-            // Compare by comp level first
-            if (compLevelOrder[aInfo.compLevel] !== compLevelOrder[bInfo.compLevel]) {
-                return compLevelOrder[aInfo.compLevel] - compLevelOrder[bInfo.compLevel];
-            }
-            
-            // If same comp level, compare by set number (for qf/sf)
-            if (aInfo.setNum !== bInfo.setNum) {
-                return aInfo.setNum - bInfo.setNum;
-            }
-            
-            // Finally compare by match number
-            return aInfo.matchNum - bInfo.matchNum;
-        });
-        
-        // Extract YouTube video IDs from sorted matches
-        const video_ids = filtered_matches
-            .map(match => match.yt)
-            .filter(yt => yt);
-        
-        if (video_ids.length === 0) return window.dash_clientside.no_update;
-        
-        // Create YouTube playlist URL with title
-        const playlist_url = `https://www.youtube.com/watch_videos?video_ids=${video_ids.join(',')}&title=${encodeURIComponent(playlist_title)}`;
+        // Create YouTube playlist URL
+        const playlist_url = `https://www.youtube.com/playlist?list=PL${event_key}`;
         
         // Open in new tab
         window.open(playlist_url, '_blank');
@@ -2897,13 +2808,32 @@ app.clientside_callback(
         return window.dash_clientside.no_update;
     }
     """,
-    Output("url", "pathname", allow_duplicate=True),
-    Input("create-playlist-btn", "n_clicks"),
-    [
-        State("team-filter", "value"),
-        State("store-event-matches", "data"),
-        State("url", "pathname"),
-    ],
+    Output('dummy-output', 'children', allow_duplicate=True),
+    [Input('create-playlist-btn', 'n_clicks')],
+    [State('team-filter', 'value'), State('store-event-matches', 'data'), State('url', 'pathname')],
+    prevent_initial_call=True
+)
+
+# Add a client-side callback for smooth page transitions
+app.clientside_callback(
+    """
+    function(pathname) {
+        var wrapper = document.getElementById('page-content-animated-wrapper');
+        if (!wrapper) return window.dash_clientside.no_update;
+
+        // Fade out
+        wrapper.classList.add('fade-out');
+        
+        // Fade back in after a short delay
+        setTimeout(function() {
+            wrapper.classList.remove('fade-out');
+        }, 200); // Half the CSS transition duration for smooth effect
+
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output('dummy-output', 'children', allow_duplicate=True),
+    Input('url', 'pathname'),
     prevent_initial_call=True
 )
 
