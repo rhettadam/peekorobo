@@ -75,7 +75,7 @@ def call_reload_endpoint():
     """Call the web app's reload endpoint to refresh the data"""
     try:
         # Get the app URL from environment or use a default
-        app_url = os.environ.get("APP_URL", "https://your-app-name.herokuapp.com")
+        app_url = os.environ.get("APP_URL", "https://peekorobo-6ec491b9fec0.herokuapp.com/")
         reload_url = f"{app_url}/reload-data"
         
         print(f"🔄 Calling reload endpoint: {reload_url}")
