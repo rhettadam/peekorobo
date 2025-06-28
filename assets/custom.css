@@ -654,6 +654,70 @@ label {
     min-width: 0;
 }
 
+/* Team Tabs Styling */
+.nav-tabs {
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.nav-tabs .nav-link {
+    color: var(--text-secondary);
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 0.375rem 0.375rem 0 0;
+    padding: 0.5rem 1rem;
+    margin-right: 0.25rem;
+    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color) var(--border-color) transparent;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--text-primary);
+    background-color: var(--card-bg);
+    border-color: var(--border-color) var(--border-color) var(--card-bg);
+}
+
+.nav-tabs .nav-link:focus {
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color) var(--border-color) transparent;
+}
+
+/* Tab content spacing */
+.tab-content {
+    padding: 20px 0;
+}
+
+.tab-pane {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-top: none;
+    border-radius: 0 0 0.375rem 0.375rem;
+    padding: 20px;
+}
+
+/* Similar teams cards spacing */
+.similar-teams-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+/* Performance trends chart container */
+.trends-chart-container {
+    margin: 20px 0;
+    padding: 20px;
+    background-color: var(--card-bg);
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+}
+
   
   
   

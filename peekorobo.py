@@ -19,6 +19,7 @@ import json
 import pandas as pd
 
 import plotly.graph_objects as go
+from scipy.interpolate import interp1d
 
 from datagather import COUNTRIES,STATES,load_data,get_team_avatar,DISTRICT_STATES,DISTRICT_STATES_A,get_pg_connection
 
@@ -3869,6 +3870,680 @@ def update_team_favorites_popover_content(is_open, pathname):
         return "Error loading favoriting users."
     finally:
         conn.close()
+
+@callback(
+    Output("team-insights-content", "children"),
+    Input("team-tabs", "active_tab"),
+    State("team-insights-store", "data")
+)
+def update_team_insights(active_tab, store_data):
+    if active_tab != "insights-tab" or not store_data:
+        return "Loading insights..."
+    
+    team_number = store_data.get("team_number")
+    year = store_data.get("year")
+    performance_year = store_data.get("performance_year")
+    
+    if not team_number:
+        return "No team data available."
+    
+    # Create performance trends chart based on URL type
+    if year:  # Specific year view - show event-by-event ACE
+        # Get team's event EPAs for the specific year
+        team_data = TEAM_DATABASE.get(performance_year, {}).get(team_number, {})
+        if not team_data:
+            return "No team data available for this year."
+        
+        event_epas = team_data.get("event_epas", [])
+        if isinstance(event_epas, str):
+            try:
+                event_epas = json.loads(event_epas)
+            except:
+                event_epas = []
+        
+        if not event_epas:
+            return "No event data available for this team in this year."
+        
+        # Sort events by actual event dates from EVENT_DATABASE
+        def get_event_date(event_epa):
+            event_key = event_epa.get("event_key", "")
+            if event_key in EVENT_DATABASE.get(performance_year, {}):
+                event_data = EVENT_DATABASE[performance_year][event_key]
+                start_date = event_data.get("sd", "")
+                if start_date:
+                    try:
+                        return datetime.strptime(start_date, "%Y-%m-%d")
+                    except:
+                        pass
+            return datetime.max  # Put events without dates at the end
+        
+        sorted_events = sorted(event_epas, key=get_event_date)
+        
+        # Create event-by-event chart
+        import plotly.graph_objects as go
+        import numpy as np
+        from scipy.interpolate import interp1d
+        
+        # Use event names instead of keys for better readability
+        event_names = []
+        for event in sorted_events:
+            event_key = event.get("event_key", "")
+            if event_key in EVENT_DATABASE.get(performance_year, {}):
+                event_name = EVENT_DATABASE[performance_year][event_key].get("n", event_key)
+                event_names.append(event_name)
+            else:
+                event_names.append(event_key)
+        
+        ace_values = [event.get("overall", 0) for event in sorted_events]
+        
+        # Create smooth line by interpolating between points
+        if len(ace_values) > 1:
+            try:
+                # Create interpolation function
+                x_indices = np.arange(len(ace_values))
+                
+                # Use cubic interpolation if we have enough points, otherwise linear
+                if len(ace_values) >= 4:
+                    f = interp1d(x_indices, ace_values, kind='cubic', bounds_error=False, fill_value='extrapolate')
+                else:
+                    f = interp1d(x_indices, ace_values, kind='linear', bounds_error=False, fill_value='extrapolate')
+                
+                # Create more points for smooth curve
+                x_smooth = np.linspace(0, len(ace_values) - 1, max(50, len(ace_values) * 10))
+                y_smooth = f(x_smooth)
+                
+                # Create smooth line
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_smooth,
+                        y=y_smooth,
+                        mode='lines',
+                        name='ACE (Smoothed)',
+                        line=dict(color='#ffdd00', width=3),
+                        showlegend=False,
+                        hoverinfo='skip'
+                    )
+                )
+                
+                # Add original points as markers
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_indices,
+                        y=ace_values,
+                        mode='markers',
+                        name='ACE',
+                        marker=dict(size=8, color='#ffdd00'),
+                        hovertemplate='<b>%{text}</b><br>ACE: %{y:.2f}<extra></extra>',
+                        text=event_names,
+                        showlegend=False
+                    )
+                )
+            except Exception as e:
+                # Fallback to simple line chart if interpolation fails
+                print(f"Interpolation failed: {e}, using simple line chart")
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=list(range(len(event_names))),
+                        y=ace_values,
+                        mode='lines+markers',
+                        name='ACE',
+                        line=dict(color='#ffdd00', width=3),
+                        marker=dict(size=8, color='#ffdd00'),
+                        hovertemplate='<b>%{text}</b><br>ACE: %{y:.2f}<extra></extra>',
+                        text=event_names,
+                        showlegend=False
+                    )
+                )
+        else:
+            # Single point or no data - just show the point
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=[0],
+                    y=ace_values,
+                    mode='markers',
+                    name='ACE',
+                    marker=dict(size=8, color='#ffdd00'),
+                    hovertemplate='<b>%{text}</b><br>ACE: %{y:.2f}<extra></extra>',
+                    text=event_names,
+                    showlegend=False
+                )
+            )
+        
+        # Update x-axis to show event names at original positions
+        fig.update_xaxes(
+            tickmode='array',
+            tickvals=list(range(len(event_names))),
+            ticktext=event_names,
+            tickangle=45,
+            showgrid=True, 
+            gridwidth=1, 
+            gridcolor='rgba(128,128,128,0.2)',
+            zeroline=False
+        )
+        
+        fig.update_layout(
+            height=400,
+            showlegend=False,
+            title_text=f"Team {team_number} Event Performance - {performance_year}",
+            title_x=0.5,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#777"),
+            xaxis_title="Events",
+            yaxis_title="ACE"
+        )
+        
+        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)', zeroline=False)
+        
+        trends_chart = dcc.Graph(figure=fig, config={"displayModeBar": False})
+        
+    else:  # History view - show year-by-year rank
+        # Get team data for all years
+        years_participated = sorted([
+            y for y in TEAM_DATABASE
+            if team_number in TEAM_DATABASE[y] and y not in [2020, 2021]  # Remove cancelled COVID seasons
+        ])
+        
+        if not years_participated:
+            return "No historical data available for this team."
+        
+        # Calculate rank for each year
+        rank_data = []
+        for y in years_participated:
+            team_data = TEAM_DATABASE[y].get(team_number, {})
+            if team_data:
+                # Calculate rank for this year
+                year_teams = list(TEAM_DATABASE[y].values())
+                if year_teams:
+                    # Sort by ACE and find rank
+                    sorted_teams = sorted(year_teams, key=lambda x: x.get("epa", 0), reverse=True)
+                    rank = next((i + 1 for i, t in enumerate(sorted_teams) if t.get("team_number") == team_number), len(sorted_teams))
+                    total_teams = len(year_teams)
+                    rank_data.append({
+                        "year": y,
+                        "rank": rank,
+                        "total_teams": total_teams
+                    })
+        
+        if not rank_data:
+            return "No rank data available for this team."
+        
+        # Create year-by-year rank chart
+        import plotly.graph_objects as go
+        import numpy as np
+        from scipy.interpolate import interp1d
+        
+        years = [d["year"] for d in rank_data]
+        ranks = [d["rank"] for d in rank_data]
+        
+        # Create smooth line by interpolating between points
+        if len(ranks) > 1:
+            try:
+                # Create interpolation function
+                x_indices = np.arange(len(ranks))
+                
+                # Use cubic interpolation if we have enough points, otherwise linear
+                if len(ranks) >= 4:
+                    f = interp1d(x_indices, ranks, kind='cubic', bounds_error=False, fill_value='extrapolate')
+                else:
+                    f = interp1d(x_indices, ranks, kind='linear', bounds_error=False, fill_value='extrapolate')
+                
+                # Create more points for smooth curve
+                x_smooth = np.linspace(0, len(ranks) - 1, max(50, len(ranks) * 10))
+                y_smooth = f(x_smooth)
+                
+                # Create smooth line
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_smooth,
+                        y=y_smooth,
+                        mode='lines',
+                        name='Rank (Smoothed)',
+                        line=dict(color='#ffdd00', width=3),
+                        showlegend=False,
+                        hoverinfo='skip'
+                    )
+                )
+                
+                # Add original points as markers
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_indices,
+                        y=ranks,
+                        mode='markers',
+                        name='Rank',
+                        marker=dict(size=8, color='#ffdd00'),
+                        hovertemplate='<b>%{text}</b><br>Rank: %{y}<extra></extra>',
+                        text=years,
+                        showlegend=False
+                    )
+                )
+            except Exception as e:
+                # Fallback to simple line chart if interpolation fails
+                print(f"Interpolation failed: {e}, using simple line chart")
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=list(range(len(years))),
+                        y=ranks,
+                        mode='lines+markers',
+                        name='Rank',
+                        line=dict(color='#ffdd00', width=3),
+                        marker=dict(size=8, color='#ffdd00'),
+                        hovertemplate='<b>%{text}</b><br>Rank: %{y}<extra></extra>',
+                        text=years,
+                        showlegend=False
+                    )
+                )
+        else:
+            # Single point or no data - just show the point
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=[0],
+                    y=ranks,
+                    mode='markers',
+                    name='Rank',
+                    marker=dict(size=8, color='#ffdd00'),
+                    hovertemplate='<b>%{text}</b><br>Rank: %{y}<extra></extra>',
+                    text=years,
+                    showlegend=False
+                )
+            )
+        
+        # Update x-axis to show years at original positions
+        fig.update_xaxes(
+            tickmode='array',
+            tickvals=list(range(len(years))),
+            ticktext=years,
+            showgrid=True, 
+            gridwidth=1, 
+            gridcolor='rgba(128,128,128,0.2)',
+            zeroline=False
+        )
+        
+        fig.update_layout(
+            height=400,
+            showlegend=False,
+            title_text=f"Team {team_number} Rank Performance Over Time",
+            title_x=0.5,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#777"),
+            xaxis_title="Year",
+            yaxis_title="Rank"
+        )
+        
+        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
+        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)', autorange="reversed", zeroline=False)
+        
+        trends_chart = dcc.Graph(figure=fig, config={"displayModeBar": False})
+    
+    # Similar Teams Section
+    similar_teams = find_similar_teams(team_number, performance_year, TEAM_DATABASE)
+    
+    similar_teams_cards = []
+    for similar_team in similar_teams[:6]:  # Show top 6 similar teams
+        team_num = similar_team["team_number"]
+        nickname = similar_team.get("nickname", "Unknown")
+        ace = similar_team.get("epa", 0)
+        similarity_score = similar_team.get("similarity_score", 0)
+        avatar_url = get_team_avatar(team_num)
+        
+        card = dbc.Card([
+            dbc.CardBody([
+                dbc.Row([
+                    dbc.Col([
+                        html.Img(
+                            src=avatar_url,
+                            style={
+                                "width": "50px",
+                                "height": "50px",
+                                "borderRadius": "50%",
+                                "objectFit": "contain"
+                            }
+                        ) if avatar_url else html.Div("", style={"width": "50px", "height": "50px"}),
+                    ], width="auto"),
+                    dbc.Col([
+                        html.A(
+                            f"#{team_num} {nickname}",
+                            href=f"/team/{team_num}/{performance_year}",
+                            style={"fontWeight": "bold", "textDecoration": "none", "color": "var(--text-primary)"}
+                        ),
+                        html.Div(f"ACE: {ace:.1f}", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"}),
+                        html.Div(f"Similarity: {similarity_score:.1%}", style={"fontSize": "0.8rem", "color": "var(--text-muted)"}),
+                    ])
+                ])
+            ])
+        ], style={"marginBottom": "10px", "backgroundColor": "var(--card-bg)"})
+        
+        similar_teams_cards.append(card)
+    
+    return html.Div([
+        html.Div(trends_chart, className="trends-chart-container"),
+        html.Hr(style={"margin": "30px 0"}),
+        html.H3("Similar Teams", style={"marginBottom": "20px", "color": "var(--text-primary)"}),
+        html.Div(similar_teams_cards, className="similar-teams-container")
+    ])
+
+@callback(
+    Output("team-events-content", "children"),
+    Input("team-tabs", "active_tab"),
+    State("team-insights-store", "data")
+)
+def update_team_events(active_tab, store_data):
+    if active_tab != "events-tab" or not store_data:
+        return ""
+    
+    team_number = store_data.get("team_number")
+    year = store_data.get("year")
+    
+    if not team_number:
+        return "No team data available."
+    
+    # Build events data
+    events_data = []
+    year_keys = [year] if year else list(EVENT_DATABASE.keys())
+    participated_events = []
+    
+    for year_key in year_keys:
+        for event_key, event in EVENT_DATABASE.get(year_key, {}).items():
+            team_list = EVENT_TEAMS.get(year_key, {}).get(event_key, [])
+            if any(t["tk"] == team_number for t in team_list):
+                # Special case: Einstein (2025cmptx) filter
+                if event_key == "2025cmptx":
+                    # Check if team played matches on Einstein
+                    einstein_matches = [
+                        m for m in EVENT_MATCHES.get(year, [])
+                        if m.get("ek") == "2025cmptx" and (
+                            str(team_number) in m.get("rt", "").split(",") or
+                            str(team_number) in m.get("bt", "").split(",")
+                        )
+                    ]
+    
+                    # Check if team won an award at Einstein
+                    einstein_awards = [
+                        aw for aw in EVENT_AWARDS
+                        if aw["tk"] == team_number and aw["ek"] == "2025cmptx" and aw["y"] == year_key
+                    ]
+    
+                    # Skip Einstein if no matches and no awards
+                    if not einstein_matches and not einstein_awards:
+                        continue
+    
+                participated_events.append((year_key, event_key, event))
+    
+    # Sort events by start date
+    participated_events.sort(key=lambda tup: tup[2].get("sd", ""), reverse=True)
+    
+    # Map event keys to names
+    event_key_to_name = {ek: e.get("n", "Unknown") for _, ek, e in participated_events}
+    
+    # Build event rows
+    for year_key, event_key, event in participated_events:
+        event_name = event.get("n", "")
+        location = f"{event.get('c', '')}, {event.get('s', '')}".strip(", ")
+        start_date = event.get("sd", "")
+        end_date = event.get("ed", "")
+        event_url = f"https://www.peekorobo.com/event/{event_key}"
+    
+        # Rank
+        rank = None
+        rankings = EVENT_RANKINGS.get(year_key, {}).get(event_key, {})
+        if team_number in rankings:
+            rank = rankings[team_number].get("rk")
+            if rank:
+                event_name += f" (Rank: {rank})"
+    
+        events_data.append({
+            "event_name": f"[{event_name}]({event_url})",
+            "event_location": location,
+            "start_date": start_date,
+            "end_date": end_date,
+        })
+    
+    events_table = dash_table.DataTable(
+        columns=[
+            {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
+            {"name": "Location", "id": "event_location"},
+            {"name": "Start Date", "id": "start_date"},
+            {"name": "End Date", "id": "end_date"},
+        ],
+        data=events_data,
+        page_size=10,
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"},
+        style_header={
+            "backgroundColor": "var(--card-bg)",
+            "fontWeight": "bold",
+            "textAlign": "center",
+            "borderBottom": "1px solid #ccc",
+            "padding": "6px",
+            "fontSize": "13px",
+        },
+        style_cell={
+            "backgroundColor": "var(--card-bg)",
+            "textAlign": "center",
+            "padding": "10px",
+            "border": "none",
+            "fontSize": "14px",
+        },
+        style_cell_conditional=[{"if": {"column_id": "event_name"}, "textAlign": "center"}],
+        style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
+    )
+    
+    return html.Div([
+        events_table
+    ])
+
+@callback(
+    Output("team-awards-content", "children"),
+    Input("team-tabs", "active_tab"),
+    State("team-insights-store", "data")
+)
+def update_team_awards(active_tab, store_data):
+    if active_tab != "awards-tab" or not store_data:
+        return ""
+    
+    team_number = store_data.get("team_number")
+    year = store_data.get("year")
+    
+    if not team_number:
+        return "No team data available."
+    
+    # Build events data for event name mapping
+    year_keys = [year] if year else list(EVENT_DATABASE.keys())
+    participated_events = []
+    
+    for year_key in year_keys:
+        for event_key, event in EVENT_DATABASE.get(year_key, {}).items():
+            team_list = EVENT_TEAMS.get(year_key, {}).get(event_key, [])
+            if any(t["tk"] == team_number for t in team_list):
+                participated_events.append((year_key, event_key, event))
+    
+    # Map event keys to names
+    event_key_to_name = {ek: e.get("n", "Unknown") for _, ek, e in participated_events}
+    
+    # Awards data
+    team_awards = [
+        row for row in EVENT_AWARDS
+        if row["tk"] == team_number and (not year or row["y"] == year)
+    ]
+    
+    team_awards.sort(key=lambda aw: aw["y"], reverse=True)
+    
+    awards_data = [
+        {
+            "award_name": aw["an"],
+            "event_name": f"[{event_key_to_name.get(aw['ek'], 'Unknown Event')}](/event/{aw['ek']})",
+            "award_year": aw["y"]
+        }
+        for aw in team_awards
+    ]
+    
+    awards_table = dash_table.DataTable(
+        columns=[
+            {"name": "Award Name", "id": "award_name"},
+            {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
+            {"name": "Year", "id": "award_year"},
+        ],
+        data=awards_data,
+        page_size=10,
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"},
+        style_header={
+            "backgroundColor": "var(--card-bg)",
+            "fontWeight": "bold",
+            "textAlign": "center",
+            "borderBottom": "1px solid #ccc",
+            "padding": "6px",
+            "fontSize": "13px",
+        },
+        style_cell={
+            "backgroundColor": "var(--card-bg)",
+            "textAlign": "center",
+            "padding": "10px",
+            "border": "none",
+            "fontSize": "14px",
+        },
+        style_cell_conditional=[{"if": {"column_id": "award_name"}, "textAlign": "left"}],
+        style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
+    )
+    
+    # Blue Banners Section
+    blue_banner_keywords = ["chairman's", "impact", "woodie flowers", "winner"]
+    blue_banners = []
+    
+    for award in team_awards:
+        name_lower = award["an"].lower()
+        if any(keyword in name_lower for keyword in blue_banner_keywords):
+            event_key = award["ek"]
+            year_str = str(award["y"])
+            event = EVENT_DATABASE.get(int(year_str), {}).get(event_key, {})
+            event_name = event.get("n", "Unknown Event")
+            full_event_name = f"{year_str} {event_name}"
+    
+            blue_banners.append({
+                "award_name": award["an"],
+                "event_name": full_event_name,
+                "event_key": event_key
+            })
+    
+    blue_banner_section = html.Div(
+        [
+            html.H4("Blue Banners", style={"marginTop": "30px", "marginBottom": "15px", "color": "var(--text-primary)"}),
+            html.Div(
+                [
+                    html.A(
+                        href=f"/event/{banner['event_key']}",
+                        children=[
+                            html.Div(
+                                [
+                                    html.Img(
+                                        src="/assets/banner.png",
+                                        style={"width": "120px", "height": "auto", "position": "relative"},
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.P(
+                                                banner["award_name"],
+                                                style={"fontSize": "0.8rem", "color": "white", "fontWeight": "bold", "textAlign": "center", "marginBottom": "3px"},
+                                            ),
+                                            html.P(
+                                                banner["event_name"],
+                                                style={"fontSize": "0.6rem", "color": "white", "textAlign": "center"},
+                                            ),
+                                        ],
+                                        style={"position": "absolute", "top": "50%", "left": "50%", "transform": "translate(-50%, -50%)"},
+                                    ),
+                                ],
+                                style={"position": "relative", "marginBottom": "15px"},
+                            ),
+                        ],
+                        style={"textDecoration": "none"},
+                    )
+                    for banner in blue_banners
+                ],
+                style={"display": "flex", "flexWrap": "wrap", "justifyContent": "center", "gap": "10px"},
+            ),
+        ],
+        style={"marginBottom": "15px", "borderRadius": "8px", "backgroundColor": "var(--card-bg)", "padding": "10px"},
+    ) if blue_banners else html.Div()
+    
+    return html.Div([
+        awards_table,
+        blue_banner_section
+    ])
+
+def find_similar_teams(team_number, year, TEAM_DATABASE):
+    """Find teams similar to the given team based on ACE, location (city, state, country), and performance patterns."""
+    if year not in TEAM_DATABASE:
+        return []
+    
+    target_team = TEAM_DATABASE[year].get(team_number)
+    if not target_team:
+        return []
+    
+    target_ace = target_team.get("epa", 0)
+    target_auto = target_team.get("auto_epa", 0)
+    target_teleop = target_team.get("teleop_epa", 0)
+    target_endgame = target_team.get("endgame_epa", 0)
+    target_city = (target_team.get("city", "") or "").strip().lower()
+    target_state = (target_team.get("state_prov", "") or "").strip().lower()
+    target_country = (target_team.get("country", "") or "").strip().lower()
+    
+    similar_teams = []
+    
+    for other_team_num, other_team in TEAM_DATABASE[year].items():
+        if other_team_num == team_number:
+            continue
+        
+        other_ace = other_team.get("epa", 0)
+        other_auto = other_team.get("auto_epa", 0)
+        other_teleop = other_team.get("teleop_epa", 0)
+        other_endgame = other_team.get("endgame_epa", 0)
+        other_city = (other_team.get("city", "") or "").strip().lower()
+        other_state = (other_team.get("state_prov", "") or "").strip().lower()
+        other_country = (other_team.get("country", "") or "").strip().lower()
+        
+        # Performance similarity (normalized absolute difference, averaged)
+        ace_diff = abs(target_ace - other_ace) / max(abs(target_ace), 1)
+        auto_diff = abs(target_auto - other_auto) / max(abs(target_auto), 1)
+        teleop_diff = abs(target_teleop - other_teleop) / max(abs(target_teleop), 1)
+        endgame_diff = abs(target_endgame - other_endgame) / max(abs(target_endgame), 1)
+        performance_diff = (ace_diff + auto_diff + teleop_diff + endgame_diff) / 4
+        
+        # Location similarity (city > state > country > other)
+        if target_city and other_city and target_city == other_city:
+            location_diff = 0
+        elif target_state and other_state and target_state == other_state:
+            location_diff = 0.3
+        elif target_country and other_country and target_country == other_country:
+            location_diff = 0.6
+        else:
+            location_diff = 1
+        
+        # Weighted similarity: 0.7 performance, 0.3 location
+        weighted_diff = 0.7 * performance_diff + 0.3 * location_diff
+        similarity_score = max(0, 1 - weighted_diff)
+        similarity_score = min(similarity_score, 1.0)  # Cap at 100%
+        
+        similar_teams.append({
+            "team_number": other_team_num,
+            "nickname": other_team.get("nickname", "Unknown"),
+            "epa": other_ace,
+            "similarity_score": similarity_score,
+            "city": other_city,
+            "state": other_state,
+            "country": other_country
+        })
+    
+    # Sort by similarity score (highest first)
+    similar_teams.sort(key=lambda x: x["similarity_score"], reverse=True)
+    
+    return similar_teams
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  

@@ -1951,203 +1951,43 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
         percentiles_dict
     )
 
-    events_data = []
-    
-    year_keys = [year] if year else list(EVENT_DATABASE.keys())
-    participated_events = []
-    
-    for year_key in year_keys:
-        for event_key, event in EVENT_DATABASE.get(year_key, {}).items():
-            team_list = EVENT_TEAMS.get(year_key, {}).get(event_key, [])
-            if any(t["tk"] == team_number for t in team_list):
-                # Special case: Einstein (2025cmptx) filter
-                if event_key == "2025cmptx":
-                    # Check if team played matches on Einstein
-                    einstein_matches = [
-                        m for m in EVENT_MATCHES.get(year, [])
-                        if m.get("ek") == "2025cmptx" and (
-                            str(team_number) in m.get("rt", "").split(",") or
-                            str(team_number) in m.get("bt", "").split(",")
-                        )
-                    ]
-    
-                    # Check if team won an award at Einstein
-                    einstein_awards = [
-                        aw for aw in EVENT_AWARDS
-                        if aw["tk"] == team_number and aw["ek"] == "2025cmptx" and aw["y"] == year_key
-                    ]
-    
-                    # Skip Einstein if no matches and no awards
-                    if not einstein_matches and not einstein_awards:
-                        continue
-    
-                participated_events.append((year_key, event_key, event))
-    
-    # Sort events by start date
-    participated_events.sort(key=lambda tup: tup[2].get("sd", ""), reverse=True)
-    
-    # Map event keys to names
-    event_key_to_name = {ek: e.get("n", "Unknown") for _, ek, e in participated_events}
-    
-    # Build event rows
-    for year_key, event_key, event in participated_events:
-        event_name = event.get("n", "")
-        location = f"{event.get('c', '')}, {event.get('s', '')}".strip(", ")
-        start_date = event.get("sd", "")
-        end_date = event.get("ed", "")
-        event_url = f"https://www.peekorobo.com/event/{event_key}"
-    
-        # Rank
-        rank = None
-        rankings = EVENT_RANKINGS.get(year_key, {}).get(event_key, {})
-        if team_number in rankings:
-            rank = rankings[team_number].get("rk")
-            if rank:
-                event_name += f" (Rank: {rank})"
-    
-        events_data.append({
-            "event_name": f"[{event_name}]({event_url})",
-            "event_location": location,
-            "start_date": start_date,
-            "end_date": end_date,
-        })
-    events_table = dash_table.DataTable(
-        columns=[
-            {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
-            {"name": "Location", "id": "event_location"},
-            {"name": "Start Date", "id": "start_date"},
-            {"name": "End Date", "id": "end_date"},
-        ],
-        data=events_data,
-        page_size=5,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"},
-        style_header={
-            "backgroundColor": "var(--card-bg)",        # Match the table background
-            "fontWeight": "bold",              # Keep column labels strong
-            "textAlign": "center",
-            "borderBottom": "1px solid #ccc",  # Thin line under header only
-            "padding": "6px",                  # Reduce banner size
-            "fontSize": "13px",                # Optional: shrink text slightly
-        },
+    # Create tabs for the team page
+    team_tabs = dbc.Tabs([
+        dbc.Tab(
+            label="Overview",
+            tab_id="overview-tab",
+            children=[
+                html.Div([
+                    rank_card,
+                    performance_metrics_card,
+                    html.Hr(),
+                    build_recent_events_section(team_key, team_number, epa_data, performance_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS),
+                ])
+            ]
+        ),
+        dbc.Tab(
+            label="Insights",
+            tab_id="insights-tab",
+            children=[
+                html.Div(id="team-insights-content", children="Loading insights...")
+            ]
+        ),
+        dbc.Tab(
+            label="Events",
+            tab_id="events-tab",
+            children=[
+                html.Div(id="team-events-content")
+            ]
+        ),
+        dbc.Tab(
+            label="Awards",
+            tab_id="awards-tab",
+            children=[
+                html.Div(id="team-awards-content")
+            ]
+        ),
+    ], id="team-tabs", active_tab="overview-tab")
 
-        style_cell={
-            "backgroundColor": "var(--card-bg)",
-            "textAlign": "center",
-            "padding": "10px",
-            "border": "none",
-            "fontSize": "14px",
-        },
-        style_cell_conditional=[{"if": {"column_id": "event_name"}, "textAlign": "center"}],
-        style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
-    )
-
-    
-    # --- Awards Section ---
-    team_awards = [
-        row for row in EVENT_AWARDS
-        if row["tk"] == team_number and (not year or row["y"] == year)
-    ]
-    
-    team_awards.sort(key=lambda aw: aw["y"], reverse=True)
-    
-    awards_data = [
-        {
-            "award_name": aw["an"],
-            "event_name": event_key_to_name.get(aw["ek"], "Unknown Event"),
-            "award_year": aw["y"]
-        }
-        for aw in team_awards
-    ]
-    
-    awards_table = dash_table.DataTable(
-        columns=[
-            {"name": "Award Name", "id": "award_name"},
-            {"name": "Event Name", "id": "event_name"},
-            {"name": "Year", "id": "award_year"},
-        ],
-        data=awards_data,
-        page_size=5,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"},
-        style_header={
-            "backgroundColor": "var(--card-bg)",        # Match the table background
-            "fontWeight": "bold",              # Keep column labels strong
-            "textAlign": "center",
-            "borderBottom": "1px solid #ccc",  # Thin line under header only
-            "padding": "6px",                  # Reduce banner size
-            "fontSize": "13px",                # Optional: shrink text slightly
-        },
-
-        style_cell={
-            "backgroundColor": "var(--card-bg)",
-            "textAlign": "center",
-            "padding": "10px",
-            "border": "none",
-            "fontSize": "14px",
-        },
-        style_cell_conditional=[{"if": {"column_id": "award_name"}, "textAlign": "left"}],
-        style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
-    )
-    
-    # --- Blue Banners Section ---
-    blue_banner_keywords = ["chairman's", "impact", "woodie flowers", "winner"]
-    blue_banners = []
-    
-    for award in team_awards:
-        name_lower = award["an"].lower()
-        if any(keyword in name_lower for keyword in blue_banner_keywords):
-            event_key = award["ek"]
-            year_str = str(award["y"])
-            event = EVENT_DATABASE.get(int(year_str), {}).get(event_key, {})
-            event_name = event.get("n", "Unknown Event")
-            full_event_name = f"{year_str} {event_name}"
-    
-            blue_banners.append({
-                "award_name": award["an"],
-                "event_name": full_event_name,
-                "event_key": event_key
-            })
-    
-    blue_banner_section = html.Div(
-        [
-            html.Div(
-                [
-                    html.A(
-                        href=f"/event/{banner['event_key']}",
-                        children=[
-                            html.Div(
-                                [
-                                    html.Img(
-                                        src="/assets/banner.png",
-                                        style={"width": "120px", "height": "auto", "position": "relative"},
-                                    ),
-                                    html.Div(
-                                        [
-                                            html.P(
-                                                banner["award_name"],
-                                                style={"fontSize": "0.8rem", "color": "white", "fontWeight": "bold", "textAlign": "center", "marginBottom": "3px"},
-                                            ),
-                                            html.P(
-                                                banner["event_name"],
-                                                style={"fontSize": "0.6rem", "color": "white", "textAlign": "center"},
-                                            ),
-                                        ],
-                                        style={"position": "absolute", "top": "50%", "left": "50%", "transform": "translate(-50%, -50%)"},
-                                    ),
-                                ],
-                                style={"position": "relative", "marginBottom": "15px"},
-                            ),
-                        ],
-                        style={"textDecoration": "none"},
-                    )
-                    for banner in blue_banners
-                ],
-                style={"display": "flex", "flexWrap": "wrap", "justifyContent": "center", "gap": "10px"},
-            ),
-        ],
-        style={"marginBottom": "15px", "borderRadius": "8px", "backgroundColor": "var(--card-bg)", "padding": "10px"},
-    )
-
-    
     # Add Popover for team favorites
     favorites_popover = dbc.Popover(
         [
@@ -2163,20 +2003,13 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
     return html.Div(
         [
             topbar(),
-            dcc.Store(id="user-session", data={"user_id": user_id} if user_id else None),  # Add this line
+            dcc.Store(id="user-session", data={"user_id": user_id} if user_id else None),
+            dcc.Store(id="team-insights-store", data={"team_number": team_number, "year": year, "performance_year": performance_year}),
             dbc.Alert(id="favorite-alert", is_open=False, duration=3000, color="warning"),
             dbc.Container(
                 [
                     team_card,
-                    rank_card,
-                    performance_metrics_card,
-                    html.Hr(),
-                    build_recent_events_section(team_key, team_number, epa_data, performance_year,EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS),
-                    html.H3("Events", style={"marginTop": "2rem", "color": "var(--text-secondary)", "fontWeight": "bold"}),
-                    events_table,
-                    html.H3("Awards", style={"marginTop": "2rem", "color": "var(--text-secondary)", "fontWeight": "bold"}),
-                    awards_table,
-                    blue_banner_section,
+                    team_tabs,
                     html.Br(),
                 ],
                 style={
@@ -2186,7 +2019,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
                     "flexGrow": "1"
                 },
             ),
-            favorites_popover, # Add the popover here
+            favorites_popover,
             dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
             dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
             dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
