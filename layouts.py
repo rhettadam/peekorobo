@@ -1388,12 +1388,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 def get_team_epa_info(t_key):
                     t_data = epa_data.get(t_key.strip(), {})
                     event_epa = next((e for e in t_data.get("event_epas", []) if e.get("event_key") == event_key), None)
-                    #print(f"\n[get_team_epa_info] t_key={t_key}, event_key={event_key}")
-                    #print(f"  event_epa: {event_epa}")
-                    #print(f"  t_data: {t_data}")
                     # Use event_epa only if EPA value is nonzero
                     if event_epa and event_epa.get("overall", 0) != 0:
-                        #print("  Using event_epa for prediction!")
                         return {
                             "epa": event_epa.get("overall", 0),
                             "confidence": event_epa.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
@@ -1401,7 +1397,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                         }
                     # Otherwise, fall back to overall EPA data if available (only require epa, use default confidence if missing)
                     if t_data.get("epa") not in (None, ""):
-                        #print("  Using overall EPA for prediction!")
                         epa_val = t_data.get("epa", 0)
                         conf_val = t_data.get("confidence", 0.7)  # Default confidence if missing
                         return {
@@ -1409,30 +1404,27 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                             "confidence": conf_val,
                             "consistency": t_data.get("consistency", 0)
                         }
-                    #print("  Using zeros for prediction!")
                     return {
                         "epa": 0,
                         "confidence": 0,
                         "consistency": 0
                     }
-                
                 # Gather info for all teams
                 red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
-                #(f"[build_match_rows] Match {label}: Red team info: {red_team_info}")
-                #print(f"[build_match_rows] Match {label}: Blue team info: {blue_team_info}")
                 if red_team_info and blue_team_info:
                     p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
-                    #print(f"[build_match_rows] Match {label}: p_red={p_red}, p_blue={p_blue}")
-                    is_red = str(team_number) in red_str
-                    team_prob = p_red if is_red else p_blue
-                    #print(f"[build_match_rows] Match {label}: team_prob={team_prob}, is_red={is_red}")
-                    prediction = f"{team_prob:.0%}"
-                    prediction_percent = round(team_prob * 100)
+                    # Pred winner logic (47-53% = Tie)
+                    if 0.47 <= p_red <= 0.53:
+                        pred_winner = "Tie"
+                    else:
+                        pred_winner = "Red" if p_red > p_blue else "Blue"
+                    prediction = f"{p_red:.0%}" if str(team_number) in red_str else f"{p_blue:.0%}"
+                    prediction_percent = round((p_red if str(team_number) in red_str else p_blue) * 100)
                 else:
-                    #print(f"[build_match_rows] Match {label}: No team info for prediction!")
                     prediction = "N/A"
                     prediction_percent = None
+                    pred_winner = "N/A"
         
                 winner = match.get("wa", "Tie").title()
                 youtube_id = match.get("yt")
@@ -1448,6 +1440,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     "Winner": winner,
                     "Prediction": prediction,
                     "Prediction %": prediction_percent,
+                    "Pred Winner": pred_winner,
                     "rowColor": "#ffe6e6" if winner == "Red" else "#e6f0ff" if winner == "Blue" else "white",
                 }
 
@@ -1475,6 +1468,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     {"name": "Red Score", "id": "Red Score"},
                     {"name": "Blue Score", "id": "Blue Score"},
                     {"name": "Winner", "id": "Winner"},
+                    {"name": "Pred Winner", "id": "Pred Winner"},
                     {"name": "Prediction", "id": "Prediction"},
                 ],
                 data=match_rows,

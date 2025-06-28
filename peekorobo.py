@@ -2667,7 +2667,10 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
             else:
                 pred_red = f"{p_red:.0%}"
                 pred_blue = f"{p_blue:.0%}"
-                pred_winner = "Red" if p_red > p_blue else "Blue"
+                if 0.47 <= p_red <= 0.53:
+                    pred_winner = "Tie"
+                else:
+                    pred_winner = "Red" if p_red > p_blue else "Blue"
 
             yid = match.get("yt")
             video_link = f"[Watch](https://www.youtube.com/watch?v={yid})" if yid else "N/A"
@@ -2705,37 +2708,38 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
     ]
 
     row_style = [
-        # Red prediction styling - make more specific
+        # Row coloring for winner (these should come first)
+        {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "#ffe6e6"},
+        {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
+        # --- Cell-level prediction rules (these should come after row-level rules) ---
+        # Red prediction styling
         {"if": {"filter_query": "{Red Prediction %} >= 45 && {Red Prediction %} <= 55", "column_id": "Red Pred"}, "backgroundColor": "#ededd4", "color": "black"},
         {"if": {"filter_query": "{Red Prediction %} > 55 && {Red Prediction %} <= 65", "column_id": "Red Pred"}, "backgroundColor": "#d4edda", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} > 65 && {Red Prediction %} <= 75", "column_id": "Red Pred"}, "backgroundColor": "#b6dfc1", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} > 65 && {Red Prediction %} <= 75", "column_id": "Red Predn"}, "backgroundColor": "#b6dfc1", "color": "black"},
         {"if": {"filter_query": "{Red Prediction %} > 75 && {Red Prediction %} <= 85", "column_id": "Red Pred"}, "backgroundColor": "#8fd4a8", "color": "black"},
         {"if": {"filter_query": "{Red Prediction %} > 85 && {Red Prediction %} <= 95", "column_id": "Red Pred"}, "backgroundColor": "#68c990", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} > 95", "column_id": "Red Pred"}, "backgroundColor": "#41be77", "color": "black"},
+        {"if": {"filter_query": "{Red Prediction %} > 95", "column_id": "Red Prediction"}, "backgroundColor": "#41be77", "color": "black"},
         {"if": {"filter_query": "{Red Prediction %} < 45 && {Red Prediction %} >= 35", "column_id": "Red Pred"}, "backgroundColor": "#f8d7da", "color": "black"},
         {"if": {"filter_query": "{Red Prediction %} < 35 && {Red Prediction %} >= 25", "column_id": "Red Pred"}, "backgroundColor": "#f1bfc2", "color": "black"},
         {"if": {"filter_query": "{Red Prediction %} < 25 && {Red Prediction %} >= 15", "column_id": "Red Pred"}, "backgroundColor": "#eaa7aa", "color": "black"},
         {"if": {"filter_query": "{Red Prediction %} < 15 && {Red Prediction %} >= 5", "column_id": "Red Pred"}, "backgroundColor": "#e39091", "color": "black"},
-        {"if": {"filter_query": "{Red Prediction %} < 5", "column_id": "Red Pred"}, "backgroundColor": "#dc7878", "color": "black"},
-        # Blue prediction styling - make more specific
+        {"if": {"filter_query": "{Red Prediction %} < 5", "column_id": "Red Prediction"}, "backgroundColor": "#dc7878", "color": "black"},
+        # Blue prediction styling
         {"if": {"filter_query": "{Blue Prediction %} >= 45 && {Blue Prediction %} <= 55", "column_id": "Blue Pred"}, "backgroundColor": "#ededd4", "color": "black"},
         {"if": {"filter_query": "{Blue Prediction %} > 55 && {Blue Prediction %} <= 65", "column_id": "Blue Pred"}, "backgroundColor": "#d4edda", "color": "black"},
         {"if": {"filter_query": "{Blue Prediction %} > 65 && {Blue Prediction %} <= 75", "column_id": "Blue Pred"}, "backgroundColor": "#b6dfc1", "color": "black"},
         {"if": {"filter_query": "{Blue Prediction %} > 75 && {Blue Prediction %} <= 85", "column_id": "Blue Pred"}, "backgroundColor": "#8fd4a8", "color": "black"},
         {"if": {"filter_query": "{Blue Prediction %} > 85 && {Blue Prediction %} <= 95", "column_id": "Blue Pred"}, "backgroundColor": "#68c990", "color": "black"},
-        {"if": {"filter_query": "{Blue Prediction %} > 95", "column_id": "Blue Pred"}, "backgroundColor": "#41be77", "color": "black"},
+        {"if": {"filter_query": "{Blue Prediction %} > 95", "column_id": "Blue Prediction"}, "backgroundColor": "#41be77", "color": "black"},
         {"if": {"filter_query": "{Blue Prediction %} < 45 && {Blue Prediction %} >= 35", "column_id": "Blue Pred"}, "backgroundColor": "#f8d7da", "color": "black"},
         {"if": {"filter_query": "{Blue Prediction %} < 35 && {Blue Prediction %} >= 25", "column_id": "Blue Pred"}, "backgroundColor": "#f1bfc2", "color": "black"},
         {"if": {"filter_query": "{Blue Prediction %} < 25 && {Blue Prediction %} >= 15", "column_id": "Blue Pred"}, "backgroundColor": "#eaa7aa", "color": "black"},
         {"if": {"filter_query": "{Blue Prediction %} < 15 && {Blue Prediction %} >= 5", "column_id": "Blue Pred"}, "backgroundColor": "#e39091", "color": "black"},
         {"if": {"filter_query": "{Blue Prediction %} < 5", "column_id": "Blue Pred"}, "backgroundColor": "#dc7878", "color": "black"},
-        # Predicted Winner styling - make more specific
+        # Predicted Winner styling
         {"if": {"filter_query": '{Pred Winner} = "Red"', "column_id": "Pred Winner"}, "backgroundColor": "#ffe6e6", "color": "black"},
         {"if": {"filter_query": '{Pred Winner} = "Blue"', "column_id": "Pred Winner"}, "backgroundColor": "#e6f0ff", "color": "black"},
         {"if": {"filter_query": '{Pred Winner} = "Tie"', "column_id": "Pred Winner"}, "backgroundColor": "#f8f9fa", "color": "black"},
-        # Winner row styling - move to end and make less specific
-        {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "#ffe6e6"},
-        {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "#e6f0ff"},
     ]
 
     style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "color": "var(--text-tertiary) !important", "backgroundColor": "white" }
