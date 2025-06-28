@@ -14,7 +14,7 @@
     --navbar-bg: #353535;
     --navbar-text: #ffffff;
     --navbar-hover: #ffdd00;
-    --card-bg: #f8f9fa;
+    --card-bg: #f0f2f4;
     --card-border: #dee2e6;
     --input-bg: #ffffff;
     --input-border: #ced4da;
@@ -691,14 +691,6 @@ label {
 /* Tab content spacing */
 .tab-content {
     padding: 20px 0;
-}
-
-.tab-pane {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-top: none;
-    border-radius: 0 0 0.375rem 0.375rem;
-    padding: 20px;
 }
 
 /* Similar teams cards spacing */

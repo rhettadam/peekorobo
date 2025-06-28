@@ -2063,7 +2063,6 @@ def event_layout(event_key):
     Input("url", "search"),
 )
 def set_event_tab_from_url(search):
-    from urllib.parse import parse_qs
     if search and search.startswith("?"):
         params = parse_qs(search[1:])
         tab = params.get("tab", [None])[0]
@@ -3188,11 +3187,13 @@ def load_teams(
             showlegend=False,
             xaxis=dict(
                 showgrid=False,
+                zeroline=False,
                 color="#777",  # Axis ticks and label color
                 title=dict(font=dict(color="#777")),  # x-axis title color
             ),
             yaxis=dict(
                 showgrid=False,
+                zeroline=False,
                 color="#777",  # Axis ticks and label color
                 title=dict(font=dict(color="#777")),  # y-axis title color
             ),
@@ -3506,9 +3507,6 @@ def update_compare_team_dropdowns(year):
     # Removed prevent_initial_call=True so it runs on page load with defaults
 )
 def compare_multiple_teams(team_ids, year): # Update function signature
-    import plotly.graph_objects as go
-    from dash import html
-    import dash_bootstrap_components as dbc
 
     if not team_ids or len(team_ids) < 2:
         # Provide a message prompting the user to select teams
@@ -3548,9 +3546,6 @@ def compare_multiple_teams(team_ids, year): # Update function signature
         "Endgame": "#388e3c",
         "Confidence": "#555"
     }
-
-    # Import get_team_avatar
-    from datagather import get_team_avatar
 
     def team_card(t, year):
         team_number = t['team_number']
@@ -3919,18 +3914,15 @@ def update_team_insights(active_tab, store_data):
         
         sorted_events = sorted(event_epas, key=get_event_date)
         
-        # Create event-by-event chart
-        import plotly.graph_objects as go
-        import numpy as np
-        from scipy.interpolate import interp1d
-        
         # Use event names instead of keys for better readability
         event_names = []
+        event_keys = []
         for event in sorted_events:
             event_key = event.get("event_key", "")
             if event_key in EVENT_DATABASE.get(performance_year, {}):
                 event_name = EVENT_DATABASE[performance_year][event_key].get("n", event_key)
                 event_names.append(event_name)
+                event_keys.append(event_key)
             else:
                 event_names.append(event_key)
         
@@ -3975,7 +3967,7 @@ def update_team_insights(active_tab, store_data):
                         name='ACE',
                         marker=dict(size=8, color='#ffdd00'),
                         hovertemplate='<b>%{text}</b><br>ACE: %{y:.2f}<extra></extra>',
-                        text=event_names,
+                        text=event_keys,
                         showlegend=False
                     )
                 )
@@ -3992,7 +3984,7 @@ def update_team_insights(active_tab, store_data):
                         line=dict(color='#ffdd00', width=3),
                         marker=dict(size=8, color='#ffdd00'),
                         hovertemplate='<b>%{text}</b><br>ACE: %{y:.2f}<extra></extra>',
-                        text=event_names,
+                        text=event_keys,
                         showlegend=False
                     )
                 )
@@ -4016,7 +4008,7 @@ def update_team_insights(active_tab, store_data):
         fig.update_xaxes(
             tickmode='array',
             tickvals=list(range(len(event_names))),
-            ticktext=event_names,
+            ticktext=event_keys,
             tickangle=45,
             showgrid=True, 
             gridwidth=1, 
@@ -4027,8 +4019,6 @@ def update_team_insights(active_tab, store_data):
         fig.update_layout(
             height=400,
             showlegend=False,
-            title_text=f"Team {team_number} Event Performance - {performance_year}",
-            title_x=0.5,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#777"),
@@ -4070,11 +4060,6 @@ def update_team_insights(active_tab, store_data):
         
         if not rank_data:
             return "No rank data available for this team."
-        
-        # Create year-by-year rank chart
-        import plotly.graph_objects as go
-        import numpy as np
-        from scipy.interpolate import interp1d
         
         years = [d["year"] for d in rank_data]
         ranks = [d["rank"] for d in rank_data]
@@ -4169,8 +4154,6 @@ def update_team_insights(active_tab, store_data):
         fig.update_layout(
             height=400,
             showlegend=False,
-            title_text=f"Team {team_number} Rank Performance Over Time",
-            title_x=0.5,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#777"),
@@ -4517,18 +4500,19 @@ def find_similar_teams(team_number, year, TEAM_DATABASE):
         
         # Location similarity (city > state > country > other)
         if target_city and other_city and target_city == other_city:
-            location_diff = 0
-        elif target_state and other_state and target_state == other_state:
-            location_diff = 0.3
-        elif target_country and other_country and target_country == other_country:
-            location_diff = 0.6
+            # Strong city bonus: similarity is much less sensitive to performance difference
+            similarity_score = 1 - (performance_diff * 0.15)
         else:
-            location_diff = 1
-        
-        # Weighted similarity: 0.7 performance, 0.3 location
-        weighted_diff = 0.7 * performance_diff + 0.3 * location_diff
-        similarity_score = max(0, 1 - weighted_diff)
-        similarity_score = min(similarity_score, 1.0)  # Cap at 100%
+            if target_state and other_state and target_state == other_state:
+                location_diff = 0.3
+            elif target_country and other_country and target_country == other_country:
+                location_diff = 0.6
+            else:
+                location_diff = 1
+            # Regular weighted formula
+            weighted_diff = 0.7 * performance_diff + 0.3 * location_diff
+            similarity_score = 1 - weighted_diff
+        similarity_score = max(0, min(similarity_score, 1.0))  # Clamp to [0, 1]
         
         similar_teams.append({
             "team_number": other_team_num,
