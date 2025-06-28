@@ -1928,13 +1928,13 @@ def event_layout(event_key):
                 None
             )
             # Fallback to overall EPA/confidence/consistency if event-specific is missing
-            if event_specific_epa and any(event_specific_epa.get(k, 0) not in (None, 0, "") for k in ["overall", "confidence"]):
+            if event_specific_epa and event_specific_epa.get("actual_epa", 0) != 0:
                 event_epa_data[str(team_num)] = {
                     "epa": event_specific_epa.get("actual_epa", 0),
                     "auto_epa": event_specific_epa.get("auto", 0),
                     "teleop_epa": event_specific_epa.get("teleop", 0),
                     "endgame_epa": event_specific_epa.get("endgame", 0),
-                    "confidence": event_specific_epa.get("confidence", 0),
+                    "confidence": event_specific_epa.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
                 }
             else:
                 # Use overall EPA/confidence/consistency from TEAM_DATABASE
@@ -2582,21 +2582,20 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
     [
         State("store-event-matches", "data"),
         State("store-event-epa", "data"),
+        State("store-event-year", "data"),  # Add event year state
     ],
 )
-def update_matches_table(selected_team, event_matches, epa_data):
+def update_matches_table(selected_team, event_matches, epa_data, event_year):
     event_matches = event_matches or []
     epa_data = epa_data or {}
-
+    event_year = event_year or 2025  # Default fallback
+    
     # 1) Filter by team number
     if selected_team and selected_team != "ALL":
         event_matches = [
             m for m in event_matches
             if selected_team in m.get("rt", "").split(",") or selected_team in m.get("bt", "").split(",")
         ] 
-
-    # 2) Sort and separate by comp level
-    comp_level_order = {"qm": 0, "qf": 1, "sf": 2, "f": 3}
 
     def match_sort_key(m):
         # Use the match key (preferred in playoff)
@@ -2625,17 +2624,19 @@ def update_matches_table(selected_team, event_matches, epa_data):
 
     def get_team_epa_info(t_key):
         info = epa_data.get(str(t_key.strip()), {})
-        # If event_epa_data is missing or all zeros, fallback to TEAM_DATABASE
-        if not info or all(info.get(k, 0) in (None, 0, "") for k in ["epa", "confidence"]):
+        
+        # If event_epa_data is missing or EPA is 0 (even if confidence exists), fallback to TEAM_DATABASE
+        if not info or info.get("epa", 0) == 0:
             # Fallback to TEAM_DATABASE
             team_data = TEAM_DATABASE.get(event_year, {}).get(int(t_key), {})
             return {
                 "epa": team_data.get("epa", 0),
                 "confidence": team_data.get("confidence", 0.7),
             }
+        # Use event-specific EPA data, but ensure confidence has a reasonable fallback
         return {
             "epa": info.get("epa", 0),
-            "confidence": info.get("confidence", 0),
+            "confidence": info.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
         }
     
     def build_match_rows(matches):
@@ -2646,7 +2647,6 @@ def update_matches_table(selected_team, event_matches, epa_data):
             red_score = match.get("rs", 0)
             blue_score = match.get("bs", 0)
             winner = match.get("wa", "")
-            event_key = match.get("ek")
             label = match.get("k", "").split("_", 1)[-1]
 
             if label.lower().startswith("sf") and "m" in label.lower():
@@ -2659,6 +2659,7 @@ def update_matches_table(selected_team, event_matches, epa_data):
             blue_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
 
             p_red, p_blue = predict_win_probability(red_info, blue_info)
+            
             if p_red == 0.5 and p_blue == 0.5:
                 pred_red = "50%"
                 pred_blue = "50%"

@@ -1391,12 +1391,12 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     #print(f"\n[get_team_epa_info] t_key={t_key}, event_key={event_key}")
                     #print(f"  event_epa: {event_epa}")
                     #print(f"  t_data: {t_data}")
-                    # Use event_epa only if at least one value is nonzero
-                    if event_epa and any(event_epa.get(k, 0) not in (None, 0, "") for k in ["overall", "confidence", "consistency"]):
+                    # Use event_epa only if EPA value is nonzero
+                    if event_epa and event_epa.get("overall", 0) != 0:
                         #print("  Using event_epa for prediction!")
                         return {
                             "epa": event_epa.get("overall", 0),
-                            "confidence": event_epa.get("confidence", 0),
+                            "confidence": event_epa.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
                             "consistency": event_epa.get("consistency", 0)
                         }
                     # Otherwise, fall back to overall EPA data if available (only require epa, use default confidence if missing)
