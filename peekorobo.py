@@ -29,7 +29,22 @@ from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avat
 from dotenv import load_dotenv
 load_dotenv()
 
-TEAM_DATABASE,EVENT_DATABASE,EVENT_TEAMS,EVENT_RANKINGS,EVENT_AWARDS,EVENT_MATCHES = load_data()
+# Global variables for data - will be reloaded when needed
+TEAM_DATABASE = {}
+EVENT_DATABASE = {}
+EVENT_TEAMS = {}
+EVENT_RANKINGS = {}
+EVENT_AWARDS = []
+EVENT_MATCHES = {}
+
+def reload_data():
+    """Reload all data from the database"""
+    global TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES
+    TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data()
+    print("✅ Data reloaded successfully")
+
+# Initial data load
+reload_data()
 
 app = dash.Dash(
     __name__,
@@ -953,6 +968,15 @@ def other_user_layout(username):
 def logout():
     flask.session.clear()
     return flask.redirect("/login")
+
+@app.server.route("/reload-data")
+def reload_data_endpoint():
+    """Endpoint to reload data from database - called by scheduler"""
+    try:
+        reload_data()
+        return {"status": "success", "message": "Data reloaded successfully"}, 200
+    except Exception as e:
+        return {"status": "error", "message": str(e)}, 500
 
 @callback(
     Output("profile-display", "hidden"),

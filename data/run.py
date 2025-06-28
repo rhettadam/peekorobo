@@ -22,6 +22,24 @@ API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 import psycopg2
 from urllib.parse import urlparse
 
+def call_reload_endpoint():
+    """Call the web app's reload endpoint to refresh the data"""
+    try:
+        # Get the app URL from environment or use a default
+        app_url = os.environ.get("APP_URL", "https://your-app-name.herokuapp.com")
+        reload_url = f"{app_url}/reload-data"
+        
+        print(f"🔄 Calling reload endpoint: {reload_url}")
+        response = requests.get(reload_url, timeout=30)
+        
+        if response.status_code == 200:
+            print("✅ Data reloaded successfully on web app")
+        else:
+            print(f"❌ Failed to reload data on web app: {response.status_code}")
+            print(f"Response: {response.text}")
+    except Exception as e:
+        print(f"❌ Error calling reload endpoint: {e}")
+
 # Robust retry for DB connection
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
 def get_pg_connection():
@@ -964,6 +982,9 @@ def fetch_and_store_team_data(year):
             print(f"  - {failed}")
         if len(failed_teams) > 10:
             print(f"  ... and {len(failed_teams) - 10} more")
+    
+    # Reload the web app data
+    call_reload_endpoint()
 
 def analyze_single_team(team_key: str, year: int):
     # Get team events from PostgreSQL
