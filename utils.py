@@ -5,7 +5,7 @@ import os
 import dash_bootstrap_components as dbc
 from dash import html
 from flask import session
-from datagather import get_pg_connection
+from datagather import DatabaseConnection
 from datetime import datetime, date
 
 #### PREDICTIONS
@@ -159,12 +159,11 @@ def sort_key(filename):
     return (0, int(name)) if name.isdigit() else (1, name.lower())
 
 def get_username(user_id):
-    conn = get_pg_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    return row[0].title() if row else f"USER {user_id}"
+    with DatabaseConnection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        return row[0].title() if row else f"USER {user_id}"
 
 def get_available_avatars():
         avatar_dir = "assets/avatars"
@@ -302,17 +301,15 @@ def universal_profile_icon_or_toast():
         user_id = session["user_id"]
 
         # Fetch avatar_key from database
-        conn = get_pg_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT avatar_key FROM users WHERE id = %s", (user_id,))
-            row = cursor.fetchone()
-            avatar_key = row[0] if row and row[0] else "stock"
-        except Exception as e:
-            print(f"Error fetching avatar: {e}")
-            avatar_key = "stock.png"
-        finally:
-            conn.close()
+        with DatabaseConnection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT avatar_key FROM users WHERE id = %s", (user_id,))
+                row = cursor.fetchone()
+                avatar_key = row[0] if row and row[0] else "stock"
+            except Exception as e:
+                print(f"Error fetching avatar: {e}")
+                avatar_key = "stock.png"
 
         return html.A(
     html.Img(

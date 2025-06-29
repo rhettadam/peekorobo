@@ -6,7 +6,7 @@ from dash.exceptions import PreventUpdate
 
 import flask
 from flask import session
-from auth import get_pg_connection, register_user, verify_user
+from auth import register_user, verify_user
 
 import os
 import numpy as np
@@ -21,7 +21,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from scipy.interpolate import interp1d
 
-from datagather import COUNTRIES,STATES,load_data,get_team_avatar,DISTRICT_STATES,DISTRICT_STATES_A,get_pg_connection
+from datagather import COUNTRIES,STATES,load_data_2025,load_search_data,load_year_data,get_team_avatar,DISTRICT_STATES,DISTRICT_STATES_A,DatabaseConnection
 
 from layouts import home_layout,footer,topbar,team_layout,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, compare_layout
 
@@ -30,7 +30,9 @@ from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avat
 from dotenv import load_dotenv
 load_dotenv()
 
-TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data()
+# Load optimized data: 2025 data globally + search data with all events
+TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data_2025()
+SEARCH_TEAM_DATA, SEARCH_EVENT_DATA = load_search_data()
 
 app = dash.Dash(
     __name__,
@@ -100,78 +102,72 @@ def user_layout(_user_id=None, deleted_items=None):
 
     dcc.Store(id="user-session", data={"user_id": user_id}),
 
-    conn = get_pg_connection()
-    cursor = conn.cursor()
-
     username = f"USER {user_id}"
     avatar_key = "stock"
+    role = "No role"
+    team_affil = "####"
+    bio = "No bio"
+    followers_count = 0
+    following_count = 0
+    color = "#f9f9f9"
+    team_keys = []
+    event_keys = []
 
     try:
-        cursor.execute("""
-            SELECT username, avatar_key, role, team, bio, followers, following, color
-            FROM users WHERE id = %s
-        """, (user_id,))
-        user_row = cursor.fetchone()
-        if user_row:
-            username = user_row[0] or username
-            avatar_key = user_row[1] or "stock"
-            role = user_row[2] or "No role"
-            team_affil = user_row[3] or "####"
-            bio = user_row[4] or "No bio"
-            followers_ids = user_row[5] or []
-            following_ids = user_row[6] or []
-            # Get usernames and avatars for followers
-            followers_user_objs = []
-            if followers_ids:
-                cursor.execute("SELECT id, username, avatar_key FROM users WHERE id = ANY(%s)", (followers_ids,))
-                followers_user_objs = cursor.fetchall()
-        
-            # Get usernames and avatars for following
-            following_user_objs = []
-            if following_ids:
-                cursor.execute("SELECT id, username, avatar_key FROM users WHERE id = ANY(%s)", (following_ids,))
-                following_user_objs = cursor.fetchall()
+        with DatabaseConnection() as conn:
+            cursor = conn.cursor()
             
-            # Count values
-            followers_count = len(followers_ids)
-            following_count = len(following_ids)
+            cursor.execute("""
+                SELECT username, avatar_key, role, team, bio, followers, following, color
+                FROM users WHERE id = %s
+            """, (user_id,))
+            user_row = cursor.fetchone()
+            if user_row:
+                username = user_row[0] or username
+                avatar_key = user_row[1] or "stock"
+                role = user_row[2] or "No role"
+                team_affil = user_row[3] or "####"
+                bio = user_row[4] or "No bio"
+                followers_ids = user_row[5] or []
+                following_ids = user_row[6] or []
+                # Get usernames and avatars for followers
+                followers_user_objs = []
+                if followers_ids:
+                    cursor.execute("SELECT id, username, avatar_key FROM users WHERE id = ANY(%s)", (followers_ids,))
+                    followers_user_objs = cursor.fetchall()
             
-            # Fetch usernames for follower IDs
-            followers_usernames = []
-            if followers_ids:
-                cursor.execute("SELECT username FROM users WHERE id = ANY(%s)", (followers_ids,))
-                followers_usernames = [row[0] for row in cursor.fetchall()]
-            
-            # Fetch usernames for following IDs
-            following_usernames = []
-            if following_ids:
-                cursor.execute("SELECT username FROM users WHERE id = ANY(%s)", (following_ids,))
-                following_usernames = [row[0] for row in cursor.fetchall()]
+                # Get usernames and avatars for following
+                following_user_objs = []
+                if following_ids:
+                    cursor.execute("SELECT id, username, avatar_key FROM users WHERE id = ANY(%s)", (following_ids,))
+                    following_user_objs = cursor.fetchall()
+                
+                # Count values
+                followers_count = len(followers_ids)
+                following_count = len(following_ids)
+                
+                # Fetch usernames for follower IDs
+                followers_usernames = []
+                if followers_ids:
+                    cursor.execute("SELECT username FROM users WHERE id = ANY(%s)", (followers_ids,))
+                    followers_usernames = [row[0] for row in cursor.fetchall()]
+                
+                # Fetch usernames for following IDs
+                following_usernames = []
+                if following_ids:
+                    cursor.execute("SELECT username FROM users WHERE id = ANY(%s)", (following_ids,))
+                    following_usernames = [row[0] for row in cursor.fetchall()]
 
-            color = user_row[7] or "#f9f9f9"
-        else:
-            role = "No role"
-            team_affil = "####"
-            bio = "No bio"
-            followers = 0
-            following = 0
-            color = "#f9f9f9"
+                color = user_row[7] or "#f9f9f9"
+
+            cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (user_id,))
+            team_keys = [r[0] for r in cursor.fetchall()]
+
+            cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'event'", (user_id,))
+            event_keys = [r[0] for r in cursor.fetchall()]
+            
     except Exception as e:
         print(f"Error retrieving user info: {e}")
-        role = "No role"
-        team_affil = "####"
-        bio = "No bio"
-        followers = 0
-        following = 0
-        color = "#f9f9f9"
-
-    cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (user_id,))
-    team_keys = [r[0] for r in cursor.fetchall()]
-
-    cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'event'", (user_id,))
-    event_keys = [r[0] for r in cursor.fetchall()]
-
-    conn.close()
 
     available_avatars = get_available_avatars()
 
@@ -692,27 +688,30 @@ def other_user_layout(username):
     if not session_user_id:
         return dcc.Location(href="/login", id="force-login-redirect")
 
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT id, avatar_key, role, team, bio, followers, following, color
-        FROM users WHERE username = %s
-    """, (username,))
-    row = cur.fetchone()
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, avatar_key, role, team, bio, followers, following, color
+                FROM users WHERE username = %s
+            """, (username,))
+            row = cur.fetchone()
 
-    if not row:
-        conn.close()
-        return html.Div("User not found.", style={"padding": "2rem", "fontSize": "1.2rem"})
+            if not row:
+                return html.Div("User not found.", style={"padding": "2rem", "fontSize": "1.2rem"})
 
-    uid, avatar_key, role, team, bio, followers_json, following_json, color = row
-    is_following = session_user_id in (followers_json or [])
+            uid, avatar_key, role, team, bio, followers_json, following_json, color = row
+            is_following = session_user_id in (followers_json or [])
 
-    cur.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (uid,))
-    team_keys = [r[0] for r in cur.fetchall()]
+            cur.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (uid,))
+            team_keys = [r[0] for r in cur.fetchall()]
 
-    cur.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'event'", (uid,))
-    event_keys = [r[0] for r in cur.fetchall()]
-    conn.close()
+            cur.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'event'", (uid,))
+            event_keys = [r[0] for r in cur.fetchall()]
+
+    except Exception as e:
+        print(f"Error loading user data: {e}")
+        return html.Div("Error loading user data.", style={"padding": "2rem", "fontSize": "1.2rem"})
 
     if color:
         color = color
@@ -992,47 +991,47 @@ def handle_profile_edit(
     session_data
 ):
     triggered_id = ctx.triggered_id
+    if not triggered_id:
+        return [dash.no_update] * 15
 
     user_id = session_data if isinstance(session_data, str) else session_data.get("user_id") if session_data else None
     if not user_id:
         return [dash.no_update] * 15
 
-    conn = get_pg_connection()
-    cur = conn.cursor()
-
     if triggered_id == "save-profile-btn":
         if not username or len(username.strip()) < 3:
             return [dash.no_update] * 15
 
-        cur.execute("SELECT id FROM users WHERE LOWER(username) = %s AND id != %s", (username.lower(), user_id))
-        if cur.fetchone():
-            return [dash.no_update] * 15
-
         try:
-            cur.execute("""
-                UPDATE users
-                SET username = %s,
-                    role = %s,
-                    team = %s,
-                    bio = %s,
-                    avatar_key = %s,
-                    color = %s
-                WHERE id = %s
-            """, (username, role, team, bio, avatar_key_selected, color, user_id))
-            conn.commit()
+            with DatabaseConnection() as conn:
+                cur = conn.cursor()
+                
+                cur.execute("SELECT id FROM users WHERE LOWER(username) = %s AND id != %s", (username.lower(), user_id))
+                if cur.fetchone():
+                    return [dash.no_update] * 15
 
-            cur.execute("SELECT role, team, bio, color, followers FROM users WHERE id = %s", (user_id,))
-            new_role, new_team, new_bio, new_color, followers_json = cur.fetchone()
-            followers_count = len(followers_json) if followers_json else 0
-            text_color = get_contrast_text_color(new_color)
+                cur.execute("""
+                    UPDATE users
+                    SET username = %s,
+                        role = %s,
+                        team = %s,
+                        bio = %s,
+                        avatar_key = %s,
+                        color = %s
+                    WHERE id = %s
+                """, (username, role, team, bio, avatar_key_selected, color, user_id))
+                conn.commit()
+
+                cur.execute("SELECT role, team, bio, color, followers FROM users WHERE id = %s", (user_id,))
+                new_role, new_team, new_bio, new_color, followers_json = cur.fetchone()
+                followers_count = len(followers_json) if followers_json else 0
+                text_color = get_contrast_text_color(new_color)
 
         except Exception as e:
             print(f"Error saving profile: {e}")
             new_role, new_team, new_bio, new_color = role, team, bio, color
             followers_count = 0
             text_color = get_contrast_text_color(color)
-        finally:
-            conn.close()
 
         return (
             False,  # show profile-display
@@ -1063,19 +1062,19 @@ def handle_profile_edit(
 
     elif triggered_id == "edit-profile-btn":
         try:
-            cur.execute("SELECT color, followers FROM users WHERE id = %s", (user_id,))
-            result = cur.fetchone()
-            saved_color = result[0] if result else "#f9f9f9"
-            followers_json = result[1] if result else []
-            followers_count = len(followers_json) if followers_json else 0
-            text_color = get_contrast_text_color(saved_color)
+            with DatabaseConnection() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT color, followers FROM users WHERE id = %s", (user_id,))
+                result = cur.fetchone()
+                saved_color = result[0] if result else "#f9f9f9"
+                followers_json = result[1] if result else []
+                followers_count = len(followers_json) if followers_json else 0
+                text_color = get_contrast_text_color(saved_color)
         except Exception as e:
             print(f"Error loading color on edit: {e}")
             saved_color = "#f9f9f9"
             text_color = "#000"
             followers_count = 0
-        finally:
-            conn.close()
 
         return (
             True,  # show edit form
@@ -1104,7 +1103,6 @@ def handle_profile_edit(
             f"Followers: {followers_count}",  # profile-followers children
         )
 
-    conn.close()
     return [dash.no_update] * 15
     
 @callback(
@@ -1121,48 +1119,44 @@ def toggle_follow_user(_, session_data, current_text):
     if follower_id == followee_id:
         return dash.no_update
 
-    conn = get_pg_connection()
-    cur = conn.cursor()
-
     try:
-        # Get followers for followee
-        cur.execute("SELECT followers FROM users WHERE id = %s", (followee_id,))
-        followers = cur.fetchone()[0] or []
-        if isinstance(followers, str):
-            followers = json.loads(followers)
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
 
-        # Get following for follower
-        cur.execute("SELECT following FROM users WHERE id = %s", (follower_id,))
-        following = cur.fetchone()[0] or []
-        if isinstance(following, str):
-            following = json.loads(following)
+            # Get followers for followee
+            cur.execute("SELECT followers FROM users WHERE id = %s", (followee_id,))
+            followers = cur.fetchone()[0] or []
+            if isinstance(followers, str):
+                followers = json.loads(followers)
 
-        followers = set(followers)
-        following = set(following)
+            # Get following for follower
+            cur.execute("SELECT following FROM users WHERE id = %s", (follower_id,))
+            following = cur.fetchone()[0] or []
+            if isinstance(following, str):
+                following = json.loads(following)
 
-        if current_text == "Follow":
-            followers.add(follower_id)
-            following.add(followee_id)
-            new_label = "Unfollow"
-        else:
-            followers.discard(follower_id)
-            following.discard(followee_id)
-            new_label = "Follow"
+            followers = set(followers)
+            following = set(following)
 
-        # Update both sides
-        cur.execute("UPDATE users SET followers = %s WHERE id = %s", (json.dumps(list(followers)), followee_id))
-        cur.execute("UPDATE users SET following = %s WHERE id = %s", (json.dumps(list(following)), follower_id))
+            if current_text == "Follow":
+                followers.add(follower_id)
+                following.add(followee_id)
+                new_label = "Unfollow"
+            else:
+                followers.discard(follower_id)
+                following.discard(followee_id)
+                new_label = "Follow"
 
-        conn.commit()
-        return new_label
+            # Update both sides
+            cur.execute("UPDATE users SET followers = %s WHERE id = %s", (json.dumps(list(followers)), followee_id))
+            cur.execute("UPDATE users SET following = %s WHERE id = %s", (json.dumps(list(following)), follower_id))
+
+            conn.commit()
+            return new_label
 
     except Exception as e:
         print("Error during follow/unfollow:", e)
-        conn.rollback()
         return current_text
-
-    finally:
-        conn.close()
 
 @callback(
     Output("user-search-results", "children"),
@@ -1174,52 +1168,55 @@ def search_users(query, session_data):
         return []
 
     current_user_id = session_data.get("user_id")
-    conn = get_pg_connection()
-    cur = conn.cursor()
+    
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
 
-    cur.execute("""
-        SELECT id, username, avatar_key, followers
-        FROM users
-        WHERE username ILIKE %s AND id != %s
-        LIMIT 10
-    """, (f"%{query}%", current_user_id))
-    rows = cur.fetchall()
-    conn.close()
+            cur.execute("""
+                SELECT id, username, avatar_key, followers
+                FROM users
+                WHERE username ILIKE %s AND id != %s
+                LIMIT 10
+            """, (f"%{query}%", current_user_id))
+            rows = cur.fetchall()
 
-    user_blocks = []
-    for uid, username, avatar_key, followers in rows:
-        followers = json.loads(followers) if isinstance(followers, str) else (followers or [])
-        is_following = current_user_id in followers
-        avatar_src = get_user_avatar(avatar_key or "stock")
+        user_blocks = []
+        for uid, username, avatar_key, followers in rows:
+            followers = json.loads(followers) if isinstance(followers, str) else (followers or [])
+            is_following = current_user_id in followers
+            avatar_src = get_user_avatar(avatar_key or "stock")
 
-        user_blocks.append(html.Div([
-            html.Img(src=avatar_src, style={
-                "height": "32px", "width": "32px", "borderRadius": "50%", "marginRight": "8px"
-            }),
-            html.A(username, href=f"/user/{username}", style={
-                "fontWeight": "bold", "textDecoration": "none", "color": "#ffffff", "flexGrow": "1"
-            }),
-            html.Button(
-                "Unfollow" if is_following else "Follow",
-                id={"type": "follow-user", "user_id": uid},
-                style={
-                    "backgroundColor": "white",
-                    "border": "1px solid #ccc",
-                    "borderRadius": "12px",
-                    "padding": "4px 10px",
-                    "fontSize": "0.85rem",
-                    "fontWeight": "500",
-                    "color": "#333",
-                    "cursor": "pointer",
-                    "boxShadow": "0 1px 3px rgba(0, 0, 0, 0.1)",
-                    "transition": "all 0.2s ease-in-out"
-                }
-            ),
-        ], style={
-            "display": "flex", "alignItems": "center", "gap": "10px", "marginBottom": "8px"
-        }))
+            user_blocks.append(html.Div([
+                html.Img(src=avatar_src, style={
+                    "height": "32px", "width": "32px", "borderRadius": "50%", "marginRight": "8px"
+                }),
+                html.A(username, href=f"/user/{username}", style={
+                    "fontWeight": "bold", "textDecoration": "none", "color": "#ffffff", "flexGrow": "1"
+                }),
+                html.Button(
+                    "Unfollow" if is_following else "Follow",
+                    id={"type": "follow-user", "user_id": uid},
+                    style={
+                        "backgroundColor": "white",
+                        "border": "1px solid #ccc",
+                        "borderRadius": "12px",
+                        "padding": "4px 10px",
+                        "fontSize": "0.85rem",
+                        "fontWeight": "500",
+                        "color": "#333",
+                        "cursor": "pointer",
+                        "boxShadow": "0 1px 3px rgba(0, 0, 0, 0.1)",
+                        "transition": "all 0.2s ease-in-out"
+                    }
+                ),
+            ], style={
+                "display": "flex", "alignItems": "center", "gap": "10px", "marginBottom": "8px"
+            }))
 
-    return user_blocks
+    except Exception as e:
+        print(f"Error searching users: {e}")
+        return []
 
 @callback(
     Output("favorites-store", "data"),
@@ -1238,23 +1235,26 @@ def remove_favorite(n_clicks, store_data, session_data):
     user_id = session_data.get("user_id")
 
     # Delete from database
-    conn = get_pg_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "DELETE FROM saved_items WHERE user_id = %s AND item_type = %s AND item_key = %s",
-        (user_id, item_type, item_key)
-    )
-    conn.commit()
-    conn.close()
+    try:
+        with DatabaseConnection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM saved_items WHERE user_id = %s AND item_type = %s AND item_key = %s",
+                (user_id, item_type, item_key)
+            )
+            conn.commit()
 
-    # Update favorites store
-    store_data = store_data or {"deleted": []}
-    deleted = set(tuple(i) for i in store_data.get("deleted", []))
-    deleted.add((item_type, item_key))
-    new_store = {"deleted": list(deleted)}
+        # Update favorites store
+        store_data = store_data or {"deleted": []}
+        deleted = set(tuple(i) for i in store_data.get("deleted", []))
+        deleted.add((item_type, item_key))
+        new_store = {"deleted": list(deleted)}
 
-    # Rerender layout
-    return new_store, user_layout(user_id, deleted)
+        # Rerender layout
+        return new_store, user_layout(user_id, deleted)
+    except Exception as e:
+        print(f"Error removing favorite: {e}")
+        return dash.no_update, dash.no_update
 
 @app.callback(
     Output("login-message", "children"),
@@ -1287,15 +1287,18 @@ def handle_login(login_clicks, register_clicks, username, password):
         success, message = register_user(username.strip(), password.strip())
         if success:
             # Auto-login after registration
-            conn = get_pg_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT id FROM users WHERE username = %s", (username.strip(),))
-            user_id = cursor.fetchone()[0]
-            conn.close()
-            session["user_id"] = user_id
-            session["username"] = username.strip()
-            redirect_url = "/user"
-            return f"✅ Welcome, {username.strip()}!", redirect_url
+            try:
+                with DatabaseConnection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT id FROM users WHERE username = %s", (username.strip(),))
+                    user_id = cursor.fetchone()[0]
+                session["user_id"] = user_id
+                session["username"] = username.strip()
+                redirect_url = "/user"
+                return f"✅ Welcome, {username.strip()}!", redirect_url
+            except Exception as e:
+                print(f"Error getting user ID after registration: {e}")
+                return "Registration successful but login failed. Please try logging in.", dash.no_update
         else:
             return message, dash.no_update
 
@@ -1319,15 +1322,9 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
     desktop_value = (desktop_value or "").strip().lower()
     mobile_value = (mobile_value or "").strip().lower()
 
-    # Collapse TEAM_DATABASE to a flat dict keeping only the most recent year for each team
-    latest_teams = {}
-    for year in sorted(TEAM_DATABASE.keys(), reverse=True):
-        for team_number, team_data in TEAM_DATABASE[year].items():
-            if team_number not in latest_teams:
-                latest_teams[team_number] = team_data
-    teams_data = list(latest_teams.values())
-
-    events_data = [ev for year_dict in EVENT_DATABASE.values() for ev in year_dict.values()]
+    # Use search-specific data: 2025 teams and all events
+    teams_data = list(SEARCH_TEAM_DATA[2025].values())
+    events_data = [ev for year_dict in SEARCH_EVENT_DATA.values() for ev in year_dict.values()]
 
     def get_children_and_style(val):
         if not val:
@@ -1335,11 +1332,10 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
 
                 # --- Filter Users from PostgreSQL ---
         try:
-            conn = get_pg_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT username, avatar_key FROM users WHERE username ILIKE %s LIMIT 10", (f"%{val}%",))
-            user_rows = cur.fetchall()
-            conn.close()
+            with DatabaseConnection() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT username, avatar_key FROM users WHERE username ILIKE %s LIMIT 10", (f"%{val}%",))
+                user_rows = cur.fetchall()
         except Exception as e:
             print("User search error:", e)
             user_rows = []
@@ -1348,7 +1344,7 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
         filtered_teams = [
             t for t in teams_data
             if val in str(t.get("team_number", "")).lower()
-            or val in (t.get("nickname", "")).lower()
+            or val in (t.get("nickname", "") or "").lower()
         ][:20]
 
         # Closest team
@@ -1364,50 +1360,35 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
         elif filtered_teams:
             closest_team_nickname = min(
                 filtered_teams,
-                key=lambda t: len(set(val) & set(t["nickname"].lower())),
+                key=lambda t: len(set(val) & set((t.get("nickname", "") or "").lower())),
                 default=None,
             )
 
-        # --- Filter Events (using compressed keys) ---
+        # --- Filter Events (simplified) ---
         filtered_events = []
         search_terms = val.split()
         
         for e in events_data:
-            event_code = (e.get("cd") or "").lower()
             event_key = (e.get("k") or "").lower()
-            event_name_raw = (e.get("n") or "").lower()
-            # Remove ' presented by' and everything after it for searching
-            if "presented" in event_name_raw:
-                event_name_searchable = event_name_raw.split(" presented by")[0]
-            else:
-                event_name_searchable = event_name_raw
-                
-            start_date = e.get("sd", "")
-            event_year = start_date[:4] if len(start_date) >= 4 else ""
+            event_name = (e.get("n") or "").lower()
             
             # Create a combined string for searching
-            searchable_text = f"{event_year} {event_name_searchable} {event_code} {event_key}".lower()
+            searchable_text = f"{event_key} {event_name}".lower()
 
             # Check if all search terms are present in the searchable text
             if all(term in searchable_text for term in search_terms):
                 filtered_events.append(e)
         
-        # Sort events by date, newest first
-        def parse_date_for_sort(date_str):
-            try:
-                return datetime.strptime(date_str, "%Y-%m-%d")
-            except:
-                return datetime.min # Put undateable events at the beginning
-
-        filtered_events.sort(key=lambda x: parse_date_for_sort(x.get("sd", "")), reverse=True)
+        # Sort events by key (newest first since keys are chronological)
+        filtered_events.sort(key=lambda x: x.get("k", ""), reverse=True)
 
         closest_event = None
         if filtered_events:
             closest_event = max(
                 filtered_events,
                 key=lambda e: (
-                    len(set(val) & set((e.get("cd") or "").lower()))
-                    + len(set(val) & set((e.get("n") or "").lower()))
+                    len(set(val) & set((e.get("k") or "").lower())) +
+                    len(set(val) & set((e.get("n") or "").lower()))
                 )
             )
 
@@ -1436,27 +1417,22 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
                     background_color = "#FFDD0080"
                     is_highlighted = True
 
-                # Create the team link element (without inline color from function)
-                team_link_element = team_link_with_avatar(team)
-
-                # Determine the correct text color based on highlight and theme
-                if is_highlighted:
-                    link_text_color = "black" # Always black on yellow background
-                else:
-                    # White in dark mode, Black in light mode for non-highlighted
-                    link_text_color = "white" if current_theme == "dark" else "black"
-
-                # Explicitly set the color on the A tag using inline style
-                if hasattr(team_link_element, 'style'):
-                     team_link_element.style['color'] = link_text_color
+                # Create simple team link since we only have basic data
+                team_link_element = html.A([
+                    html.Img(src=get_team_avatar(tn), style={
+                        "height": "20px", "width": "20px", "borderRadius": "50%", "marginRight": "8px"
+                    }),
+                    html.Span(f"{tn} | {nm}")
+                ], href=f"/team/{tn}", style={
+                    "textDecoration": "none",
+                    "color": "black" if is_highlighted else default_text_color
+                })
 
                 row_el = dbc.Row(
-                    dbc.Col(team_link_element), # Use the modified link element
+                    dbc.Col(team_link_element),
                     style={
                         "padding": "5px",
                         "backgroundColor": background_color,
-                        # Remove any explicit color setting here
-                        # "color": "",
                     },
                 )
 
@@ -1475,8 +1451,7 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
             for evt in filtered_events:
                 event_key = evt.get("k", "???")
                 e_name = evt.get("n", "")
-                start_date = evt.get("sd", "")
-                e_year = start_date[:4] if len(start_date) >= 4 else ""
+                e_year = event_key[:4] if len(event_key) >= 4 else ""
                 background_color = "var(--card-bg)"
 
                 if closest_event and event_key == closest_event.get("k"):
@@ -1491,7 +1466,7 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
                             style={
                                 "lineHeight": "20px",
                                 "textDecoration": "none",
-                                "color": "black" if background_color == "#FFDD00" else default_text_color, # Conditional color
+                                "color": "black" if background_color == "#FFDD00" else default_text_color,
                             },
                         ),
                         width=True,
@@ -1522,7 +1497,7 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
                             username
                         ], href=f"/user/{username}", style={
                             "textDecoration": "none",
-                            "color": default_text_color # Apply default text color
+                            "color": default_text_color
                             }),
                     ),
                     style={"padding": "5px", "backgroundColor": "transparent"},
@@ -1536,7 +1511,7 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
         style_dict = {
             "display": "block",
             "backgroundColor": "var(--card-bg)",
-            "color": "var(--text-primary)", # Use CSS variable for consistency
+            "color": "var(--text-primary)",
             "border": "1px solid #ddd",
             "borderRadius": "8px",
             "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
@@ -1579,26 +1554,28 @@ def save_favorite_team(n_clicks, pathname):
     else:
         return "Invalid team path.", True
 
-    conn = get_pg_connection()
-    cursor = conn.cursor()
+    try:
+        with DatabaseConnection() as conn:
+            cursor = conn.cursor()
 
-    # Avoid duplicates
-    cursor.execute("""
-        SELECT id FROM saved_items
-        WHERE user_id = %s AND item_type = 'team' AND item_key = %s
-    """, (user_id, team_key))
-    if cursor.fetchone():
-        conn.close()
-        return "Team already favorited.", True
+            # Avoid duplicates
+            cursor.execute("""
+                SELECT id FROM saved_items
+                WHERE user_id = %s AND item_type = 'team' AND item_key = %s
+            """, (user_id, team_key))
+            if cursor.fetchone():
+                return "Team already favorited.", True
 
-    cursor.execute("""
-        INSERT INTO saved_items (user_id, item_type, item_key)
-        VALUES (%s, 'team', %s)
-    """, (user_id, team_key))
-    conn.commit()
-    conn.close()
+            cursor.execute("""
+                INSERT INTO saved_items (user_id, item_type, item_key)
+                VALUES (%s, 'team', %s)
+            """, (user_id, team_key))
+            conn.commit()
 
-    return "Team favorited successfully!", True
+        return "Team favorited successfully!", True
+    except Exception as e:
+        print(f"Error favoriting team: {e}")
+        return "Error favoriting team.", True
 
 @app.callback(
     [
@@ -1627,7 +1604,22 @@ def update_events_tab_content(
     store_data,
 ):
     user_favorites = set(store_data or [])
-    events_data = list(EVENT_DATABASE.get(selected_year, {}).values())
+    
+    # Load data for the selected year
+    if selected_year == 2025:
+        # Use global data for 2025
+        events_data = list(EVENT_DATABASE.get(selected_year, {}).values())
+        year_event_teams = EVENT_TEAMS.get(selected_year, {})
+        year_team_database = TEAM_DATABASE
+    else:
+        # Load data for other years on-demand
+        try:
+            year_team_data, year_event_data, year_event_teams, _, _, _ = load_year_data(selected_year)
+            events_data = list(year_event_data.values())
+            year_team_database = {selected_year: year_team_data}
+        except Exception as e:
+            return html.Div(f"Error loading data for year {selected_year}: {str(e)}"), []
+    
     if not events_data:
         return html.Div("No events available."), []
 
@@ -1695,14 +1687,14 @@ def update_events_tab_content(
     def compute_event_insights_from_data(EVENT_TEAMS, EVENT_DATABASE, TEAM_DATABASE, selected_year, filtered_event_keys=None):
         rows = []
     
-        teams_by_event = EVENT_TEAMS.get(selected_year, {})
-        events = EVENT_DATABASE.get(selected_year, {})
+        teams_by_event = EVENT_TEAMS
+        events = EVENT_DATABASE
     
         for event_key, team_entries in teams_by_event.items():
             if filtered_event_keys and event_key not in filtered_event_keys:
                 continue
     
-            event = events.get(event_key)
+            event = events.get(selected_year, {}).get(event_key)
             if not event:
                 continue
     
@@ -1785,7 +1777,9 @@ def update_events_tab_content(
         events_data.sort(key=lambda x: x.get("n", "").lower())
 
     if active_tab == "table-tab":
-        df = compute_event_insights_from_data(EVENT_TEAMS, EVENT_DATABASE, TEAM_DATABASE, selected_year)
+        # Create year-specific databases for the compute function
+        year_event_database = {selected_year: {ev["k"]: ev for ev in events_data}}
+        df = compute_event_insights_from_data(year_event_teams, year_event_database, year_team_database, selected_year)
     
         # Sort by "Top 8 ACE"
         df = df.sort_values(by="Top 8 ACE", ascending=False).reset_index(drop=True)
@@ -2924,7 +2918,20 @@ def load_teams(
     })
 
     # Load and filter teams
-    teams_data, epa_ranks = calculate_all_ranks(selected_year, TEAM_DATABASE)
+    # Check if data for the selected year is available
+    if not TEAM_DATABASE.get(selected_year):
+        # Load data for the specific year if it's not 2025
+        if selected_year != 2025:
+            try:
+                year_team_data, _, _, _, _, _ = load_year_data(selected_year)
+                year_team_database = {selected_year: year_team_data}
+                teams_data, epa_ranks = calculate_all_ranks(selected_year, year_team_database)
+            except Exception as e:
+                return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string, []
+        else:
+            return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string, []
+    else:
+        teams_data, epa_ranks = calculate_all_ranks(selected_year, TEAM_DATABASE)
 
     empty_style = []
     if not teams_data:
@@ -2962,9 +2969,21 @@ def load_teams(
     teams_data.sort(key=lambda t: t.get("weighted_ace") or 0, reverse=True)
     
     # Always compute global percentiles
-    global_data, _ = calculate_all_ranks(selected_year, TEAM_DATABASE)
+    if not TEAM_DATABASE.get(selected_year):
+        if selected_year != 2025:
+            try:
+                year_team_data, _, _, _, _, _ = load_year_data(selected_year)
+                year_team_database = {selected_year: year_team_data}
+                global_data, _ = calculate_all_ranks(selected_year, year_team_database)
+            except Exception as e:
+                global_data = teams_data
+        else:
+            global_data = teams_data
+    else:
+        global_data, _ = calculate_all_ranks(selected_year, TEAM_DATABASE)
+    
     extract_global = lambda key: [t[key] for t in global_data if t.get(key) is not None]
-
+    
     extract_valid = lambda key: [t[key] for t in teams_data if t.get(key) is not None]
     
     # Use filtered data only if toggle is on
@@ -3195,47 +3214,49 @@ def handle_navigation(
     
     # Search through all years if no specific year selected
     if selected_year is None:
-        for year in TEAM_DATABASE.keys():
-            year_data = TEAM_DATABASE[year]
-            matching_team = next(
-                (
-                    team for team in year_data.values()
-                    if str(team.get("team_number", "")).lower() == search_value
-                    or search_value in (team.get("nickname", "") or "").lower()
-                ),
-                None
-            )
-            if matching_team:
-                team_number = matching_team.get("team_number", "")
-                return f"/team/{team_number}"
+        # Use search data which only has 2025 teams
+        year_data = SEARCH_TEAM_DATA[2025]
+        matching_team = next(
+            (
+                team for team in year_data.values()
+                if str(team.get("team_number", "")).lower() == search_value
+                or search_value in (team.get("nickname", "") or "").lower()
+            ),
+            None
+        )
+        if matching_team:
+            team_number = matching_team.get("team_number", "")
+            return f"/team/{team_number}"
     else:
-        year_data = TEAM_DATABASE.get(selected_year)
-        if year_data:
-            matching_team = next(
-                (
-                    team for team in year_data.values()
-                    if str(team.get("team_number", "")).lower() == search_value
-                    or search_value in (team.get("nickname", "") or "").lower()
-                ),
-                None
-            )
-            if matching_team:
-                team_number = matching_team.get("team_number", "")
-                return f"/team/{team_number}/{selected_year}"
+        # For specific year, check if it's 2025 (only year we have)
+        if selected_year == 2025:
+            year_data = SEARCH_TEAM_DATA.get(selected_year)
+            if year_data:
+                matching_team = next(
+                    (
+                        team for team in year_data.values()
+                        if str(team.get("team_number", "")).lower() == search_value
+                        or search_value in (team.get("nickname", "") or "").lower()
+                    ),
+                    None
+                )
+                if matching_team:
+                    team_number = matching_team.get("team_number", "")
+                    return f"/team/{team_number}/{selected_year}"
 
-    events_data = [ev for year_dict in EVENT_DATABASE.values() for ev in year_dict.values()]
+    # Use search event data which has all events
+    events_data = [ev for year_dict in SEARCH_EVENT_DATA.values() for ev in year_dict.values()]
     # --- EVENT SEARCH ---
     matching_events = []
     for event in events_data:
         event_key = event.get("k", "").lower()
         event_name = (event.get("n", "") or "").lower()
-        event_code = (event.get("cd", "") or "").lower()
-        event_year = (event.get("sd", "") or "")[:4]
+        event_year = event_key[:4] if len(event_key) >= 4 else ""
 
         if (
             search_value in event_key
             or search_value in event_name
-            or search_value in event_code
+            or search_value in event_year
             or search_value in f"{event_year} {event_name}".lower()
         ):
             matching_events.append(event)
@@ -3245,7 +3266,7 @@ def handle_navigation(
         best_event = max(
             matching_events,
             key=lambda e: (
-                len(set(search_value) & set((e.get("cd") or "").lower())) +
+                len(set(search_value) & set((e.get("k") or "").lower())) +
                 len(set(search_value) & set((e.get("n") or "").lower()))
             )
         )
@@ -3325,6 +3346,30 @@ def display_page(pathname):
     if len(path_parts) >= 2 and path_parts[0] == "team":
         team_number = path_parts[1]
         year = path_parts[2] if len(path_parts) > 2 else None
+        
+        # If year is specified and it's not 2025, load that year's data
+        if year and year != "2025":
+            try:
+                year = int(year)
+                if year != 2025:
+                    # Load data for the specific year
+                    year_team_data, year_event_data, year_event_teams, year_event_rankings, year_event_awards, year_event_matches = load_year_data(year)
+                    
+                    # Create year-specific databases
+                    year_team_database = {year: year_team_data}
+                    year_event_database = {year: year_event_data}
+                    
+                    return wrap_with_toast_or_star(team_layout(
+                        team_number, year, 
+                        year_team_database, year_event_database, 
+                        year_event_matches, year_event_awards, 
+                        year_event_rankings, year_event_teams
+                    ))
+            except (ValueError, TypeError):
+                # If year parsing fails, fall back to 2025
+                pass
+        
+        # Use global 2025 data for current year or fallback
         return wrap_with_toast_or_star(team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS))
     
     if pathname.startswith("/event/"):
@@ -3426,7 +3471,21 @@ app.clientside_callback(
 )
 def update_compare_team_dropdowns(year):
     year = year or 2025
-    teams = TEAM_DATABASE.get(year, {})
+    
+    # Check if data for the selected year is available
+    if not TEAM_DATABASE.get(year):
+        # Load data for the specific year if it's not 2025
+        if year != 2025:
+            try:
+                year_team_data, _, _, _, _, _ = load_year_data(year)
+                teams = year_team_data
+            except Exception as e:
+                return []  # Return empty options if loading fails
+        else:
+            return []  # Return empty options for 2025 if not loaded
+    else:
+        teams = TEAM_DATABASE.get(year, {})
+    
     options = [
         {"label": f"{t['team_number']} | {t.get('nickname', '')}", "value": t["team_number"]}
         for t in teams.values()
@@ -3449,9 +3508,18 @@ def compare_multiple_teams(team_ids, year): # Update function signature
     
     # Check if data for the selected year is available
     if not TEAM_DATABASE.get(year):
-        return html.Div(f"Loading data for year {year}...", className="text-center my-4", style={"color": "var(--text-secondary)"})
-
-    teams = TEAM_DATABASE.get(year, {})
+        # Load data for the specific year if it's not 2025
+        if year != 2025:
+            try:
+                year_team_data, _, _, _, _, _ = load_year_data(year)
+                teams = year_team_data
+            except Exception as e:
+                return html.Div(f"Error loading data for year {year}: {str(e)}", className="text-center my-4", style={"color": "var(--text-secondary)"})
+        else:
+            return html.Div(f"Loading data for year {year}...", className="text-center my-4", style={"color": "var(--text-secondary)"})
+    else:
+        teams = TEAM_DATABASE.get(year, {})
+    
     selected = [teams.get(int(tid)) for tid in team_ids if tid and int(tid) in teams]
 
     if not all(selected) or len(selected) < 2:
@@ -3698,39 +3766,37 @@ def toggle_favorite_team(n_clicks_list, id_list, session_data):
     button_id = id_list[0]
     team_number = button_id["key"]
 
-    conn = get_pg_connection()
-    cursor = conn.cursor()
-
     try:
-        # Check if already favorited
-        cursor.execute("""
-            SELECT id FROM saved_items
-            WHERE user_id = %s AND item_type = 'team' AND item_key = %s
-        """, (user_id, team_number))
-        existing = cursor.fetchone()
+        with DatabaseConnection() as conn:
+            cursor = conn.cursor()
 
-        if existing:
-            # Remove favorite
+            # Check if already favorited
             cursor.execute("""
-                DELETE FROM saved_items
+                SELECT id FROM saved_items
                 WHERE user_id = %s AND item_type = 'team' AND item_key = %s
             """, (user_id, team_number))
-            conn.commit()
-            return "Team removed from favorites.", True, ["☆"]
-        else:
-            # Add favorite
-            cursor.execute("""
-                INSERT INTO saved_items (user_id, item_type, item_key)
-                VALUES (%s, 'team', %s)
-            """, (user_id, team_number))
-            conn.commit()
-            return "Team added to favorites.", True, ["★"]
+            existing = cursor.fetchone()
+
+            if existing:
+                # Remove favorite
+                cursor.execute("""
+                    DELETE FROM saved_items
+                    WHERE user_id = %s AND item_type = 'team' AND item_key = %s
+                """, (user_id, team_number))
+                conn.commit()
+                return "Team removed from favorites.", True, ["☆"]
+            else:
+                # Add favorite
+                cursor.execute("""
+                    INSERT INTO saved_items (user_id, item_type, item_key)
+                    VALUES (%s, 'team', %s)
+                """, (user_id, team_number))
+                conn.commit()
+                return "Team added to favorites.", True, ["★"]
 
     except Exception as e:
         print(f"Error toggling team favorite: {e}")
         return "Error updating favorites.", True, [dash.no_update]
-    finally:
-        conn.close()
 
 @callback(
     Output({"type": "team-favorites-popover-body", "team_number": MATCH}, "children"),
@@ -3756,48 +3822,46 @@ def update_team_favorites_popover_content(is_open, pathname):
          # This case should theoretically not happen with MATCH if ID is set correctly
         return "Error: Invalid team number in ID."
 
-    conn = get_pg_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute("""
-            SELECT user_id FROM saved_items
-            WHERE item_type = 'team' AND item_key = %s
-        """, (str(team_number),))
-        favorited_user_ids = [row[0] for row in cursor.fetchall()]
+        with DatabaseConnection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT user_id FROM saved_items
+                WHERE item_type = 'team' AND item_key = %s
+            """, (str(team_number),))
+            favorited_user_ids = [row[0] for row in cursor.fetchall()]
 
-        if not favorited_user_ids:
-            return "No users have favorited this team yet."
+            if not favorited_user_ids:
+                return "No users have favorited this team yet."
 
-        # Get usernames and avatars for these user IDs
-        user_details = []
-        # Use IN clause for efficiency
-        # Ensure favorited_user_ids is not empty before executing IN query
-        if not favorited_user_ids:
-             return "No users have favorited this team yet."
+            # Get usernames and avatars for these user IDs
+            user_details = []
+            # Use IN clause for efficiency
+            # Ensure favorited_user_ids is not empty before executing IN query
+            if not favorited_user_ids:
+                 return "No users have favorited this team yet."
 
-        format_strings = ','.join(['%s'] * len(favorited_user_ids))
-        cursor.execute("SELECT id, username, avatar_key FROM users WHERE id IN (%s)" % format_strings, tuple(favorited_user_ids))
-        user_rows = cursor.fetchall()
+            format_strings = ','.join(['%s'] * len(favorited_user_ids))
+            cursor.execute("SELECT id, username, avatar_key FROM users WHERE id IN (%s)" % format_strings, tuple(favorited_user_ids))
+            user_rows = cursor.fetchall()
 
-        user_list_items = []
-        for uid, username, avatar_key in user_rows:
-            avatar_src = get_user_avatar(avatar_key or "stock")
-            user_list_items.append(html.Li([
-                html.Img(src=avatar_src, height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
-                html.A(username, href=f"/user/{username}", style={"textDecoration": "none", "color": "#007bff"})
-            ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"}))
+            user_list_items = []
+            for uid, username, avatar_key in user_rows:
+                avatar_src = get_user_avatar(avatar_key or "stock")
+                user_list_items.append(html.Li([
+                    html.Img(src=avatar_src, height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
+                    html.A(username, href=f"/user/{username}", style={"textDecoration": "none", "color": "#007bff"})
+                ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"}))
 
-        return html.Ul(user_list_items, style={
-            "listStyleType": "none",
-            "paddingLeft": "0",
-            "marginBottom": "0"
-        })
+            return html.Ul(user_list_items, style={
+                "listStyleType": "none",
+                "paddingLeft": "0",
+                "marginBottom": "0"
+            })
 
     except Exception as e:
         print(f"Error fetching favoriting users: {e}")
         return "Error loading favoriting users."
-    finally:
-        conn.close()
 
 @callback(
     Output("team-insights-content", "children"),

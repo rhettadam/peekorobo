@@ -1,6 +1,6 @@
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
-from datagather import frc_games,COUNTRIES,STATES,DISTRICT_STATES,get_team_avatar,get_pg_connection
+from datagather import frc_games,COUNTRIES,STATES,DISTRICT_STATES,get_team_avatar,get_pg_connection, get_team_years_participated
 from flask import session
 from datetime import datetime, date
 from utils import predict_win_probability, calculate_single_rank, compute_percentiles, pill
@@ -1674,10 +1674,7 @@ def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES,
     avatar_url = get_team_avatar(team_number)
     
         # Get all years this team appears in, sorted
-    years_participated = sorted([
-        y for y in TEAM_DATABASE
-        if team_number in TEAM_DATABASE[y]
-    ])
+    years_participated = get_team_years_participated(team_number)
     
     # Build clickable year links
     years_links = [
