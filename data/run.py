@@ -5,6 +5,7 @@ from tenacity import retry, stop_never, wait_exponential, retry_if_exception_typ
 import requests
 import os
 import concurrent.futures
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 import random
@@ -630,8 +631,7 @@ def optimized_create_event_db(year):
     except Exception as e:
         print(f"❌ Failed to load events for {year}: {e}")
         return
-
-    from datetime import datetime
+    
     events_to_process = []
     events_skipped = 0
     
@@ -1560,6 +1560,33 @@ def analyze_single_team(team_key: str, year: int):
         print(f"→ Event Boost:     {round(overall_epa_data['avg_event_boost'], 3)} × {weights['events']} = {round(components['event'], 4)}")
         print(f"→ Confidence Total: {round(components['raw'], 4)} → Capped: {round(overall_epa_data['confidence'], 3)}")
 
+def restart_heroku_app():
+    """Restart the Heroku app to reload updated data."""
+    
+    app_name = os.environ.get("HEROKU_APP_NAME")
+    api_key = os.environ.get("HEROKU_API_KEY")
+    
+    if not app_name or not api_key:
+        print("⚠️  HEROKU_APP_NAME or HEROKU_API_KEY not set, skipping app restart")
+        return
+    
+    try:
+        url = f"https://api.heroku.com/apps/{app_name}/dynos"
+        headers = {
+            "Accept": "application/vnd.heroku+json; version=3",
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        # Restart all dynos
+        response = requests.delete(url, headers=headers)
+        if response.status_code == 202:
+            print(f"✅ Successfully restarted Heroku app: {app_name}")
+        else:
+            print(f"❌ Failed to restart app: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"❌ Error restarting app: {e}")
+
 def main():
     print("\nEPA Calculator")
     print("="*20)
@@ -1587,6 +1614,8 @@ def main():
             
         else:
             fetch_and_store_team_data(year)
+            # Restart the app after successful data update
+            restart_heroku_app()
             
     except KeyboardInterrupt:
         print("\n🛑 Interrupted by user (Ctrl+C)")
@@ -1602,7 +1631,6 @@ def main():
         print("✅ Cleanup complete.")
 
 if __name__ == "__main__":
-    import sys
     try:
         if len(sys.argv) > 1:
             # Command-line mode
@@ -1632,6 +1660,8 @@ if __name__ == "__main__":
                     print("Year must be an integer.")
                     sys.exit(1)
                 fetch_and_store_team_data(year)
+                # Restart the app after successful data update
+                restart_heroku_app()
             else:
                 print("Unknown mode. Use '1' for single team or '2' for all teams.")
                 sys.exit(1)
