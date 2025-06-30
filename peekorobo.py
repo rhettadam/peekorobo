@@ -2288,8 +2288,14 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         data_rows = []
         for team_num, rank_info in (rankings or {}).items():
             tstr = str(team_num)
-            team_data = year_team_data.get(int(team_num), {})
+            print(team_num)
+            if event_year == 2025:
+                team_data = year_team_data.get(2025, {}).get(int(team_num), {})
+            else:
+                team_data = year_team_data.get(int(team_num), {})
+            print(team_data)
             nickname = team_data.get("nickname", "Unknown")
+            print(nickname)
 
             data_rows.append({
                 "Rank": rank_info.get("rk", "N/A"),
@@ -3772,9 +3778,6 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         )
     )
     
-    # Estimate rookie year just like before
-    rookie_year = years_participated[0] if years_participated else year or 2025
-    
     with open("data/notables_by_year.json", "r") as f:
         NOTABLES_DB = json.load(f)
     
@@ -3852,7 +3855,6 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                                 html.P([html.Img(src="/assets/pin.png", style={"height": "1.5em", "verticalAlign": "middle", "marginRight": "5px"}), f" {city}, {state}, {country}"]),
                                 html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
                                         html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "underline"})]),
-                                html.P([html.I(className="bi bi-award"), f" Rookie Year: {rookie_year}"]),
                                 html.Div(
                                     [
                                         html.I(className="bi bi-calendar"),
