@@ -2276,9 +2276,9 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
 
     percentiles_dict = {
         "ACE": compute_percentiles(epa_values),
-        "Auto ACE": compute_percentiles(auto_values),
-        "Teleop ACE": compute_percentiles(teleop_values),
-        "Endgame ACE": compute_percentiles(endgame_values),
+        "Auto": compute_percentiles(auto_values),
+        "Teleop": compute_percentiles(teleop_values),
+        "Endgame": compute_percentiles(endgame_values),
     }
         
     style_data_conditional = get_epa_styling(percentiles_dict)
@@ -2360,9 +2360,9 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             rows.append({
                 "ACE Rank": rank_map.get(int(tnum), "N/A"),
                 "ACE": f"{team_data.get('epa', 0):.2f}",
-                "Auto ACE": f"{team_data.get('auto_epa', 0):.2f}",
-                "Teleop ACE": f"{team_data.get('teleop_epa', 0):.2f}",
-                "Endgame ACE": f"{team_data.get('endgame_epa', 0):.2f}",
+                "Auto": f"{team_data.get('auto_epa', 0):.2f}",
+                "Teleop": f"{team_data.get('teleop_epa', 0):.2f}",
+                "Endgame": f"{team_data.get('endgame_epa', 0):.2f}",
                 "Team": f"[{tstr} | {t.get('nn', 'Unknown')}](/team/{tstr}/{event_year})",
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
@@ -2374,9 +2374,9 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             {"name": "ACE Rank", "id": "ACE Rank"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
             {"name": "ACE", "id": "ACE"},
-            {"name": "Auto ACE", "id": "Auto ACE"},
-            {"name": "Teleop ACE", "id": "Teleop ACE"},
-            {"name": "Endgame ACE", "id": "Endgame ACE"},
+            {"name": "Auto", "id": "Auto"},
+            {"name": "Teleop", "id": "Teleop"},
+            {"name": "Endgame", "id": "Endgame"},
             {"name": "Location", "id": "Location"},
         ]
 
