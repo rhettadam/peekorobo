@@ -1913,6 +1913,7 @@ def event_layout(event_key):
                     # Use overall EPA/confidence/consistency from TEAM_DATABASE
                     event_epa_data[str(team_num)] = {
                         "epa": team_data.get("epa", 0),
+                        "normal_epa": team_data.get("normal_epa"),
                         "auto_epa": team_data.get("auto_epa", 0),
                         "teleop_epa": team_data.get("teleop_epa", 0),
                         "endgame_epa": team_data.get("endgame_epa", 0),
@@ -1961,6 +1962,7 @@ def event_layout(event_key):
                         # Use overall EPA/confidence/consistency from year_team_data
                         event_epa_data[str(team_num)] = {
                             "epa": team_data.get("epa", 0),
+                            "normal_epa": team_data.get("normal_epa"),
                             "auto_epa": team_data.get("auto_epa", 0),
                             "teleop_epa": team_data.get("teleop_epa", 0),
                             "endgame_epa": team_data.get("endgame_epa", 0),
@@ -2348,8 +2350,6 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         )
         top_3 = sorted_teams[:3]
 
-        
-
         spotlight_cards = [
             dbc.Col(create_team_card_spotlight(t, year_team_data, event_year), width="auto")
             for t in top_3
@@ -2365,6 +2365,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             
             rows.append({
                 "ACE Rank": rank_map.get(int(tnum), "N/A"),
+                "EPA": f"{team_data.get('normal_epa', 0):.2f}",
+                "Confidence": f"{team_data.get('confidence', 0):.2f}",
                 "ACE": f"{team_data.get('epa', 0):.2f}",
                 "Auto": f"{team_data.get('auto_epa', 0):.2f}",
                 "Teleop": f"{team_data.get('teleop_epa', 0):.2f}",
@@ -2379,6 +2381,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         columns = [
             {"name": "ACE Rank", "id": "ACE Rank"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "EPA", "id": "EPA"},
+            {"name": "Confidence", "id": "Confidence"},
             {"name": "ACE", "id": "ACE"},
             {"name": "Auto", "id": "Auto"},
             {"name": "Teleop", "id": "Teleop"},
@@ -2387,7 +2391,6 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         ]
 
         return html.Div([
-            html.H4("Spotlight Teams", className="text-center mb-4", style={"fontWeight": "bold"}),
             spotlight_layout,
             epa_legend_layout(),
             dash_table.DataTable(
@@ -2684,8 +2687,77 @@ app.clientside_callback(
             playlist_title = `${event_name} - Team ${selected_team}`;
         }
         
-        // Create YouTube playlist URL
-        const playlist_url = `https://www.youtube.com/playlist?list=PL${event_key}`;
+        // Filter matches based on team selection
+        let filtered_matches = event_matches;
+        if (selected_team && selected_team !== 'ALL') {
+            filtered_matches = event_matches.filter(match => {
+                const redTeams = match.rt ? match.rt.split(',') : [];
+                const blueTeams = match.bt ? match.bt.split(',') : [];
+                return redTeams.includes(selected_team) || blueTeams.includes(selected_team);
+            });
+        }
+        
+        // Sort matches in correct order: quals first, then semis, then finals
+        filtered_matches.sort((a, b) => {
+            // Get competition level and match number from match key
+            const getMatchInfo = (match) => {
+                const key = match.k ? match.k.split('_').pop().toLowerCase() : '';
+                
+                // Extract comp level and match number
+                let compLevel = 'qm'; // default
+                let matchNum = 0;
+                let setNum = 0;
+                
+                if (key.startsWith('qm')) {
+                    compLevel = 'qm';
+                    matchNum = parseInt(key.replace('qm', '').replace('m', '')) || 0;
+                } else if (key.startsWith('qf')) {
+                    compLevel = 'qf';
+                    const parts = key.replace('qf', '').split('m');
+                    setNum = parseInt(parts[0]) || 0;
+                    matchNum = parseInt(parts[1]) || 0;
+                } else if (key.startsWith('sf')) {
+                    compLevel = 'sf';
+                    const parts = key.replace('sf', '').split('m');
+                    setNum = parseInt(parts[0]) || 0;
+                    matchNum = parseInt(parts[1]) || 0;
+                } else if (key.startsWith('f')) {
+                    compLevel = 'f';
+                    matchNum = parseInt(key.replace('f', '').replace('m', '')) || 0;
+                }
+                
+                return { compLevel, setNum, matchNum };
+            };
+            
+            const aInfo = getMatchInfo(a);
+            const bInfo = getMatchInfo(b);
+            
+            // Define comp level order: qm < qf < sf < f
+            const compLevelOrder = { 'qm': 0, 'qf': 1, 'sf': 2, 'f': 3 };
+            
+            // Compare by comp level first
+            if (compLevelOrder[aInfo.compLevel] !== compLevelOrder[bInfo.compLevel]) {
+                return compLevelOrder[aInfo.compLevel] - compLevelOrder[bInfo.compLevel];
+            }
+            
+            // If same comp level, compare by set number (for qf/sf)
+            if (aInfo.setNum !== bInfo.setNum) {
+                return aInfo.setNum - bInfo.setNum;
+            }
+            
+            // Finally compare by match number
+            return aInfo.matchNum - bInfo.matchNum;
+        });
+        
+        // Extract YouTube video IDs from sorted matches
+        const video_ids = filtered_matches
+            .map(match => match.yt)
+            .filter(yt => yt);
+        
+        if (video_ids.length === 0) return window.dash_clientside.no_update;
+        
+        // Create YouTube playlist URL with title
+        const playlist_url = `https://www.youtube.com/watch_videos?video_ids=${video_ids.join(',')}&title=${encodeURIComponent(playlist_title)}`;
         
         // Open in new tab
         window.open(playlist_url, '_blank');
@@ -2693,9 +2765,13 @@ app.clientside_callback(
         return window.dash_clientside.no_update;
     }
     """,
-    Output('dummy-output', 'children', allow_duplicate=True),
-    [Input('create-playlist-btn', 'n_clicks')],
-    [State('team-filter', 'value'), State('store-event-matches', 'data'), State('url', 'pathname')],
+    Output("url", "pathname", allow_duplicate=True),
+    Input("create-playlist-btn", "n_clicks"),
+    [
+        State("team-filter", "value"),
+        State("store-event-matches", "data"),
+        State("url", "pathname"),
+    ],
     prevent_initial_call=True
 )
 

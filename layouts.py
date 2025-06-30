@@ -20,7 +20,7 @@ def topbar():
                             dbc.NavbarBrand(
                                 html.Img(
                                     src="/assets/logo.png",
-                                    style={"height": "40px", "width": "auto", "marginRight": "5px"},
+                                    style={"height": "40px", "width": "auto", "marginRight": "0px"},
                                 ),
                                 href="/",
                                 className="navbar-brand-custom mobile-navbar-col",
@@ -52,7 +52,7 @@ def topbar():
                                             }
                                         ),
                                     ],
-                                    style={"width": "180px"},
+                                    style={"width": "160px"},
                                     className="mobile-search-group",
                                 ),
                                 html.Div(id="mobile-search-preview", style={
@@ -79,7 +79,7 @@ def topbar():
                             style={"position": "relative", "textAlign": "center"},
                         ),
                         dbc.Col(
-                            dbc.NavbarToggler(id="navbar-toggler", n_clicks=0, className="navbar-toggler-custom"),
+                            dbc.NavbarToggler(id="navbar-toggler", n_clicks=0, className="navbar-toggler-custom",style={"padding": "0px"}),
                             width="auto",
                             className="d-md-none align-self-center",
                         ),
@@ -121,7 +121,7 @@ def topbar():
                                                     dbc.DropdownMenuItem(divider=True),
                                                     dbc.DropdownMenuItem("FIRST Technical Resources", href="https://www.firstinspires.org/resource-library/frc/technical-resources", target="_blank"),
                                                     dbc.DropdownMenuItem("FRCDesign", href="https://www.frcdesign.org/learning-course/", target="_blank"),
-                                                    dbc.DropdownMenuItem("OnShape4FRC", href="https://onshape4frc.com/", target="_blank"),
+                                                    dbc.DropdownMenuItem("FRCManual", href="https://www.frcmanual.com/", target="_blank"),
                                                     dbc.DropdownMenuItem(divider=True),
                                                     dbc.DropdownMenuItem("Statbotics", href="https://www.statbotics.io/", target="_blank"),
                                                     dbc.DropdownMenuItem("ScoutRadioz", href="https://scoutradioz.com/", target="_blank"),
@@ -979,9 +979,9 @@ def teams_layout(default_year=2025):
             {"name": "Confidence", "id": "confidence"},
             {"name": "=", "id": "equals_symbol"},
             {"name": "ACE", "id": "ace"},
-            {"name": "Auto", "id": "auto_epa"},
-            {"name": "Teleop", "id": "teleop_epa"},
-            {"name": "Endgame", "id": "endgame_epa"},
+            {"name": "Auto ACE", "id": "auto_epa"},
+            {"name": "Teleop ACE", "id": "teleop_epa"},
+            {"name": "Endgame ACE", "id": "endgame_epa"},
             {"name": "Record", "id": "record"},
         ],
         data=[],
@@ -1197,8 +1197,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
 
     recent_rows = []
     year = performance_year 
-    # Get the 3 most recent events by start date
-    # Get team-attended events with start dates
+    # Get all events the team attended with start dates
     event_dates = []
     
     year_events = EVENT_DATABASE.get(performance_year, {}) if isinstance(EVENT_DATABASE, dict) else EVENT_DATABASE
@@ -1229,8 +1228,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         else:
             print(f"  No start date for event {ek}")
     
-    # Most recent 3 events they attended
-    recent_events_sorted = sorted(event_dates, key=lambda x: x[0], reverse=True)[:4]
+    # Sort all attended events by most recent first (no slicing)
+    recent_events_sorted = sorted(event_dates, key=lambda x: x[0], reverse=True)
     
     # Iterate through sorted events to build the section
     for dt, event_key, event in recent_events_sorted:
@@ -1452,7 +1451,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
                 if red_team_info and blue_team_info:
                     p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
-                    # Pred winner logic (47-53% = Tie)
+                    # Pred winner logic (49-51% = Tie)
                     if 0.49 <= p_red <= 0.51:
                         pred_winner = "Tie"
                     else:
@@ -1551,6 +1550,9 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     {"if": {"filter_query": "{Prediction %} < 5", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-deepred)", "fontWeight": "bold", "color": "var(--text-primary)"},
                     {"if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Score"}, "borderBottom": "1px solid var(--text-primary)"},
                     {"if": {"filter_query": '{team_alliance} = "Blue"', "column_id": "Blue Score"}, "borderBottom": "1px solid var(--text-primary)"},
+                    {"if": {"filter_query": '{Pred Winner} = "Red"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
+                    {"if": {"filter_query": '{Pred Winner} = "Blue"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
+                    {"if": {"filter_query": '{Pred Winner} = "Tie"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-yellow)", "color": "var(--text-primary)"},
                 ]
             ),
             className="recent-events-table"
