@@ -21,11 +21,11 @@ import pandas as pd
 import plotly.graph_objects as go
 from scipy.interpolate import interp1d
 
-from datagather import COUNTRIES,STATES,load_data_2025,load_search_data,load_year_data,get_team_avatar,DISTRICT_STATES,DISTRICT_STATES_A,DatabaseConnection
+from datagather import COUNTRIES,STATES,load_data_2025,load_search_data,load_year_data,get_team_avatar,DISTRICT_STATES,DISTRICT_STATES_A,DatabaseConnection,get_team_years_participated
 
-from layouts import home_layout,footer,topbar,team_layout,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, compare_layout
+from layouts import home_layout,footer,topbar,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, compare_layout
 
-from utils import pill,predict_win_probability,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_available_avatars,get_contrast_text_color,parse_event_key,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card,truncate_name
+from utils import calculate_single_rank,pill,predict_win_probability,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_available_avatars,get_contrast_text_color,parse_event_key,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card,truncate_name
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -185,7 +185,7 @@ def user_layout(_user_id=None, deleted_items=None):
                 html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
                 html.Span([
                     html.Span("Team: ", style={"color": text_color, "fontWeight": "500"}),
-                    html.A(team_affil, href=f"/team/{team_affil}", style={
+                    html.A(team_affil, href=f"/team/{team_affil}/2025", style={
                         "color": text_color,
                         "textDecoration": "underline",
                         "fontWeight": "500"
@@ -427,7 +427,7 @@ def user_layout(_user_id=None, deleted_items=None):
         team_cards.append(user_team_card(
             html.A(
                 f"{team_number} | {team_data.get('nickname', '')}",
-                href=f"/team/{team_key}",
+                href=f"/team/{team_key}/2025",
                 style={"textDecoration": "none", "color": "inherit"}
             ),
 
@@ -798,7 +798,7 @@ def other_user_layout(username):
         team_cards.append(user_team_card(
             html.A(
                 f"{team_number} | {team_data.get('nickname', '')}",
-                href=f"/team/{team_key}",
+                href=f"/team/{team_key}/2025",
                 style={"textDecoration": "none", "color": "inherit"}
             ),
             [
@@ -862,7 +862,7 @@ def other_user_layout(username):
                 html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
                 html.Span([
                     html.Span("Team: ", style={"color": text_color, "fontWeight": "500"}),
-                    html.A(team, href=f"/team/{team}", style={
+                    html.A(team, href=f"/team/{team}/2025", style={
                         "color": text_color,
                         "textDecoration": "none",
                         "fontWeight": "500"
@@ -1049,7 +1049,7 @@ def handle_profile_edit(
             html.Span(f"Role: {new_role}", style={"color": text_color}),
             html.Span([
                 html.Span("Team: ", style={"color": text_color, "fontWeight": "500"}),
-                html.A(new_team, href=f"/team/{new_team}", style={"color": text_color, "textDecoration": "underline"})
+                html.A(new_team, href=f"/team/{new_team}/2025", style={"color": text_color, "textDecoration": "underline"})
             ]),
             html.Div(new_bio, style={"color": text_color}),
             {"color": text_color},  # profile-header
@@ -1092,7 +1092,7 @@ def handle_profile_edit(
             html.Span(f"Role: {role}", style={"color": text_color}),
             html.Span([
                 "Team: ",
-                html.A(team, href=f"/team/{team}", style={"color": text_color, "textDecoration": "underline"})
+                html.A(team, href=f"/team/{team}/2025", style={"color": text_color, "textDecoration": "underline"})
             ]),
             html.Div(bio, style={"color": text_color}),
             {"color": text_color},  # profile-header
@@ -1417,13 +1417,12 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
                     background_color = "#FFDD0080"
                     is_highlighted = True
 
-                # Create simple team link since we only have basic data
                 team_link_element = html.A([
                     html.Img(src=get_team_avatar(tn), style={
                         "height": "20px", "width": "20px", "borderRadius": "50%", "marginRight": "8px"
                     }),
                     html.Span(f"{tn} | {nm}")
-                ], href=f"/team/{tn}", style={
+                ], href=f"/team/{tn}/2025", style={
                     "textDecoration": "none",
                     "color": "black" if is_highlighted else default_text_color
                 })
@@ -1878,53 +1877,107 @@ def update_events_tab_content(
 
 def event_layout(event_key):
     parsed_year, _ = parse_event_key(event_key)
-    event = EVENT_DATABASE.get(parsed_year, {}).get(event_key)
+    
+    # Load data for the specific year
+    if parsed_year == 2025:
+        # Use global data for 2025
+        event = EVENT_DATABASE.get(parsed_year, {}).get(event_key)
+        event_teams = EVENT_TEAMS.get(parsed_year, {}).get(event_key, [])
+        event_epa_data = {}
+        for team in event_teams:
+            team_num = team.get("tk")
+            team_data = TEAM_DATABASE.get(parsed_year, {}).get(team_num, {})
+            if team_data:
+                # Handle event_epas whether it's a string or list
+                event_epas = team_data.get("event_epas", [])
+                if isinstance(event_epas, str):
+                    try:
+                        event_epas = json.loads(event_epas)
+                    except json.JSONDecodeError:
+                        event_epas = []
+                # Find event-specific EPA data for this team at this event
+                event_specific_epa = next(
+                    (e for e in event_epas if e.get("event_key") == event_key),
+                    None
+                )
+                # Fallback to overall EPA/confidence/consistency if event-specific is missing
+                if event_specific_epa and event_specific_epa.get("actual_epa", 0) != 0:
+                    event_epa_data[str(team_num)] = {
+                        "epa": event_specific_epa.get("actual_epa", 0),
+                        "auto_epa": event_specific_epa.get("auto", 0),
+                        "teleop_epa": event_specific_epa.get("teleop", 0),
+                        "endgame_epa": event_specific_epa.get("endgame", 0),
+                        "confidence": event_specific_epa.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
+                    }
+                else:
+                    # Use overall EPA/confidence/consistency from TEAM_DATABASE
+                    event_epa_data[str(team_num)] = {
+                        "epa": team_data.get("epa", 0),
+                        "auto_epa": team_data.get("auto_epa", 0),
+                        "teleop_epa": team_data.get("teleop_epa", 0),
+                        "endgame_epa": team_data.get("endgame_epa", 0),
+                        "confidence": team_data.get("confidence", 0.7),
+                    }
+        
+        # Calculate rankings based on event-specific EPA
+        rankings = EVENT_RANKINGS.get(parsed_year, {}).get(event_key, {})
+        
+        # Get event matches
+        event_matches = [m for m in EVENT_MATCHES.get(parsed_year, []) if m.get("ek") == event_key]
+        
+    else:
+        # Load data for other years on-demand
+        try:
+            year_team_data, year_event_data, year_event_teams, year_event_rankings, _, year_event_matches = load_year_data(parsed_year)
+            event = year_event_data.get(event_key)
+            event_teams = year_event_teams.get(event_key, [])
+            event_epa_data = {}
+            for team in event_teams:
+                team_num = team.get("tk")
+                team_data = year_team_data.get(team_num, {})
+                if team_data:
+                    # Handle event_epas whether it's a string or list
+                    event_epas = team_data.get("event_epas", [])
+                    if isinstance(event_epas, str):
+                        try:
+                            event_epas = json.loads(event_epas)
+                        except json.JSONDecodeError:
+                            event_epas = []
+                    # Find event-specific EPA data for this team at this event
+                    event_specific_epa = next(
+                        (e for e in event_epas if e.get("event_key") == event_key),
+                        None
+                    )
+                    # Fallback to overall EPA/confidence/consistency if event-specific is missing
+                    if event_specific_epa and event_specific_epa.get("actual_epa", 0) != 0:
+                        event_epa_data[str(team_num)] = {
+                            "epa": event_specific_epa.get("actual_epa", 0),
+                            "auto_epa": event_specific_epa.get("auto", 0),
+                            "teleop_epa": event_specific_epa.get("teleop", 0),
+                            "endgame_epa": event_specific_epa.get("endgame", 0),
+                            "confidence": event_specific_epa.get("confidence", 0.7),
+                        }
+                    else:
+                        # Use overall EPA/confidence/consistency from year_team_data
+                        event_epa_data[str(team_num)] = {
+                            "epa": team_data.get("epa", 0),
+                            "auto_epa": team_data.get("auto_epa", 0),
+                            "teleop_epa": team_data.get("teleop_epa", 0),
+                            "endgame_epa": team_data.get("endgame_epa", 0),
+                            "confidence": team_data.get("confidence", 0.7),
+                        }
+            
+            # Calculate rankings based on event-specific EPA
+            rankings = year_event_rankings.get(event_key, {})
+            
+            # Get event matches
+            event_matches = [m for m in year_event_matches if m.get("ek") == event_key]
+            
+        except Exception as e:
+            return dbc.Alert(f"Error loading data for year {parsed_year}: {str(e)}", color="danger")
+    
     if not event:
         return dbc.Alert("Event details could not be found.", color="danger")
-
-    # Get event-specific EPA data for teams at this event
-    event_teams = EVENT_TEAMS.get(parsed_year, {}).get(event_key, [])
-    event_epa_data = {}
-    for team in event_teams:
-        team_num = team.get("tk")
-        team_data = TEAM_DATABASE.get(parsed_year, {}).get(team_num, {})
-        if team_data:
-            # Handle event_epas whether it's a string or list
-            event_epas = team_data.get("event_epas", [])
-            if isinstance(event_epas, str):
-                try:
-                    event_epas = json.loads(event_epas)
-                except json.JSONDecodeError:
-                    event_epas = []
-            # Find event-specific EPA data for this team at this event
-            event_specific_epa = next(
-                (e for e in event_epas if e.get("event_key") == event_key),
-                None
-            )
-            # Fallback to overall EPA/confidence/consistency if event-specific is missing
-            if event_specific_epa and event_specific_epa.get("actual_epa", 0) != 0:
-                event_epa_data[str(team_num)] = {
-                    "epa": event_specific_epa.get("actual_epa", 0),
-                    "auto_epa": event_specific_epa.get("auto", 0),
-                    "teleop_epa": event_specific_epa.get("teleop", 0),
-                    "endgame_epa": event_specific_epa.get("endgame", 0),
-                    "confidence": event_specific_epa.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
-                }
-            else:
-                # Use overall EPA/confidence/consistency from TEAM_DATABASE
-                event_epa_data[str(team_num)] = {
-                    "epa": team_data.get("epa", 0),
-                    "auto_epa": team_data.get("auto_epa", 0),
-                    "teleop_epa": team_data.get("teleop_epa", 0),
-                    "endgame_epa": team_data.get("endgame_epa", 0),
-                    "confidence": team_data.get("confidence", 0.7),
-                }
-
-    # Calculate rankings based on event-specific EPA
-    rankings = EVENT_RANKINGS.get(parsed_year, {}).get(event_key, {})
-
-    # Get event matches
-    event_matches = [m for m in EVENT_MATCHES.get(parsed_year, []) if m.get("ek") == event_key]
 
     event_name = event.get("n", "Unknown Event")
     # Remove ' presented by' and everything after it
@@ -1998,7 +2051,6 @@ def event_layout(event_key):
             dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Rankings", tab_id="rankings", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Matches", tab_id="matches", label_style=tab_style, active_label_style=tab_style),
-            dbc.Tab(label="Alliances", tab_id="alliances", label_style=tab_style, active_label_style=tab_style),
         ],
         id="event-data-tabs",
         active_tab=None,  # Will be set by callback
@@ -2040,7 +2092,7 @@ def set_event_tab_from_url(search):
     if search and search.startswith("?"):
         params = parse_qs(search[1:])
         tab = params.get("tab", [None])[0]
-        if tab in ["teams", "rankings", "matches", "alliances"]:
+        if tab in ["teams", "rankings", "matches"]:
             return tab
     return "teams"
 
@@ -2051,101 +2103,6 @@ def set_event_tab_from_url(search):
 )
 def set_event_tabs_active_tab(tab):
     return tab
-
-def create_team_card_spotlight(team, event_year):
-    t_num = team.get("tk")  # from compressed team list
-    team_data = TEAM_DATABASE.get(event_year, {}).get(t_num, {})
-
-    nickname = team_data.get("nickname", "Unknown")
-    city = team_data.get("city", "")
-    state = team_data.get("state_prov", "")
-    country = team_data.get("country", "")
-    location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
-
-    # === EPA & Rank Calculation (standalone) ===
-    all_teams = TEAM_DATABASE.get(event_year, {})
-    team_epas = [
-        (tnum, data.get("epa", 0))
-        for tnum, data in all_teams.items()
-        if isinstance(data, dict)
-    ]
-    team_epas.sort(key=lambda x: x[1], reverse=True)
-    rank_map = {tnum: i + 1 for i, (tnum, _) in enumerate(team_epas)}
-
-    team_epa = team_data.get("epa", 0)
-    epa_display = f"{team_epa:.1f}"
-    epa_rank = rank_map.get(t_num, "N/A")
-
-    # === Avatar and link ===
-    avatar_url = get_team_avatar(t_num, event_year)
-    team_url = f"/team/{t_num}/{event_year}"
-
-    # === Card Layout ===
-    card_body = dbc.CardBody(
-        [
-            html.H5(f"#{t_num} | {nickname}", className="card-title", style={
-                "fontSize": "1.1rem",
-                "textAlign": "center",
-                "marginBottom": "0.5rem"
-            }),
-            html.P(f"Location: {location_str}", className="card-text", style={
-                "fontSize": "0.9rem",
-                "textAlign": "center",
-                "marginBottom": "0.5rem"
-            }),
-            html.P(f"ACE: {epa_display} (Global Rank: {epa_rank})", className="card-text", style={
-                "fontSize": "0.9rem",
-                "textAlign": "center",
-                "marginBottom": "auto"
-            }),
-            dbc.Button(
-                "View Team",
-                href=team_url,
-                color="warning",
-                outline=True,
-                className="custom-view-btn mt-3",
-            ),
-        ],
-        style={
-            "display": "flex",
-            "flexDirection": "column",
-            "flexGrow": "1",
-            "justifyContent": "space-between",
-            "padding": "1rem"
-        }
-    )
-
-    card_elements = []
-    if avatar_url:
-        card_elements.append(
-            dbc.CardImg(
-                src=avatar_url,
-                top=True,
-                style={
-                    "width": "100%",
-                    "height": "150px",
-                    "objectFit": "contain",
-                    "backgroundColor": "transparent",
-                    "padding": "0.5rem"
-                }
-            )
-        )
-
-    card_elements.append(card_body)
-
-    return dbc.Card(
-        card_elements,
-        className="m-2 shadow-sm",
-        style={
-            "width": "18rem",
-            "height": "22rem",
-            "display": "flex",
-            "flexDirection": "column",
-            "justifyContent": "space-between",
-            "alignItems": "stretch",
-            "borderRadius": "12px"
-        },
-    )
 
 @callback(
     Output("data-display-container", "children"),
@@ -2159,6 +2116,103 @@ def create_team_card_spotlight(team, event_year):
     State("url", "pathname"),  # get the event_key from the URL
 )
 def update_event_display(active_tab, rankings, epa_data, event_teams, event_matches, event_year, pathname):
+
+    def create_team_card_spotlight(team, year_team_database, event_year):
+        t_num = team.get("tk")  # from compressed team list
+        
+        # Use the passed year_team_database
+        team_data = year_team_database.get(event_year, {}).get(t_num, {})
+        all_teams = year_team_database.get(event_year, {})
+
+        nickname = team_data.get("nickname", "Unknown")
+        city = team_data.get("city", "")
+        state = team_data.get("state_prov", "")
+        country = team_data.get("country", "")
+        location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
+
+        # === EPA & Rank Calculation (standalone) ===
+        team_epas = [
+            (tnum, data.get("epa", 0))
+            for tnum, data in all_teams.items()
+            if isinstance(data, dict)
+        ]
+        team_epas.sort(key=lambda x: x[1], reverse=True)
+        rank_map = {tnum: i + 1 for i, (tnum, _) in enumerate(team_epas)}
+
+        team_epa = team_data.get("epa", 0)
+        epa_display = f"{team_epa:.1f}"
+        epa_rank = rank_map.get(t_num, "N/A")
+
+        # === Avatar and link ===
+        avatar_url = get_team_avatar(t_num, event_year)
+        team_url = f"/team/{t_num}/{event_year}"
+
+        # === Card Layout ===
+        card_body = dbc.CardBody(
+            [
+                html.H5(f"#{t_num} | {nickname}", className="card-title", style={
+                    "fontSize": "1.1rem",
+                    "textAlign": "center",
+                    "marginBottom": "0.5rem"
+                }),
+                html.P(f"Location: {location_str}", className="card-text", style={
+                    "fontSize": "0.9rem",
+                    "textAlign": "center",
+                    "marginBottom": "0.5rem"
+                }),
+                html.P(f"ACE: {epa_display} (Global Rank: {epa_rank})", className="card-text", style={
+                    "fontSize": "0.9rem",
+                    "textAlign": "center",
+                    "marginBottom": "auto"
+                }),
+                dbc.Button(
+                    "View Team",
+                    href=team_url,
+                    color="warning",
+                    outline=True,
+                    className="custom-view-btn mt-3",
+                ),
+            ],
+            style={
+                "display": "flex",
+                "flexDirection": "column",
+                "flexGrow": "1",
+                "justifyContent": "space-between",
+                "padding": "1rem"
+            }
+        )
+
+        card_elements = []
+        if avatar_url:
+            card_elements.append(
+                dbc.CardImg(
+                    src=avatar_url,
+                    top=True,
+                    style={
+                        "width": "100%",
+                        "height": "150px",
+                        "objectFit": "contain",
+                        "backgroundColor": "transparent",
+                        "padding": "0.5rem"
+                    }
+                )
+            )
+
+        card_elements.append(card_body)
+
+        return dbc.Card(
+            card_elements,
+            className="m-2 shadow-sm",
+            style={
+                "width": "18rem",
+                "height": "22rem",
+                "display": "flex",
+                "flexDirection": "column",
+                "justifyContent": "space-between",
+                "alignItems": "stretch",
+                "borderRadius": "12px"
+            },
+        )
     # --- URL update logic ---
     # Extract event_key from pathname
     event_key = None
@@ -2192,10 +2246,23 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         try: return int(val)
         except: return 999999
 
-    team_epas = []
-    for tnum, team_data in TEAM_DATABASE.get(event_year, {}).items():
-        if team_data:
-            team_epas.append((tnum, team_data.get("epa", 0)))
+    # Load team data for the specific year
+    if event_year == 2025:
+        year_team_data = TEAM_DATABASE # Use global data for 2025
+        team_epas = []
+        for tnum, team_data in TEAM_DATABASE.get(event_year, {}).items():
+            if team_data:
+                team_epas.append((tnum, team_data.get("epa", 0)))
+    else:
+        # Load data for other years on-demand
+        try:
+            year_team_data, _, _, _, _, _ = load_year_data(event_year)
+            team_epas = []
+            for tnum, team_data in year_team_data.items():
+                if team_data:
+                    team_epas.append((tnum, team_data.get("epa", 0)))
+        except Exception as e:
+            return dbc.Alert(f"Error loading team data for year {event_year}: {str(e)}", color="danger"), query_string
         
     # Sort by EPA to calculate ranks
     team_epas.sort(key=lambda x: x[1], reverse=True)
@@ -2221,16 +2288,12 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         data_rows = []
         for team_num, rank_info in (rankings or {}).items():
             tstr = str(team_num)
-
-            try:
-                team_data = TEAM_DATABASE.get(event_year, {}).get(int(team_num), {})
-            except Exception as e:
-                team_data = {}
+            team_data = year_team_data.get(int(team_num), {})
             nickname = team_data.get("nickname", "Unknown")
 
             data_rows.append({
                 "Rank": rank_info.get("rk", "N/A"),
-                "Team": f"[{tstr} | {nickname}](/team/{tstr})",
+                "Team": f"[{tstr} | {nickname}](/team/{tstr}/{event_year})",
                 "Wins": rank_info.get("w", "N/A"),
                 "Losses": rank_info.get("l", "N/A"),
                 "Ties": rank_info.get("t", "N/A"),
@@ -2267,16 +2330,22 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
 
     # === Teams Tab ===
     elif active_tab == "teams":
-        # Sort teams by overall EPA from TEAM_DATABASE
+
+        if event_year != 2025:
+            year_team_data = {event_year: year_team_data}
+        
+        # Sort teams by overall EPA from year_team_database
         sorted_teams = sorted(
             event_teams,
-            key=lambda t: TEAM_DATABASE.get(event_year, {}).get(int(t.get("tk")), {}).get("epa", 0),
+            key=lambda t: year_team_data.get(event_year, {}).get(int(t.get("tk")), {}).get("epa", 0),
             reverse=True
         )
         top_3 = sorted_teams[:3]
 
+        
+
         spotlight_cards = [
-            dbc.Col(create_team_card_spotlight(t, event_year), width="auto")
+            dbc.Col(create_team_card_spotlight(t, year_team_data, event_year), width="auto")
             for t in top_3
         ]
         spotlight_layout = dbc.Row(spotlight_cards, className="justify-content-center mb-4")
@@ -2285,8 +2354,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         for t in event_teams:
             tnum = t.get("tk")
             tstr = str(tnum)
-            # Convert team number to integer for TEAM_DATABASE lookup
-            team_data = TEAM_DATABASE.get(event_year, {}).get(int(tnum), {})
+            # Convert team number to integer for year_team_database lookup
+            team_data = year_team_data.get(event_year, {}).get(int(tnum), {})
             
             rows.append({
                 "ACE Rank": rank_map.get(int(tnum), "N/A"),
@@ -2294,7 +2363,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 "Auto ACE": f"{team_data.get('auto_epa', 0):.2f}",
                 "Teleop ACE": f"{team_data.get('teleop_epa', 0):.2f}",
                 "Endgame ACE": f"{team_data.get('endgame_epa', 0):.2f}",
-                "Team": f"[{tstr} | {t.get('nn', 'Unknown')}](/team/{tstr})",
+                "Team": f"[{tstr} | {t.get('nn', 'Unknown')}](/team/{tstr}/{event_year})",
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
 
@@ -2357,197 +2426,6 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             html.Div(id="matches-container")
         ]), query_string
 
-    elif active_tab == "alliances":
-        # === Extract alliance picks ===
-        def extract_alliance_picks(teams, rankings=None):
-            teams = [t for t in teams if t.strip()] + ["?", "?", "?"]
-            teams = teams[:3]
-            if rankings:
-                teams = sorted(teams, key=lambda t: rankings.get(t, {}).get("rk", 9999))
-            return teams[0], teams[1], teams[2]
-    
-        # === Identify alliances from SF matches ===
-        sf_alliance_map = {1: (1, 8), 2: (4, 5), 3: (2, 7), 4: (3, 6)}
-        alliance_slots = {}
-        sf_matches = [m for m in event_matches if m.get("cl") == "sf" and m.get("mn") == 1]
-    
-        for match in sf_matches:
-            key = match.get("k", "").split("_", 1)[-1].lower()
-            match_re = re.match(r"sf(\d+)m1", key)
-            if not match_re:
-                continue
-            sf_num = int(match_re.group(1))
-            if sf_num not in sf_alliance_map:
-                continue
-            red_alliance, blue_alliance = sf_alliance_map[sf_num]
-            alliance_slots[red_alliance] = match.get("rt", "").split(",")
-            alliance_slots[blue_alliance] = match.get("bt", "").split(",")
-    
-        # === Build picked team set ===
-        picked_teams = set()
-        for teams in alliance_slots.values():
-            picked_teams.update([t for t in teams if t.strip()])
-    
-        # === Alliance table ===
-        alliance_table_data = []
-        for i in range(1, 9):
-            teams = alliance_slots.get(i, [])
-            captain, pick1, pick2 = extract_alliance_picks(teams, rankings)
-            alliance_table_data.append({
-                "Alliance": f"Alliance {i}",
-                "Captain": f"[{captain}](/team/{captain})" if captain.isdigit() else "?",
-                "Pick 1": f"[{pick1}](/team/{pick1})" if pick1.isdigit() else "?",
-                "Pick 2": f"[{pick2}](/team/{pick2})" if pick2.isdigit() else "?",
-            })
-    
-        # === Ranked teams ===
-        ranked_teams = sorted(
-            ((str(t["tk"]), rankings.get(str(t["tk"]), {}).get("rk", 9999)) for t in event_teams),
-            key=lambda x: x[1]
-        )
-    
-        # === Nodes and Edges ===
-        nodes = []
-        edges = []
-    
-        # Teams left and right, compact spacing
-        team_spacing = 0.05
-        left_teams = ranked_teams[::2]
-        right_teams = ranked_teams[1::2]
-    
-        for idx, (tnum, rk) in enumerate(left_teams):
-            nodes.append({
-                "id": tnum,
-                "label": f"{tnum} (#{rk})",
-                "x": -2,
-                "y": -idx * team_spacing,
-                "type": "team",
-                "picked": tnum in picked_teams
-            })
-    
-        for idx, (tnum, rk) in enumerate(right_teams):
-            nodes.append({
-                "id": tnum,
-                "label": f"{tnum} (#{rk})",
-                "x": 2,
-                "y": -idx * team_spacing,
-                "type": "team",
-                "picked": tnum in picked_teams
-            })
-    
-        # Calculate vertical span and center alliances accordingly
-        max_left_y = -(len(left_teams) - 1) * team_spacing / 2
-        max_right_y = -(len(right_teams) - 1) * team_spacing / 2
-        alliance_start_y = (max_left_y + max_right_y) / 2 + (8 / 2) * team_spacing
-    
-        for i in range(1, 9):
-            y_pos = alliance_start_y - (i - 1) * team_spacing * 2
-            nodes.append({
-                "id": f"A{i}",
-                "label": f"Alliance {i}",
-                "x": 0,
-                "y": y_pos,
-                "type": "alliance"
-            })
-    
-        # Edges from alliances to picked teams
-        for i in range(1, 9):
-            for t in alliance_slots.get(i, []):
-                if t.strip():
-                    edges.append((f"A{i}", t))
-    
-        # Build edge traces
-        edge_x, edge_y = [], []
-        for src, dst in edges:
-            src_node = next(n for n in nodes if n["id"] == src)
-            dst_node = next(n for n in nodes if n["id"] == dst)
-            edge_x += [src_node["x"], dst_node["x"], None]
-            edge_y += [src_node["y"], dst_node["y"], None]
-    
-        # Build node traces
-        node_x = [n["x"] for n in nodes]
-        node_y = [n["y"] for n in nodes]
-        node_text = [n["label"] for n in nodes]
-        node_color = [
-            "#2759d6" if n["type"] == "alliance" else ("#2ca02c" if n.get("picked") else "#c62828")
-            for n in nodes
-        ]
-        node_size = [30 if n["type"] == "alliance" else 12 for n in nodes]
-    
-        # === Build figure ===
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=edge_x, y=edge_y, mode="lines",
-            line=dict(width=2, color="#aaa"), hoverinfo="none"
-        ))
-        fig.add_trace(go.Scatter(
-            x=node_x, y=node_y, mode="markers+text",
-            text=node_text, textposition="middle right",
-            marker=dict(size=node_size, color=node_color, line=dict(width=1, color=node_color)),
-            hoverinfo="text",
-            textfont=dict(color="#777")  # <-- Add this line
-        ))
-        fig.update_layout(
-            font=dict(color="#777"),
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            showlegend=False,
-            margin=dict(l=20, r=20, t=20, b=20),
-            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-2.5, 2.5]),
-            yaxis=dict(
-                showgrid=False,
-                zeroline=False,
-                showticklabels=False,
-                color="#777",  # axis ticks and label color
-                title=dict(font=dict(color="#777")),  # y-axis title color
-            ),
-            height=1000,
-        )
-    
-        # === Render ===
-        return html.Div([
-            dash_table.DataTable(
-                columns=[
-                    {"name": "Alliance", "id": "Alliance", "presentation": "markdown"},
-                    {"name": "Captain", "id": "Captain", "presentation": "markdown"},
-                    {"name": "Pick 1", "id": "Pick 1", "presentation": "markdown"},
-                    {"name": "Pick 2", "id": "Pick 2", "presentation": "markdown"},
-                ],
-                data=alliance_table_data,
-                style_table=common_style_table,
-                style_header={
-                    "backgroundColor": "var(--card-bg)",
-                    "fontWeight": "bold",
-                    "padding": "6px",
-                    "fontSize": "13px",
-                },
-                style_cell={
-                    "backgroundColor": "var(--card-bg)", 
-                    "padding": "8px",
-                    "fontSize": "14px",
-                    "textAlign": "center"  # Default to center for safety
-                },
-                style_cell_conditional=[
-                    {"if": {"column_id": "Alliance"}, "textAlign": "left", "fontWeight": "bold"},
-                ],
-                style_header_conditional=[
-                    {"if": {"column_id": "Alliance"}, "textAlign": "left"},
-                    {"if": {"column_id": "Captain"}, "textAlign": "center"},
-                    {"if": {"column_id": "Pick 1"}, "textAlign": "center"},
-                    {"if": {"column_id": "Pick 2"}, "textAlign": "center"},
-                ],
-                page_size=8
-            ),
-            dcc.Graph(
-                figure=fig,
-                config={
-                    "staticPlot": True,  # This disables all interactivity
-                    "displayModeBar": True,  # Hide the toolbar
-                    "displaylogo": False,     # Hide the Plotly logo
-                }
-            ),
-        ]), query_string
-
     return dbc.Alert("No data available.", color="warning"), query_string
 
 @app.callback(
@@ -2594,15 +2472,22 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
 
     # 3) Utility functions
     def format_teams_markdown(team_list_str):
-        return ", ".join(f"[{t}](/team/{t})" for t in team_list_str.split(",") if t.strip().isdigit())
+        return ", ".join(f"[{t}](/team/{t}/{event_year})" for t in team_list_str.split(",") if t.strip().isdigit())
 
     def get_team_epa_info(t_key):
         info = epa_data.get(str(t_key.strip()), {})
         
-        # If event_epa_data is missing or EPA is 0 (even if confidence exists), fallback to TEAM_DATABASE
+        # If event_epa_data is missing or EPA is 0 (even if confidence exists), fallback to team database
         if not info or info.get("epa", 0) == 0:
-            # Fallback to TEAM_DATABASE
-            team_data = TEAM_DATABASE.get(event_year, {}).get(int(t_key), {})
+            # Fallback to team database for the specific year
+            if event_year == 2025:
+                team_data = TEAM_DATABASE.get(event_year, {}).get(int(t_key), {})
+            else:
+                try:
+                    year_team_data, _, _, _, _, _ = load_year_data(event_year)
+                    team_data = year_team_data.get(int(t_key), {})
+                except Exception:
+                    team_data = {}
             return {
                 "epa": team_data.get("epa", 0),
                 "confidence": team_data.get("confidence", 0.7),
@@ -3226,9 +3111,8 @@ def handle_navigation(
         )
         if matching_team:
             team_number = matching_team.get("team_number", "")
-            return f"/team/{team_number}"
+            return f"/team/{team_number}/2025"
     else:
-        # For specific year, check if it's 2025 (only year we have)
         if selected_year == 2025:
             year_data = SEARCH_TEAM_DATA.get(selected_year)
             if year_data:
@@ -3722,6 +3606,489 @@ def compare_multiple_teams(team_ids, year): # Update function signature
         ], className="justify-content-center"), # Center the main row
     ], style={"padding": "10px 0"})
 
+def team_layout(team_number, year, team_database, event_database, event_matches, event_awards, event_rankings, event_teams):
+
+    user_id = session.get("user_id")
+    is_logged_in = bool(user_id)
+    
+    # Check if team is already favorited
+    is_favorited = False
+    if is_logged_in:
+        try:
+            with DatabaseConnection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id FROM saved_items
+                    WHERE user_id = %s AND item_type = 'team' AND item_key = %s
+                """, (user_id, str(team_number)))
+                is_favorited = bool(cursor.fetchone())
+        except Exception as e:
+            print(f"Error checking favorite status: {e}")
+    
+    favorite_button = dbc.Button(
+        "★" if is_favorited else "☆",
+        id={"type": "favorite-team-btn", "key": str(team_number)},
+        href="/login" if not is_logged_in else None,
+        color="link",
+        className="p-0",
+        style={
+            "position": "absolute",
+            "top": "12px",
+            "right": "16px",
+            "fontSize": "2.2rem",
+            "lineHeight": "1",
+            "border": "none",
+            "boxShadow": "none",
+            "background": "none",
+            "color": "#ffc107",  # golden star
+            "zIndex": "10",
+            "textDecoration": "none",
+            "cursor": "pointer"
+        }
+    )
+
+    # Add alert component without pattern matching
+    favorite_alert = dbc.Alert(
+        id="favorite-alert",
+        is_open=False,
+        duration=3000,
+        color="warning"
+    )
+    
+    if not team_number:
+        return dbc.Alert("No team number provided. Please go back and search again.", color="warning")
+
+    team_number = int(team_number)
+    team_key = f"frc{team_number}"
+
+    # Get total favorites count for this team
+    try:
+        with DatabaseConnection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) FROM saved_items WHERE item_type = 'team' AND item_key = %s",
+                (str(team_number),)
+            )
+            favorites_count = cursor.fetchone()[0]
+    except Exception as e:
+        print(f"Error getting favorites count: {e}")
+        favorites_count = 0
+
+
+    # Separate handling for performance year (used for ACE/stats) vs. awards/events year
+    is_history = not year or str(year).lower() == "history"
+
+    if is_history:
+        year = None
+        # fallback year to use for metrics (default to 2025 or latest available)
+        performance_year = 2025
+    else:
+        try:
+            year = int(year)
+            performance_year = year
+        except ValueError:
+            return dbc.Alert("Invalid year provided.", color="danger")
+
+    # Now safely use performance_year for stats lookups
+    year_data = team_database.get(performance_year)
+    if not year_data:
+        return dbc.Alert(f"Data for year {performance_year} not found.", color="danger")
+
+    selected_team = year_data.get(team_number)
+    if not selected_team:
+        return dbc.Alert(f"Team {team_number} not found in the data for {performance_year}.", color="danger")
+
+    # DEBUG: Print selected_team data
+    #print(f"DEBUG (team_layout): selected_team for {team_number}: {selected_team}")
+
+    # Calculate Rankings
+    global_rank, country_rank, state_rank = calculate_single_rank(list(year_data.values()), selected_team)
+
+    epa_data = {
+        str(team_num): {
+            "epa": data.get("epa", 0),
+            "auto_epa": data.get("auto_epa", 0),
+            "teleop_epa": data.get("teleop_epa", 0),
+            "endgame_epa": data.get("endgame_epa", 0),
+            "event_epas": json.loads(data["event_epas"]) if isinstance(data.get("event_epas"), str) else data.get("event_epas", [])
+        }
+        for team_num, data in year_data.items()
+    }
+
+
+    epa_values = [data.get("normal_epa", 0) for data in year_data.values()]
+    auto_values = [data.get("auto_epa", 0) for data in year_data.values()]
+    teleop_values = [data.get("teleop_epa", 0) for data in year_data.values()]
+    endgame_values = [data.get("endgame_epa", 0) for data in year_data.values()]
+    ace_values = [data.get("epa", 0) for data in year_data.values()]
+
+    percentiles_dict = {
+        "epa": compute_percentiles(epa_values),
+        "auto_epa": compute_percentiles(auto_values),
+        "teleop_epa": compute_percentiles(teleop_values),
+        "endgame_epa": compute_percentiles(endgame_values),
+        "ace": compute_percentiles(ace_values),
+    }
+
+
+    nickname = selected_team.get("nickname", "Unknown")
+    city = selected_team.get("city", "")
+    state = selected_team.get("state_prov", "")
+    country = selected_team.get("country", "")
+    website = selected_team.get("website", "N/A")
+    if website and website.startswith("http://"):
+        website = "https://" + website[len("http://"):]
+    
+    avatar_url = get_team_avatar(team_number)
+    
+        # Get all years this team appears in, sorted
+    years_participated = get_team_years_participated(team_number)
+    
+    # Build clickable year links
+    years_links = [
+        html.A(
+            str(yr),
+            href=f"/team/{team_number}/{yr}",
+            style={
+                "marginRight": "0px",
+                "color": "#007BFF",
+                "textDecoration": "none",
+            },
+        )
+        for yr in years_participated
+    ] if years_participated else ["N/A"]
+    
+    # Add "History" button (same as before)
+    years_links.append(
+        html.A(
+            "History",
+            href=f"/team/{team_number}",
+            style={
+                "marginLeft": "0px",
+                "color": "#007BFF",
+                "fontWeight": "bold",
+                "textDecoration": "none",
+            },
+        )
+    )
+    
+    # Estimate rookie year just like before
+    rookie_year = years_participated[0] if years_participated else year or 2025
+    
+    with open("data/notables_by_year.json", "r") as f:
+        NOTABLES_DB = json.load(f)
+    
+    INCLUDED_CATEGORIES = {
+        "notables_hall_of_fame": "Hall of Fame",
+        "notables_world_champions": "World Champions",
+    }
+    
+    def get_team_notables_grouped(team_number):
+        team_key = f"frc{team_number}"
+        category_data = {}
+    
+        for year, categories in NOTABLES_DB.items():
+            for category, entries in categories.items():
+                if category in INCLUDED_CATEGORIES:
+                    for entry in entries:
+                        if entry["team"] == team_key:
+                            if category not in category_data:
+                                category_data[category] = {"years": [], "video": None}
+                            category_data[category]["years"].append(int(year))
+                            if category == "notables_hall_of_fame" and "video" in entry:
+                                category_data[category]["video"] = entry["video"]
+        return category_data
+    
+    def generate_notable_badges(team_number):
+        grouped = get_team_notables_grouped(team_number)
+        badge_elements = []
+    
+        for category, info in sorted(grouped.items()):
+            display_name = INCLUDED_CATEGORIES[category]
+            year_list = ", ".join(str(y) for y in sorted(set(info["years"])))
+            children = [
+                html.Img(src="/assets/trophy.png", style={"height": "1.2em", "verticalAlign": "middle", "marginRight": "5px"}),
+                html.Span(
+                    f" {display_name} ({year_list})",
+                    style={
+                        "color": "var(--text-primary)",
+                        "fontSize": "1.2rem",
+                        "fontWeight": "bold",
+                        "marginLeft": "5px"
+                    }
+                ),
+            ]
+    
+            # Add video link if available (Hall of Fame only)
+            if category == "notables_hall_of_fame" and info.get("video"):
+                children.append(
+                    html.A("Video", href=info["video"], target="_blank", style={
+                        "marginLeft": "8px",
+                        "fontSize": "1.1rem",
+                        "textDecoration": "underline",
+                        "color": "#007BFF",
+                        "fontWeight": "normal"
+                    })
+                )
+    
+            badge_elements.append(
+                html.Div(children, style={"display": "flex", "alignItems": "center", "marginBottom": "8px"})
+            )
+    
+        return badge_elements
+
+    badges = generate_notable_badges(team_number)
+    
+        # Team Info Card
+    team_card = dbc.Card(
+        dbc.CardBody(
+            [
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            [
+                                html.H2(f"Team {team_number}: {nickname}", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
+                                *badges,
+                                html.P([html.Img(src="/assets/pin.png", style={"height": "1.5em", "verticalAlign": "middle", "marginRight": "5px"}), f" {city}, {state}, {country}"]),
+                                html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
+                                        html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "underline"})]),
+                                html.P([html.I(className="bi bi-award"), f" Rookie Year: {rookie_year}"]),
+                                html.Div(
+                                    [
+                                        html.I(className="bi bi-calendar"),
+                                        " Years Participated: ",
+                                        html.Div(
+                                            years_links,
+                                            style={"display": "flex", "flexWrap": "wrap", "gap": "8px", "textDecoration": "underline","color": "#007BFF"},
+                                        ),
+                                    ],
+                                    style={"marginBottom": "10px"},
+                                ),
+                                html.Div( # Wrapper div for positioning
+                                    id=f"team-{team_number}-favorites-popover-target", # Move ID to wrapper
+                                    style={
+                                        "position": "relative", # Establish positioning context
+                                        "display": "inline-block" # Prevent div from taking full width
+                                    },
+                                    children=[
+                                        html.P(
+                                            [
+                                                html.I(className="bi bi-star-fill", style={"color": "#ffc107"}),
+                                                f" {favorites_count} Favorites ▼"
+                                            ],
+                                            style={
+                                                "marginBottom": "0px", # Remove bottom margin on paragraph
+                                                "cursor": "pointer" # Keep cursor on text
+                                            }),
+                                    ]
+                                ),
+                                favorite_button  # ⭐ Inserted here
+                            ],
+                            width=9,
+                        ),
+                        dbc.Col(
+                            [
+                                html.Img(
+                                    src=avatar_url,
+                                    alt=f"Team {team_number} Avatar",
+                                    style={
+                                        "maxWidth": "150px",
+                                        "width": "100%",
+                                        "height": "auto",
+                                        "objectFit": "contain",
+                                        "borderRadius": "0px",
+                                        "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
+                                        "marginLeft": "auto",
+                                        "marginRight": "auto",
+                                        "display": "block",
+                                    },
+                                ) if avatar_url else html.Div("No avatar available.", style={"color": "#777"}),
+                            ],
+                            width=3,
+                            style={"textAlign": "center"},
+                        )
+                    ],
+                    align="center",
+                ),
+            ],
+            style={"fontSize": "1.1rem"}
+        ),
+        style={
+            "marginBottom": "20px",
+            "borderRadius": "10px",
+            "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+            "backgroundColor": "var(--card-bg)"
+        },
+    )
+    def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state):
+        def rank_card(top, bottom, rank, href):
+            return html.Div(
+                dbc.Card(
+                    dbc.CardBody([
+                        html.P([
+                            html.Span(top, style={"display": "block"}),
+                            html.Span(bottom, style={"display": "block"})
+                        ], className="rank-card-label"),
+                        html.A(str(rank), href=href, className="rank-card-value")
+                    ]),
+                    className="rank-card"
+                )
+            )
+
+        return html.Div([
+            html.Div([
+                rank_card("Global", "Rank", global_rank, f"/teams?year={performance_year}&sort_by=epa"),
+                rank_card(country, "Rank", country_rank, f"/teams?year={performance_year}&country={country}&sort_by=epa"),
+                rank_card(state, "Rank", state_rank, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa"),
+            ], className="rank-card-container")
+        ], className="mb-4")
+
+
+    def build_performance_metrics_card(selected_team, performance_year, percentiles_dict):
+        def pill(label, value, color):
+            return html.Span(f"{label}: {value}", style={
+                "backgroundColor": color,
+                "borderRadius": "6px",
+                "padding": "4px 10px",
+                "color": "white",
+                "fontWeight": "bold",
+                "fontSize": "0.85rem",
+                "marginRight": "6px",
+                "marginBottom": "6px",   # 👈 add vertical spacing
+                "display": "inline-block"
+            })
+        # Fixed colors to match screenshot styling
+        auto_color = "#1976d2"     # Blue
+        teleop_color = "#fb8c00"   # Orange
+        endgame_color = "#388e3c"  # Green
+        norm_color = "#d32f2f"    # Red
+        conf_color = "#555"        # Gray for confidence
+        total_color = "#673ab7"     # Deep Purple for normal EPA
+    
+        total = selected_team.get("epa", 0)
+        normal_epa = selected_team.get("normal_epa", 0)
+        confidence = selected_team.get("confidence", 0)
+        auto = selected_team.get("auto_epa", 0)
+        teleop = selected_team.get("teleop_epa", 0)
+        endgame = selected_team.get("endgame_epa", 0)
+        wins = selected_team.get("wins", 0)
+        losses = selected_team.get("losses", 0)
+        ties = selected_team.get("ties", 0)
+        team_number = selected_team.get("team_number", "")
+        nickname = selected_team.get("nickname", "")
+    
+        return html.Div([
+            html.P([
+                html.Span(f"Team {team_number} ({nickname}) had a record of ", style={"fontWeight": "bold"}),
+                html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
+                html.Span("-", style={"color": "var(--text-primary)"}),
+                html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
+                html.Span("-", style={"color": "var(--text-primary)"}),
+                html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
+                html.Span(f" in {performance_year}.")
+            ], style={"marginBottom": "6px", "fontWeight": "bold"}),
+            html.Div([
+                pill("Auto", f"{auto:.1f}", auto_color),
+                pill("Teleop", f"{teleop:.1f}", teleop_color),
+                pill("Endgame", f"{endgame:.1f}", endgame_color),
+                pill("EPA", f"{normal_epa:.1f}", norm_color),
+                pill("Confidence", f"{confidence:.2f}", conf_color),
+                pill("ACE", f"{total:.1f}", total_color),
+            ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
+        ])
+
+
+    rank_card = build_rank_cards(
+        performance_year,
+        global_rank,
+        country_rank,
+        state_rank,
+        country,
+        state
+    )
+
+    performance_metrics_card = build_performance_metrics_card(
+        selected_team,
+        performance_year,
+        percentiles_dict
+    )
+
+    # Create tabs for the team page
+    team_tabs = dbc.Tabs([
+        dbc.Tab(
+            label="Overview",
+            tab_id="overview-tab",
+            children=[
+                html.Div([
+                    rank_card,
+                    performance_metrics_card,
+                    html.Hr(),
+                    build_recent_events_section(team_key, team_number, epa_data, performance_year, event_database, event_teams, event_matches, event_awards, event_rankings),
+                ])
+            ]
+        ),
+        dbc.Tab(
+            label="Insights",
+            tab_id="insights-tab",
+            children=[
+                html.Div(id="team-insights-content", children="Loading insights...")
+            ]
+        ),
+        dbc.Tab(
+            label="Events",
+            tab_id="events-tab",
+            children=[
+                html.Div(id="team-events-content")
+            ]
+        ),
+        dbc.Tab(
+            label="Awards",
+            tab_id="awards-tab",
+            children=[
+                html.Div(id="team-awards-content")
+            ]
+        ),
+    ], id="team-tabs", active_tab="overview-tab")
+
+    # Add Popover for team favorites
+    favorites_popover = dbc.Popover(
+        [
+            dbc.PopoverHeader("Favorited By"),
+            dbc.PopoverBody(id={"type": "team-favorites-popover-body", "team_number": str(team_number)}, children="Loading..."), # Body to be updated by callback
+        ],
+        id={"type": "team-favorites-popover", "team_number": str(team_number)}, # Popover ID
+        target=f"team-{team_number}-favorites-popover-target", # Target the favorites count element
+        trigger="hover", # Trigger on hover
+        placement="right", # Position the popover
+    )
+
+    return html.Div(
+        [
+            topbar(),
+            dcc.Store(id="user-session", data={"user_id": user_id} if user_id else None),
+            dcc.Store(id="team-insights-store", data={"team_number": team_number, "year": year, "performance_year": performance_year}),
+            dbc.Alert(id="favorite-alert", is_open=False, duration=3000, color="warning"),
+            dbc.Container(
+                [
+                    team_card,
+                    team_tabs,
+                    html.Br(),
+                ],
+                style={
+                    "padding": "20px",
+                    "maxWidth": "1200px",
+                    "margin": "0 auto",
+                    "flexGrow": "1"
+                },
+            ),
+            favorites_popover,
+            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+            footer,
+        ]
+    )
+
 @callback(
     Output("followers-hidden", "style"),
     Input("followers-see-more", "n_clicks"),
@@ -3879,13 +4246,24 @@ def update_team_insights(active_tab, store_data):
     if not team_number:
         return "No team data available."
     
+    # Load year-specific data if needed
+    if performance_year == 2025:
+        team_data = TEAM_DATABASE.get(performance_year, {}).get(team_number, {})
+        event_database = EVENT_DATABASE
+    else:
+        try:
+            year_team_data, year_event_data, _, _, _, _ = load_year_data(performance_year)
+            team_data = year_team_data.get(team_number, {})
+            event_database = {performance_year: year_event_data}
+        except Exception:
+            return "No team data available for this year."
+    
+    if not team_data:
+        return "No team data available for this year."
+    
     # Create performance trends chart based on URL type
     if year:  # Specific year view - show event-by-event ACE
         # Get team's event EPAs for the specific year
-        team_data = TEAM_DATABASE.get(performance_year, {}).get(team_number, {})
-        if not team_data:
-            return "No team data available for this year."
-        
         event_epas = team_data.get("event_epas", [])
         if isinstance(event_epas, str):
             try:
@@ -3896,266 +4274,124 @@ def update_team_insights(active_tab, store_data):
         if not event_epas:
             return "No event data available for this team in this year."
         
-        # Sort events by actual event dates from EVENT_DATABASE
+        # Sort events by actual event dates
         def get_event_date(event_epa):
             event_key = event_epa.get("event_key", "")
-            if event_key in EVENT_DATABASE.get(performance_year, {}):
-                event_data = EVENT_DATABASE[performance_year][event_key]
+            if event_key in event_database.get(performance_year, {}):
+                event_data = event_database[performance_year][event_key]
                 start_date = event_data.get("sd", "")
                 if start_date:
                     try:
                         return datetime.strptime(start_date, "%Y-%m-%d")
                     except:
                         pass
-            return datetime.max  # Put events without dates at the end
+            return datetime.max
         
         sorted_events = sorted(event_epas, key=get_event_date)
         
-        # Use event names instead of keys for better readability
+        # Extract data for plotting
         event_names = []
         event_keys = []
+        ace_values = []
+        
         for event in sorted_events:
             event_key = event.get("event_key", "")
-            if event_key in EVENT_DATABASE.get(performance_year, {}):
-                event_name = EVENT_DATABASE[performance_year][event_key].get("n", event_key)
+            if event_key in event_database.get(performance_year, {}):
+                event_name = event_database[performance_year][event_key].get("n", event_key)
                 event_names.append(event_name)
                 event_keys.append(event_key)
-            else:
-                event_names.append(event_key)
+                ace_values.append(event.get("overall", 0))
         
-        ace_values = [event.get("overall", 0) for event in sorted_events]
+        if not ace_values:
+            return "No valid event data found."
         
-        # Create smooth line by interpolating between points
-        if len(ace_values) > 1:
-            try:
-                # Create interpolation function
-                x_indices = np.arange(len(ace_values))
-                
-                # Use cubic interpolation if we have enough points, otherwise linear
-                if len(ace_values) >= 4:
-                    f = interp1d(x_indices, ace_values, kind='cubic', bounds_error=False, fill_value='extrapolate')
-                else:
-                    f = interp1d(x_indices, ace_values, kind='linear', bounds_error=False, fill_value='extrapolate')
-                
-                # Create more points for smooth curve
-                x_smooth = np.linspace(0, len(ace_values) - 1, max(50, len(ace_values) * 10))
-                y_smooth = f(x_smooth)
-                
-                # Create smooth line
-                fig = go.Figure()
-                fig.add_trace(
-                    go.Scatter(
-                        x=x_smooth,
-                        y=y_smooth,
-                        mode='lines',
-                        name='ACE (Smoothed)',
-                        line=dict(color='#ffdd00', width=3),
-                        showlegend=False,
-                        hoverinfo='skip'
-                    )
-                )
-                
-                # Add original points as markers
-                fig.add_trace(
-                    go.Scatter(
-                        x=x_indices,
-                        y=ace_values,
-                        mode='markers',
-                        name='ACE',
-                        marker=dict(size=8, color='#ffdd00'),
-                        hovertemplate='<b>%{text}</b><br>ACE: %{y:.2f}<extra></extra>',
-                        text=event_keys,
-                        showlegend=False
-                    )
-                )
-            except Exception as e:
-                # Fallback to simple line chart if interpolation fails
-                print(f"Interpolation failed: {e}, using simple line chart")
-                fig = go.Figure()
-                fig.add_trace(
-                    go.Scatter(
-                        x=list(range(len(event_names))),
-                        y=ace_values,
-                        mode='lines+markers',
-                        name='ACE',
-                        line=dict(color='#ffdd00', width=3),
-                        marker=dict(size=8, color='#ffdd00'),
-                        hovertemplate='<b>%{text}</b><br>ACE: %{y:.2f}<extra></extra>',
-                        text=event_keys,
-                        showlegend=False
-                    )
-                )
-        else:
-            # Single point or no data - just show the point
-            fig = go.Figure()
-            fig.add_trace(
-                go.Scatter(
-                    x=[0],
-                    y=ace_values,
-                    mode='markers',
-                    name='ACE',
-                    marker=dict(size=8, color='#ffdd00'),
-                    hovertemplate='<b>%{text}</b><br>ACE: %{y:.2f}<extra></extra>',
-                    text=event_names,
-                    showlegend=False
-                )
-            )
-        
-        # Update x-axis to show event names at original positions
-        fig.update_xaxes(
-            tickmode='array',
-            tickvals=list(range(len(event_names))),
-            ticktext=event_keys,
-            tickangle=45,
-            showgrid=True, 
-            gridwidth=1, 
-            gridcolor='rgba(128,128,128,0.2)',
-            zeroline=False
-        )
+        # Create the chart
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=event_names,
+            y=ace_values,
+            mode='lines+markers',
+            line=dict(color='#007BFF', width=3),
+            marker=dict(size=8, color='#007BFF'),
+            name='ACE'
+        ))
         
         fig.update_layout(
+            title=f"Team {team_number} Event Performance in {performance_year}",
             height=400,
-            showlegend=False,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=50, r=50, t=80, b=50),
             font=dict(color="#777"),
-            xaxis_title="Events",
-            yaxis_title="ACE"
+            xaxis_title="Event",
+            yaxis_title="ACE",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)"
         )
         
+        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
         fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)', zeroline=False)
         
         trends_chart = dcc.Graph(figure=fig, config={"displayModeBar": False})
+    
+    else:  # History view - show year-by-year rank trends
+        # Get all years this team has participated in
+        years_participated = get_team_years_participated(team_number)
+        print(f"Team {team_number} participated in years: {years_participated}")
         
-    else:  # History view - show year-by-year rank
-        # Get team data for all years
-        years_participated = sorted([
-            y for y in TEAM_DATABASE
-            if team_number in TEAM_DATABASE[y] and y not in [2020, 2021]  # Remove cancelled COVID seasons
-        ])
+        # Get team's historical data across all years they participated in
+        years_data = []
+        for year_key in sorted(years_participated):
+            print(f"Loading data for year {year_key}")
+            
+            if year_key == 2025:
+                # Use global database for 2025
+                year_team_data = TEAM_DATABASE[year_key]
+            else:
+                # Load data for other years
+                try:
+                    year_team_data, _, _, _, _, _ = load_year_data(year_key)
+                    print(f"Successfully loaded data for {year_key}")
+                except Exception as e:
+                    print(f"Failed to load data for {year_key}: {e}")
+                    continue
+            
+            if team_number in year_team_data:
+                team_year_data = year_team_data[team_number]
+                global_rank, _, _ = calculate_single_rank(list(year_team_data.values()), team_year_data)
+                years_data.append({
+                    'year': year_key,
+                    'rank': global_rank,
+                    'ace': team_year_data.get('epa', 0)
+                })
+                print(f"Added data for {year_key}: rank {global_rank}, ace {team_year_data.get('epa', 0)}")
+            else:
+                print(f"Team {team_number} not found in {year_key} data")
         
-        if not years_participated:
+        if not years_data:
             return "No historical data available for this team."
         
-        # Calculate rank for each year
-        rank_data = []
-        for y in years_participated:
-            team_data = TEAM_DATABASE[y].get(team_number, {})
-            if team_data:
-                # Calculate rank for this year
-                year_teams = list(TEAM_DATABASE[y].values())
-                if year_teams:
-                    # Sort by ACE and find rank
-                    sorted_teams = sorted(year_teams, key=lambda x: x.get("epa", 0), reverse=True)
-                    rank = next((i + 1 for i, t in enumerate(sorted_teams) if t.get("team_number") == team_number), len(sorted_teams))
-                    total_teams = len(year_teams)
-                    rank_data.append({
-                        "year": y,
-                        "rank": rank,
-                        "total_teams": total_teams
-                    })
+        years_data.sort(key=lambda x: x['year'])
+        print(f"Final years_data: {years_data}")
         
-        if not rank_data:
-            return "No rank data available for this team."
-        
-        years = [d["year"] for d in rank_data]
-        ranks = [d["rank"] for d in rank_data]
-        
-        # Create smooth line by interpolating between points
-        if len(ranks) > 1:
-            try:
-                # Create interpolation function
-                x_indices = np.arange(len(ranks))
-                
-                # Use cubic interpolation if we have enough points, otherwise linear
-                if len(ranks) >= 4:
-                    f = interp1d(x_indices, ranks, kind='cubic', bounds_error=False, fill_value='extrapolate')
-                else:
-                    f = interp1d(x_indices, ranks, kind='linear', bounds_error=False, fill_value='extrapolate')
-                
-                # Create more points for smooth curve
-                x_smooth = np.linspace(0, len(ranks) - 1, max(50, len(ranks) * 10))
-                y_smooth = f(x_smooth)
-                
-                # Create smooth line
-                fig = go.Figure()
-                fig.add_trace(
-                    go.Scatter(
-                        x=x_smooth,
-                        y=y_smooth,
-                        mode='lines',
-                        name='Rank (Smoothed)',
-                        line=dict(color='#ffdd00', width=3),
-                        showlegend=False,
-                        hoverinfo='skip'
-                    )
-                )
-                
-                # Add original points as markers
-                fig.add_trace(
-                    go.Scatter(
-                        x=x_indices,
-                        y=ranks,
-                        mode='markers',
-                        name='Rank',
-                        marker=dict(size=8, color='#ffdd00'),
-                        hovertemplate='<b>%{text}</b><br>Rank: %{y}<extra></extra>',
-                        text=years,
-                        showlegend=False
-                    )
-                )
-            except Exception as e:
-                # Fallback to simple line chart if interpolation fails
-                print(f"Interpolation failed: {e}, using simple line chart")
-                fig = go.Figure()
-                fig.add_trace(
-                    go.Scatter(
-                        x=list(range(len(years))),
-                        y=ranks,
-                        mode='lines+markers',
-                        name='Rank',
-                        line=dict(color='#ffdd00', width=3),
-                        marker=dict(size=8, color='#ffdd00'),
-                        hovertemplate='<b>%{text}</b><br>Rank: %{y}<extra></extra>',
-                        text=years,
-                        showlegend=False
-                    )
-                )
-        else:
-            # Single point or no data - just show the point
-            fig = go.Figure()
-            fig.add_trace(
-                go.Scatter(
-                    x=[0],
-                    y=ranks,
-                    mode='markers',
-                    name='Rank',
-                    marker=dict(size=8, color='#ffdd00'),
-                    hovertemplate='<b>%{text}</b><br>Rank: %{y}<extra></extra>',
-                    text=years,
-                    showlegend=False
-                )
-            )
-        
-        # Update x-axis to show years at original positions
-        fig.update_xaxes(
-            tickmode='array',
-            tickvals=list(range(len(years))),
-            ticktext=years,
-            showgrid=True, 
-            gridwidth=1, 
-            gridcolor='rgba(128,128,128,0.2)',
-            zeroline=False
-        )
+        # Create the chart
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=[d['year'] for d in years_data],
+            y=[d['rank'] for d in years_data],
+            mode='lines+markers',
+            line=dict(color='#007BFF', width=3),
+            marker=dict(size=8, color='#007BFF'),
+            name='Global Rank'
+        ))
         
         fig.update_layout(
+            title=f"Team {team_number} Historical Performance",
             height=400,
-            showlegend=False,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=50, r=50, t=80, b=50),
             font=dict(color="#777"),
             xaxis_title="Year",
-            yaxis_title="Rank"
+            yaxis_title="Rank",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)"
         )
         
         fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
@@ -4221,49 +4457,45 @@ def update_team_events(active_tab, store_data):
     
     team_number = store_data.get("team_number")
     year = store_data.get("year")
+    performance_year = store_data.get("performance_year")
     
     if not team_number:
         return "No team data available."
     
-    # Build events data
-    events_data = []
-    year_keys = [year] if year else list(EVENT_DATABASE.keys())
     participated_events = []
+    # Detect if we're on the history page
+    is_history = not year or str(year).lower() == "history"
+    years_to_process = get_team_years_participated(team_number) if is_history else [int(year)]
     
-    for year_key in year_keys:
-        for event_key, event in EVENT_DATABASE.get(year_key, {}).items():
-            team_list = EVENT_TEAMS.get(year_key, {}).get(event_key, [])
-            if any(t["tk"] == team_number for t in team_list):
-                # Special case: Einstein (2025cmptx) filter
-                if event_key == "2025cmptx":
-                    # Check if team played matches on Einstein
-                    einstein_matches = [
-                        m for m in EVENT_MATCHES.get(year, [])
-                        if m.get("ek") == "2025cmptx" and (
-                            str(team_number) in m.get("rt", "").split(",") or
-                            str(team_number) in m.get("bt", "").split(",")
-                        )
-                    ]
-    
-                    # Check if team won an award at Einstein
-                    einstein_awards = [
-                        aw for aw in EVENT_AWARDS
-                        if aw["tk"] == team_number and aw["ek"] == "2025cmptx" and aw["y"] == year_key
-                    ]
-    
-                    # Skip Einstein if no matches and no awards
-                    if not einstein_matches and not einstein_awards:
-                        continue
-    
-                participated_events.append((year_key, event_key, event))
+    for year_key in years_to_process:
+        if year_key == 2025:
+            year_event_database = EVENT_DATABASE
+            year_event_teams = EVENT_TEAMS
+            year_event_rankings = EVENT_RANKINGS
+            event_iter = year_event_database[2025].items()
+            for event_key, event in event_iter:
+                team_list = year_event_teams[2025].get(event_key, [])
+                if any(t["tk"] == team_number for t in team_list):
+                    participated_events.append((year_key, event_key, event))
+        else:
+            try:
+                _, year_event_data, year_event_teams, year_event_rankings, _, _ = load_year_data(year_key)
+                year_event_database = year_event_data
+                year_event_teams = year_event_teams
+                year_event_rankings = year_event_rankings
+                event_iter = year_event_database.items()
+                for event_key, event in event_iter:
+                    team_list = year_event_teams.get(event_key, []) if isinstance(year_event_teams, dict) else year_event_teams
+                    if any(t["tk"] == team_number for t in team_list):
+                        participated_events.append((year_key, event_key, event))
+            except Exception as e:
+                continue
     
     # Sort events by start date
     participated_events.sort(key=lambda tup: tup[2].get("sd", ""), reverse=True)
     
-    # Map event keys to names
-    event_key_to_name = {ek: e.get("n", "Unknown") for _, ek, e in participated_events}
-    
     # Build event rows
+    events_data = []
     for year_key, event_key, event in participated_events:
         event_name = event.get("n", "")
         location = f"{event.get('c', '')}, {event.get('s', '')}".strip(", ")
@@ -4273,7 +4505,11 @@ def update_team_events(active_tab, store_data):
     
         # Rank
         rank = None
-        rankings = EVENT_RANKINGS.get(year_key, {}).get(event_key, {})
+        if year_key == 2025:
+            rankings = year_event_rankings.get(year_key, {}).get(event_key, {})
+        else:
+            rankings = year_event_rankings.get(event_key, {}) if isinstance(year_event_rankings, dict) else {}
+        
         if team_number in rankings:
             rank = rankings[team_number].get("rk")
             if rank:
@@ -4327,33 +4563,59 @@ def update_team_events(active_tab, store_data):
 def update_team_awards(active_tab, store_data):
     if active_tab != "awards-tab" or not store_data:
         return ""
-    
     team_number = store_data.get("team_number")
     year = store_data.get("year")
-    
+    performance_year = store_data.get("performance_year")
     if not team_number:
         return "No team data available."
-    
-    # Build events data for event name mapping
-    year_keys = [year] if year else list(EVENT_DATABASE.keys())
+
     participated_events = []
-    
-    for year_key in year_keys:
-        for event_key, event in EVENT_DATABASE.get(year_key, {}).items():
-            team_list = EVENT_TEAMS.get(year_key, {}).get(event_key, [])
-            if any(t["tk"] == team_number for t in team_list):
-                participated_events.append((year_key, event_key, event))
+    all_event_awards = []
+
+    # Detect if we're on the history page
+    is_history = not year or str(year).lower() == "history"
+    years_to_process = get_team_years_participated(team_number) if is_history else [int(year)]
+
+    for year_key in years_to_process:
+        if year_key == 2025:
+            year_event_database = EVENT_DATABASE
+            year_event_teams = EVENT_TEAMS
+            year_event_awards = EVENT_AWARDS  # Flat list for 2025!
+            event_iter = year_event_database[2025].items()
+            year_awards = [aw for aw in year_event_awards if isinstance(aw, dict) and aw.get("tk") == team_number and aw.get("y") == 2025]
+            for event_key, event in event_iter:
+                team_list = year_event_teams[2025].get(event_key, [])
+                if any(t["tk"] == team_number for t in team_list):
+                    participated_events.append((year_key, event_key, event))
+            for aw in year_awards:
+                all_event_awards.append(aw)
+        else:
+            try:
+                _, year_event_data, year_event_teams, _, year_event_awards, _ = load_year_data(year_key)
+                year_event_database = year_event_data
+                year_event_teams = year_event_teams
+                year_event_awards = year_event_awards
+                event_iter = year_event_database.items()
+                for event_key, event in event_iter:
+                    team_list = year_event_teams.get(event_key, []) if isinstance(year_event_teams, dict) else year_event_teams
+                    if any(t["tk"] == team_number for t in team_list):
+                        participated_events.append((year_key, event_key, event))
+                if isinstance(year_event_awards, dict):
+                    year_awards = list(year_event_awards.values())
+                else:
+                    year_awards = year_event_awards
+                year_awards = [aw for aw in year_awards if isinstance(aw, dict)]
+                for aw in year_awards:
+                    if aw["tk"] == team_number:
+                        all_event_awards.append(aw)
+            except Exception as e:
+                continue
     
     # Map event keys to names
     event_key_to_name = {ek: e.get("n", "Unknown") for _, ek, e in participated_events}
     
-    # Awards data
-    team_awards = [
-        row for row in EVENT_AWARDS
-        if row["tk"] == team_number and (not year or row["y"] == year)
-    ]
-    
-    team_awards.sort(key=lambda aw: aw["y"], reverse=True)
+    # Sort awards by year (newest first)
+    all_event_awards.sort(key=lambda aw: aw["y"], reverse=True)
     
     awards_data = [
         {
@@ -4361,7 +4623,7 @@ def update_team_awards(active_tab, store_data):
             "event_name": f"[{event_key_to_name.get(aw['ek'], 'Unknown Event')}](/event/{aw['ek']})",
             "award_year": aw["y"]
         }
-        for aw in team_awards
+        for aw in all_event_awards
     ]
     
     awards_table = dash_table.DataTable(
@@ -4396,13 +4658,20 @@ def update_team_awards(active_tab, store_data):
     blue_banner_keywords = ["chairman's", "impact", "woodie flowers", "winner"]
     blue_banners = []
     
-    for award in team_awards:
+    for award in all_event_awards:
         name_lower = award["an"].lower()
         if any(keyword in name_lower for keyword in blue_banner_keywords):
             event_key = award["ek"]
             year_str = str(award["y"])
-            event = EVENT_DATABASE.get(int(year_str), {}).get(event_key, {})
-            event_name = event.get("n", "Unknown Event")
+            
+            # Find the event in the participated events
+            event = None
+            for _, ek, e in participated_events:
+                if ek == event_key:
+                    event = e
+                    break
+            
+            event_name = event.get("n", "Unknown Event") if event else "Unknown Event"
             full_event_name = f"{year_str} {event_name}"
     
             blue_banners.append({
@@ -4458,70 +4727,51 @@ def update_team_awards(active_tab, store_data):
     ])
 
 def find_similar_teams(team_number, year, TEAM_DATABASE):
-    """Find teams similar to the given team based on ACE, location (city, state, country), and performance patterns."""
-    if year not in TEAM_DATABASE:
+    """Find teams with similar performance characteristics"""
+    # Load year-specific data if needed
+    if year == 2025:
+        year_data = TEAM_DATABASE.get(year, {})
+    else:
+        try:
+            year_team_data, _, _, _, _, _ = load_year_data(year)
+            year_data = year_team_data
+        except Exception:
+            return []
+    
+    if team_number not in year_data:
         return []
     
-    target_team = TEAM_DATABASE[year].get(team_number)
-    if not target_team:
-        return []
+    target_team = year_data[team_number]
     
-    target_ace = target_team.get("epa", 0)
+    # Get target team's characteristics
     target_auto = target_team.get("auto_epa", 0)
     target_teleop = target_team.get("teleop_epa", 0)
     target_endgame = target_team.get("endgame_epa", 0)
-    target_city = (target_team.get("city", "") or "").strip().lower()
-    target_state = (target_team.get("state_prov", "") or "").strip().lower()
-    target_country = (target_team.get("country", "") or "").strip().lower()
+    target_ace = target_team.get("epa", 0)
     
     similar_teams = []
     
-    for other_team_num, other_team in TEAM_DATABASE[year].items():
-        if other_team_num == team_number:
+    for team_num, team_data in year_data.items():
+        if team_num == team_number:
             continue
         
-        other_ace = other_team.get("epa", 0)
-        other_auto = other_team.get("auto_epa", 0)
-        other_teleop = other_team.get("teleop_epa", 0)
-        other_endgame = other_team.get("endgame_epa", 0)
-        other_city = (other_team.get("city", "") or "").strip().lower()
-        other_state = (other_team.get("state_prov", "") or "").strip().lower()
-        other_country = (other_team.get("country", "") or "").strip().lower()
+        # Calculate similarity based on EPA components
+        auto_diff = abs(team_data.get("auto_epa", 0) - target_auto)
+        teleop_diff = abs(team_data.get("teleop_epa", 0) - target_teleop)
+        endgame_diff = abs(team_data.get("endgame_epa", 0) - target_endgame)
+        ace_diff = abs(team_data.get("epa", 0) - target_ace)
         
-        # Performance similarity (normalized absolute difference, averaged)
-        ace_diff = abs(target_ace - other_ace) / max(abs(target_ace), 1)
-        auto_diff = abs(target_auto - other_auto) / max(abs(target_auto), 1)
-        teleop_diff = abs(target_teleop - other_teleop) / max(abs(target_teleop), 1)
-        endgame_diff = abs(target_endgame - other_endgame) / max(abs(target_endgame), 1)
-        performance_diff = (ace_diff + auto_diff + teleop_diff + endgame_diff) / 4
-        
-        # Location similarity (city > state > country > other)
-        if target_city and other_city and target_city == other_city:
-            # Strong city bonus: similarity is much less sensitive to performance difference
-            similarity_score = 1 - (performance_diff * 0.15)
-        else:
-            if target_state and other_state and target_state == other_state:
-                location_diff = 0.3
-            elif target_country and other_country and target_country == other_country:
-                location_diff = 0.6
-            else:
-                location_diff = 1
-            # Regular weighted formula
-            weighted_diff = 0.7 * performance_diff + 0.3 * location_diff
-            similarity_score = 1 - weighted_diff
-        similarity_score = max(0, min(similarity_score, 1.0))  # Clamp to [0, 1]
+        # Calculate similarity score (lower is more similar)
+        similarity_score = (auto_diff + teleop_diff + endgame_diff + ace_diff) / 4
         
         similar_teams.append({
-            "team_number": other_team_num,
-            "nickname": other_team.get("nickname", "Unknown"),
-            "epa": other_ace,
-            "similarity_score": similarity_score,
-            "city": other_city,
-            "state": other_state,
-            "country": other_country
+            "team_number": team_num,
+            "nickname": team_data.get("nickname", "Unknown"),
+            "epa": team_data.get("epa", 0),
+            "similarity_score": max(0, 1 - (similarity_score / 10))  # Normalize to 0-1
         })
     
-    # Sort by similarity score (highest first)
+    # Sort by similarity (highest first)
     similar_teams.sort(key=lambda x: x["similarity_score"], reverse=True)
     
     return similar_teams

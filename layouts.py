@@ -1,9 +1,9 @@
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
-from datagather import frc_games,COUNTRIES,STATES,DISTRICT_STATES,get_team_avatar,get_pg_connection, get_team_years_participated
+from datagather import frc_games,COUNTRIES,STATES,DISTRICT_STATES,get_team_avatar,get_team_years_participated
 from flask import session
 from datetime import datetime, date
-from utils import predict_win_probability, calculate_single_rank, compute_percentiles, pill
+from utils import predict_win_probability, compute_percentiles, pill
 import json
 import os
 
@@ -1193,29 +1193,41 @@ def events_layout(year=2025):
     )
 
 def build_recent_events_section(team_key, team_number, team_epa_data, performance_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS):
-    #print(f"DEBUG: epa_data for {team_key} in {performance_year}: {team_epa_data.get('event_epas')}") # Removed old debug
     epa_data = team_epa_data or {}
-
-    # DEBUG: Print team_epa_data at the beginning of build_recent_events_section
-    #print(f"DEBUG (build_recent_events_section): team_epa_data received: {team_epa_data.get('event_epas', 'No event_epas key')}")
 
     recent_rows = []
     year = performance_year 
     # Get the 3 most recent events by start date
     # Get team-attended events with start dates
     event_dates = []
-    for ek, ev in EVENT_DATABASE.get(performance_year, {}).items():
-        event_teams = EVENT_TEAMS.get(performance_year, {}).get(ek, [])
+    
+    year_events = EVENT_DATABASE.get(performance_year, {}) if isinstance(EVENT_DATABASE, dict) else EVENT_DATABASE
+
+    # Detect data structure: 2025 has year keys, 2024 doesn't
+    has_year_keys = isinstance(EVENT_TEAMS, dict) and performance_year in EVENT_TEAMS
+    
+    for ek, ev in year_events.items():
+        # Handle both data structures
+        if has_year_keys:
+            # 2025 structure: EVENT_TEAMS[year][event_key]
+            event_teams = EVENT_TEAMS.get(performance_year, {}).get(ek, [])
+        else:
+            # 2024 structure: EVENT_TEAMS[event_key]
+            event_teams = EVENT_TEAMS.get(ek, []) if isinstance(EVENT_TEAMS, dict) else EVENT_TEAMS
+        
         if not any(int(t.get("tk", -1)) == team_number for t in event_teams):
             continue
-    
+        
         start_str = ev.get("sd")
         if start_str:
             try:
                 dt = datetime.strptime(start_str, "%Y-%m-%d")
                 event_dates.append((dt, ek, ev)) # Store event data as well
             except ValueError:
+                print(f"  Failed to parse date {start_str} for event {ek}")
                 continue
+        else:
+            print(f"  No start date for event {ek}")
     
     # Most recent 3 events they attended
     recent_events_sorted = sorted(event_dates, key=lambda x: x[0], reverse=True)[:4]
@@ -1223,7 +1235,13 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
     # Iterate through sorted events to build the section
     for dt, event_key, event in recent_events_sorted:
 
-        event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
+        # Handle both data structures
+        if has_year_keys:
+            # 2025 structure: EVENT_TEAMS[year][event_key]
+            event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
+        else:
+            # 2024 structure: EVENT_TEAMS[event_key]
+            event_teams = EVENT_TEAMS.get(event_key, []) if isinstance(EVENT_TEAMS, dict) else EVENT_TEAMS
     
         # Skip if team wasn't on the team list
         if not any(int(t["tk"]) == team_number for t in event_teams if "tk" in t):
@@ -1231,16 +1249,22 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
     
         # === Special check for Einstein (2025cmptx) ===
         if event_key == "2025cmptx":
-            # Check if they played matches at Einstein
+            # Handle both data structures for matches
+            if has_year_keys:
+                # 2025 structure: EVENT_MATCHES[year]
+                year_matches = EVENT_MATCHES.get(year, [])
+            else:
+                # 2024 structure: EVENT_MATCHES is a list
+                year_matches = EVENT_MATCHES
             einstein_matches = [
-                m for m in EVENT_MATCHES.get(year, [])
+                m for m in year_matches
                 if m.get("ek") == "2025cmptx" and (
                     str(team_number) in m.get("rt", "").split(",") or
                     str(team_number) in m.get("bt", "").split(",")
                 )
             ]
 
-            # Check if they earned an award at Einstein
+            # EVENT_AWARDS is always a list
             einstein_awards = [
                 a for a in EVENT_AWARDS
                 if a["tk"] == team_number and a["ek"] == "2025cmptx" and a["y"] == year
@@ -1255,12 +1279,17 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         start_date = event.get("sd", "")
         event_url = f"/event/{event_key}"
 
-        # Ranking
-        ranking = EVENT_RANKINGS.get(year, {}).get(event_key, {}).get(team_number, {})
+        # Handle both data structures for rankings
+        if has_year_keys:
+            # 2025 structure: EVENT_RANKINGS[year][event_key]
+            ranking = EVENT_RANKINGS.get(year, {}).get(event_key, {}).get(team_number, {})
+        else:
+            # 2024 structure: EVENT_RANKINGS[event_key]
+            ranking = EVENT_RANKINGS.get(event_key, {}).get(team_number, {}) if isinstance(EVENT_RANKINGS, dict) else {}
         rank_val = ranking.get("rk", "N/A")
         total_teams = len(event_teams)
 
-        # Awards
+        # EVENT_AWARDS is always a list
         award_names = [
             a["an"] for a in EVENT_AWARDS
             if a["tk"] == team_number and a["ek"] == event_key and a["y"] == year
@@ -1328,6 +1357,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                         "marginBottom": "5px"
                     }),
                 ], style={"marginBottom": "10px"})
+            else:
+                print(f"No event EPA found for {event_key}")
         else:
             event_epa_pills = html.Div() # Ensure it's an empty div if no data, not None
 
@@ -1343,7 +1374,14 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             ]),
         ], style={"marginBottom": "10px"})
 
-        matches = [m for m in EVENT_MATCHES.get(year, []) if m.get("ek") == event_key]
+        # Handle both data structures for matches
+        if has_year_keys:
+            # 2025 structure: EVENT_MATCHES[year]
+            year_matches = EVENT_MATCHES.get(year, [])
+        else:
+            # 2024 structure: EVENT_MATCHES is a list
+            year_matches = EVENT_MATCHES
+        matches = [m for m in year_matches if m.get("ek") == event_key]
         matches = [
             m for m in matches
             if str(team_number) in m.get("rt", "").split(",") or str(team_number) in m.get("bt", "").split(",")
@@ -1524,502 +1562,11 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 table
             ])
         )
-
+    
     return html.Div([
         html.H3("Recent Events", style={"marginTop": "2rem", "color": "var(--text-secondary)", "fontWeight": "bold"}),
         html.Div(recent_rows)
     ])
-
-def team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS):
-
-    user_id = session.get("user_id")
-    is_logged_in = bool(user_id)
-    
-    # Check if team is already favorited
-    is_favorited = False
-    if is_logged_in:
-        conn = get_pg_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("""
-                SELECT id FROM saved_items
-                WHERE user_id = %s AND item_type = 'team' AND item_key = %s
-            """, (user_id, str(team_number)))
-            is_favorited = bool(cursor.fetchone())
-        except Exception as e:
-            print(f"Error checking favorite status: {e}")
-        finally:
-            conn.close()
-    
-    favorite_button = dbc.Button(
-        "★" if is_favorited else "☆",
-        id={"type": "favorite-team-btn", "key": str(team_number)},
-        href="/login" if not is_logged_in else None,
-        color="link",
-        className="p-0",
-        style={
-            "position": "absolute",
-            "top": "12px",
-            "right": "16px",
-            "fontSize": "2.2rem",
-            "lineHeight": "1",
-            "border": "none",
-            "boxShadow": "none",
-            "background": "none",
-            "color": "#ffc107",  # golden star
-            "zIndex": "10",
-            "textDecoration": "none",
-            "cursor": "pointer"
-        }
-    )
-
-    # Add alert component without pattern matching
-    favorite_alert = dbc.Alert(
-        id="favorite-alert",
-        is_open=False,
-        duration=3000,
-        color="warning"
-    )
-    
-    if not team_number:
-        return dbc.Alert("No team number provided. Please go back and search again.", color="warning")
-
-    team_number = int(team_number)
-    team_key = f"frc{team_number}"
-
-        # Get total favorites count for this team
-    conn = get_pg_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "SELECT COUNT(*) FROM saved_items WHERE item_type = 'team' AND item_key = %s",
-            (str(team_number),)
-        )
-        favorites_count = cursor.fetchone()[0]
-    except Exception as e:
-        print(f"Error getting favorites count: {e}")
-        favorites_count = 0
-    finally:
-        conn.close()
-
-    # Separate handling for performance year (used for ACE/stats) vs. awards/events year
-    is_history = not year or str(year).lower() == "history"
-
-    if is_history:
-        year = None
-        # fallback year to use for metrics (default to 2025 or latest available)
-        performance_year = 2025
-        available_years = sorted(TEAM_DATABASE.keys(), reverse=True)
-        for y in available_years:
-            if team_number in TEAM_DATABASE[y]:
-                performance_year = y
-                break
-    else:
-        try:
-            year = int(year)
-            performance_year = year
-        except ValueError:
-            return dbc.Alert("Invalid year provided.", color="danger")
-
-    # Now safely use performance_year for stats lookups
-    year_data = TEAM_DATABASE.get(performance_year)
-    if not year_data:
-        return dbc.Alert(f"Data for year {performance_year} not found.", color="danger")
-
-    selected_team = year_data.get(team_number)
-    if not selected_team:
-        return dbc.Alert(f"Team {team_number} not found in the data for {performance_year}.", color="danger")
-
-    # DEBUG: Print selected_team data
-    #print(f"DEBUG (team_layout): selected_team for {team_number}: {selected_team}")
-
-    # Calculate Rankings
-    global_rank, country_rank, state_rank = calculate_single_rank(list(year_data.values()), selected_team)
-
-    epa_data = {
-        str(team_num): {
-            "epa": data.get("epa", 0),
-            "auto_epa": data.get("auto_epa", 0),
-            "teleop_epa": data.get("teleop_epa", 0),
-            "endgame_epa": data.get("endgame_epa", 0),
-            "event_epas": json.loads(data["event_epas"]) if isinstance(data.get("event_epas"), str) else data.get("event_epas", [])
-        }
-        for team_num, data in year_data.items()
-    }
-
-
-    epa_values = [data.get("normal_epa", 0) for data in year_data.values()]
-    auto_values = [data.get("auto_epa", 0) for data in year_data.values()]
-    teleop_values = [data.get("teleop_epa", 0) for data in year_data.values()]
-    endgame_values = [data.get("endgame_epa", 0) for data in year_data.values()]
-    ace_values = [data.get("epa", 0) for data in year_data.values()]
-
-    percentiles_dict = {
-        "epa": compute_percentiles(epa_values),
-        "auto_epa": compute_percentiles(auto_values),
-        "teleop_epa": compute_percentiles(teleop_values),
-        "endgame_epa": compute_percentiles(endgame_values),
-        "ace": compute_percentiles(ace_values),
-    }
-
-
-    nickname = selected_team.get("nickname", "Unknown")
-    city = selected_team.get("city", "")
-    state = selected_team.get("state_prov", "")
-    country = selected_team.get("country", "")
-    website = selected_team.get("website", "N/A")
-    if website and website.startswith("http://"):
-        website = "https://" + website[len("http://"):]
-    
-    avatar_url = get_team_avatar(team_number)
-    
-        # Get all years this team appears in, sorted
-    years_participated = get_team_years_participated(team_number)
-    
-    # Build clickable year links
-    years_links = [
-        html.A(
-            str(yr),
-            href=f"/team/{team_number}/{yr}",
-            style={
-                "marginRight": "0px",
-                "color": "#007BFF",
-                "textDecoration": "none",
-            },
-        )
-        for yr in years_participated
-    ] if years_participated else ["N/A"]
-    
-    # Add "History" button (same as before)
-    years_links.append(
-        html.A(
-            "History",
-            href=f"/team/{team_number}",
-            style={
-                "marginLeft": "0px",
-                "color": "#007BFF",
-                "fontWeight": "bold",
-                "textDecoration": "none",
-            },
-        )
-    )
-    
-    # Estimate rookie year just like before
-    rookie_year = years_participated[0] if years_participated else year or 2025
-    
-    with open("data/notables_by_year.json", "r") as f:
-        NOTABLES_DB = json.load(f)
-    
-    INCLUDED_CATEGORIES = {
-        "notables_hall_of_fame": "Hall of Fame",
-        "notables_world_champions": "World Champions",
-    }
-    
-    def get_team_notables_grouped(team_number):
-        team_key = f"frc{team_number}"
-        category_data = {}
-    
-        for year, categories in NOTABLES_DB.items():
-            for category, entries in categories.items():
-                if category in INCLUDED_CATEGORIES:
-                    for entry in entries:
-                        if entry["team"] == team_key:
-                            if category not in category_data:
-                                category_data[category] = {"years": [], "video": None}
-                            category_data[category]["years"].append(int(year))
-                            if category == "notables_hall_of_fame" and "video" in entry:
-                                category_data[category]["video"] = entry["video"]
-        return category_data
-    
-    def generate_notable_badges(team_number):
-        grouped = get_team_notables_grouped(team_number)
-        badge_elements = []
-    
-        for category, info in sorted(grouped.items()):
-            display_name = INCLUDED_CATEGORIES[category]
-            year_list = ", ".join(str(y) for y in sorted(set(info["years"])))
-            children = [
-                html.Img(src="/assets/trophy.png", style={"height": "1.2em", "verticalAlign": "middle", "marginRight": "5px"}),
-                html.Span(
-                    f" {display_name} ({year_list})",
-                    style={
-                        "color": "var(--text-primary)",
-                        "fontSize": "1.2rem",
-                        "fontWeight": "bold",
-                        "marginLeft": "5px"
-                    }
-                ),
-            ]
-    
-            # Add video link if available (Hall of Fame only)
-            if category == "notables_hall_of_fame" and info.get("video"):
-                children.append(
-                    html.A("Video", href=info["video"], target="_blank", style={
-                        "marginLeft": "8px",
-                        "fontSize": "1.1rem",
-                        "textDecoration": "underline",
-                        "color": "#007BFF",
-                        "fontWeight": "normal"
-                    })
-                )
-    
-            badge_elements.append(
-                html.Div(children, style={"display": "flex", "alignItems": "center", "marginBottom": "8px"})
-            )
-    
-        return badge_elements
-
-    badges = generate_notable_badges(team_number)
-    
-        # Team Info Card
-    team_card = dbc.Card(
-        dbc.CardBody(
-            [
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            [
-                                html.H2(f"Team {team_number}: {nickname}", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
-                                *badges,
-                                html.P([html.Img(src="/assets/pin.png", style={"height": "1.5em", "verticalAlign": "middle", "marginRight": "5px"}), f" {city}, {state}, {country}"]),
-                                html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
-                                        html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "underline"})]),
-                                html.P([html.I(className="bi bi-award"), f" Rookie Year: {rookie_year}"]),
-                                html.Div(
-                                    [
-                                        html.I(className="bi bi-calendar"),
-                                        " Years Participated: ",
-                                        html.Div(
-                                            years_links,
-                                            style={"display": "flex", "flexWrap": "wrap", "gap": "8px", "textDecoration": "underline","color": "#007BFF"},
-                                        ),
-                                    ],
-                                    style={"marginBottom": "10px"},
-                                ),
-                                html.Div( # Wrapper div for positioning
-                                    id=f"team-{team_number}-favorites-popover-target", # Move ID to wrapper
-                                    style={
-                                        "position": "relative", # Establish positioning context
-                                        "display": "inline-block" # Prevent div from taking full width
-                                    },
-                                    children=[
-                                        html.P(
-                                            [
-                                                html.I(className="bi bi-star-fill", style={"color": "#ffc107"}),
-                                                f" {favorites_count} Favorites ▼"
-                                            ],
-                                            style={
-                                                "marginBottom": "0px", # Remove bottom margin on paragraph
-                                                "cursor": "pointer" # Keep cursor on text
-                                            }),
-                                    ]
-                                ),
-                                favorite_button  # ⭐ Inserted here
-                            ],
-                            width=9,
-                        ),
-                        dbc.Col(
-                            [
-                                html.Img(
-                                    src=avatar_url,
-                                    alt=f"Team {team_number} Avatar",
-                                    style={
-                                        "maxWidth": "150px",
-                                        "width": "100%",
-                                        "height": "auto",
-                                        "objectFit": "contain",
-                                        "borderRadius": "0px",
-                                        "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
-                                        "marginLeft": "auto",
-                                        "marginRight": "auto",
-                                        "display": "block",
-                                    },
-                                ) if avatar_url else html.Div("No avatar available.", style={"color": "#777"}),
-                            ],
-                            width=3,
-                            style={"textAlign": "center"},
-                        )
-                    ],
-                    align="center",
-                ),
-            ],
-            style={"fontSize": "1.1rem"}
-        ),
-        style={
-            "marginBottom": "20px",
-            "borderRadius": "10px",
-            "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
-            "backgroundColor": "var(--card-bg)"
-        },
-    )
-    def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state):
-        def rank_card(top, bottom, rank, href):
-            return html.Div(
-                dbc.Card(
-                    dbc.CardBody([
-                        html.P([
-                            html.Span(top, style={"display": "block"}),
-                            html.Span(bottom, style={"display": "block"})
-                        ], className="rank-card-label"),
-                        html.A(str(rank), href=href, className="rank-card-value")
-                    ]),
-                    className="rank-card"
-                )
-            )
-
-        return html.Div([
-            html.Div([
-                rank_card("Global", "Rank", global_rank, f"/teams?year={performance_year}&sort_by=epa"),
-                rank_card(country, "Rank", country_rank, f"/teams?year={performance_year}&country={country}&sort_by=epa"),
-                rank_card(state, "Rank", state_rank, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa"),
-            ], className="rank-card-container")
-        ], className="mb-4")
-
-
-    def build_performance_metrics_card(selected_team, performance_year, percentiles_dict):
-        def pill(label, value, color):
-            return html.Span(f"{label}: {value}", style={
-                "backgroundColor": color,
-                "borderRadius": "6px",
-                "padding": "4px 10px",
-                "color": "white",
-                "fontWeight": "bold",
-                "fontSize": "0.85rem",
-                "marginRight": "6px",
-                "marginBottom": "6px",   # 👈 add vertical spacing
-                "display": "inline-block"
-            })
-        # Fixed colors to match screenshot styling
-        auto_color = "#1976d2"     # Blue
-        teleop_color = "#fb8c00"   # Orange
-        endgame_color = "#388e3c"  # Green
-        norm_color = "#d32f2f"    # Red
-        conf_color = "#555"        # Gray for confidence
-        total_color = "#673ab7"     # Deep Purple for normal EPA
-    
-        total = selected_team.get("epa", 0)
-        normal_epa = selected_team.get("normal_epa", 0)
-        confidence = selected_team.get("confidence", 0)
-        auto = selected_team.get("auto_epa", 0)
-        teleop = selected_team.get("teleop_epa", 0)
-        endgame = selected_team.get("endgame_epa", 0)
-        wins = selected_team.get("wins", 0)
-        losses = selected_team.get("losses", 0)
-        ties = selected_team.get("ties", 0)
-        team_number = selected_team.get("team_number", "")
-        nickname = selected_team.get("nickname", "")
-    
-        return html.Div([
-            html.P([
-                html.Span(f"Team {team_number} ({nickname}) had a record of ", style={"fontWeight": "bold"}),
-                html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
-                html.Span("-", style={"color": "var(--text-primary)"}),
-                html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
-                html.Span("-", style={"color": "var(--text-primary)"}),
-                html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
-                html.Span(f" in {performance_year}.")
-            ], style={"marginBottom": "6px", "fontWeight": "bold"}),
-            html.Div([
-                pill("Auto", f"{auto:.1f}", auto_color),
-                pill("Teleop", f"{teleop:.1f}", teleop_color),
-                pill("Endgame", f"{endgame:.1f}", endgame_color),
-                pill("EPA", f"{normal_epa:.1f}", norm_color),
-                pill("Confidence", f"{confidence:.2f}", conf_color),
-                pill("ACE", f"{total:.1f}", total_color),
-            ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
-        ])
-
-
-    rank_card = build_rank_cards(
-        performance_year,
-        global_rank,
-        country_rank,
-        state_rank,
-        country,
-        state
-    )
-
-    performance_metrics_card = build_performance_metrics_card(
-        selected_team,
-        performance_year,
-        percentiles_dict
-    )
-
-    # Create tabs for the team page
-    team_tabs = dbc.Tabs([
-        dbc.Tab(
-            label="Overview",
-            tab_id="overview-tab",
-            children=[
-                html.Div([
-                    rank_card,
-                    performance_metrics_card,
-                    html.Hr(),
-                    build_recent_events_section(team_key, team_number, epa_data, performance_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS),
-                ])
-            ]
-        ),
-        dbc.Tab(
-            label="Insights",
-            tab_id="insights-tab",
-            children=[
-                html.Div(id="team-insights-content", children="Loading insights...")
-            ]
-        ),
-        dbc.Tab(
-            label="Events",
-            tab_id="events-tab",
-            children=[
-                html.Div(id="team-events-content")
-            ]
-        ),
-        dbc.Tab(
-            label="Awards",
-            tab_id="awards-tab",
-            children=[
-                html.Div(id="team-awards-content")
-            ]
-        ),
-    ], id="team-tabs", active_tab="overview-tab")
-
-    # Add Popover for team favorites
-    favorites_popover = dbc.Popover(
-        [
-            dbc.PopoverHeader("Favorited By"),
-            dbc.PopoverBody(id={"type": "team-favorites-popover-body", "team_number": str(team_number)}, children="Loading..."), # Body to be updated by callback
-        ],
-        id={"type": "team-favorites-popover", "team_number": str(team_number)}, # Popover ID
-        target=f"team-{team_number}-favorites-popover-target", # Target the favorites count element
-        trigger="hover", # Trigger on hover
-        placement="right", # Position the popover
-    )
-
-    return html.Div(
-        [
-            topbar(),
-            dcc.Store(id="user-session", data={"user_id": user_id} if user_id else None),
-            dcc.Store(id="team-insights-store", data={"team_number": team_number, "year": year, "performance_year": performance_year}),
-            dbc.Alert(id="favorite-alert", is_open=False, duration=3000, color="warning"),
-            dbc.Container(
-                [
-                    team_card,
-                    team_tabs,
-                    html.Br(),
-                ],
-                style={
-                    "padding": "20px",
-                    "maxWidth": "1200px",
-                    "margin": "0 auto",
-                    "flexGrow": "1"
-                },
-            ),
-            favorites_popover,
-            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-            footer,
-        ]
-    )
 
 def compare_layout():
     # Team options will be filled by callback or server-side, so use empty list for now
