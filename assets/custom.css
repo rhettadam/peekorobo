@@ -760,6 +760,21 @@ label {
     }
 }
 
+/* Color red alliance team number headers */
+.dash-table-container .dash-header th.column-1,
+.dash-table-container .dash-header th.column-2,
+.dash-table-container .dash-header th.column-3 {
+    color: #d32f2f !important;
+    font-weight: bold;
+}
+/* Color blue alliance team number headers */
+.dash-table-container .dash-header th.column-5,
+.dash-table-container .dash-header th.column-6,
+.dash-table-container .dash-header th.column-7 {
+    color: #1976d2 !important;
+    font-weight: bold;
+}
+
   
   
   

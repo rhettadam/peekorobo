@@ -1319,9 +1319,9 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         ties = ranking.get("t", "N/A")
         record = html.Span([
             html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
-            html.Span("-", style={"color": "#333"}),
+            html.Span("-", style={"color": "#777"}),
             html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
-            html.Span("-", style={"color": "#333"}),
+            html.Span("-", style={"color": "#777"}),
             html.Span(str(ties), style={"color": "gray", "fontWeight": "bold"})
         ])
 
@@ -1417,41 +1417,36 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 label = match.get("k", "").split("_", 1)[-1]
 
                 if label.lower().startswith("sf") and "m" in label.lower():
-                    # Always work with lower and reconstruct as upper for safety
                     label = label.lower().split("m")[0].upper()
                 else:
                     label = label.upper()
+
+                # Add match link
+                match_url = f"/match/{event_key}/{label}"
+                match_label_md = f"[{label}]({match_url})"
                 
                 def get_team_epa_info(t_key):
                     t_data = epa_data.get(t_key.strip(), {})
                     event_epa = next((e for e in t_data.get("event_epas", []) if e.get("event_key") == event_key), None)
-                    # Use event_epa only if EPA value is nonzero
                     if event_epa and event_epa.get("overall", 0) != 0:
                         return {
                             "epa": event_epa.get("overall", 0),
-                            "confidence": event_epa.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
+                            "confidence": event_epa.get("confidence", 0.7),
                             "consistency": event_epa.get("consistency", 0)
                         }
-                    # Otherwise, fall back to overall EPA data if available (only require epa, use default confidence if missing)
                     if t_data.get("epa") not in (None, ""):
                         epa_val = t_data.get("epa", 0)
-                        conf_val = t_data.get("confidence", 0.7)  # Default confidence if missing
+                        conf_val = t_data.get("confidence", 0.7)
                         return {
                             "epa": epa_val,
                             "confidence": conf_val,
                             "consistency": t_data.get("consistency", 0)
                         }
-                    return {
-                        "epa": 0,
-                        "confidence": 0,
-                        "consistency": 0
-                    }
-                # Gather info for all teams
+                    return {"epa": 0, "confidence": 0, "consistency": 0}
                 red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
                 if red_team_info and blue_team_info:
                     p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
-                    # Pred winner logic (49-51% = Tie)
                     if 0.49 <= p_red <= 0.51:
                         pred_winner = "Tie"
                     else:
@@ -1469,7 +1464,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         
                 row = {
                     "Video": video_link,
-                    "Match": label,
+                    "Match": match_label_md,
                     "Red Alliance": format_team_list(red_str),
                     "Blue Alliance": format_team_list(blue_str),
                     "Red Score": red_score,
@@ -1499,7 +1494,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             dash_table.DataTable(
                 columns=[
                     {"name": "Video", "id": "Video", "presentation": "markdown"},
-                    {"name": "Match", "id": "Match"},
+                    {"name": "Match", "id": "Match", "presentation": "markdown"},
                     {"name": "Red Alliance", "id": "Red Alliance", "presentation": "markdown"},
                     {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
                     {"name": "Red Score", "id": "Red Score"},

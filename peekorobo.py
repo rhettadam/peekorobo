@@ -2518,7 +2518,6 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
             label = match.get("k", "").split("_", 1)[-1]
 
             if label.lower().startswith("sf") and "m" in label.lower():
-                # Always work with lower and reconstruct as upper for safety
                 label = label.lower().split("m")[0].upper()
             else:
                 label = label.upper()
@@ -2540,9 +2539,13 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
             yid = match.get("yt")
             video_link = f"[Watch](https://www.youtube.com/watch?v={yid})" if yid else "N/A"
 
+            # Add match link for the label
+            event_key = match.get("ek", "")
+            match_link = f"[{label}](/match/{event_key}/{label})"
+
             rows.append({
                 "Video": video_link,
-                "Match": label,
+                "Match": match_link,
                 "Red Alliance": format_teams_markdown(red_str),
                 "Blue Alliance": format_teams_markdown(blue_str),
                 "Red Score": red_score,
@@ -2561,7 +2564,7 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
 
     match_columns = [
         {"name": "Video", "id": "Video", "presentation": "markdown"},
-        {"name": "Match", "id": "Match"},
+        {"name": "Match", "id": "Match", "presentation": "markdown"},
         {"name": "Red Alliance", "id": "Red Alliance", "presentation": "markdown"},
         {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
         {"name": "Red Score", "id": "Red Score"},
@@ -3385,6 +3388,16 @@ def display_page(pathname):
 
     if pathname == "/compare":
         return wrap_with_toast_or_star(compare_layout())
+
+    if pathname.startswith("/match/"):
+        # /match/<event_key>/<match_key>
+        parts = pathname.split("/")
+        if len(parts) >= 4:
+            event_key = parts[2]
+            match_key = parts[3]
+            return wrap_with_toast_or_star(match_layout(event_key, match_key))
+        else:
+            return dbc.Alert("Invalid match URL.", color="danger")
 
     return wrap_with_toast_or_star(home_layout)
 
@@ -4853,6 +4866,272 @@ def find_similar_teams(team_number, year, TEAM_DATABASE):
     similar_teams.sort(key=lambda x: x["similarity_score"], reverse=True)
     
     return similar_teams
+
+def match_layout(event_key, match_key):
+    # Parse year from event_key
+    try:
+        year = int(event_key[:4])
+    except Exception:
+        return dbc.Alert("Invalid event key.", color="danger")
+    
+     # Get EPA data for teams (prefer event-specific EPA)
+    if year == 2025:
+        team_db = TEAM_DATABASE.get(year, {})
+        event_matches = EVENT_MATCHES
+    else:
+        try:
+            team_db, _, _, _, _, event_matches = load_year_data(year)
+        except Exception:
+            team_db = {}
+
+    if isinstance(event_matches, dict):
+        matches = [m for m in event_matches.get(year, []) if m.get("ek") == event_key]
+    else:
+        matches = [m for m in event_matches if m.get("ek") == event_key]
+        
+    match_keys = [m.get("k", "").split("_", 1)[-1].upper() for m in matches]
+    match_idx = next((i for i, k in enumerate(match_keys) if k == match_key.upper()), None)
+    match = matches[match_idx] if match_idx is not None else None
+    if match is None:
+        return dbc.Alert("Match not found.", color="danger")
+
+    # Navigation arrows
+    prev_match = match_keys[match_idx - 1] if match_idx > 0 else None
+    next_match = match_keys[match_idx + 1] if match_idx < len(match_keys) - 1 else None
+
+    # Get teams
+    red_teams = [t for t in match.get("rt", "").split(",") if t.strip().isdigit()]
+    blue_teams = [t for t in match.get("bt", "").split(",") if t.strip().isdigit()]
+    red_score = match.get("rs", "N/A")
+    blue_score = match.get("bs", "N/A")
+    winner = match.get("wa", "Tie").title()
+    match_label = match.get("k", "").split("_", 1)[-1].upper()
+    yid = match.get("yt")
+    video_embed = html.Iframe(
+        src=f"https://www.youtube.com/embed/{yid}" if yid else None,
+        style={"width": "100%", "height": "360px", "border": "none"},
+    ) if yid else html.Div("No video available.", style={"color": "#888"})
+
+    def get_team_epa_breakdown(t):
+        t_data = team_db.get(int(t), {})
+        event_epas = t_data.get("event_epas", [])
+        if isinstance(event_epas, str):
+            import json
+            try:
+                event_epas = json.loads(event_epas)
+            except Exception:
+                event_epas = []
+        event_epa = next((e for e in event_epas if e.get("event_key") == event_key), None)
+        if event_epa and event_epa.get("actual_epa", 0) != 0:
+            return {
+                "auto_epa": event_epa.get("auto", 0),
+                "teleop_epa": event_epa.get("teleop", 0),
+                "endgame_epa": event_epa.get("endgame", 0),
+                "confidence": event_epa.get("confidence", 0.7),
+                "epa": event_epa.get("actual_epa", 0),
+                "normal_epa": event_epa.get("overall", 0),
+                "nickname": t_data.get("nickname", ""),
+                "team_number": t_data.get("team_number", t),
+            }
+        return {
+            "auto_epa": t_data.get("auto_epa", 0),
+            "teleop_epa": t_data.get("teleop_epa", 0),
+            "endgame_epa": t_data.get("endgame_epa", 0),
+            "confidence": t_data.get("confidence", 0.7),
+            "epa": t_data.get("epa", 0),
+            "normal_epa": t_data.get("normal_epa", 0),
+            "nickname": t_data.get("nickname", ""),
+            "team_number": t_data.get("team_number", t),
+        }
+
+    red_epas = [get_team_epa_breakdown(t) for t in red_teams]
+    blue_epas = [get_team_epa_breakdown(t) for t in blue_teams]
+
+    p_red, p_blue = predict_win_probability(red_epas, blue_epas)
+
+    # Projected/actual scores
+    pred_red_score = sum(t["epa"] for t in red_epas)
+    pred_blue_score = sum(t["epa"] for t in blue_epas)
+
+    # Percentile coloring for EPA/ACE using app-wide logic
+    all_epas = [t.get("epa", 0) for t in team_db.values() if t.get("epa") is not None]
+    percentiles_dict = {"epa": compute_percentiles(all_epas)}
+
+    # Build breakdown data for DataTable
+    phases = [
+        ("Auto", "auto_epa"),
+        ("Teleop", "teleop_epa"),
+        ("Endgame", "endgame_epa"),
+        ("EPA", "normal_epa"),
+        ("Confidence", "confidence"),
+    ]
+    # Build columns: team numbers, Red Predicted, Red Actual, Blue teams, Blue Predicted, Blue Actual
+    columns = [
+        {"name": "Phase", "id": "Phase"}
+    ]
+    # Red alliance team columns
+    columns += [{
+        "name": str(t["team_number"]),
+        "id": f"red_{t['team_number']}"
+    } for t in red_epas]
+    columns.append({"name": "Red Predicted", "id": "Red Predicted"})
+    columns.append({"name": "Red Actual", "id": "Red Actual"})
+    # Blue alliance team columns
+    columns += [{
+        "name": str(t["team_number"]),
+        "id": f"blue_{t['team_number']}"
+    } for t in blue_epas]
+    columns.append({"name": "Blue Predicted", "id": "Blue Predicted"})
+    columns.append({"name": "Blue Actual", "id": "Blue Actual"})
+    # Build rows
+    data = []
+    for label, key in phases:
+        row = {"Phase": label}
+        for t in red_epas:
+            row[f"red_{t['team_number']}"] = round(t[key], 2)
+        row["Red Predicted"] = round(sum(t[key] for t in red_epas), 2)
+        row["Red Actual"] = ""  # Placeholder for actuals
+        for t in blue_epas:
+            row[f"blue_{t['team_number']}"] = round(t[key], 2)
+        row["Blue Predicted"] = round(sum(t[key] for t in blue_epas), 2)
+        row["Blue Actual"] = ""  # Placeholder for actuals
+        data.append(row)
+    # Add Total row
+    total_row = {"Phase": "ACE"}
+    for t in red_epas:
+        total_row[f"red_{t['team_number']}"] = round(t["epa"], 2)
+    total_row["Red Predicted"] = round(pred_red_score, 2)
+    total_row["Red Actual"] = red_score
+    for t in blue_epas:
+        total_row[f"blue_{t['team_number']}"] = round(t["epa"], 2)
+    total_row["Blue Predicted"] = round(pred_blue_score, 2)
+    total_row["Blue Actual"] = blue_score
+    data.append(total_row)
+    # Percentile coloring for all stats
+    all_stats = {
+        k: [t.get(k if k != "normal_epa" else "epa", 0) for t in team_db.values() if t.get(k if k != "normal_epa" else "epa") is not None]
+        for k in ["auto_epa", "teleop_epa", "endgame_epa", "confidence", "epa", "normal_epa"]
+    }
+    percentiles_dict = {k: compute_percentiles(v) for k, v in all_stats.items()}
+    # Build style_data_conditional for all columns and phases, matching teams layout
+    style_data_conditional = []
+    for row_idx, (label, stat_key) in enumerate(phases):
+        percentiles = percentiles_dict[stat_key]
+        stat_rules = get_epa_styling({stat_key: percentiles})
+        # Red alliance
+        for t in red_epas:
+            col_id = f"red_{t['team_number']}"
+            for rule in stat_rules:
+                filter_query = rule["if"]["filter_query"].replace(f"{{{stat_key}}}", f"{{{col_id}}}")
+                style_data_conditional.append({
+                    **rule,
+                    "if": {
+                        **rule["if"],
+                        "column_id": col_id,
+                        "row_index": row_idx,
+                        "filter_query": filter_query
+                    }
+                })
+        # Blue alliance
+        for t in blue_epas:
+            col_id = f"blue_{t['team_number']}"
+            for rule in stat_rules:
+                filter_query = rule["if"]["filter_query"].replace(f"{{{stat_key}}}", f"{{{col_id}}}")
+                style_data_conditional.append({
+                    **rule,
+                    "if": {
+                        **rule["if"],
+                        "column_id": col_id,
+                        "row_index": row_idx,
+                        "filter_query": filter_query
+                    }
+                })
+        # Red Predicted
+        for rule in stat_rules:
+            filter_query = rule["if"]["filter_query"].replace(f"{{{stat_key}}}", "{Red Predicted}")
+        # Blue Predicted
+        for rule in stat_rules:
+            filter_query = rule["if"]["filter_query"].replace(f"{{{stat_key}}}", "{Blue Predicted}")
+    # Layout
+    event_name = next((ev.get("n", event_key) for ev in EVENT_DATABASE.get(year, {}).values() if ev.get("k") == event_key), event_key)
+    event_name = f"{year} {event_name}"
+    header = html.Div([
+        dbc.Row([
+            dbc.Col([
+                html.A("←", href=f"/match/{event_key}/{prev_match}", style={"fontSize": "2rem", "textDecoration": "none", "color": "#888"}) if prev_match else None
+            ], width=1, style={"textAlign": "right", "verticalAlign": "middle"}),
+            dbc.Col([
+                html.H2([
+                    match_label,
+                    html.Span(" "),
+                    html.A(event_name, href=f"/event/{event_key}", style={"fontSize": "1.2rem", "textDecoration": "underline", "color": "#1976d2"})
+                ], style={"textAlign": "center", "marginBottom": "0"})
+            ], width=10),
+            dbc.Col([
+                html.A("→", href=f"/match/{event_key}/{next_match}", style={"fontSize": "2rem", "textDecoration": "none", "color": "#888"}) if next_match else None
+            ], width=1, style={"textAlign": "left", "verticalAlign": "middle"}),
+        ], align="center", style={"marginBottom": "1rem"})
+    ])
+    summary = html.Div([
+        dbc.Row([
+            dbc.Col([
+                html.Div([
+                    html.Div(f"{int(round(pred_red_score))} - {int(round(pred_blue_score))}", style={"fontSize": "2rem", "fontWeight": "bold", "color": "#d32f2f" if pred_red_score > pred_blue_score else "#1976d2"}),
+                    html.Div(f"Projected Winner: {'RED' if pred_red_score > pred_blue_score else 'BLUE'}", style={"fontWeight": "bold", "color": "#d32f2f" if pred_red_score > pred_blue_score else "#1976d2"}),
+                ], style={"textAlign": "center"})
+            ], width=4),
+            dbc.Col([
+                html.Div([
+                    html.Div(f"{int(red_score)} - {int(blue_score)}", style={"fontSize": "2rem", "fontWeight": "bold", "color": "#d32f2f" if red_score > blue_score else "#1976d2"}),
+                    html.Div(f"Actual Winner: {winner}", style={"fontWeight": "bold", "color": "#d32f2f" if winner == 'Red' else '#1976d2' if winner == 'Blue' else '#888'}),
+                ], style={"textAlign": "center"})
+            ], width=4),
+            dbc.Col([
+                html.Div([
+                    html.Div(f"{int(round(100 * max(p_red, p_blue)))}%", style={"fontSize": "2rem", "fontWeight": "bold", "color": "#d32f2f" if p_red > p_blue else "#1976d2"}),
+                    html.Div("Win Probability", style={"fontWeight": "bold"}),
+                ], style={"textAlign": "center"})
+            ], width=4),
+        ], style={"marginBottom": "2rem"})
+    ])
+    breakdown_table = dash_table.DataTable(
+        columns=columns,
+        data=data,
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
+        style_header={
+            "backgroundColor": "var(--card-bg)",
+            "fontWeight": "bold",
+            "textAlign": "center",
+            "borderBottom": "1px solid var(--border-color)",
+            "padding": "6px",
+            "fontSize": "13px",
+        },
+        style_cell={
+            "backgroundColor": "#181a1b",
+            "color": "var(--text-primary)",
+            "textAlign": "center",
+            "padding": "10px",
+            "border": "none",
+            "fontSize": "14px",
+        },
+        style_data_conditional=style_data_conditional,
+        style_as_list_view=True,
+    )
+    return html.Div([
+        topbar(),
+        dbc.Container([
+            header,
+            summary,
+            html.H4("Match Breakdown", style={"textAlign": "center", "marginBottom": "1rem"}),
+            breakdown_table,
+            html.H4("Video", style={"textAlign": "center", "marginTop": "2rem"}),
+            html.Div(video_embed, style={"textAlign": "center"}),
+        ], style={"padding": "30px", "maxWidth": "1000px"}),
+        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
+        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
+        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
+        footer
+    ])
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
