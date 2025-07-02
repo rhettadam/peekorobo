@@ -663,19 +663,39 @@ def teams_map_layout():
             [
                 html.Iframe(
                     src=f"/{map_path}",  # Reference the generated HTML file
-                    style={"width": "100%", "height": "1050px", "border": "none"},
+                    style={
+                        "width": "100%",
+                        "height": "100%",
+                        "border": "none",
+                        "minHeight": "0",
+                        "flexGrow": 1,
+                        "display": "block"
+                    },
                 ),
             ],
             fluid=True,
             style={
-                "flexGrow": "1", # Added flex-grow
+                "flexGrow": "1",
+                "padding": "0",
+                "margin": "0",
+                "height": "100%",
+                "minHeight": "0",
+                "display": "flex",
+                "flexDirection": "column"
             }
         ),
         footer,
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
         dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
-    ])
+    ], style={
+        "minHeight": "100vh",
+        "display": "flex",
+        "flexDirection": "column",
+        "padding": "0",
+        "margin": "0",
+        "overflow": "hidden"
+    })
 
 def login_layout():
     # Optional redirect if logged in
