@@ -1508,6 +1508,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     "Red Score": red_score,
                     "Blue Score": blue_score,
                     "Winner": winner,
+                    "Outcome": "",
                     "Prediction": f"{prediction}".strip(),
                     "Prediction %": prediction_percent,
                     "rowColor": "#ffe6e6" if winner == "Red" else "#e6f0ff" if winner == "Blue" else "white",
@@ -1536,7 +1537,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
                     {"name": "Red Score", "id": "Red Score"},
                     {"name": "Blue Score", "id": "Blue Score"},
-                    {"name": "Winner", "id": "Winner"},
+                    {"name": "Outcome", "id": "Outcome"},
                     {"name": "Prediction", "id": "Prediction"},
                 ],
                 data=match_rows,
@@ -1564,10 +1565,15 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     "padding": "10px",
                     "border": "none",
                     "fontSize": "14px",
+                    "fontWeight": "bold",
                 },
                 style_data_conditional=[
                     {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
                     {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
+                    {"if": {"filter_query": '{Winner} = "Red" && {team_alliance} = "Red"',"column_id": "Outcome"},"backgroundColor": "var(--table-row-green)","color": "var(--text-primary)"},
+                    {"if": {"filter_query": '{Winner} = "Red" && {team_alliance} != "Red"',"column_id": "Outcome"},"backgroundColor": "var(--table-row-red)","color": "var(--text-primary)"},
+                    {"if": {"filter_query": '{Winner} = "Blue" && {team_alliance} = "Blue"',"column_id": "Outcome"},"backgroundColor": "var(--table-row-green)","color": "var(--table-row-prediction-green)"},
+                    {"if": {"filter_query": '{Winner} = "Blue" && {team_alliance} != "Blue"',"column_id": "Outcome"},"backgroundColor": "var(--table-row-red)","color": "var(--table-row-prediction-red)"},
                     {"if": {"filter_query": "{Prediction %} >= 45 && {Prediction %} < 50", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lowneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
                     {"if": {"filter_query": "{Prediction %} >= 50 && {Prediction %} <= 55", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-highneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
                     {"if": {"filter_query": "{Prediction %} > 55 && {Prediction %} <= 65", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightestgreen)", "fontWeight": "bold", "color": "var(--text-primary)"},
@@ -1582,9 +1588,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     {"if": {"filter_query": "{Prediction %} < 5", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-deepred)", "fontWeight": "bold", "color": "var(--text-primary)"},
                     {"if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Score"}, "borderBottom": "1px solid var(--text-primary)"},
                     {"if": {"filter_query": '{team_alliance} = "Blue"', "column_id": "Blue Score"}, "borderBottom": "1px solid var(--text-primary)"},
-                    {"if": {"filter_query": '{Pred Winner} = "Red"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
-                    {"if": {"filter_query": '{Pred Winner} = "Blue"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
-                    {"if": {"filter_query": '{Pred Winner} = "Tie"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-yellow)", "color": "var(--text-primary)"},
+
+
                 ]
             ),
             className="recent-events-table"
