@@ -4899,16 +4899,26 @@ def match_layout(event_key, match_key):
         matches = [m for m in event_matches.get(year, []) if m.get("ek") == event_key]
     else:
         matches = [m for m in event_matches if m.get("ek") == event_key]
-        
-    match_keys = [m.get("k", "").split("_", 1)[-1].upper() for m in matches]
-    match_idx = next((i for i, k in enumerate(match_keys) if k == match_key.upper()), None)
+
+    # Use the same normalization as build_match_rows in layouts.py
+    def normalized_label(match):
+        label = match.get("k", "").split("_", 1)[-1]
+        if label.lower().startswith("sf") and "m" in label.lower():
+            label = label.lower().split("m")[0].upper()
+        else:
+            label = label.upper()
+        return label
+
+    match_labels = [normalized_label(m) for m in matches]
+    # Try to find the first match whose normalized label matches match_key (case-insensitive)
+    match_idx = next((i for i, k in enumerate(match_labels) if k == match_key.upper()), None)
     match = matches[match_idx] if match_idx is not None else None
     if match is None:
         return dbc.Alert("Match not found.", color="danger")
 
     # Navigation arrows
-    prev_match = match_keys[match_idx - 1] if match_idx > 0 else None
-    next_match = match_keys[match_idx + 1] if match_idx < len(match_keys) - 1 else None
+    prev_match = match_labels[match_idx - 1] if match_idx > 0 else None
+    next_match = match_labels[match_idx + 1] if match_idx < len(match_labels) - 1 else None
 
     # Get teams
     red_teams = [t for t in match.get("rt", "").split(",") if t.strip().isdigit()]
@@ -5131,12 +5141,11 @@ def match_layout(event_key, match_key):
     return html.Div([
         topbar(),
         dbc.Container([
-            header,
-            summary,
-            html.H4("Match Breakdown", style={"textAlign": "center", "marginBottom": "1rem"}),
-            breakdown_table,
-            html.H4("Video", style={"textAlign": "center", "marginTop": "2rem"}),
-            html.Div(video_embed, style={"textAlign": "center"}),
+            html.Div(header, style={"marginBottom": "2rem"}),
+            html.Div(summary, style={"marginBottom": "2rem"}),
+            html.Div(epa_legend_layout(), style={"marginBottom": "1rem", "marginTop": "1rem"}),
+            html.Div(breakdown_table, style={"marginBottom": "2rem"}),
+            html.Div(video_embed, style={"textAlign": "center", "marginBottom": "2rem"}),
         ], style={"padding": "30px", "maxWidth": "1000px"}),
         dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
         dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
