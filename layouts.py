@@ -1447,7 +1447,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
                 if red_team_info and blue_team_info:
                     p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
-                    if 0.49 <= p_red <= 0.51:
+                    if p_red == 0.50:
                         pred_winner = "Tie"
                     else:
                         pred_winner = "Red" if p_red > p_blue else "Blue"
@@ -1532,15 +1532,16 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 style_data_conditional=[
                     {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
                     {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
-                    {"if": {"filter_query": "{Prediction %} >= 45 && {Prediction %} <= 55", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-neutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
-                    {"if": {"filter_query": "{Prediction %} > 55 && {Prediction %} <= 65", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightgreen)", "fontWeight": "bold", "color": "var(--text-primary)"},
+                    {"if": {"filter_query": "{Prediction %} >= 45 && {Prediction %} < 50", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lowneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
+                    {"if": {"filter_query": "{Prediction %} >= 50 && {Prediction %} <= 55", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-highneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
+                    {"if": {"filter_query": "{Prediction %} > 55 && {Prediction %} <= 65", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightestgreen)", "fontWeight": "bold", "color": "var(--text-primary)"},
                     {"if": {"filter_query": "{Prediction %} > 65 && {Prediction %} <= 75", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightergreen)", "fontWeight": "bold", "color": "var(--text-primary)"},
-                    {"if": {"filter_query": "{Prediction %} > 75 && {Prediction %} <= 85", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightestgreen)", "fontWeight": "bold", "color": "var(--text-primary)"},
+                    {"if": {"filter_query": "{Prediction %} > 75 && {Prediction %} <= 85", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightgreen)", "fontWeight": "bold", "color": "var(--text-primary)"},
                     {"if": {"filter_query": "{Prediction %} > 85 && {Prediction %} <= 95", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-darkgreen)", "fontWeight": "bold", "color": "var(--text-primary)"},
                     {"if": {"filter_query": "{Prediction %} > 95", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-deepgreen)", "fontWeight": "bold", "color": "var(--text-primary)"},
-                    {"if": {"filter_query": "{Prediction %} < 45 && {Prediction %} >= 35", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightred)", "fontWeight": "bold", "color": "var(--text-primary)"},
+                    {"if": {"filter_query": "{Prediction %} < 45 && {Prediction %} >= 35", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightestred)", "fontWeight": "bold", "color": "var(--text-primary)"},
                     {"if": {"filter_query": "{Prediction %} < 35 && {Prediction %} >= 25", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lighterred)", "fontWeight": "bold", "color": "var(--text-primary)"},
-                    {"if": {"filter_query": "{Prediction %} < 25 && {Prediction %} >= 15", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightestred)", "fontWeight": "bold", "color": "var(--text-primary)"},
+                    {"if": {"filter_query": "{Prediction %} < 25 && {Prediction %} >= 15", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightred)", "fontWeight": "bold", "color": "var(--text-primary)"},
                     {"if": {"filter_query": "{Prediction %} < 15 && {Prediction %} >= 5", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-darkred)", "fontWeight": "bold", "color": "var(--text-primary)"},
                     {"if": {"filter_query": "{Prediction %} < 5", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-deepred)", "fontWeight": "bold", "color": "var(--text-primary)"},
                     {"if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Score"}, "borderBottom": "1px solid var(--text-primary)"},

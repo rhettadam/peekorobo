@@ -23,18 +23,18 @@ def effective_epa(team_infos):
         
         return np.mean(weighted_epas)
     
-def predict_win_probability(red_info, blue_info, scale=0.12):
-    # Use mean EPA, not weighted by confidence
-    red_epa = np.mean([t["epa"] for t in red_info]) if red_info else 0
-    blue_epa = np.mean([t["epa"] for t in blue_info]) if blue_info else 0
-
-    if red_epa + blue_epa == 0:
+def predict_win_probability(red_info, blue_info, boost=1.1):
+    red_eff = effective_epa(red_info)
+    blue_eff = effective_epa(blue_info)
+    reliability = np.mean([t["confidence"] for t in red_info + blue_info]) if red_info + blue_info else 0
+    
+    if red_eff + blue_eff == 0:
         return 0.5, 0.5
-
-    diff = red_epa - blue_epa
+    
+    diff = red_eff - blue_eff
+    scale = boost * (0.06 + 0.3 * (1 - reliability))
     p_red = 1 / (1 + math.exp(-scale * diff))
-    # Optionally clip at [0.05, 0.95] to avoid extreme predictions
-    p_red = max(0.05, min(0.95, p_red))
+    p_red = max(0.15, min(0.90, p_red))  # clip for calibration
     return p_red, 1 - p_red
 
 def calculate_single_rank(team_data, selected_team):
