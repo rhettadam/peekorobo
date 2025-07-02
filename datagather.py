@@ -800,11 +800,11 @@ frc_games = {
                "manual": "Not Available",
                "summary": "In the 2006 game, Aim High, students robots are designed to launch balls into goals while human players enter balls into play and score points by throwing/pushing balls into corner goals. Extra points are scored by robots racing back to their end zones and climbing the ramp to the platform before the end of the 2 minute and 10 second match."},
     
-        2005: {"name": "Triply Play", 
+        2005: {"name": "Triple Play", 
                "video": "https://www.youtube.com/watch?v=6ePwDtrthWE", 
                "logo": "/assets/logos/2005.png", 
                "manual": "https://www.firstinspires.org/sites/default/files/uploads/resource_library/frc/game-and-season-info/archive/2005/2005-the-game.pdf",
-               "summary": "Triply Play was played on a 27 foot wide by 52 foot long playing field with the 9 goals configured in 3 x 3 matrix, similar to tic-tac-toe. The robots will attempt to place the red and blue game tetras in or on one or more of the nine goals to score points and claim ownership of the goals."},
+               "summary": "Triple Play was played on a 27 foot wide by 52 foot long playing field with the 9 goals configured in 3 x 3 matrix, similar to tic-tac-toe. The robots will attempt to place the red and blue game tetras in or on one or more of the nine goals to score points and claim ownership of the goals."},
     
         2004: {"name": "FIRST Frenzy", 
                "video": "https://www.youtube.com/watch?v=JIGggWdMekk", 
