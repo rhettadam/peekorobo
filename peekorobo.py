@@ -25,7 +25,7 @@ from datagather import COUNTRIES,STATES,load_data_2025,load_search_data,load_yea
 
 from layouts import home_layout,footer,topbar,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, compare_layout
 
-from utils import calculate_single_rank,pill,predict_win_probability,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_available_avatars,get_contrast_text_color,parse_event_key,user_team_card,user_event_card,team_link_with_avatar,wrap_with_toast_or_star,get_week_number,event_card,truncate_name
+from utils import calculate_single_rank,pill,predict_win_probability,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_available_avatars,get_contrast_text_color,parse_event_key,user_team_card,user_event_card,wrap_with_toast_or_star,get_week_number,event_card,truncate_name
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -2498,11 +2498,13 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
                 except Exception:
                     team_data = {}
             return {
+                "team_number": int(t_key.strip()),
                 "epa": team_data.get("epa", 0),
                 "confidence": team_data.get("confidence", 0.7),
             }
         # Use event-specific EPA data, but ensure confidence has a reasonable fallback
         return {
+            "team_number": int(t_key.strip()),
             "epa": info.get("epa", 0),
             "confidence": info.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
         }
@@ -2516,6 +2518,7 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
             blue_score = match.get("bs", 0)
             winner = match.get("wa", "")
             label = match.get("k", "").split("_", 1)[-1]
+            event_key = match.get("ek", "")  # Extract event_key early
 
             if label.lower().startswith("sf") and "m" in label.lower():
                 label = label.lower().split("m")[0].upper()
@@ -2525,7 +2528,13 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
             red_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
             blue_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
 
-            p_red, p_blue = predict_win_probability(red_info, blue_info)
+            # Use adaptive prediction that learns from previous matches
+            p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, event_key, match.get("k", ""))
+            
+            # Learn from completed matches
+            winner = match.get("wa", "Tie").lower()
+            if winner in ["red", "blue"]:
+                learn_from_match_outcome(event_key, match.get("k", ""), winner, red_score, blue_score)
             
             if p_red == 0.5 and p_blue == 0.5:
                 pred_red = "50%"
@@ -2541,9 +2550,8 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
             video_link = f"[Watch](https://www.youtube.com/watch?v={yid})" if yid else "N/A"
 
             # Add match link for the label
-            event_key = match.get("ek", "")
             match_link = f"[{label}](/match/{event_key}/{label})"
-
+            
             rows.append({
                 "Video": video_link,
                 "Match": match_link,
@@ -2553,8 +2561,8 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
                 "Blue Score": blue_score,
                 "Winner": winner.title() if winner else "Tie",
                 "Pred Winner": pred_winner,
-                "Red Pred": pred_red,
-                "Blue Pred": pred_blue,
+                "Red Pred": f"{pred_red}",
+                "Blue Pred": f"{pred_blue}",
                 "Red Prediction %": p_red * 100,  # For conditional styling
                 "Blue Prediction %": p_blue * 100,  # For conditional styling
             })

@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import os
+from collections import defaultdict
 
 import dash_bootstrap_components as dbc
 from dash import html
@@ -23,6 +24,182 @@ def effective_epa(team_infos):
         
         return np.mean(weighted_epas)
     
+class AdaptivePredictor:
+    """Learns from match outcomes to improve predictions within an event."""
+    
+    def __init__(self, learning_rate=0.05, decay_factor=0.99, min_matches=3):
+        self.learning_rate = learning_rate
+        self.decay_factor = decay_factor
+        self.min_matches = min_matches
+        self.event_predictions = defaultdict(list)  # event_key -> list of predictions
+        self.team_adjustments = defaultdict(lambda: {"bias": 0.0, "matches": 0, "accuracy": 0.0})  # team -> adjustment data
+        self.event_accuracy = defaultdict(list)  # event_key -> list of prediction accuracies
+        
+    def predict_with_learning(self, red_info, blue_info, event_key, match_key, boost=1.1):
+        """Make prediction with learning from previous matches in the event."""
+        # Get base prediction
+        base_p_red, base_p_blue = predict_win_probability(red_info, blue_info, boost)
+        
+        # Only apply adjustments if we have enough learning data
+        event_match_count = len(self.event_predictions[event_key])
+        if event_match_count >= self.min_matches:
+            adjusted_p_red, adjusted_p_blue = self._apply_team_adjustments(
+                red_info, blue_info, base_p_red, base_p_blue, event_key
+            )
+        else:
+            adjusted_p_red, adjusted_p_blue = base_p_red, base_p_blue
+        
+        # Store prediction for later learning
+        self.event_predictions[event_key].append({
+            "match_key": match_key,
+            "red_teams": [t.get("team_number", 0) for t in red_info],
+            "blue_teams": [t.get("team_number", 0) for t in blue_info],
+            "predicted_red": adjusted_p_red,
+            "predicted_blue": adjusted_p_blue,
+            "base_red": base_p_red,
+            "base_blue": base_p_blue,
+            "red_epa": effective_epa(red_info),
+            "blue_epa": effective_epa(blue_info)
+        })
+        
+        return adjusted_p_red, adjusted_p_blue
+    
+    def _apply_team_adjustments(self, red_info, blue_info, base_p_red, base_p_blue, event_key):
+        """Apply learned adjustments to base prediction."""
+        red_teams = [t.get("team_number", 0) for t in red_info]
+        blue_teams = [t.get("team_number", 0) for t in blue_info]
+        
+        # Calculate weighted adjustments based on team accuracy
+        red_adjustment = 0.0
+        red_weights = 0.0
+        for team in red_teams:
+            team_key = f"{event_key}_{team}"
+            team_data = self.team_adjustments[team_key]
+            if team_data["matches"] >= 2:  # Only use teams with enough data
+                weight = min(team_data["accuracy"], 0.8)  # Cap weight at 0.8
+                red_adjustment += team_data["bias"] * weight
+                red_weights += weight
+        
+        blue_adjustment = 0.0
+        blue_weights = 0.0
+        for team in blue_teams:
+            team_key = f"{event_key}_{team}"
+            team_data = self.team_adjustments[team_key]
+            if team_data["matches"] >= 2:  # Only use teams with enough data
+                weight = min(team_data["accuracy"], 0.8)  # Cap weight at 0.8
+                blue_adjustment += team_data["bias"] * weight
+                blue_weights += weight
+        
+        # Apply weighted adjustments
+        if red_weights > 0:
+            red_adjustment /= red_weights
+        if blue_weights > 0:
+            blue_adjustment /= blue_weights
+        
+        # Conservative adjustment (max 10% change)
+        max_adjustment = 0.1
+        red_adjustment = np.clip(red_adjustment, -max_adjustment, max_adjustment)
+        blue_adjustment = np.clip(blue_adjustment, -max_adjustment, max_adjustment)
+        
+        # Apply adjustments (clamp to reasonable bounds)
+        adjusted_p_red = np.clip(base_p_red + red_adjustment - blue_adjustment, 0.1, 0.9)
+        adjusted_p_blue = 1.0 - adjusted_p_red
+        
+        return adjusted_p_red, adjusted_p_blue
+    
+    def learn_from_outcome(self, event_key, match_key, actual_winner, red_score, blue_score):
+        """Learn from match outcome to adjust future predictions."""
+        # Find the prediction for this match
+        prediction = None
+        for pred in self.event_predictions[event_key]:
+            if pred["match_key"] == match_key:
+                prediction = pred
+                break
+        
+        if not prediction:
+            return  # No prediction found for this match
+        
+        # Calculate prediction error
+        predicted_red = prediction["predicted_red"]
+        actual_red_win = 1.0 if actual_winner == "red" else 0.0
+        
+        error = actual_red_win - predicted_red
+        
+        # Calculate learning rate that decreases with more matches in the event
+        event_match_count = len(self.event_predictions[event_key])
+        current_learning_rate = self.learning_rate * (self.decay_factor ** (event_match_count - 1))
+        
+        # Update team adjustments with accuracy tracking
+        red_teams = prediction["red_teams"]
+        blue_teams = prediction["blue_teams"]
+        
+        # Calculate prediction accuracy for this match
+        prediction_accuracy = 1.0 - abs(error)
+        
+        # Adjust red alliance teams
+        for team in red_teams:
+            team_key = f"{event_key}_{team}"
+            team_data = self.team_adjustments[team_key]
+            
+            # Update bias
+            team_data["bias"] += current_learning_rate * error
+            team_data["matches"] += 1
+            
+            # Update accuracy (exponential moving average)
+            alpha = 0.3
+            team_data["accuracy"] = alpha * prediction_accuracy + (1 - alpha) * team_data["accuracy"]
+        
+        # Adjust blue alliance teams (opposite direction)
+        for team in blue_teams:
+            team_key = f"{event_key}_{team}"
+            team_data = self.team_adjustments[team_key]
+            
+            # Update bias
+            team_data["bias"] -= current_learning_rate * error
+            team_data["matches"] += 1
+            
+            # Update accuracy (exponential moving average)
+            alpha = 0.3
+            team_data["accuracy"] = alpha * prediction_accuracy + (1 - alpha) * team_data["accuracy"]
+        
+        # Track event-level accuracy
+        self.event_accuracy[event_key].append(prediction_accuracy)
+    
+    def get_prediction_confidence(self, event_key):
+        """Get confidence in predictions based on learning progress and accuracy."""
+        event_predictions = self.event_predictions[event_key]
+        if not event_predictions:
+            return 0.5  # No learning yet
+        
+        # Calculate average accuracy for this event
+        accuracies = self.event_accuracy.get(event_key, [])
+        if accuracies:
+            avg_accuracy = np.mean(accuracies[-5:])  # Last 5 matches
+        else:
+            avg_accuracy = 0.5
+        
+        # Confidence increases with more matches and higher accuracy
+        match_count = len(event_predictions)
+        base_confidence = 0.5 + 0.1 * min(match_count, 10)  # Cap at 10 matches
+        accuracy_boost = avg_accuracy * 0.3  # Up to 30% boost from accuracy
+        
+        return min(0.9, base_confidence + accuracy_boost)
+    
+    def reset_event(self, event_key):
+        """Reset learning for a specific event."""
+        if event_key in self.event_predictions:
+            del self.event_predictions[event_key]
+        if event_key in self.event_accuracy:
+            del self.event_accuracy[event_key]
+        
+        # Remove team adjustments for this event
+        keys_to_remove = [k for k in self.team_adjustments.keys() if k.startswith(f"{event_key}_")]
+        for key in keys_to_remove:
+            del self.team_adjustments[key]
+
+# Global adaptive predictor instance
+adaptive_predictor = AdaptivePredictor(learning_rate=0.05, decay_factor=0.99, min_matches=3)  # Conservative learning
+
 def predict_win_probability(red_info, blue_info, boost=1.1):
     red_eff = effective_epa(red_info)
     blue_eff = effective_epa(blue_info)
@@ -36,6 +213,22 @@ def predict_win_probability(red_info, blue_info, boost=1.1):
     p_red = 1 / (1 + math.exp(-scale * diff))
     p_red = max(0.15, min(0.90, p_red))  # clip for calibration
     return p_red, 1 - p_red
+
+def predict_win_probability_adaptive(red_info, blue_info, event_key, match_key, boost=1.1):
+    """Enhanced prediction that learns from previous matches in the event."""
+    return adaptive_predictor.predict_with_learning(red_info, blue_info, event_key, match_key, boost)
+
+def learn_from_match_outcome(event_key, match_key, actual_winner, red_score, blue_score):
+    """Learn from a completed match to improve future predictions."""
+    adaptive_predictor.learn_from_outcome(event_key, match_key, actual_winner, red_score, blue_score)
+
+def get_event_prediction_confidence(event_key):
+    """Get confidence level for predictions in a specific event."""
+    return adaptive_predictor.get_prediction_confidence(event_key)
+
+def reset_event_learning(event_key):
+    """Reset learning for a specific event (useful for testing or new events)."""
+    adaptive_predictor.reset_event(event_key)
 
 def calculate_single_rank(team_data, selected_team):
     global_rank = 1
@@ -428,4 +621,36 @@ def event_card(event, favorited=False):
 
 def truncate_name(name, max_length=32):
         return name if len(name) <= max_length else name[:max_length-3] + '...'
+
+def get_event_learning_stats(event_key):
+    """Get learning statistics for a specific event."""
+    event_predictions = adaptive_predictor.event_predictions.get(event_key, [])
+    team_adjustments = adaptive_predictor.team_adjustments
+    event_accuracies = adaptive_predictor.event_accuracy.get(event_key, [])
+    
+    # Count teams with adjustments for this event
+    event_teams = [k for k in team_adjustments.keys() if k.startswith(f"{event_key}_")]
+    teams_with_adjustments = len(event_teams)
+    
+    # Calculate average adjustment magnitude
+    avg_adjustment = 0.0
+    if event_teams:
+        adjustments = [team_adjustments[team]["bias"] for team in event_teams]
+        avg_adjustment = np.mean(np.abs(adjustments))
+    
+    # Calculate average accuracy
+    avg_accuracy = np.mean(event_accuracies) if event_accuracies else 0.5
+    
+    return {
+        "matches_processed": len(event_predictions),
+        "teams_with_adjustments": teams_with_adjustments,
+        "average_adjustment": avg_adjustment,
+        "average_accuracy": avg_accuracy,
+        "prediction_confidence": get_event_prediction_confidence(event_key),
+        "learning_active": len(event_predictions) >= adaptive_predictor.min_matches
+    }
+
+def get_prediction_difference(event_key, match_key):
+    """Get the difference between base and adaptive predictions for debugging."""
+    return adaptive_predictor.get_prediction_difference(event_key, match_key)
 

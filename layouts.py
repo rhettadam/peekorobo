@@ -3,7 +3,7 @@ from dash import html, dcc, dash_table
 from datagather import frc_games,COUNTRIES,STATES,DISTRICT_STATES,get_team_avatar,get_team_years_participated
 from flask import session
 from datetime import datetime, date
-from utils import predict_win_probability, compute_percentiles, pill
+from utils import predict_win_probability, predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, get_event_learning_stats, get_prediction_difference, compute_percentiles, pill
 import json
 import os
 
@@ -1196,6 +1196,17 @@ def events_layout(year=2025):
                         ],
                         className="mb-4",
                     ),
+                    # Learning progress indicator
+                    dbc.Alert(
+                        id="learning-progress-alert",
+                        is_open=False,
+                        color="info",
+                        className="mb-3",
+                        children=[
+                            html.H6("🤖 Adaptive Learning Active", className="mb-2"),
+                            html.P(id="learning-stats-text", className="mb-0", style={"fontSize": "0.9rem"})
+                        ]
+                    ),
                     html.Div(id="events-tab-content"),
                 ],
                 style={
@@ -1450,6 +1461,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     event_epa = next((e for e in t_data.get("event_epas", []) if e.get("event_key") == event_key), None)
                     if event_epa and event_epa.get("overall", 0) != 0:
                         return {
+                            "team_number": int(t_key.strip()),
                             "epa": event_epa.get("overall", 0),
                             "confidence": event_epa.get("confidence", 0.7),
                             "consistency": event_epa.get("consistency", 0)
@@ -1458,30 +1470,36 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                         epa_val = t_data.get("epa", 0)
                         conf_val = t_data.get("confidence", 0.7)
                         return {
+                            "team_number": int(t_key.strip()),
                             "epa": epa_val,
                             "confidence": conf_val,
                             "consistency": t_data.get("consistency", 0)
                         }
-                    return {"epa": 0, "confidence": 0, "consistency": 0}
+                    return {"team_number": int(t_key.strip()), "epa": 0, "confidence": 0, "consistency": 0}
                 red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
                 if red_team_info and blue_team_info:
-                    p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
-                    if p_red == 0.50:
-                        pred_winner = "Tie"
-                    else:
-                        pred_winner = "Red" if p_red > p_blue else "Blue"
+                    # Use adaptive prediction that learns from previous matches
+                    p_red, p_blue = predict_win_probability_adaptive(red_team_info, blue_team_info, event_key, match.get("k", ""))
+                    # Learn from completed matches
+                    winner = match.get("wa", "Tie").lower()
+                    if winner in ["red", "blue"]:
+                        learn_from_match_outcome(event_key, match.get("k", ""), winner, red_score, blue_score)
+                    
                     prediction = f"{p_red:.0%}" if str(team_number) in red_str else f"{p_blue:.0%}"
                     prediction_percent = round((p_red if str(team_number) in red_str else p_blue) * 100)
                 else:
                     prediction = "N/A"
                     prediction_percent = None
-                    pred_winner = "N/A"
         
                 winner = match.get("wa", "Tie").title()
                 youtube_id = match.get("yt")
                 video_link = f"[Watch](https://youtube.com/watch?v={youtube_id})" if youtube_id else "N/A"
         
+                # Get prediction confidence for this event
+                prediction_confidence = get_event_prediction_confidence(event_key)
+                confidence_indicator = f"({prediction_confidence:.1%} conf)" if prediction_confidence > 0.5 else ""
+                
                 row = {
                     "Video": video_link,
                     "Match": match_label_md,
@@ -1490,9 +1508,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     "Red Score": red_score,
                     "Blue Score": blue_score,
                     "Winner": winner,
-                    "Prediction": prediction,
+                    "Prediction": f"{prediction}".strip(),
                     "Prediction %": prediction_percent,
-                    "Pred Winner": pred_winner,
                     "rowColor": "#ffe6e6" if winner == "Red" else "#e6f0ff" if winner == "Blue" else "white",
                 }
 
@@ -1520,7 +1537,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     {"name": "Red Score", "id": "Red Score"},
                     {"name": "Blue Score", "id": "Blue Score"},
                     {"name": "Winner", "id": "Winner"},
-                    {"name": "Pred Winner", "id": "Pred Winner"},
                     {"name": "Prediction", "id": "Prediction"},
                 ],
                 data=match_rows,
