@@ -1420,6 +1420,7 @@ def fetch_team_components(team, year):
     event_keys = get_team_events(team_number, year)
 
     event_epa_results = []
+    event_epa_full = []  # Keep full data for aggregation
     total_wins = 0
     total_losses = 0
     total_ties = 0
@@ -1444,13 +1445,27 @@ def fetch_team_components(team, year):
                 # Calculate EPA after processing all matches
                 event_epa = calculate_event_epa(matches, team_key, team_number)
                 event_epa["event_key"] = event_key  # Ensure event_key is included
-                event_epa_results.append(event_epa)
+                
+                # Keep full data for aggregation
+                event_epa_full.append(event_epa)
+                
+                # Only keep essential fields for final event_epas
+                simplified_event_epa = {
+                    "event_key": event_key,
+                    "overall": event_epa["overall"],
+                    "auto": event_epa["auto"],
+                    "teleop": event_epa["teleop"],
+                    "endgame": event_epa["endgame"],
+                    "confidence": event_epa["confidence"],
+                    "actual_epa": event_epa["actual_epa"]
+                }
+                event_epa_results.append(simplified_event_epa)
         except Exception as e:
             print(f"Failed to fetch matches for team {team_key} at event {event_key}: {e}")
             continue
 
-    # Aggregate overall EPA from event-specific EPAs
-    overall_epa_data = aggregate_overall_epa(event_epa_results)
+    # Aggregate overall EPA from full event-specific EPAs
+    overall_epa_data = aggregate_overall_epa(event_epa_full)
     overall_epa_data["wins"] = total_wins
     overall_epa_data["losses"] = total_losses
     overall_epa_data["ties"] = total_ties
