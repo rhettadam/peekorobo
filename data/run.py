@@ -1095,6 +1095,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
 
     match_count = 0
     overall_epa = auto_epa = teleop_epa = endgame_epa = None
+    # Component EPAs for 2025
+    l1_epa = l2_epa = l3_epa = l4_epa = processor_epa = net_epa = None
     contributions, teammate_epas = [], []
     breakdowns = []
     dominance_scores = []
@@ -1110,6 +1112,15 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         auto_func = globals()[f"auto_{year}"]
         teleop_func = globals()[f"teleop_{year}"]
         endgame_func = globals()[f"endgame_{year}"]
+        
+        # Get component EPA functions for 2025
+        if year == "2025":
+            l1_func = globals()["l1_epa_2025"]
+            l2_func = globals()["l2_epa_2025"]
+            l3_func = globals()["l3_epa_2025"]
+            l4_func = globals()["l4_epa_2025"]
+            processor_func = globals()["processor_epa_2025"]
+            net_func = globals()["net_epa_2025"]
     except KeyError:
         print(f"Warning: No scoring functions found for year {year}, using 2025 functions")
         auto_func = auto_2025
@@ -1186,11 +1197,29 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             # Decay simplified for event-specific EPA
             decay = 1.0 
 
+            # Calculate component EPAs for 2025
+            if year == "2025":
+                actual_l1 = l1_func(breakdowns, team_count)
+                actual_l2 = l2_func(breakdowns, team_count)
+                actual_l3 = l3_func(breakdowns, team_count)
+                actual_l4 = l4_func(breakdowns, team_count)
+                actual_processor = processor_func(breakdowns, team_count)
+                actual_net = net_func(breakdowns, team_count)
+
             if overall_epa is None: # Initial EPA for the event
                 overall_epa = actual_overall
                 auto_epa = actual_auto
                 endgame_epa = actual_endgame
                 teleop_epa = actual_teleop
+                
+                # Initialize component EPAs for 2025
+                if year == "2025":
+                    l1_epa = actual_l1
+                    l2_epa = actual_l2
+                    l3_epa = actual_l3
+                    l4_epa = actual_l4
+                    processor_epa = actual_processor
+                    net_epa = actual_net
                 continue
 
             K = 0.4
@@ -1204,13 +1233,29 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             teleop_epa += delta_teleop
             endgame_epa += delta_endgame
             overall_epa = auto_epa + teleop_epa + endgame_epa
+            
+            # Update component EPAs for 2025
+            if year == "2025":
+                delta_l1 = K * (actual_l1 - l1_epa)
+                delta_l2 = K * (actual_l2 - l2_epa)
+                delta_l3 = K * (actual_l3 - l3_epa)
+                delta_l4 = K * (actual_l4 - l4_epa)
+                delta_processor = K * (actual_processor - processor_epa)
+                delta_net = K * (actual_net - net_epa)
+                
+                l1_epa += delta_l1
+                l2_epa += delta_l2
+                l3_epa += delta_l3
+                l4_epa += delta_l4
+                processor_epa += delta_processor
+                net_epa += delta_net
 
             contributions.append(actual_overall)
         except Exception as e:
             print(f"Warning: Error processing match {match.get('key', 'unknown')}: {str(e)}")
 
     if not match_count:
-        return {
+        result = {
             "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
             "confidence": 0.0, "actual_epa": 0.0,
             "match_count": 0, "raw_confidence": 0.0,
@@ -1220,6 +1265,15 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             "record_alignment": 0.0, "wins": event_wins,
             "losses": event_losses, "ties": event_ties
         }
+        
+        # Add component EPAs for 2025
+        if year == "2025":
+            result.update({
+                "l1_epa": 0.0, "l2_epa": 0.0, "l3_epa": 0.0, "l4_epa": 0.0,
+                "processor_epa": 0.0, "net_epa": 0.0
+            })
+        
+        return result
 
     if len(contributions) >= 2:
         peak = max(contributions)
@@ -1245,7 +1299,7 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
     years = get_team_experience(team_number, int(year))
     veteran_boost = get_veteran_boost(years)
 
-    return {
+    result = {
         "overall": round(overall_epa, 2) if overall_epa is not None else 0.0,
         "auto": round(auto_epa, 2) if auto_epa is not None else 0.0,
         "teleop": round(teleop_epa, 2) if teleop_epa is not None else 0.0,
@@ -1265,14 +1319,36 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         "losses": event_losses,
         "ties": event_ties
     }
+    
+    # Add component EPAs for 2025
+    if year == "2025":
+        result.update({
+            "l1_epa": round(l1_epa, 2) if l1_epa is not None else 0.0,
+            "l2_epa": round(l2_epa, 2) if l2_epa is not None else 0.0,
+            "l3_epa": round(l3_epa, 2) if l3_epa is not None else 0.0,
+            "l4_epa": round(l4_epa, 2) if l4_epa is not None else 0.0,
+            "processor_epa": round(processor_epa, 2) if processor_epa is not None else 0.0,
+            "net_epa": round(net_epa, 2) if net_epa is not None else 0.0
+        })
+    
+    return result
 
 def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
     if not event_epas:
-        return {
+        result = {
             "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
             "confidence": 0.0, "actual_epa": 0.0,
             "wins": 0, "losses": 0, "ties": 0
         }
+        
+        # Add component EPAs for 2025
+        if event_epas and any("l1_epa" in epa for epa in event_epas):
+            result.update({
+                "l1_epa": 0.0, "l2_epa": 0.0, "l3_epa": 0.0, "l4_epa": 0.0,
+                "processor_epa": 0.0, "net_epa": 0.0
+            })
+        
+        return result
 
     # Filter out events with no valid matches or zero EPAs
     valid_events = [
@@ -1281,11 +1357,20 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
     ]
 
     if not valid_events:
-        return {
+        result = {
             "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
             "confidence": 0.0, "actual_epa": 0.0,
             "wins": 0, "losses": 0, "ties": 0
         }
+        
+        # Add component EPAs for 2025
+        if event_epas and any("l1_epa" in epa for epa in event_epas):
+            result.update({
+                "l1_epa": 0.0, "l2_epa": 0.0, "l3_epa": 0.0, "l4_epa": 0.0,
+                "processor_epa": 0.0, "net_epa": 0.0
+            })
+        
+        return result
 
     total_overall = 0.0
     total_auto = 0.0
@@ -1303,6 +1388,14 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
     total_wins = 0
     total_losses = 0
     total_ties = 0
+    
+    # Component EPA totals for 2025
+    total_l1 = 0.0
+    total_l2 = 0.0
+    total_l3 = 0.0
+    total_l4 = 0.0
+    total_processor = 0.0
+    total_net = 0.0
 
     # Use a weighted average based on match count per event
     for epa_data in valid_events:
@@ -1326,6 +1419,15 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
         total_losses += epa_data["losses"]
         total_ties += epa_data.get("ties", 0)
         total_events += 1
+        
+        # Add component EPAs for 2025
+        if "l1_epa" in epa_data:
+            total_l1 += epa_data["l1_epa"] * match_count
+            total_l2 += epa_data["l2_epa"] * match_count
+            total_l3 += epa_data["l3_epa"] * match_count
+            total_l4 += epa_data["l4_epa"] * match_count
+            total_processor += epa_data["processor_epa"] * match_count
+            total_net += epa_data["net_epa"] * match_count
     
     if total_match_count == 0:
         return {
@@ -1366,7 +1468,7 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
     
     final_confidence = max(0.0, min(1.0, raw_confidence))
 
-    return {
+    result = {
         "overall": round(total_overall / total_match_count, 2),
         "auto": round(total_auto / total_match_count, 2),
         "teleop": round(total_teleop / total_match_count, 2),
@@ -1391,6 +1493,19 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
             "raw": raw_confidence
         }
     }
+    
+    # Add component EPAs for 2025
+    if total_l1 > 0:  # Check if we have component EPAs
+        result.update({
+            "l1_epa": round(total_l1 / total_match_count, 2),
+            "l2_epa": round(total_l2 / total_match_count, 2),
+            "l3_epa": round(total_l3 / total_match_count, 2),
+            "l4_epa": round(total_l4 / total_match_count, 2),
+            "processor_epa": round(total_processor / total_match_count, 2),
+            "net_epa": round(total_net / total_match_count, 2)
+        })
+    
+    return result
 
 # Retry wrapper for fetch_team_components
 def retry_team_fetch(max_attempts=3):
@@ -1459,6 +1574,17 @@ def fetch_team_components(team, year):
                     "confidence": event_epa["confidence"],
                     "actual_epa": event_epa["actual_epa"]
                 }
+                
+                # Add component EPAs for 2025
+                if year == 2025:
+                    simplified_event_epa.update({
+                        "l1_epa": event_epa.get("l1_epa", 0),
+                        "l2_epa": event_epa.get("l2_epa", 0),
+                        "l3_epa": event_epa.get("l3_epa", 0),
+                        "l4_epa": event_epa.get("l4_epa", 0),
+                        "processor_epa": event_epa.get("processor_epa", 0),
+                        "net_epa": event_epa.get("net_epa", 0)
+                    })
                 event_epa_results.append(simplified_event_epa)
         except Exception as e:
             print(f"Failed to fetch matches for team {team_key} at event {event_key}: {e}")
@@ -1470,7 +1596,7 @@ def fetch_team_components(team, year):
     overall_epa_data["losses"] = total_losses
     overall_epa_data["ties"] = total_ties
 
-    return {
+    result = {
         "team_number": team.get("team_number"),
         "nickname": team.get("nickname"),
         "city": team.get("city"),
@@ -1488,6 +1614,19 @@ def fetch_team_components(team, year):
         "ties": overall_epa_data.get("ties", 0),
         "event_epas": event_epa_results, # List of event-specific EPA results
     }
+    
+    # Add component EPAs for 2025
+    if year == 2025:
+        result.update({
+            "l1_epa": overall_epa_data.get("l1_epa", 0),
+            "l2_epa": overall_epa_data.get("l2_epa", 0),
+            "l3_epa": overall_epa_data.get("l3_epa", 0),
+            "l4_epa": overall_epa_data.get("l4_epa", 0),
+            "processor_epa": overall_epa_data.get("processor_epa", 0),
+            "net_epa": overall_epa_data.get("net_epa", 0)
+        })
+    
+    return result
 
 def analyze_single_team(team_key: str, year: int):
     # Get team events from PostgreSQL
