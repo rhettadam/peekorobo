@@ -485,7 +485,7 @@ img:hover {
         margin-bottom: 20px;
     }
 
-    .dozer-image {
+    .home-image {
         margin-top: 20px;
     }
 
@@ -765,6 +765,34 @@ label {
 .custom-view-btn-large {
     font-size: 1.0rem !important;
     padding: 1.0rem 2.0rem !important;
+}
+
+.gradient-hover {
+  color: #fff;
+  transition: background 0.5s, color 0.5s;
+  cursor: pointer;
+}
+.gradient-hover:hover {
+  background: linear-gradient(90deg, #ffdd00, #ff4e50, #1e90ff, #ffdd00 80%);
+  background-size: 200% auto;
+  background-position: 100% 50%;
+  color: inherit;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-fill-color: transparent;
+}
+
+.frc-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.3s, color 0.3s;
+}
+.frc-link:hover {
+  color: #ffdd00;
+  text-decoration-color: #ffdd00;
 }
 
   

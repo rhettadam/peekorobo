@@ -250,14 +250,19 @@ home_layout = html.Div([
                     [
                         html.Div(
                             [
-                                html.Img(
-                                    src="/assets/logo.png",
-                                    className='homelogo',
-                                    style={
-                                        "width": "100%",
-                                        "maxWidth": "500px",
-                                        "height": "auto",
-                                    },
+                                html.A(
+                                    html.Img(
+                                        src="/assets/home.png",
+                                        className='homelogo',
+                                        style={
+                                            "width": "100%",
+                                            "maxWidth": "700px",
+                                            "height": "auto",
+                                        },
+                                    ),
+                                    href="https://github.com/rhettadam/peekorobo",
+                                    target="_blank",
+                                    rel="noopener noreferrer"
                                 ),
                             ],
                             className="logo-container",
@@ -279,70 +284,81 @@ home_layout = html.Div([
                         html.Div(
                             [
                                 html.H1(
-                                    "Data-Driven FRC Insights",
+                                    [
+                                        "Data-Driven ",
+                                        html.Span("FRC", className="gradient-hover"),
+                                        " Insights"
+                                    ],
                                     style={
                                         "fontSize": "3.5rem",
                                         "fontWeight": "bold",
                                         "color": "var(--text-primary)",
                                         "marginBottom": "1rem",
-                                        "textAlign": "left"
+                                        "textAlign": "center"
                                     },
                                 ),
                                 html.P(
-                                    "Explore teams, events, and insights from the FIRST Robotics Competition",
+                                    [
+                                        "Explore teams, events, and insights from the ",
+                                        html.A(
+                                            "FIRST Robotics Competition",
+                                            href="https://www.firstinspires.org/robotics/frc",
+                                            target="_blank",
+                                            rel="noopener noreferrer",
+                                            className="frc-link"
+                                        )
+                                    ],
                                     style={
                                         "fontSize": "1.3rem",
                                         "color": "var(--text-secondary)",
-                                        "marginBottom": "3rem",
-                                        "textAlign": "left",
+                                        "marginBottom": "1.2rem",
+                                        "textAlign": "center",
                                         "lineHeight": "1.4"
                                     },
                                 ),
-                                dbc.Row(
+                                html.Div(
                                     [
-                                        dbc.Col(
-                                            dbc.Button(
-                                                [
-                                                    html.I(className="fas fa-users me-2"),
-                                                    "Teams"
-                                                ],
-                                                href="/teams",
-                                                color="warning",
-                                                outline=True,
-                                                size="lg",
-                                                className="custom-view-btn",
-                                                style={
-                                                    "fontSize": "1.2rem",
-                                                    "fontWeight": "bold",
-                                                    "padding": "1rem 2rem",
-                                                    "width": "100%"
-                                                },
-                                            ),
-                                            width=6
+                                        dbc.Button(
+                                            [
+                                                html.I(className="fas fa-users me-2"),
+                                                "Teams"
+                                            ],
+                                            href="/teams",
+                                            color="warning",
+                                            outline=True,
+                                            size="lg",
+                                            className="custom-view-btn",
+                                            style={
+                                                "fontSize": "1.2rem",
+                                                "fontWeight": "bold",
+                                                "padding": "1rem 2rem",
+                                                "width": "240px"
+                                            },
                                         ),
-                                        dbc.Col(
-                                            dbc.Button(
-                                                [
-                                                    html.I(className="fas fa-calendar-alt me-2"),
-                                                    "Events"
-                                                ],
-                                                href="/events",
-                                                color="warning",
-                                                outline=True,
-                                                size="lg",
-                                                className="custom-view-btn",
-                                                style={
-                                                    "fontSize": "1.2rem",
-                                                    "fontWeight": "bold",
-                                                    "padding": "1rem 2rem",
-                                                    "width": "100%"
-                                                },
-                                            ),
-                                            width=6
+                                        dbc.Button(
+                                            [
+                                                html.I(className="fas fa-calendar-alt me-2"),
+                                                "Events"
+                                            ],
+                                            href="/events",
+                                            color="warning",
+                                            outline=True,
+                                            size="lg",
+                                            className="custom-view-btn",
+                                            style={
+                                                "fontSize": "1.2rem",
+                                                "fontWeight": "bold",
+                                                "padding": "1rem 2rem",
+                                                "width": "240px"
+                                            },
                                         ),
                                     ],
-                                    justify="center",
-                                    style={"maxWidth": "600px"}
+                                    style={
+                                        "display": "flex",
+                                        "justifyContent": "center",
+                                        "gap": "2rem",
+                                        "marginTop": "0.5rem"
+                                    }
                                 ),
                             ],
                             className="navigation-container",
@@ -858,9 +874,9 @@ def login_layout():
                 dbc.Col(
                     html.Div([
                         html.Img(
-                            src="/assets/dozer.png",
+                            src="/assets/home.png",
                             style={"width": "100%", "maxWidth": "500px", "marginBottom": "30px"},
-                            className="dozer-image"
+                            className="home-image"
                         ),
                         html.H3("Login or Register", style={"textAlign": "center", "marginBottom": "20px", "color": "var(--text-primary)"}),
                         dbc.Input(id="username", type="text", placeholder="Username", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1rem"}),
