@@ -220,6 +220,8 @@ footer = dbc.Container(
                 [
                     "Built With:  ",
                     html.A("The Blue Alliance ", href="https://www.thebluealliance.com/", target="_blank", style={"color": "#3366CC", "textDecoration": "line"}),
+                    "| View Peekorobo on ",
+                    html.A("GitHub", href="https://github.com/rhettadam/peekorobo", target="_blank", style={"color": "#3366CC", "textDecoration": "line"}),
                 ],
                 style={
                     "textAlign": "center",
