@@ -301,7 +301,7 @@ home_layout = html.Div([
                                 ),
                                 html.P(
                                     [
-                                        "Explore teams, events, and insights from the ",
+                                        "Explore teams, events, and matches from the ",
                                         html.A(
                                             "FIRST Robotics Competition",
                                             href="https://www.firstinspires.org/robotics/frc",
