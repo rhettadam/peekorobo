@@ -2,7 +2,6 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import callback, html, dcc, dash_table, ctx, ALL, MATCH, no_update
 from dash.dependencies import Input, Output, State
-from dash.exceptions import PreventUpdate
 
 import flask
 from flask import session
@@ -19,13 +18,12 @@ import json
 import pandas as pd
 
 import plotly.graph_objects as go
-from scipy.interpolate import interp1d
 
 from datagather import COUNTRIES,STATES,load_data_2025,load_search_data,load_year_data,get_team_avatar,DISTRICT_STATES,DISTRICT_STATES_A,DatabaseConnection,get_team_years_participated
 
 from layouts import home_layout,footer,topbar,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,epa_legend_layout,events_layout, build_recent_events_section, compare_layout
 
-from utils import calculate_single_rank,pill,predict_win_probability,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_available_avatars,get_contrast_text_color,parse_event_key,user_team_card,user_event_card,wrap_with_toast_or_star,get_week_number,event_card,truncate_name
+from utils import calculate_single_rank,pill,predict_win_probability,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,sort_key,get_available_avatars,get_contrast_text_color,parse_event_key,user_team_card,user_event_card,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -77,18 +75,22 @@ app.index_string = '''
 server = app.server
 server.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-placeholder-key")
 
-app.layout = html.Div([
-    dcc.Location(id='url', refresh=False),
-    dcc.Store(id='tab-title', data='Peekorobo'),
-    dcc.Store(id='theme-store'),
-    html.Div(
-        id='page-content-animated-wrapper',
-        children=html.Div(id='page-content'),
-        className='fade-page'
-    ),
-    html.Div(id='dummy-output', style={'display': 'none'}),
-    html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'})
-])
+def serve_layout():
+    return html.Div([
+        dcc.Location(id='url', refresh=False),
+        dcc.Store(id='tab-title', data='Peekorobo'),
+        dcc.Store(id='theme-store'),
+        html.Div(
+            id='page-content-animated-wrapper',
+            children=html.Div(id='page-content'),
+            className='fade-page',
+        ),
+        universal_profile_icon_or_toast(),
+        html.Div(id='dummy-output', style={'display': 'none'}),
+        html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'})
+    ])
+
+app.layout = serve_layout
 
 def user_layout(_user_id=None, deleted_items=None):
 
@@ -677,9 +679,6 @@ def user_layout(_user_id=None, deleted_items=None):
             html.Hr(),
 
         ], style={"padding": "20px", "maxWidth": "1000px"}),
-        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
         footer
     ])
 
@@ -946,9 +945,6 @@ def other_user_layout(username):
             *team_cards,
             html.Hr(),
         ], style={"padding": "20px", "maxWidth": "1000px"}),
-        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
         footer,
     ])
 
@@ -2078,9 +2074,6 @@ def event_layout(event_key):
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),
-            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
             footer,
         ]
     )
@@ -3145,115 +3138,6 @@ def toggle_axis_dropdowns(active_tab):
         return {"display": "block", "marginBottom": "15px"}
     return {"display": "none"}
 
-@app.callback(
-    Output("url", "pathname"),
-    [
-        Input("btn-search-home", "n_clicks"),
-        Input("input-team-home", "n_submit"),
-        Input("input-year-home", "n_submit"),
-        Input("desktop-search-button", "n_clicks"),
-        Input("desktop-search-input", "n_submit"),
-        Input("mobile-search-button", "n_clicks"),
-        Input("mobile-search-input", "n_submit"),
-    ],
-    [
-        State("input-team-home", "value"),
-        State("input-year-home", "value"),
-        State("desktop-search-input", "value"),
-        State("mobile-search-input", "value"),
-    ],
-    prevent_initial_call=True,
-)
-def handle_navigation(
-    home_click, home_submit, home_year_submit, desktop_click, desktop_submit,
-    mobile_click, mobile_submit, home_team_value, home_year_value,
-    desktop_search_value, mobile_search_value
-):
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        return dash.no_update
-
-    trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
-
-    if trigger_id in ["btn-search-home", "input-team-home", "input-year-home"]:
-        search_value = home_team_value
-        year_value = home_year_value
-    elif trigger_id in ["desktop-search-button", "desktop-search-input"]:
-        search_value = desktop_search_value
-        year_value = None
-    elif trigger_id in ["mobile-search-button", "mobile-search-input"]:
-        search_value = mobile_search_value
-        year_value = None
-    else:
-        return dash.no_update
-
-    if not search_value:
-        return dash.no_update
-
-    search_value = search_value.strip().lower()
-    selected_year = int(year_value) if year_value and year_value.isdigit() else None
-    
-    # Search through all years if no specific year selected
-    if selected_year is None:
-        # Use search data which only has 2025 teams
-        year_data = SEARCH_TEAM_DATA[2025]
-        matching_team = next(
-            (
-                team for team in year_data.values()
-                if str(team.get("team_number", "")).lower() == search_value
-                or search_value in (team.get("nickname", "") or "").lower()
-            ),
-            None
-        )
-        if matching_team:
-            team_number = matching_team.get("team_number", "")
-            return f"/team/{team_number}/2025"
-    else:
-        if selected_year == 2025:
-            year_data = SEARCH_TEAM_DATA.get(selected_year)
-            if year_data:
-                matching_team = next(
-                    (
-                        team for team in year_data.values()
-                        if str(team.get("team_number", "")).lower() == search_value
-                        or search_value in (team.get("nickname", "") or "").lower()
-                    ),
-                    None
-                )
-                if matching_team:
-                    team_number = matching_team.get("team_number", "")
-                    return f"/team/{team_number}/{selected_year}"
-
-    # Use search event data which has all events
-    events_data = [ev for year_dict in SEARCH_EVENT_DATA.values() for ev in year_dict.values()]
-    # --- EVENT SEARCH ---
-    matching_events = []
-    for event in events_data:
-        event_key = event.get("k", "").lower()
-        event_name = (event.get("n", "") or "").lower()
-        event_year = event_key[:4] if len(event_key) >= 4 else ""
-
-        if (
-            search_value in event_key
-            or search_value in event_name
-            or search_value in event_year
-            or search_value in f"{event_year} {event_name}".lower()
-        ):
-            matching_events.append(event)
-
-    if matching_events:
-        # pick the "closest" match — most character overlap
-        best_event = max(
-            matching_events,
-            key=lambda e: (
-                len(set(search_value) & set((e.get("k") or "").lower())) +
-                len(set(search_value) & set((e.get("n") or "").lower()))
-            )
-        )
-        return f"/event/{best_event['k']}"
-
-    return "/"
-
 # Theme switching callbacks
 app.clientside_callback(
     """
@@ -3339,37 +3223,37 @@ def display_page(pathname):
                     year_team_database = {year: year_team_data}
                     year_event_database = {year: year_event_data}
                     
-                    return wrap_with_toast_or_star(team_layout(
+                    return team_layout(
                         team_number, year, 
                         year_team_database, year_event_database, 
                         year_event_matches, year_event_awards, 
                         year_event_rankings, year_event_teams
-                    ))
+                    )
             except (ValueError, TypeError):
                 # If year parsing fails, fall back to 2025
                 pass
         
         # Use global 2025 data for current year or fallback
-        return wrap_with_toast_or_star(team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS))
+        return team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS)
     
     if pathname.startswith("/event/"):
         event_key = pathname.split("/")[-1]
-        return wrap_with_toast_or_star(event_layout(event_key))
+        return event_layout(event_key)
     
     if pathname == "/teams":
-        return wrap_with_toast_or_star(teams_layout())
+        return teams_layout()
     
     if pathname == "/map":
-        return wrap_with_toast_or_star(teams_map_layout())
+        return teams_map_layout()
     
     if pathname == "/events":
-        return wrap_with_toast_or_star(events_layout())
+        return events_layout()
     
     if pathname == "/challenges":
-        return wrap_with_toast_or_star(challenges_layout())
+        return challenges_layout()
 
     if pathname == "/blog":
-        return wrap_with_toast_or_star(blog_layout)
+        return blog_layout
 
     if pathname == "/login":
         return login_layout()
@@ -3385,7 +3269,7 @@ def display_page(pathname):
     if len(path_parts) == 2 and path_parts[0] == "user":
         try:
             username = pathname.split("/user/")[1]
-            return wrap_with_toast_or_star(other_user_layout(username))
+            return other_user_layout(username)
         except ValueError:
             pass
     
@@ -3398,7 +3282,7 @@ def display_page(pathname):
         return challenge_details_layout(year)
 
     if pathname == "/compare":
-        return wrap_with_toast_or_star(compare_layout())
+        return compare_layout()
 
     if pathname.startswith("/match/"):
         # /match/<event_key>/<match_key>
@@ -3406,11 +3290,11 @@ def display_page(pathname):
         if len(parts) >= 4:
             event_key = parts[2]
             match_key = parts[3]
-            return wrap_with_toast_or_star(match_layout(event_key, match_key))
+            return match_layout(event_key, match_key)
         else:
             return dbc.Alert("Invalid match URL.", color="danger")
 
-    return wrap_with_toast_or_star(home_layout)
+    return home_layout
 
 @app.callback(
     Output('tab-title', 'data'),
@@ -4184,9 +4068,6 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                 },
             ),
             favorites_popover,
-            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
             footer,
         ]
     )
@@ -5147,9 +5028,6 @@ def match_layout(event_key, match_key):
             html.Div(breakdown_table, style={"marginBottom": "2rem"}),
             html.Div(video_embed, style={"textAlign": "center", "marginBottom": "2rem"}),
         ], style={"padding": "30px", "maxWidth": "1000px"}),
-        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
         footer
     ])
 

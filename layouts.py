@@ -245,7 +245,7 @@ home_layout = html.Div([
     dbc.Container(fluid=True, children=[
         dbc.Row(
             [
-                # Left Section: Logo, Text, Search
+                # Left Section: Logo
                 dbc.Col(
                     [
                         html.Div(
@@ -254,92 +254,104 @@ home_layout = html.Div([
                                     src="/assets/logo.png",
                                     className='homelogo',
                                     style={
-                                        "width": "400px",
-                                        "marginBottom": "15px",
-                                    },
-                                ),
-                                html.P(
-                                    "Search for any FRC Team",
-                                    style={
-                                        "fontSize": "1.5rem",
-                                        "color": "var(--text-primary)",
-                                        "textAlign": "center",
-                                        "marginBottom": "20px"
-                                    },
-                                ),
-                                dbc.Row(
-                                    [
-                                        dbc.Col(
-                                            dbc.Input(
-                                                id="input-team-home",
-                                                type="text",
-                                                placeholder="Team name or # (e.g., 1912)",
-                                                className="custom-input-box",
-                                                style={"width": "100%", "marginBottom": ".4rem"}
-                                            ),
-                                            width=12
-                                        ),
-                                        dbc.Col(
-                                            dbc.Input(
-                                                id="input-year-home",
-                                                type="text",
-                                                placeholder="Year (e.g., 2025) optional",
-                                                className="custom-input-box",
-                                                style={"width": "100%"}
-                                            ),
-                                            width=12
-                                        ),
-                                    ],
-                                    justify="center",
-                                    style={"marginBottom": "1rem"}
-                                ),
-                                dbc.Button(
-                                    "Search",
-                                    id="btn-search-home",
-                                    color="primary",
-                                    size="lg",
-                                    style={
-                                        "backgroundColor": "#ffdd00ff",
-                                        "border": "2px solid #555",
-                                        "color": "#222",
-                                        "marginTop": "10px",
-                                        "width": "50%",
+                                        "width": "100%",
+                                        "maxWidth": "500px",
+                                        "height": "auto",
                                     },
                                 ),
                             ],
-                            className="logo-search-container",
+                            className="logo-container",
                             style={
                                 "textAlign": "center",
                                 "display": "flex",
-                                "flexDirection": "column",
-                                "alignItems": "center"
+                                "alignItems": "center",
+                                "justifyContent": "center",
+                                "height": "100%"
                             }
                         )
                     ],
                     width=6,
                     className="desktop-left-section"
                 ),
-                # Right Section: Bulldozer GIF
+                # Right Section: Navigation
                 dbc.Col(
                     [
                         html.Div(
                             [
-                                html.A(
-                                    html.Img(
-                                        src="/assets/dozer.png",
-                                        style={
-                                            "width": "100%",
-                                            "maxWidth": "600px",
-                                            "display": "block",
-                                            "margin": "auto"
-                                        },
-                                        className="dozer-image"
-                                    ),
-                                    href="https://github.com/rhettadam/peekorobo",
-                                    target="_blank",
+                                html.H1(
+                                    "Data-Driven FRC Insights",
+                                    style={
+                                        "fontSize": "3.5rem",
+                                        "fontWeight": "bold",
+                                        "color": "var(--text-primary)",
+                                        "marginBottom": "1rem",
+                                        "textAlign": "left"
+                                    },
+                                ),
+                                html.P(
+                                    "Explore teams, events, and insights from the FIRST Robotics Competition",
+                                    style={
+                                        "fontSize": "1.3rem",
+                                        "color": "var(--text-secondary)",
+                                        "marginBottom": "3rem",
+                                        "textAlign": "left",
+                                        "lineHeight": "1.4"
+                                    },
+                                ),
+                                dbc.Row(
+                                    [
+                                        dbc.Col(
+                                            dbc.Button(
+                                                [
+                                                    html.I(className="fas fa-users me-2"),
+                                                    "Teams"
+                                                ],
+                                                href="/teams",
+                                                color="warning",
+                                                outline=True,
+                                                size="lg",
+                                                className="custom-view-btn",
+                                                style={
+                                                    "fontSize": "1.2rem",
+                                                    "fontWeight": "bold",
+                                                    "padding": "1rem 2rem",
+                                                    "width": "100%"
+                                                },
+                                            ),
+                                            width=6
+                                        ),
+                                        dbc.Col(
+                                            dbc.Button(
+                                                [
+                                                    html.I(className="fas fa-calendar-alt me-2"),
+                                                    "Events"
+                                                ],
+                                                href="/events",
+                                                color="warning",
+                                                outline=True,
+                                                size="lg",
+                                                className="custom-view-btn",
+                                                style={
+                                                    "fontSize": "1.2rem",
+                                                    "fontWeight": "bold",
+                                                    "padding": "1rem 2rem",
+                                                    "width": "100%"
+                                                },
+                                            ),
+                                            width=6
+                                        ),
+                                    ],
+                                    justify="center",
+                                    style={"maxWidth": "600px"}
                                 ),
                             ],
-                            style={"textAlign": "center"}
+                            className="navigation-container",
+                            style={
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "justifyContent": "center",
+                                "height": "100%"
+                            }
                         )
                     ],
                     width=6,
@@ -352,7 +364,7 @@ home_layout = html.Div([
         ),
     ], class_name="py-5", style={
         "backgroundColor": "var(--bg-primary)",
-        "flexGrow": "1" # Added flex-grow
+        "flexGrow": "1"
         }),
     footer
 ])
@@ -372,7 +384,7 @@ blog_layout = html.Div([
             dbc.CardBody([
                 html.Pre("""
 # For each component (auto, teleop, endgame):
-delta = decay * K * (actual - epa)
+delta = decay * K * (actual - epa) 
 
 # Where:
 decay = world_champ_penalty * (match_count / total_matches)²
@@ -470,9 +482,6 @@ confidence = min(1.0, sum(weight * component))
         "maxWidth": "900px",
         "flexGrow": "1" # Added flex-grow
         }, className="py-4 mx-auto"),
-    dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-    dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-    dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
     footer
 ])
 
@@ -538,9 +547,6 @@ def challenges_layout():
                     "flexGrow": "1" # Added flex-grow
                 },
             ),
-            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
             footer,
         ]
     )
@@ -566,89 +572,234 @@ def challenge_details_layout(year):
         alt=f"{year} Challenge Banner",
     ) if has_banner else None
 
+    # --- Stats Section ---
+    # Count number of events, teams, and matches for the year
+    num_events = num_teams = num_matches = 'N/A'
+    try:
+        if year == 2025:
+            from peekorobo import EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES
+            year_events = EVENT_DATABASE.get(year, {})
+            year_event_keys = list(year_events.keys())
+            num_events = len(year_event_keys)
+            team_set = set()
+            for ek in year_event_keys:
+                teams = EVENT_TEAMS.get(year, {}).get(ek, [])
+                for t in teams:
+                    if isinstance(t, dict) and 'tk' in t:
+                        team_set.add(t['tk'])
+            num_teams = len(team_set)
+            year_matches = EVENT_MATCHES.get(year, [])
+            num_matches = len(year_matches)
+        else:
+            from datagather import load_year_data
+            _, event_data, event_teams, _, _, event_matches = load_year_data(year)
+            num_events = len(event_data)
+            team_set = set()
+            for ek, teams in event_teams.items():
+                for t in teams:
+                    if isinstance(t, dict) and 'tk' in t:
+                        team_set.add(t['tk'])
+            num_teams = len(team_set)
+            num_matches = len(event_matches)
+    except Exception:
+        pass
+
+    stats_row = dbc.Row([
+        dbc.Col(dbc.Card([
+            dbc.CardBody([
+                html.Div(str(num_teams), style={
+                    "fontSize": "2.5rem",
+                    "fontWeight": "bold",
+                    "textAlign": "center",
+                    "marginBottom": "0.25rem",
+                    "whiteSpace": "nowrap"
+                }),
+                html.Div("Teams", style={
+                    "fontSize": "1.1rem",
+                    "color": "var(--text-secondary)",
+                    "textAlign": "center",
+                    "whiteSpace": "nowrap"
+                })
+            ])
+        ], className="shadow-sm stat-card", style={
+            "borderRadius": "12px",
+            "padding": "1.2rem 0.5rem",
+            "minWidth": "100px",
+            "background": "rgba(255,255,255,0.02)",
+            "border": "1.5px solid #444"
+        }), xs=12, md=4, style={"marginBottom": "1rem"}),
+        dbc.Col(dbc.Card([
+            dbc.CardBody([
+                html.Div(str(num_events), style={
+                    "fontSize": "2.5rem",
+                    "fontWeight": "bold",
+                    "textAlign": "center",
+                    "marginBottom": "0.25rem",
+                    "whiteSpace": "nowrap"
+                }),
+                html.Div("Events", style={
+                    "fontSize": "1.1rem",
+                    "color": "var(--text-secondary)",
+                    "textAlign": "center",
+                    "whiteSpace": "nowrap"
+                })
+            ])
+        ], className="shadow-sm stat-card", style={
+            "borderRadius": "12px",
+            "padding": "1.2rem 0.5rem",
+            "minWidth": "100px",
+            "background": "rgba(255,255,255,0.02)",
+            "border": "1.5px solid #444"
+        }), xs=12, md=4, style={"marginBottom": "1rem"}),
+        dbc.Col(dbc.Card([
+            dbc.CardBody([
+                html.Div(str(num_matches), style={
+                    "fontSize": "2.5rem",
+                    "fontWeight": "bold",
+                    "textAlign": "center",
+                    "marginBottom": "0.25rem",
+                    "whiteSpace": "nowrap"
+                }),
+                html.Div("Matches", style={
+                    "fontSize": "1.1rem",
+                    "color": "var(--text-secondary)",
+                    "textAlign": "center",
+                    "whiteSpace": "nowrap"
+                })
+            ])
+        ], className="shadow-sm stat-card", style={
+            "borderRadius": "12px",
+            "padding": "1.2rem 0.5rem",
+            "minWidth": "160px",
+            "background": "rgba(255,255,255,0.02)",
+            "border": "1.5px solid #444"
+        }), xs=12, md=4),
+    ], className="mb-4 justify-content-center", style={"maxWidth": "600px", "margin": "0 auto"})
+
+    # --- Field Diagram Section ---
+    field_img_path = f"/assets/logos/{year}field.png"
+    field_img_exists = os.path.exists(f"assets/logos/{year}field.png")
+    field_diagram = (
+        html.Div([
+            html.H5("Field Diagram", className="text-center mt-4 mb-2"),
+            html.Img(
+                src=field_img_path,
+                style={
+                    "display": "block",
+                    "margin": "0 auto",
+                    "maxWidth": "100%",
+                    "maxHeight": "350px",
+                    "borderRadius": "10px",
+                    "boxShadow": "0px 2px 8px rgba(0,0,0,0.12)"
+                },
+                alt=f"{year} FRC Field"
+            ),
+            html.Div(
+                className="text-center mt-2"
+            )
+        ]) if field_img_exists else None
+    )
+
+    # Manual Button (now to be placed below the logo)
+    manual_button = html.Div(
+        dbc.Button(
+            "View Game Manual",
+            href=game["manual"],
+            target="_blank",
+            color="warning",
+            outline=True,
+            className="custom-view-btn custom-view-btn-large",
+            style={
+                "marginTop": "1rem"
+            },
+        ),
+        className="text-center mb-4",
+        style={"marginTop": "1rem"}
+    )
+
+    # --- Collage Layout ---
+    # Hero Section: Logo + Summary/Stats side by side
+    hero_row = dbc.Row([
+        dbc.Col([
+            html.Img(
+                src=game["logo"],
+                style={
+                    "display": "block",
+                    "margin": "0 auto 1.5rem auto",
+                    "maxWidth": "260px",
+                    "borderRadius": "16px",
+                    "boxShadow": "0px 2px 12px rgba(0,0,0,0.13)"
+                },
+                alt=game["name"],
+            ),
+            manual_button,
+        ], md=5, xs=12, style={"textAlign": "center", "marginBottom": "2rem", "display": "flex", "flexDirection": "column", "justifyContent": "center"}),
+        dbc.Col([
+            html.H2(f"{game['name']} ({year})", className="card-title text-center mb-3", style={"fontWeight": "bold"}),
+            html.P(
+                game.get("summary", "No summary available."),
+                className="card-text text-center mb-4",
+                style={
+                    "fontSize": "1.1rem",
+                    "lineHeight": "1.6",
+                    "color": "var(--text-primary)",
+                    "marginBottom": "2rem",
+                    "maxWidth": "600px",
+                    "marginLeft": "auto",
+                    "marginRight": "auto"
+                },
+            ),
+            stats_row,
+        ], md=7, xs=12, style={"display": "flex", "flexDirection": "column", "justifyContent": "center", "marginBottom": "2rem"}),
+    ], align="center", className="mb-4", style={"minHeight": "340px"})
+
+    # Collage Section: Field Diagram + Reveal Video side by side
+    collage_row = dbc.Row([
+        dbc.Col([
+            field_diagram,
+        ], md=6, xs=12, style={"marginBottom": "2rem"}),
+        dbc.Col([
+            html.H5("Watch the official game reveal:", className="text-center mb-3 mt-2"),
+            html.Div(
+                html.A(
+                    html.Img(
+                        src=f"https://img.youtube.com/vi/{game['video'].split('=')[-1]}/0.jpg",
+                        style={
+                            "maxWidth": "100%",
+                            "borderRadius": "8px",
+                            "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
+                            "margin": "0 auto",
+                            "display": "block"
+                        },
+                    ),
+                    href=game["video"],
+                    target="_blank",
+                    style={
+                        "display": "block",
+                        "margin": "0 auto"
+                    },
+                ),
+                className="text-center",
+            ),
+        ], md=6, xs=12, style={"marginBottom": "2rem"}),
+    ], className="mb-4", style={"background": "var(--card-bg)", "borderRadius": "12px", "padding": "2rem 1rem"})
+
     return html.Div(
         [
             topbar(),
             dbc.Container(
                 [
-                    banner_img if banner_img else None, # Add banner at the top
-                    dbc.Card(
-                        dbc.CardBody([
-                            html.H2(f"{game['name']} ({year})", className="card-title text-center mb-4"),
-                            html.Img(
-                                src=game["logo"],
-                                style={
-                                    "display": "block",
-                                    "margin": "0 auto",
-                                    "maxWidth": "300px", # Adjust max-width for card
-                                    "borderRadius": "10px"
-                                },
-                                alt=game["name"],
-                                className="mb-4",
-                            ),
-                            html.P(
-                                game.get("summary", "No summary available."),
-                                className="card-text text-center mb-4",
-                                style={
-                                    "fontSize": "1rem",
-                                    "lineHeight": "1.5",
-                                    "color": "var(--text-primary)"
-                                },
-                            ),
-                            html.Div(
-                                dbc.Button(
-                                    "View Game Manual",
-                                    href=game["manual"],
-                                    target="_blank",
-                                    style={
-                                        "backgroundColor": "#ffdd00ff",
-                                        "color": "#222",
-                                        "border": "2px solid #555"
-                                    },
-                                ),
-                                className="text-center mb-4", # Add margin below button
-                            ),
-                            html.P(
-                                "Watch the official game reveal:",
-                                className="text-center mb-3", # Adjust margin
-                            ),
-                            html.Div(
-                                html.A(
-                                    html.Img(
-                                        src=f"https://img.youtube.com/vi/{game['video'].split('=')[-1]}/0.jpg",
-                                        style={
-                                            "maxWidth": "400px",
-                                            "borderRadius": "8px",
-                                            "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
-                                        },
-                                    ),
-                                    href=game["video"],
-                                    target="_blank",
-                                    style={
-                                        "display": "block",
-                                        "margin": "0 auto"
-                                    },
-                                ),
-                                className="text-center",
-                            ),
-                        ]),
-                        className="mb-4 shadow-sm", # Add shadow and bottom margin to card
-                        style={
-                           "borderRadius": "10px",
-                           "backgroundColor": "var(--card-bg)"
-                        }
-                    )
+                    banner_img if banner_img else None,
+                    hero_row,
+                    collage_row,
                 ],
                 style={
-                    "maxWidth": "800px",
+                    "maxWidth": "1000px",
                     "margin": "0 auto",
-                    "padding": "20px",
+                    "padding": "32px 10px 20px 10px",
                     "flexGrow": "1",
                 },
             ),
-            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
             footer,
         ]
     )
@@ -685,9 +836,6 @@ def teams_map_layout():
             }
         ),
         footer,
-        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
     ], style={
         "minHeight": "100vh",
         "display": "flex",
@@ -733,9 +881,6 @@ def login_layout():
             "backgroundColor": "var(--bg-primary)",
             "flexGrow": "1" # Added flex-grow
             }),
-        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
         footer
     ])
 
@@ -1075,9 +1220,6 @@ def teams_layout(default_year=2025):
                 "margin": "0 auto",
                 "flexGrow": "1" # Added flex-grow
                 }),
-            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
             footer,
         ]
     )
@@ -1216,9 +1358,6 @@ def events_layout(year=2025):
                     "flexGrow": "1" # Added flex-grow
                 },
             ),
-            dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-            dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-            dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
             footer,
         ]
     )
@@ -1647,8 +1786,5 @@ def compare_layout():
             html.Hr(),
             html.Div(id="compare-output-section", children=[]) # Make this div initially empty
         ], style={"maxWidth": "1000px", "margin": "0 auto", "padding": "20px", "flexGrow": "1"}),
-        dbc.Button("Invisible", id="btn-search-home", style={"display": "none"}),
-        dbc.Button("Invisible2", id="input-team-home", style={"display": "none"}),
-        dbc.Button("Invisible3", id="input-year-home", style={"display": "none"}),
         footer
     ])

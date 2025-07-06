@@ -568,11 +568,7 @@ def universal_profile_icon_or_toast():
         },
     )
 
-def wrap_with_toast_or_star(content):
-    return html.Div([
-        content,
-        universal_profile_icon_or_toast()
-    ])
+
 
 WEEK_RANGES = [
     (date(2025, 2, 26), date(2025, 3, 2)),  # Week 1
