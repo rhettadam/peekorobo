@@ -954,6 +954,65 @@ def logout():
     flask.session.clear()
     return flask.redirect("/login")
 
+@app.server.route('/api/playlist/<event_key>/<team_number>')
+def create_team_event_playlist(event_key, team_number):
+    """Create a YouTube playlist for a specific team at a specific event."""
+    try:
+        team_number = int(team_number)
+        year = 2025  # Default to 2025 for now
+        
+        # Get matches for this team and event
+        year_matches = EVENT_MATCHES.get(year, [])
+        team_matches = [
+            m for m in year_matches 
+            if m.get("ek") == event_key and (
+                str(team_number) in m.get("rt", "").split(",") or 
+                str(team_number) in m.get("bt", "").split(",")
+            )
+        ]
+        
+        if not team_matches:
+            return "No matches found for this team at this event.", 404
+        
+        # Sort matches in correct order
+        def parse_match_sort_key(match):
+            comp_level_order = {"qm": 0, "sf": 1, "qf": 2, "f": 3}
+            key = match.get("k", "").split("_")[-1].lower()
+            
+            # Extract comp level and match number
+            for level in comp_level_order:
+                if key.startswith(level):
+                    remainder = key[len(level):].replace("m", "")
+                    match_number = int(remainder) if remainder.isdigit() else 0
+                    return (comp_level_order[level], match_number)
+            
+            return (99, 9999)
+        
+        team_matches.sort(key=parse_match_sort_key)
+        
+        # Extract YouTube video IDs
+        video_ids = [m.get("yt") for m in team_matches if m.get("yt")]
+        
+        if not video_ids:
+            return "No YouTube videos found for this team at this event.", 404
+        
+        # Get event name
+        event_data = EVENT_DATABASE.get(year, {}).get(event_key, {})
+        event_name = event_data.get("n", event_key)
+        
+        # Create playlist title
+        playlist_title = f"{event_name} - Team {team_number}"
+        
+        # Create YouTube playlist URL
+        from urllib.parse import quote
+        playlist_url = f"https://www.youtube.com/watch_videos?video_ids={','.join(video_ids)}&title={quote(playlist_title)}"
+        
+        # Redirect to the playlist
+        return flask.redirect(playlist_url)
+        
+    except Exception as e:
+        return f"Error creating playlist: {str(e)}", 500
+
 @callback(
     Output("profile-display", "hidden"),
     Output("profile-card", "style"),
@@ -2404,42 +2463,56 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             for t in event_teams
         ]
 
-        return html.Div([
-            dbc.Row([
-                dbc.Col([
-                    html.Label("Filter by Team:", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
-                    dcc.Dropdown(
-                        id="team-filter",
-                        options=[{"label": "All Teams", "value": "ALL"}] + team_filter_options,
-                        value="ALL",
-                        clearable=False
-                    )
-                ], md=6),
-                dbc.Col([
-                    dbc.Button(
-                        "Create Playlist ▶︎",
-                        id="create-playlist-btn",
-                        color="warning",
-                        className="w-100",
-                        style={"marginTop": "10px"}
-                    )
-                ], md=6, className="d-flex align-items-end")
-            ], className="mb-4"),
-            html.Div(id="matches-container")
-        ]), query_string
+    return html.Div([
+        dbc.Row([
+            dbc.Col([
+                html.Label("Filter by Team:", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
+                dcc.Dropdown(
+                    id="team-filter",
+                    options=[{"label": "All Teams", "value": "ALL"}] + team_filter_options,
+                    value="ALL",
+                    clearable=False
+                )
+            ], md=4),
+            dbc.Col([
+                html.Label("Table Style:", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
+                dcc.RadioItems(
+                    id="table-style-toggle",
+                    options=[
+                        {"label": "Both Alliances", "value": "both"},
+                        {"label": "Team Focus", "value": "team"}
+                    ],
+                    value="both",
+                    inline=True,
+                    labelStyle={"marginRight": "15px", "color": "var(--text-primary)"}
+                )
+            ], md=4),
+            dbc.Col([
+                dbc.Button(
+                    "Create Playlist ▶︎",
+                    id="create-playlist-btn",
+                    color="warning",
+                    className="w-100",
+                    style={"marginTop": "10px"}
+                )
+            ], md=4, className="d-flex align-items-end")
+        ], className="mb-4"),
+        html.Div(id="matches-container")
+    ]), query_string
 
     return dbc.Alert("No data available.", color="warning"), query_string
 
 @app.callback(
     Output("matches-container", "children"),
     Input("team-filter", "value"),
+    Input("table-style-toggle", "value"),
     [
         State("store-event-matches", "data"),
         State("store-event-epa", "data"),
         State("store-event-year", "data"),  # Add event year state
     ],
 )
-def update_matches_table(selected_team, event_matches, epa_data, event_year):
+def update_matches_table(selected_team, table_style, event_matches, epa_data, event_year):
     event_matches = event_matches or []
     epa_data = epa_data or {}
     event_year = event_year or 2025  # Default fallback
@@ -2502,7 +2575,7 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
             "confidence": info.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
         }
     
-    def build_match_rows(matches):
+    def build_match_rows(matches, table_style="both"):
         rows = []
         for match in matches:
             red_str = match.get("rt", "")
@@ -2533,7 +2606,6 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
                 pred_red = "50%"
                 pred_blue = "50%"
                 pred_winner = "Tie"
-            
             else:
                 pred_red = f"{p_red:.0%}"
                 pred_blue = f"{p_blue:.0%}"
@@ -2545,74 +2617,145 @@ def update_matches_table(selected_team, event_matches, epa_data, event_year):
             # Add match link for the label
             match_link = f"[{label}](/match/{event_key}/{label})"
             
-            rows.append({
-                "Video": video_link,
-                "Match": match_link,
-                "Red Alliance": format_teams_markdown(red_str),
-                "Blue Alliance": format_teams_markdown(blue_str),
-                "Red Score": red_score,
-                "Blue Score": blue_score,
-                "Winner": winner.title() if winner else "Tie",
-                "Pred Winner": pred_winner,
-                "Red Pred": f"{pred_red}",
-                "Blue Pred": f"{pred_blue}",
-                "Red Prediction %": p_red * 100,  # For conditional styling
-                "Blue Prediction %": p_blue * 100,  # For conditional styling
-            })
+            if table_style == "both":
+                # Both alliances view - show all predictions
+                rows.append({
+                    "Video": video_link,
+                    "Match": match_link,
+                    "Red Alliance": format_teams_markdown(red_str),
+                    "Blue Alliance": format_teams_markdown(blue_str),
+                    "Red Score": red_score,
+                    "Blue Score": blue_score,
+                    "Winner": winner.title() if winner else "Tie",
+                    "Pred Winner": pred_winner,
+                    "Red Pred": f"{pred_red}",
+                    "Blue Pred": f"{pred_blue}",
+                    "Red Prediction %": p_red * 100,  # For conditional styling
+                    "Blue Prediction %": p_blue * 100,  # For conditional styling
+                })
+            else:
+                # Team focus view - only show selected team's alliance
+                team_alliance = None
+                team_prediction = "N/A"
+                team_prediction_percent = None
+                
+                if selected_team and selected_team != "ALL":
+                    if selected_team in red_str.split(","):
+                        team_alliance = "Red"
+                        team_prediction = pred_red
+                        team_prediction_percent = p_red * 100
+                    elif selected_team in blue_str.split(","):
+                        team_alliance = "Blue"
+                        team_prediction = pred_blue
+                        team_prediction_percent = p_blue * 100
+                
+                rows.append({
+                    "Video": video_link,
+                    "Match": match_link,
+                    "Alliance": team_alliance or "N/A",
+                    "Red Alliance": format_teams_markdown(red_str),
+                    "Blue Alliance": format_teams_markdown(blue_str),
+                    "Score": red_score if team_alliance == "Red" else blue_score if team_alliance == "Blue" else "N/A",
+                    "Opponent Score": blue_score if team_alliance == "Red" else red_score if team_alliance == "Blue" else "N/A",
+                    "Winner": winner.title() if winner else "Tie",
+                    "Prediction": team_prediction,
+                    "Prediction %": team_prediction_percent,
+                    "Outcome": "",
+                })
         return rows
 
-    qual_data = build_match_rows(qual_matches)
-    playoff_data = build_match_rows(playoff_matches)
+    qual_data = build_match_rows(qual_matches, table_style)
+    playoff_data = build_match_rows(playoff_matches, table_style)
 
-    match_columns = [
-        {"name": "Video", "id": "Video", "presentation": "markdown"},
-        {"name": "Match", "id": "Match", "presentation": "markdown"},
-        {"name": "Red Alliance", "id": "Red Alliance", "presentation": "markdown"},
-        {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
-        {"name": "Red Score", "id": "Red Score"},
-        {"name": "Blue Score", "id": "Blue Score"},
-        {"name": "Winner", "id": "Winner"},
-        {"name": "Pred Winner", "id": "Pred Winner"},
-        {"name": "Red Pred", "id": "Red Pred"},
-        {"name": "Blue Pred", "id": "Blue Pred"},
-    ]
+    if table_style == "both":
+        match_columns = [
+            {"name": "Video", "id": "Video", "presentation": "markdown"},
+            {"name": "Match", "id": "Match", "presentation": "markdown"},
+            {"name": "Red Alliance", "id": "Red Alliance", "presentation": "markdown"},
+            {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
+            {"name": "Red Score", "id": "Red Score"},
+            {"name": "Blue Score", "id": "Blue Score"},
+            {"name": "Winner", "id": "Winner"},
+            {"name": "Pred Winner", "id": "Pred Winner"},
+            {"name": "Red Pred", "id": "Red Pred"},
+            {"name": "Blue Pred", "id": "Blue Pred"},
+        ]
+    else:
+        match_columns = [
+            {"name": "Video", "id": "Video", "presentation": "markdown"},
+            {"name": "Match", "id": "Match", "presentation": "markdown"},
+            {"name": "Alliance", "id": "Alliance"},
+            {"name": "Red Alliance", "id": "Red Alliance", "presentation": "markdown"},
+            {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
+            {"name": "Score", "id": "Score"},
+            {"name": "Opponent Score", "id": "Opponent Score"},
+            {"name": "Winner", "id": "Winner"},
+            {"name": "Prediction", "id": "Prediction"},
+            {"name": "Outcome", "id": "Outcome"},
+        ]
 
-    row_style = [
-        # Row coloring for winner (these should come first)
-        {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
-        # --- Cell-level prediction rules (these should come after row-level rules) ---
-        # Red prediction styling
-        {"if": {"filter_query": "{Red Prediction %} >= 45 && {Red Prediction %} < 50", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lowneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Red Prediction %} >= 50 && {Red Prediction %} < 55", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-highneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Red Prediction %} >= 55 && {Red Prediction %} <= 65", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightgreen)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Red Prediction %} > 65 && {Red Prediction %} <= 75", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightergreen)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Red Prediction %} > 75 && {Red Prediction %} <= 85", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightestgreen)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Red Prediction %} > 85 && {Red Prediction %} <= 95", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-darkgreen)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Red Prediction %} > 95", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-deepgreen)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Red Prediction %} < 45 && {Red Prediction %} >= 35", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightestred)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Red Prediction %} < 35 && {Red Prediction %} >= 25", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lighterred)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Red Prediction %} < 25 && {Red Prediction %} >= 15", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightred)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Red Prediction %} < 15 && {Red Prediction %} >= 5", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-darkred)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Red Prediction %} < 5", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-deepred)", "color": "var(--text-primary)"},
-        # Blue prediction styling
-        {"if": {"filter_query": "{Blue Prediction %} >= 45 && {Blue Prediction %} < 50", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lowneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Blue Prediction %} >= 50 && {Blue Prediction %} < 55", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-highneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Blue Prediction %} >= 55 && {Blue Prediction %} <= 65", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightestgreen)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Blue Prediction %} > 65 && {Blue Prediction %} <= 75", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightergreen)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Blue Prediction %} > 75 && {Blue Prediction %} <= 85", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightgreen)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Blue Prediction %} > 85 && {Blue Prediction %} <= 95", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-darkgreen)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Blue Prediction %} > 95", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-deepgreen)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Blue Prediction %} < 45 && {Blue Prediction %} >= 35", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightestred)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Blue Prediction %} < 35 && {Blue Prediction %} >= 25", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lighterred)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Blue Prediction %} < 25 && {Blue Prediction %} >= 15", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightred)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Blue Prediction %} < 15 && {Blue Prediction %} >= 5", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-darkred)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": "{Blue Prediction %} < 5", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-deepred)", "color": "var(--text-primary)"},
-        # Predicted Winner styling
-        {"if": {"filter_query": '{Pred Winner} = "Red"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": '{Pred Winner} = "Blue"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
-        {"if": {"filter_query": '{Pred Winner} = "Tie"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-yellow)", "color": "var(--text-primary)"},
-    ]
+    if table_style == "both":
+        row_style = [
+            # Row coloring for winner (these should come first)
+            {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
+            # --- Cell-level prediction rules (these should come after row-level rules) ---
+            # Red prediction styling
+            {"if": {"filter_query": "{Red Prediction %} >= 45 && {Red Prediction %} < 50", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lowneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Red Prediction %} >= 50 && {Red Prediction %} < 55", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-highneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Red Prediction %} >= 55 && {Red Prediction %} <= 65", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Red Prediction %} > 65 && {Red Prediction %} <= 75", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightergreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Red Prediction %} > 75 && {Red Prediction %} <= 85", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightestgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Red Prediction %} > 85 && {Red Prediction %} <= 95", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-darkgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Red Prediction %} > 95", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-deepgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Red Prediction %} < 45 && {Red Prediction %} >= 35", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightestred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Red Prediction %} < 35 && {Red Prediction %} >= 25", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lighterred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Red Prediction %} < 25 && {Red Prediction %} >= 15", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Red Prediction %} < 15 && {Red Prediction %} >= 5", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-darkred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Red Prediction %} < 5", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-deepred)", "color": "var(--text-primary)"},
+            # Blue prediction styling
+            {"if": {"filter_query": "{Blue Prediction %} >= 45 && {Blue Prediction %} < 50", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lowneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Blue Prediction %} >= 50 && {Blue Prediction %} < 55", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-highneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Blue Prediction %} >= 55 && {Blue Prediction %} <= 65", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightestgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Blue Prediction %} > 65 && {Blue Prediction %} <= 75", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightergreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Blue Prediction %} > 75 && {Blue Prediction %} <= 85", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Blue Prediction %} > 85 && {Blue Prediction %} <= 95", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-darkgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Blue Prediction %} > 95", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-deepgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Blue Prediction %} < 45 && {Blue Prediction %} >= 35", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightestred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Blue Prediction %} < 35 && {Blue Prediction %} >= 25", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lighterred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Blue Prediction %} < 25 && {Blue Prediction %} >= 15", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-lightred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Blue Prediction %} < 15 && {Blue Prediction %} >= 5", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-darkred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Blue Prediction %} < 5", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-deepred)", "color": "var(--text-primary)"},
+            # Predicted Winner styling
+            {"if": {"filter_query": '{Pred Winner} = "Red"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Pred Winner} = "Blue"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Pred Winner} = "Tie"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-yellow)", "color": "var(--text-primary)"},
+        ]
+    else:
+        # Team focus styling
+        row_style = [
+            # Row coloring for winner
+            {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
+            # Team prediction styling
+            {"if": {"filter_query": "{Prediction %} >= 45 && {Prediction %} < 50", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lowneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Prediction %} >= 50 && {Prediction %} < 55", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-highneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Prediction %} >= 55 && {Prediction %} <= 65", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightestgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Prediction %} > 65 && {Prediction %} <= 75", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightergreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Prediction %} > 75 && {Prediction %} <= 85", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Prediction %} > 85 && {Prediction %} <= 95", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-darkgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Prediction %} > 95", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-deepgreen)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Prediction %} < 45 && {Prediction %} >= 35", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightestred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Prediction %} < 35 && {Prediction %} >= 25", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lighterred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Prediction %} < 25 && {Prediction %} >= 15", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lightred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Prediction %} < 15 && {Prediction %} >= 5", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-darkred)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": "{Prediction %} < 5", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-deepred)", "color": "var(--text-primary)"},
+            # Outcome styling (win/loss for team)
+            {"if": {"filter_query": '{Winner} = "Red" && {Alliance} = "Red"', "column_id": "Outcome"}, "backgroundColor": "var(--table-row-green)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Winner} = "Red" && {Alliance} != "Red"', "column_id": "Outcome"}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Winner} = "Blue" && {Alliance} = "Blue"', "column_id": "Outcome"}, "backgroundColor": "var(--table-row-green)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Winner} = "Blue" && {Alliance} != "Blue"', "column_id": "Outcome"}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
+        ]
 
     style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "color": "var(--text-primary)", "backgroundColor": "transparent" }
     style_header={
@@ -4867,79 +5010,81 @@ def match_layout(event_key, match_key):
         ("EPA", "normal_epa"),
         ("Confidence", "confidence"),
     ]
-    # Build columns: team numbers, Red Predicted, Red Actual, Blue teams, Blue Predicted, Blue Actual
-    columns = [
-        {"name": "Phase", "id": "Phase"}
+    # Build columns for red and blue tables
+    red_columns = [
+        {"name": "Phase", "id": "Phase"},
+    ] + [
+        {"name": str(t["team_number"]), "id": f"red_{t['team_number']}"} for t in red_epas
+    ] + [
+        {"name": "Pred", "id": "Red Predicted"},
+        {"name": "Actual", "id": "Red Actual"},
     ]
-    # Red alliance team columns
-    columns += [{
-        "name": str(t["team_number"]),
-        "id": f"red_{t['team_number']}"
-    } for t in red_epas]
-    columns.append({"name": "Red Predicted", "id": "Red Predicted"})
-    columns.append({"name": "Red Actual", "id": "Red Actual"})
-    # Blue alliance team columns
-    columns += [{
-        "name": str(t["team_number"]),
-        "id": f"blue_{t['team_number']}"
-    } for t in blue_epas]
-    columns.append({"name": "Blue Predicted", "id": "Blue Predicted"})
-    columns.append({"name": "Blue Actual", "id": "Blue Actual"})
-    # Build rows
-    data = []
+    blue_columns = [
+        {"name": "Phase", "id": "Phase"},
+    ] + [
+        {"name": str(t["team_number"]), "id": f"blue_{t['team_number']}"} for t in blue_epas
+    ] + [
+        {"name": "Pred", "id": "Blue Predicted"},
+        {"name": "Actual", "id": "Blue Actual"},
+    ]
+
+    # Build data for red and blue tables
+    red_data = []
+    blue_data = []
     for label, key in phases:
-        row = {"Phase": label}
+        red_row = {"Phase": label}
         for t in red_epas:
-            row[f"red_{t['team_number']}"] = round(t[key], 2)
-        row["Red Predicted"] = round(sum(t[key] for t in red_epas), 2)
-        row["Red Actual"] = ""  # Placeholder for actuals
+            red_row[f"red_{t['team_number']}"] = round(t[key], 2)
+        if key == "confidence":
+            red_row["Red Predicted"] = round(sum(t[key] for t in red_epas) / len(red_epas), 2) if red_epas else 0
+        else:
+            red_row["Red Predicted"] = round(sum(t[key] for t in red_epas), 2)
+        red_row["Red Actual"] = ""  # Placeholder for actuals
+        red_data.append(red_row)
+
+        blue_row = {"Phase": label}
         for t in blue_epas:
-            row[f"blue_{t['team_number']}"] = round(t[key], 2)
-        row["Blue Predicted"] = round(sum(t[key] for t in blue_epas), 2)
-        row["Blue Actual"] = ""  # Placeholder for actuals
-        data.append(row)
-    # Add Total row
-    total_row = {"Phase": "ACE"}
+            blue_row[f"blue_{t['team_number']}"] = round(t[key], 2)
+        if key == "confidence":
+            blue_row["Blue Predicted"] = round(sum(t[key] for t in blue_epas) / len(blue_epas), 2) if blue_epas else 0
+        else:
+            blue_row["Blue Predicted"] = round(sum(t[key] for t in blue_epas), 2)
+        blue_row["Blue Actual"] = ""  # Placeholder for actuals
+        blue_data.append(blue_row)
+
+    # Add Total row (ACE)
+    red_total_row = {"Phase": "ACE"}
     for t in red_epas:
-        total_row[f"red_{t['team_number']}"] = round(t["epa"], 2)
-    total_row["Red Predicted"] = round(pred_red_score, 2)
-    total_row["Red Actual"] = red_score
+        red_total_row[f"red_{t['team_number']}"] = round(t["epa"], 2)
+    red_total_row["Red Predicted"] = round(pred_red_score, 2)
+    red_total_row["Red Actual"] = red_score
+    red_data.append(red_total_row)
+
+    blue_total_row = {"Phase": "ACE"}
     for t in blue_epas:
-        total_row[f"blue_{t['team_number']}"] = round(t["epa"], 2)
-    total_row["Blue Predicted"] = round(pred_blue_score, 2)
-    total_row["Blue Actual"] = blue_score
-    data.append(total_row)
+        blue_total_row[f"blue_{t['team_number']}"] = round(t["epa"], 2)
+    blue_total_row["Blue Predicted"] = round(pred_blue_score, 2)
+    blue_total_row["Blue Actual"] = blue_score
+    blue_data.append(blue_total_row)
+
     # Percentile coloring for all stats
     all_stats = {
         k: [t.get(k if k != "normal_epa" else "epa", 0) for t in team_db.values() if t.get(k if k != "normal_epa" else "epa") is not None]
         for k in ["auto_epa", "teleop_epa", "endgame_epa", "confidence", "epa", "normal_epa"]
     }
     percentiles_dict = {k: compute_percentiles(v) for k, v in all_stats.items()}
-    # Build style_data_conditional for all columns and phases, matching teams layout
-    style_data_conditional = []
+
+    # Build style_data_conditional for red table
+    red_style_data_conditional = []
     for row_idx, (label, stat_key) in enumerate(phases):
         percentiles = percentiles_dict[stat_key]
         stat_rules = get_epa_styling({stat_key: percentiles})
-        # Red alliance
+        # Red alliance teams
         for t in red_epas:
             col_id = f"red_{t['team_number']}"
             for rule in stat_rules:
                 filter_query = rule["if"]["filter_query"].replace(f"{{{stat_key}}}", f"{{{col_id}}}")
-                style_data_conditional.append({
-                    **rule,
-                    "if": {
-                        **rule["if"],
-                        "column_id": col_id,
-                        "row_index": row_idx,
-                        "filter_query": filter_query
-                    }
-                })
-        # Blue alliance
-        for t in blue_epas:
-            col_id = f"blue_{t['team_number']}"
-            for rule in stat_rules:
-                filter_query = rule["if"]["filter_query"].replace(f"{{{stat_key}}}", f"{{{col_id}}}")
-                style_data_conditional.append({
+                red_style_data_conditional.append({
                     **rule,
                     "if": {
                         **rule["if"],
@@ -4951,16 +5096,155 @@ def match_layout(event_key, match_key):
         # Red Predicted
         for rule in stat_rules:
             filter_query = rule["if"]["filter_query"].replace(f"{{{stat_key}}}", "{Red Predicted}")
+            red_style_data_conditional.append({
+                **rule,
+                "if": {
+                    **rule["if"],
+                    "column_id": "Red Predicted",
+                    "row_index": row_idx,
+                    "filter_query": filter_query
+                }
+            })
+    # ACE row for red table
+    ace_percentiles = percentiles_dict["epa"]
+    ace_rules = get_epa_styling({"epa": ace_percentiles})
+    for t in red_epas:
+        col_id = f"red_{t['team_number']}"
+        for rule in ace_rules:
+            filter_query = rule["if"]["filter_query"].replace("{epa}", f"{{{col_id}}}")
+            red_style_data_conditional.append({
+                **rule,
+                "if": {
+                    **rule["if"],
+                    "column_id": col_id,
+                    "row_index": len(phases),
+                    "filter_query": filter_query
+                }
+            })
+    for rule in ace_rules:
+        filter_query = rule["if"]["filter_query"].replace("{epa}", "{Red Predicted}")
+        red_style_data_conditional.append({
+            **rule,
+            "if": {
+                **rule["if"],
+                "column_id": "Red Predicted",
+                "row_index": len(phases),
+                "filter_query": filter_query
+            }
+        })
+
+    # Build style_data_conditional for blue table
+    blue_style_data_conditional = []
+    for row_idx, (label, stat_key) in enumerate(phases):
+        percentiles = percentiles_dict[stat_key]
+        stat_rules = get_epa_styling({stat_key: percentiles})
+        # Blue alliance teams
+        for t in blue_epas:
+            col_id = f"blue_{t['team_number']}"
+            for rule in stat_rules:
+                filter_query = rule["if"]["filter_query"].replace(f"{{{stat_key}}}", f"{{{col_id}}}")
+                blue_style_data_conditional.append({
+                    **rule,
+                    "if": {
+                        **rule["if"],
+                        "column_id": col_id,
+                        "row_index": row_idx,
+                        "filter_query": filter_query
+                    }
+                })
         # Blue Predicted
         for rule in stat_rules:
             filter_query = rule["if"]["filter_query"].replace(f"{{{stat_key}}}", "{Blue Predicted}")
+            blue_style_data_conditional.append({
+                **rule,
+                "if": {
+                    **rule["if"],
+                    "column_id": "Blue Predicted",
+                    "row_index": row_idx,
+                    "filter_query": filter_query
+                }
+            })
+    # ACE row for blue table
+    for t in blue_epas:
+        col_id = f"blue_{t['team_number']}"
+        for rule in ace_rules:
+            filter_query = rule["if"]["filter_query"].replace("{epa}", f"{{{col_id}}}")
+            blue_style_data_conditional.append({
+                **rule,
+                "if": {
+                    **rule["if"],
+                    "column_id": col_id,
+                    "row_index": len(phases),
+                    "filter_query": filter_query
+                }
+            })
+    for rule in ace_rules:
+        filter_query = rule["if"]["filter_query"].replace("{epa}", "{Blue Predicted}")
+        blue_style_data_conditional.append({
+            **rule,
+            "if": {
+                **rule["if"],
+                "column_id": "Blue Predicted",
+                "row_index": len(phases),
+                "filter_query": filter_query
+            }
+        })
+
+    # Style for red and blue headers
+    red_header_style = {
+        "backgroundColor": "#d32f2f",
+        "color": "#fff",
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "borderBottom": "1px solid var(--border-color)",
+        "padding": "6px",
+        "fontSize": "13px",
+    }
+    blue_header_style = {
+        "backgroundColor": "#1976d2",
+        "color": "#fff",
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "borderBottom": "1px solid var(--border-color)",
+        "padding": "6px",
+        "fontSize": "13px",
+    }
+    cell_style = {
+        "backgroundColor": "#181a1b",
+        "color": "var(--text-primary)",
+        "textAlign": "center",
+        "padding": "10px",
+        "border": "none",
+        "fontSize": "14px",
+    }
+
+    # Red and Blue DataTables
+    red_table = dash_table.DataTable(
+        columns=red_columns,
+        data=red_data,
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
+        style_header=red_header_style,
+        style_cell=cell_style,
+        style_data_conditional=red_style_data_conditional,
+        style_as_list_view=True,
+    )
+    blue_table = dash_table.DataTable(
+        columns=blue_columns,
+        data=blue_data,
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
+        style_header=blue_header_style,
+        style_cell=cell_style,
+        style_data_conditional=blue_style_data_conditional,
+        style_as_list_view=True,
+    )
+
     # Layout
     event_name = next((ev.get("n", event_key) for ev in EVENT_DATABASE.get(year, {}).values() if ev.get("k") == event_key), event_key)
     event_name = f"{year} {event_name}"
     header = html.Div([
         dbc.Row([
             dbc.Col([
-                html.A("←", href=f"/match/{event_key}/{prev_match}", style={"fontSize": "2rem", "textDecoration": "none", "color": "#888"}) if prev_match else None
+                html.A("\u2190", href=f"/match/{event_key}/{prev_match}", style={"fontSize": "2rem", "textDecoration": "none", "color": "#888"}) if prev_match else None
             ], width=1, style={"textAlign": "right", "verticalAlign": "middle"}),
             dbc.Col([
                 html.H2([
@@ -4970,7 +5254,7 @@ def match_layout(event_key, match_key):
                 ], style={"textAlign": "center", "marginBottom": "0"})
             ], width=10),
             dbc.Col([
-                html.A("→", href=f"/match/{event_key}/{next_match}", style={"fontSize": "2rem", "textDecoration": "none", "color": "#888"}) if next_match else None
+                html.A("\u2192", href=f"/match/{event_key}/{next_match}", style={"fontSize": "2rem", "textDecoration": "none", "color": "#888"}) if next_match else None
             ], width=1, style={"textAlign": "left", "verticalAlign": "middle"}),
         ], align="center", style={"marginBottom": "1rem"})
     ])
@@ -4996,40 +5280,55 @@ def match_layout(event_key, match_key):
             ], width=4),
         ], style={"marginBottom": "2rem"})
     ])
-    breakdown_table = dash_table.DataTable(
-        columns=columns,
-        data=data,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
-        style_header={
-            "backgroundColor": "var(--card-bg)",
-            "fontWeight": "bold",
-            "textAlign": "center",
-            "borderBottom": "1px solid var(--border-color)",
-            "padding": "6px",
-            "fontSize": "13px",
-        },
-        style_cell={
-            "backgroundColor": "#181a1b",
-            "color": "var(--text-primary)",
-            "textAlign": "center",
-            "padding": "10px",
-            "border": "none",
-            "fontSize": "14px",
-        },
-        style_data_conditional=style_data_conditional,
-        style_as_list_view=True,
-    )
+    breakdown_tables = dbc.Row([
+        dbc.Col([red_table], width=6),
+        dbc.Col([blue_table], width=6),
+    ], style={"marginBottom": "2rem"})
     return html.Div([
         topbar(),
         dbc.Container([
             html.Div(header, style={"marginBottom": "2rem"}),
             html.Div(summary, style={"marginBottom": "2rem"}),
             html.Div(epa_legend_layout(), style={"marginBottom": "1rem", "marginTop": "1rem"}),
-            html.Div(breakdown_table, style={"marginBottom": "2rem"}),
+            html.Div(breakdown_tables),
             html.Div(video_embed, style={"textAlign": "center", "marginBottom": "2rem"}),
         ], style={"padding": "30px", "maxWidth": "1000px"}),
         footer
     ])
+
+app.clientside_callback(
+    """
+    function(n_clicks, button_ids, pathname) {
+        if (!n_clicks || !n_clicks.some(n => n)) return window.dash_clientside.no_update;
+        
+        // Find which button was clicked
+        const clicked_index = n_clicks.findIndex(n => n);
+        if (clicked_index === -1) return window.dash_clientside.no_update;
+        
+        const clicked_button = button_ids[clicked_index];
+        const event_key = clicked_button.event_key;
+        const team_number = clicked_button.team_number;
+        
+        if (!event_key || !team_number) return window.dash_clientside.no_update;
+        
+        // Create a simple playlist URL that will be handled by the server
+        // We'll use a special URL format that the server can intercept
+        const playlist_url = `/api/playlist/${event_key}/${team_number}`;
+        
+        // Open in new tab
+        window.open(playlist_url, '_blank');
+        
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("url", "pathname", allow_duplicate=True),
+    Input({"type": "recent-event-playlist", "event_key": ALL, "team_number": ALL}, "n_clicks"),
+    [
+        State({"type": "recent-event-playlist", "event_key": ALL, "team_number": ALL}, "id"),
+        State("url", "pathname"),
+    ],
+    prevent_initial_call=True
+)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  

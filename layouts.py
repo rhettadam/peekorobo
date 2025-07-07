@@ -1550,7 +1550,24 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             event_epa_pills = html.Div() # Ensure it's an empty div if no data, not None
 
         header = html.Div([
-            html.A(str(year) + " " + event_name, href=event_url, style={"fontWeight": "bold", "fontSize": "1.1rem"}),
+            html.Div([
+                html.A(str(year) + " " + event_name, href=event_url, style={"fontWeight": "bold", "fontSize": "1.1rem"}),
+                dbc.Button(
+                    "Playlist",
+                    id={"type": "recent-event-playlist", "event_key": event_key, "team_number": team_number},
+                    color="warning",
+                    outline=True,
+                    size="sm",
+                    className="custom-view-btn",
+                    style={
+                        "fontSize": "1.2rem",
+                        "fontWeight": "bold",
+                        "padding": "1rem 2rem",
+                        "width": "100px",
+                        "marginLeft": "10px"
+                    }
+                )
+            ], style={"display": "flex", "alignItems": "center"}),
             html.Div(loc),
             html.Div(rank_str),
             html.Div([
