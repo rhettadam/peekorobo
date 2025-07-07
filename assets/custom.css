@@ -768,7 +768,7 @@ label {
 }
 
 .gradient-hover {
-  color: #fff;
+  color: var(--text-primary);
   transition: background 0.5s, color 0.5s;
   cursor: pointer;
 }
