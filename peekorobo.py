@@ -2108,6 +2108,7 @@ def event_layout(event_key):
             dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Rankings", tab_id="rankings", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Matches", tab_id="matches", label_style=tab_style, active_label_style=tab_style),
+            dbc.Tab(label="Strength of Schedule (SoS)", tab_id="sos", label_style=tab_style, active_label_style=tab_style),
         ],
         id="event-data-tabs",
         active_tab=None,  # Will be set by callback
@@ -2324,12 +2325,14 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
 
     # Get all EPA values for percentile calculations
     epa_values = [data.get("epa", 0) for data in epa_data.values()]
+    confidence_values = [data.get("confidence", 0) for data in epa_data.values()]
     auto_values = [data.get("auto_epa", 0) for data in epa_data.values()]
     teleop_values = [data.get("teleop_epa", 0) for data in epa_data.values()]
     endgame_values = [data.get("endgame_epa", 0) for data in epa_data.values()]
 
     percentiles_dict = {
         "ACE": compute_percentiles(epa_values),
+        "Confidence": compute_percentiles(confidence_values),
         "Auto": compute_percentiles(auto_values),
         "Teleop": compute_percentiles(teleop_values),
         "Endgame": compute_percentiles(endgame_values),
@@ -2442,6 +2445,27 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             {"name": "Location", "id": "Location"},
         ]
 
+        # --- GLOBAL PERCENTILES FOR COLORING ---
+        # Use all teams for the year, not just event teams
+        if event_year == 2025:
+            global_teams = TEAM_DATABASE.get(event_year, {}).values()
+        else:
+            global_teams = year_team_data.get(event_year, {}).values()
+        global_epa_values = [t.get("epa", 0) for t in global_teams]
+        global_confidence_values = [t.get("confidence", 0) for t in global_teams]
+        global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
+        global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
+        global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
+
+        percentiles_dict = {
+            "ACE": compute_percentiles(global_epa_values),
+            "Auto": compute_percentiles(global_auto_values),
+            "Teleop": compute_percentiles(global_teleop_values),
+            "Endgame": compute_percentiles(global_endgame_values),
+            "Confidence": compute_percentiles(global_confidence_values),
+        }
+        style_data_conditional = get_epa_styling(percentiles_dict)
+
         return html.Div([
             spotlight_layout,
             epa_legend_layout(),
@@ -2462,43 +2486,144 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             {"label": f"{t['tk']} - {t.get('nn', '')}", "value": str(t["tk"])}
             for t in event_teams
         ]
+        return html.Div([
+            dbc.Row([
+                dbc.Col([
+                    html.Label("Filter by Team:", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
+                    dcc.Dropdown(
+                        id="team-filter",
+                        options=[{"label": "All Teams", "value": "ALL"}] + team_filter_options,
+                        value="ALL",
+                        clearable=False
+                    )
+                ], md=4),
+                dbc.Col([
+                    html.Label("Table Style:", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
+                    dcc.RadioItems(
+                        id="table-style-toggle",
+                        options=[
+                            {"label": "Both Alliances", "value": "both"},
+                            {"label": "Team Focus", "value": "team"}
+                        ],
+                        value="both",
+                        inline=True,
+                        labelStyle={"marginRight": "15px", "color": "var(--text-primary)"}
+                    )
+                ], md=4),
+                dbc.Col([
+                    dbc.Button(
+                        "Create Playlist ▶︎",
+                        id="create-playlist-btn",
+                        color="warning",
+                        className="w-100",
+                        style={"marginTop": "10px"}
+                    )
+                ], md=4, className="d-flex align-items-end")
+            ], className="mb-4"),
+            html.Div(id="matches-container")
+        ]), query_string
 
-    return html.Div([
-        dbc.Row([
-            dbc.Col([
-                html.Label("Filter by Team:", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
-                dcc.Dropdown(
-                    id="team-filter",
-                    options=[{"label": "All Teams", "value": "ALL"}] + team_filter_options,
-                    value="ALL",
-                    clearable=False
-                )
-            ], md=4),
-            dbc.Col([
-                html.Label("Table Style:", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
-                dcc.RadioItems(
-                    id="table-style-toggle",
-                    options=[
-                        {"label": "Both Alliances", "value": "both"},
-                        {"label": "Team Focus", "value": "team"}
-                    ],
-                    value="both",
-                    inline=True,
-                    labelStyle={"marginRight": "15px", "color": "var(--text-primary)"}
-                )
-            ], md=4),
-            dbc.Col([
-                dbc.Button(
-                    "Create Playlist ▶︎",
-                    id="create-playlist-btn",
-                    color="warning",
-                    className="w-100",
-                    style={"marginTop": "10px"}
-                )
-            ], md=4, className="d-flex align-items-end")
-        ], className="mb-4"),
-        html.Div(id="matches-container")
-    ]), query_string
+    # === Strength of Schedule (SoS) Tab ===
+    elif active_tab == "sos":
+        # Build a table of SoS metrics for each team
+        # For each team, get their matches, compute average predicted opponent EPA, avg win prob, hardest/easiest match
+        team_sos_rows = []
+        team_numbers = [t["tk"] for t in event_teams]
+        matches = event_matches or []
+        # Build a lookup for team data
+        team_lookup = {int(t["tk"]): t for t in event_teams}
+        # For each team
+        for team_num in team_numbers:
+            team_num_int = int(team_num)
+            # Find matches this team played
+            team_matches = [m for m in matches if str(team_num) in m.get("rt", "").split(",") or str(team_num) in m.get("bt", "").split(",")]
+            if not team_matches:
+                continue
+            opp_epas = []
+            win_probs = []
+            hardest = None
+            easiest = None
+            hardest_prob = 1.0
+            easiest_prob = 0.0
+            for m in team_matches:
+                # Determine alliance
+                if str(team_num) in m.get("rt", "").split(","):
+                    alliance = "red"
+                    opp_teams = [int(t) for t in m.get("bt", "").split(",") if t.strip().isdigit()]
+                else:
+                    alliance = "blue"
+                    opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
+                # Opponent EPA
+                opp_epa = 0
+                opp_count = 0
+                for opp in opp_teams:
+                    opp_epa += epa_data.get(str(opp), {}).get("epa", 0)
+                    opp_count += 1
+                avg_opp_epa = opp_epa / opp_count if opp_count else 0
+                opp_epas.append(avg_opp_epa)
+                # Win probability (use adaptive prediction)
+                red_info = [
+                    {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
+                    for t in m.get("rt", "").split(",") if t.strip().isdigit()
+                ]
+                blue_info = [
+                    {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
+                    for t in m.get("bt", "").split(",") if t.strip().isdigit()
+                ]
+                p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, m.get("ek", ""), m.get("k", ""))
+                win_prob = p_red if alliance == "red" else p_blue
+                win_probs.append(win_prob)
+                if win_prob < hardest_prob:
+                    hardest_prob = win_prob
+                    hardest = m
+                if win_prob > easiest_prob:
+                    easiest_prob = win_prob
+                    easiest = m
+            avg_opp_epa = sum(opp_epas) / len(opp_epas) if opp_epas else 0
+            avg_win_prob = sum(win_probs) / len(win_probs) if win_probs else 0
+            sos_metric = avg_win_prob  # SoS: 0 = lose all, 1 = win all
+            # Build row
+            team_data = team_lookup.get(team_num_int, {})
+            nickname = team_data.get("nn", "Unknown")
+            def match_label(m):
+                if not m: return "N/A"
+                label = m.get("k", "").split("_", 1)[-1].upper()
+                return f"[{label}](/match/{m.get('ek', '')}/{label})"
+            team_sos_rows.append({
+                "Team": f"[{team_num} | {nickname}](/team/{team_num}/{event_year})",
+                "SoS": f"{sos_metric:.3f}",
+                "Avg Opponent EPA": f"{avg_opp_epa:.2f}",
+                "Avg Win Prob": f"{avg_win_prob:.2%}",
+                "Hardest Match": match_label(hardest),
+                "Hardest Win Prob": f"{hardest_prob:.2%}",
+                "Easiest Match": match_label(easiest),
+                "Easiest Win Prob": f"{easiest_prob:.2%}",
+                "# Matches": len(team_matches),
+            })
+        # Sort by SoS (ascending: hardest at bottom, easiest at top)
+        team_sos_rows.sort(key=lambda r: float(r["SoS"]), reverse=True)
+        sos_columns = [
+            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "SoS", "id": "SoS"},
+            {"name": "Avg Opponent EPA", "id": "Avg Opponent EPA"},
+            {"name": "Avg Win Prob", "id": "Avg Win Prob"},
+            {"name": "Hardest Match", "id": "Hardest Match", "presentation": "markdown"},
+            {"name": "Hardest Win Prob", "id": "Hardest Win Prob"},
+            {"name": "Easiest Match", "id": "Easiest Match", "presentation": "markdown"},
+            {"name": "Easiest Win Prob", "id": "Easiest Win Prob"},
+            {"name": "# Matches", "id": "# Matches"},
+        ]
+        return html.Div([
+            html.H4("Strength of Schedule (SoS) Metrics", className="mb-3 mt-3"),
+            dash_table.DataTable(
+                columns=sos_columns,
+                data=team_sos_rows,
+                page_size=15,
+                style_table=common_style_table,
+                style_header=common_style_header,
+                style_cell=common_style_cell,
+            )
+        ]), query_string
 
     return dbc.Alert("No data available.", color="warning"), query_string
 
@@ -3110,9 +3235,11 @@ def load_teams(
     auto_percentiles = compute_percentiles(extract_used("auto_epa"))
     teleop_percentiles = compute_percentiles(extract_used("teleop_epa"))
     endgame_percentiles = compute_percentiles(extract_used("endgame_epa"))
+    confidence_percentiles = compute_percentiles(extract_used("confidence"))
     
     percentiles_dict = {
         "ace": overall_percentiles,
+        "confidence": confidence_percentiles,
         "auto_epa": auto_percentiles,
         "teleop_epa": teleop_percentiles,
         "endgame_epa": endgame_percentiles,

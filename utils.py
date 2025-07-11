@@ -323,11 +323,26 @@ def get_epa_styling(percentiles_dict):
     
         for col, percentiles in percentiles_dict.items():
             thresholds = {int(k): v for k, v in percentiles.items()}
-    
+
+            # Special subtle styling for confidence: only accentuate below 50th percentile
+            if col.lower() == "confidence":
+                # Use 50th percentile as threshold
+                p50 = thresholds.get(50) or thresholds.get(55) or 0
+                style_rules.append({
+                    "if": {
+                        "filter_query": f"{{{col}}} < {p50}",
+                        "column_id": col
+                    },
+                    "backgroundColor": "#e5393575",  
+                    "borderRadius": "6px",
+                    "padding": "4px 6px",
+                })
+                continue  # Skip normal color map for confidence
+
             for i, (lower_str, color) in enumerate(color_map):
                 lower = thresholds.get(int(lower_str), 0)
                 upper = thresholds.get(int(color_map[i - 1][0]), float("inf")) if i > 0 else float("inf")
-    
+
                 style_rules.append({
                     "if": {
                         "filter_query": f"{{{col}}} >= {lower}" + (f" && {{{col}}} < {upper}" if upper < float("inf") else ""),
