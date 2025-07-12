@@ -1619,6 +1619,9 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 blue_str = match.get("bt", "")
                 red_score = match.get("rs", 0)
                 blue_score = match.get("bs", 0)
+                if red_score <= 0 or blue_score <= 0:
+                    red_score = 0
+                    blue_score = 0
                 label = match.get("k", "").split("_", 1)[-1]
 
                 if label.lower().startswith("sf") and "m" in label.lower():

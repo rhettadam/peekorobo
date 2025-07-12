@@ -13,7 +13,7 @@ import datetime
 from datetime import datetime, date
 
 import re
-from urllib.parse import parse_qs, urlencode
+from urllib.parse import parse_qs, urlencode, quote
 import json
 import pandas as pd
 
@@ -1004,7 +1004,6 @@ def create_team_event_playlist(event_key, team_number):
         playlist_title = f"{event_name} - Team {team_number}"
         
         # Create YouTube playlist URL
-        from urllib.parse import quote
         playlist_url = f"https://www.youtube.com/watch_videos?video_ids={','.join(video_ids)}&title={quote(playlist_title)}"
         
         # Redirect to the playlist
@@ -1958,6 +1957,7 @@ def event_layout(event_key):
                 # Fallback to overall EPA/confidence/consistency if event-specific is missing
                 if event_specific_epa and event_specific_epa.get("actual_epa", 0) != 0:
                     event_epa_data[str(team_num)] = {
+                        "normal_epa": event_specific_epa.get("overall", 0),
                         "epa": event_specific_epa.get("actual_epa", 0),
                         "auto_epa": event_specific_epa.get("auto", 0),
                         "teleop_epa": event_specific_epa.get("teleop", 0),
@@ -2007,6 +2007,7 @@ def event_layout(event_key):
                     # Fallback to overall EPA/confidence/consistency if event-specific is missing
                     if event_specific_epa and event_specific_epa.get("actual_epa", 0) != 0:
                         event_epa_data[str(team_num)] = {
+                            "normal_epa": event_specific_epa.get("overall", 0),
                             "epa": event_specific_epa.get("actual_epa", 0),
                             "auto_epa": event_specific_epa.get("auto", 0),
                             "teleop_epa": event_specific_epa.get("teleop", 0),
@@ -2044,8 +2045,6 @@ def event_layout(event_key):
     start_date = event.get("sd", "N/A")
     end_date = event.get("ed", "N/A")
     event_type = event.get("et", "N/A")
-    website = event.get("w", "#")
-
     # Header card
     header_card = dbc.Card(
         html.Div([
@@ -2054,17 +2053,28 @@ def event_layout(event_key):
                 html.P(f"Location: {event_location}", className="card-text"),
                 html.P(f"Dates: {start_date} - {end_date}", className="card-text"),
                 html.P(f"Type: {event_type}", className="card-text"),
-                dbc.Button(
-                    "Visit Website",
-                    href=website,
-                    external_link=True,
-                    className="mt-3",
-                    style={
-                        "backgroundColor": "#FFCC00",
-                        "borderColor": "#FFCC00",
-                        "color": "black",
-                    },
-                )
+                dbc.Row([
+                    dbc.Col([
+                        html.A(
+                            html.Img(src="/assets/tba.png", style={"height": "40px", "width": "auto"}),
+                            href=f"https://www.thebluealliance.com/event/{event_key}",
+                            target="_blank",
+                            style={"marginLeft": "0px", "marginTop": "20px", "display": "inline-block"}
+                        ),
+                        html.A(
+                            html.Img(src="/assets/statbotics.png", style={"height": "35px", "width": "auto"}),
+                            href=f"https://www.statbotics.io/event/{event_key}",
+                            target="_blank",
+                            style={"marginLeft": "10px", "marginTop": "20px", "display": "inline-block"}
+                        ),
+                        html.A(
+                            html.Img(src="/assets/frc.png", style={"height": "35px", "width": "auto"}),
+                            href=f"https://frc-events.firstinspires.org/{parsed_year}/{event_key[4:]}",
+                            target="_blank",
+                            style={"marginLeft": "12px", "marginTop": "20px", "display": "inline-block"}
+                        )
+                    ], width="auto")
+                ], className="mt-3")
             ])
         ], style={"position": "relative"}),
         className="mb-4 shadow-sm flex-fill",
@@ -2108,7 +2118,8 @@ def event_layout(event_key):
             dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Rankings", tab_id="rankings", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Matches", tab_id="matches", label_style=tab_style, active_label_style=tab_style),
-            dbc.Tab(label="Strength of Schedule (SoS)", tab_id="sos", label_style=tab_style, active_label_style=tab_style),
+            dbc.Tab(label="SoS", tab_id="sos", label_style=tab_style, active_label_style=tab_style),
+            dbc.Tab(label="Compare", tab_id="compare", label_style=tab_style, active_label_style=tab_style),
         ],
         id="event-data-tabs",
         active_tab=None,  # Will be set by callback
@@ -2147,7 +2158,7 @@ def set_event_tab_from_url(search):
     if search and search.startswith("?"):
         params = parse_qs(search[1:])
         tab = params.get("tab", [None])[0]
-        if tab in ["teams", "rankings", "matches"]:
+        if tab in ["teams", "rankings", "matches", "sos", "compare"]:
             return tab
     return "teams"
 
@@ -2515,7 +2526,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                         "Create Playlist ▶︎",
                         id="create-playlist-btn",
                         color="warning",
-                        className="w-100",
+                        outline=True,
+                        className="custom-view-btn w-100",
                         style={"marginTop": "10px"}
                     )
                 ], md=4, className="d-flex align-items-end")
@@ -2539,7 +2551,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             team_matches = [m for m in matches if str(team_num) in m.get("rt", "").split(",") or str(team_num) in m.get("bt", "").split(",")]
             if not team_matches:
                 continue
-            opp_epas = []
+            opp_aces = []
             win_probs = []
             hardest = None
             easiest = None
@@ -2554,13 +2566,13 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                     alliance = "blue"
                     opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
                 # Opponent EPA
-                opp_epa = 0
+                opp_ace = 0
                 opp_count = 0
                 for opp in opp_teams:
-                    opp_epa += epa_data.get(str(opp), {}).get("epa", 0)
+                    opp_ace += epa_data.get(str(opp), {}).get("epa", 0)
                     opp_count += 1
-                avg_opp_epa = opp_epa / opp_count if opp_count else 0
-                opp_epas.append(avg_opp_epa)
+                avg_opp_ace = opp_ace / opp_count if opp_count else 0
+                opp_aces.append(avg_opp_ace)
                 # Win probability (use adaptive prediction)
                 red_info = [
                     {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
@@ -2579,7 +2591,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 if win_prob > easiest_prob:
                     easiest_prob = win_prob
                     easiest = m
-            avg_opp_epa = sum(opp_epas) / len(opp_epas) if opp_epas else 0
+            avg_opp_ace = sum(opp_aces) / len(opp_aces) if opp_aces else 0
             avg_win_prob = sum(win_probs) / len(win_probs) if win_probs else 0
             sos_metric = avg_win_prob  # SoS: 0 = lose all, 1 = win all
             # Build row
@@ -2592,7 +2604,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             team_sos_rows.append({
                 "Team": f"[{team_num} | {nickname}](/team/{team_num}/{event_year})",
                 "SoS": f"{sos_metric:.3f}",
-                "Avg Opponent EPA": f"{avg_opp_epa:.2f}",
+                "Avg Opponent ACE": f"{avg_opp_ace:.2f}",
                 "Avg Win Prob": f"{avg_win_prob:.2%}",
                 "Hardest Match": match_label(hardest),
                 "Hardest Win Prob": f"{hardest_prob:.2%}",
@@ -2605,7 +2617,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         sos_columns = [
             {"name": "Team", "id": "Team", "presentation": "markdown"},
             {"name": "SoS", "id": "SoS"},
-            {"name": "Avg Opponent EPA", "id": "Avg Opponent EPA"},
+            {"name": "Avg Opponent ACE", "id": "Avg Opponent ACE"},
             {"name": "Avg Win Prob", "id": "Avg Win Prob"},
             {"name": "Hardest Match", "id": "Hardest Match", "presentation": "markdown"},
             {"name": "Hardest Win Prob", "id": "Hardest Win Prob"},
@@ -2614,7 +2626,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             {"name": "# Matches", "id": "# Matches"},
         ]
         return html.Div([
-            html.H4("Strength of Schedule (SoS) Metrics", className="mb-3 mt-3"),
+            html.H4("Strength of Schedule (SoS)", className="mb-3 mt-3"),
             dash_table.DataTable(
                 columns=sos_columns,
                 data=team_sos_rows,
@@ -2624,6 +2636,31 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 style_cell=common_style_cell,
             )
         ]), query_string
+
+    # === Compare Teams Tab ===
+    elif active_tab == "compare":
+        # Multi-select dropdown for teams
+        team_options = [
+            {"label": f"{t['tk']} - {t.get('nn', '')}", "value": str(t["tk"])}
+            for t in event_teams
+        ]
+        # Default: top 2 teams by EPA
+        sorted_teams = sorted(event_teams, key=lambda t: epa_data.get(str(t["tk"]), {}).get("epa", 0), reverse=True)
+        default_team_values = [str(t["tk"]) for t in sorted_teams[:2]]
+        # Use a Store to keep selection in sync
+        compare_layout = html.Div([
+            html.Label("Select Teams to Compare:", style={"fontWeight": "bold", "color": "var(--text-primary)", "marginBottom": "8px"}),
+            dcc.Dropdown(
+                id="compare-teams-dropdown",
+                options=team_options,
+                value=default_team_values,
+                multi=True,
+                placeholder="Select teams...",
+                style={"marginBottom": "20px"}
+            ),
+            html.Div(id="compare-teams-table-container")
+        ])
+        return compare_layout, query_string
 
     return dbc.Alert("No data available.", color="warning"), query_string
 
@@ -2707,6 +2744,9 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             blue_str = match.get("bt", "")
             red_score = match.get("rs", 0)
             blue_score = match.get("bs", 0)
+            if red_score <= 0 or blue_score <= 0:
+                red_score = 0
+                blue_score = 0
             winner = match.get("wa", "")
             label = match.get("k", "").split("_", 1)[-1]
             event_key = match.get("ek", "")  # Extract event_key early
@@ -2723,7 +2763,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, event_key, match.get("k", ""))
             
             # Learn from completed matches
-            winner = match.get("wa", "Tie").lower()
+            winner = match.get("wa", "Unknown").lower()
             if winner in ["red", "blue"]:
                 learn_from_match_outcome(event_key, match.get("k", ""), winner, red_score, blue_score)
             
@@ -5088,7 +5128,6 @@ def match_layout(event_key, match_key):
         t_data = team_db.get(int(t), {})
         event_epas = t_data.get("event_epas", [])
         if isinstance(event_epas, str):
-            import json
             try:
                 event_epas = json.loads(event_epas)
             except Exception:
@@ -5456,6 +5495,201 @@ app.clientside_callback(
     ],
     prevent_initial_call=True
 )
+
+# Add a callback for the compare teams table
+@app.callback(
+    Output("compare-teams-table-container", "children"),
+    Input("compare-teams-dropdown", "value"),
+    State("store-event-epa", "data"),
+    State("store-event-teams", "data"),
+    State("store-rankings", "data"),
+    State("store-event-year", "data"),
+    State("store-event-matches", "data"),
+)
+def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, event_year, event_matches):
+    if not selected_teams:
+        return dbc.Alert("Select two or more teams to compare.", color="info")
+    # Build lookup for event_teams
+    team_lookup = {str(t["tk"]): t for t in event_teams}
+    # Build rows for each team
+    rows = []
+    for tnum in selected_teams:
+        t = team_lookup.get(str(tnum), {})
+        epa = epa_data.get(str(tnum), {})
+        rank_info = (rankings or {}).get(str(tnum), {})
+        rows.append({
+            "Team": f"[{tnum} | {t.get('nn', 'Unknown')}](/team/{tnum}/{event_year})",
+            "Rank": rank_info.get("rk", "N/A"),
+            "W-L-T": f"{rank_info.get('w', 'N/A')}-{rank_info.get('l', 'N/A')}-{rank_info.get('t', 'N/A')}",
+            "DQ": rank_info.get("dq", "N/A"),
+            "EPA": float(epa.get('normal_epa', 0)),
+            "Auto EPA": float(epa.get('auto_epa', 0)),
+            "Teleop EPA": float(epa.get('teleop_epa', 0)),
+            "Endgame EPA": float(epa.get('endgame_epa', 0)),
+            "Confidence": float(epa.get('confidence', 0)),
+            "ACE": float(epa.get('epa', 0)),
+        })
+    # Compute global percentiles for coloring
+    if event_year == 2025:
+        global_teams = TEAM_DATABASE.get(event_year, {}).values()
+    else:
+        year_team_data, _, _, _, _, _ = load_year_data(event_year)
+        global_teams = year_team_data.values()
+    global_ace_values = [t.get("epa", 0) for t in global_teams]
+    global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
+    global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
+    global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
+    global_confidence_values = [t.get("confidence", 0) for t in global_teams]
+    percentiles_dict = {
+        "Auto EPA": compute_percentiles(global_auto_values),
+        "Teleop EPA": compute_percentiles(global_teleop_values),
+        "Endgame EPA": compute_percentiles(global_endgame_values),
+        "Confidence": compute_percentiles(global_confidence_values),
+        "ACE": compute_percentiles(global_ace_values),
+    }
+    style_data_conditional = get_epa_styling(percentiles_dict)
+    columns = [
+        {"name": "Team", "id": "Team", "presentation": "markdown"},
+        {"name": "Rank", "id": "Rank"},
+        {"name": "W-L-T", "id": "W-L-T"},
+        {"name": "DQ", "id": "DQ"},
+        {"name": "EPA", "id": "EPA"},
+        {"name": "Auto EPA", "id": "Auto EPA"},
+        {"name": "Teleop EPA", "id": "Teleop EPA"},
+        {"name": "Endgame EPA", "id": "Endgame EPA"},
+        {"name": "Confidence", "id": "Confidence"},
+        {"name": "ACE", "id": "ACE"},
+    ]
+    # Radar chart for visual comparison
+    
+    # Compute avg score and SoS for each team
+    avg_score_map = {}
+    sos_map = {}
+    matches = event_matches or []
+    for tnum in selected_teams:
+        tnum_str = str(tnum)
+        team_matches = [m for m in matches if tnum_str in m.get("rt", "").split(",") or tnum_str in m.get("bt", "").split(",")]
+        scores = []
+        win_probs = []
+        for m in team_matches:
+            # Determine alliance
+            if tnum_str in m.get("rt", "").split(","):
+                alliance = "red"
+                score = m.get("rs", 0)
+                opp_teams = [int(t) for t in m.get("bt", "").split(",") if t.strip().isdigit()]
+            else:
+                alliance = "blue"
+                score = m.get("bs", 0)
+                opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
+            scores.append(score)
+            # Win probability (use adaptive prediction)
+            red_info = [
+                {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
+                for t in m.get("rt", "").split(",") if t.strip().isdigit()
+            ]
+            blue_info = [
+                {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
+                for t in m.get("bt", "").split(",") if t.strip().isdigit()
+            ]
+            p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, m.get("ek", ""), m.get("k", ""))
+            win_prob = p_red if alliance == "red" else p_blue
+            win_probs.append(win_prob)
+        avg_score_map[tnum_str] = sum(scores) / len(scores) if scores else 0
+        sos_map[tnum_str] = sum(win_probs) / len(win_probs) if win_probs else 0
+    radar_stats = ["Auto EPA", "Teleop EPA", "Endgame EPA", "Confidence", "EPA", "ACE", "Avg Score", "SoS"]
+    # Gather all event teams' stats for normalization
+    all_team_stats = {stat: [] for stat in radar_stats}
+    for t in event_teams:
+        tnum = str(t["tk"])
+        epa = epa_data.get(tnum, {})
+        all_team_stats["Auto EPA"].append(float(epa.get("auto_epa", 0)))
+        all_team_stats["Teleop EPA"].append(float(epa.get("teleop_epa", 0)))
+        all_team_stats["Endgame EPA"].append(float(epa.get("endgame_epa", 0)))
+        all_team_stats["Confidence"].append(float(epa.get("confidence", 0)))
+        all_team_stats["EPA"].append(float(epa.get("", 0)))
+        all_team_stats["ACE"].append(float(epa.get("epa", 0)))
+        all_team_stats["Avg Score"].append(avg_score_map.get(tnum, 0))
+        all_team_stats["SoS"].append(sos_map.get(tnum, 0))
+    # Compute min/max for each stat
+    stat_minmax = {}
+    for stat in radar_stats:
+        vals = all_team_stats[stat]
+        if vals:
+            stat_min = min(vals)
+            stat_max = max(vals)
+            stat_minmax[stat] = (stat_min, stat_max)
+        else:
+            stat_minmax[stat] = (0, 1)
+    # Radar chart with normalized values
+    fig = go.Figure()
+    for row in rows:
+        tnum = row["Team"].split("|")[0].replace("[", "").strip()
+        tnum_key = tnum
+        values = [
+            row["Auto EPA"],
+            row["Teleop EPA"],
+            row["Endgame EPA"],
+            row["Confidence"],
+            row["EPA"],
+            row["ACE"],
+            avg_score_map.get(tnum_key, 0),
+            sos_map.get(tnum_key, 0),
+        ]
+        norm_values = []
+        for v, stat in zip(values, radar_stats):
+            stat_min, stat_max = stat_minmax[stat]
+            if stat_max > stat_min:
+                norm = (v - stat_min) / (stat_max - stat_min)
+            else:
+                norm = 0.5
+            norm_values.append(norm)
+        fig.add_trace(go.Scatterpolar(
+            r=norm_values,
+            theta=radar_stats,
+            fill='toself',
+            name=tnum,
+        ))
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, showticklabels=True, ticks=''),
+            bgcolor='rgba(0,0,0,0)'
+        ),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        showlegend=True,
+        margin=dict(l=30, r=30, t=30, b=30),
+        height=400,
+        template="plotly_dark"
+    )
+    return html.Div([
+        dash_table.DataTable(
+            columns=columns,
+            data=[{k: (f"{v:.2f}" if isinstance(v, float) else v) for k, v in row.items()} for row in rows],
+            style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
+            style_header={
+                "backgroundColor": "var(--card-bg)",
+                "fontWeight": "bold",
+                "textAlign": "center",
+                "borderBottom": "1px solid #ccc",
+                "padding": "6px",
+                "fontSize": "13px",
+            },
+            style_cell={
+                "backgroundColor": "var(--card-bg)",
+                "textAlign": "center",
+                "padding": "10px",
+                "border": "none",
+                "fontSize": "14px",
+            },
+            style_data_conditional=style_data_conditional,
+            style_as_list_view=True,
+        ),
+        html.Div([
+            html.Hr(),
+            html.H5("Radar Chart Comparison", style={"marginTop": "20px"}),
+            dcc.Graph(figure=fig)
+        ])
+    ])
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
