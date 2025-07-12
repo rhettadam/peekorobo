@@ -239,77 +239,106 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
     
         # Team Info Card
     team_card = dbc.Card(
-        dbc.CardBody(
-            [
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            [
-                                html.H2(f"Team {team_number}: {nickname}", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
-                                *badges,
-                                html.P([html.Img(src="/assets/pin.png", style={"height": "1.5em", "verticalAlign": "middle", "marginRight": "5px"}), f" {city}, {state}, {country}"]),
-                                html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
-                                        html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "underline"})]),
-                                html.Div(
-                                    [
-                                        html.I(className="bi bi-calendar"),
-                                        " Years Participated: ",
-                                        html.Div(
-                                            years_links,
-                                            style={"display": "flex", "flexWrap": "wrap", "gap": "8px", "textDecoration": "underline","color": "#007BFF"},
-                                        ),
-                                    ],
-                                    style={"marginBottom": "10px"},
-                                ),
-                                html.Div( # Wrapper div for positioning
-                                    id=f"team-{team_number}-favorites-popover-target", # Move ID to wrapper
-                                    style={
-                                        "position": "relative", # Establish positioning context
-                                        "display": "inline-block" # Prevent div from taking full width
-                                    },
-                                    children=[
-                                        html.P(
-                                            [
-                                                html.I(className="bi bi-star-fill", style={"color": "#ffc107"}),
-                                                f" {favorites_count} Favorites ▼"
-                                            ],
-                                            style={
-                                                "marginBottom": "0px", # Remove bottom margin on paragraph
-                                                "cursor": "pointer" # Keep cursor on text
-                                            }),
-                                    ]
-                                ),
-                                favorite_button  # ⭐ Inserted here
-                            ],
-                            width=9,
-                        ),
-                        dbc.Col(
-                            [
-                                html.Img(
-                                    src=avatar_url,
-                                    alt=f"Team {team_number} Avatar",
-                                    style={
-                                        "maxWidth": "150px",
-                                        "width": "100%",
-                                        "height": "auto",
-                                        "objectFit": "contain",
-                                        "borderRadius": "0px",
-                                        "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
-                                        "marginLeft": "auto",
-                                        "marginRight": "auto",
-                                        "display": "block",
-                                    },
-                                ) if avatar_url else html.Div("No avatar available.", style={"color": "#777"}),
-                            ],
-                            width=3,
-                            style={"textAlign": "center"},
-                        )
-                    ],
-                    align="center",
+        html.Div([
+            dbc.CardBody(
+                [
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                [
+                                    html.H2(f"Team {team_number}: {nickname}", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
+                                    *badges,
+                                    html.P([html.Img(src="/assets/pin.png", style={"height": "1.5em", "verticalAlign": "middle", "marginRight": "5px"}), f" {city}, {state}, {country}"]),
+                                    html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
+                                            html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "underline"})]),
+                                    html.Div(
+                                        [
+                                            html.I(className="bi bi-calendar"),
+                                            " Years Participated: ",
+                                            html.Div(
+                                                years_links,
+                                                style={"display": "flex", "flexWrap": "wrap", "gap": "8px", "textDecoration": "underline","color": "#007BFF"},
+                                            ),
+                                        ],
+                                        style={"marginBottom": "10px"},
+                                    ),
+                                    html.Div( # Wrapper div for positioning
+                                        id=f"team-{team_number}-favorites-popover-target", # Move ID to wrapper
+                                        style={
+                                            "position": "relative", # Establish positioning context
+                                            "display": "inline-block" # Prevent div from taking full width
+                                        },
+                                        children=[
+                                            html.P(
+                                                [
+                                                    html.I(className="bi bi-star-fill", style={"color": "#ffc107"}),
+                                                    f" {favorites_count} Favorites ▼"
+                                                ],
+                                                style={
+                                                    "marginBottom": "0px", # Remove bottom margin on paragraph
+                                                    "cursor": "pointer" # Keep cursor on text
+                                                }),
+                                        ]
+                                    ),
+                                ],
+                                width=9,
+                            ),
+                            dbc.Col(
+                                [
+                                    html.Img(
+                                        src=avatar_url,
+                                        alt=f"Team {team_number} Avatar",
+                                        style={
+                                            "maxWidth": "150px",
+                                            "width": "100%",
+                                            "height": "auto",
+                                            "objectFit": "contain",
+                                            "borderRadius": "0px",
+                                            "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
+                                            "marginLeft": "auto",
+                                            "marginRight": "auto",
+                                            "display": "block",
+                                        },
+                                    ) if avatar_url else html.Div("No avatar available.", style={"color": "#777"}),
+                                ],
+                                width=3,
+                                style={"textAlign": "center"},
+                            )
+                        ],
+                        align="center",
+                    ),
+                ],
+                style={"fontSize": "1.1rem"}
+            ),
+            # External website buttons positioned in bottom right corner
+            html.Div([
+                html.A(
+                    html.Img(src="/assets/tba.png", style={"height": "35px", "width": "auto"}),
+                    href=f"https://www.thebluealliance.com/team/{team_number}",
+                    target="_blank",
+                    style={"marginRight": "6px", "display": "inline-block"}
                 ),
-            ],
-            style={"fontSize": "1.1rem"}
-        ),
+                html.A(
+                    html.Img(src="/assets/statbotics.png", style={"height": "30px", "width": "auto"}),
+                    href=f"https://www.statbotics.io/team/{team_number}",
+                    target="_blank",
+                    style={"marginRight": "6px", "display": "inline-block"}
+                ),
+                html.A(
+                    html.Img(src="/assets/frc.png", style={"height": "30px", "width": "auto"}),
+                    href=f"https://frc-events.firstinspires.org/team/{team_number}",
+                    target="_blank",
+                    style={"display": "inline-block"}
+                )
+            ], style={
+                "position": "absolute",
+                "bottom": "10px",
+                "right": "15px",
+                "zIndex": "5"
+            }),
+            # Favorite button positioned in top right corner
+            favorite_button,
+        ], style={"position": "relative"}),
         style={
             "marginBottom": "20px",
             "borderRadius": "10px",
@@ -3474,8 +3503,6 @@ def other_user_layout(username):
 
 def event_layout(event_key):
 
-    from peekorobo import EVENT_DATABASE, EVENT_TEAMS, TEAM_DATABASE, EVENT_RANKINGS, EVENT_MATCHES
-
     def parse_event_key(event_key):
         if len(event_key) >= 5 and event_key[:4].isdigit():
             return int(event_key[:4]), event_key[4:]
@@ -3485,6 +3512,7 @@ def event_layout(event_key):
     
     # Load data for the specific year
     if parsed_year == 2025:
+        from peekorobo import EVENT_DATABASE, EVENT_TEAMS, TEAM_DATABASE, EVENT_RANKINGS, EVENT_MATCHES
         # Use global data for 2025
         event = EVENT_DATABASE.get(parsed_year, {}).get(event_key)
         event_teams = EVENT_TEAMS.get(parsed_year, {}).get(event_key, [])

@@ -47,6 +47,29 @@ app = dash.Dash(
     title="Peekorobo",
 )
 
+# client-side callback for smooth page transitions
+app.clientside_callback(
+    """
+    function(pathname) {
+        var wrapper = document.getElementById('page-content-animated-wrapper');
+        if (!wrapper) return window.dash_clientside.no_update;
+
+        // Fade out
+        wrapper.classList.add('fade-out');
+        
+        // Fade back in after a short delay
+        setTimeout(function() {
+            wrapper.classList.remove('fade-out');
+        }, 200); // Half the CSS transition duration for smooth effect
+
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output('dummy-output', 'children', allow_duplicate=True),
+    Input('url', 'pathname'),
+    prevent_initial_call=True
+)
+
 # Set dark mode immediately on first page render
 app.index_string = '''
 <!DOCTYPE html>
@@ -730,6 +753,7 @@ def save_favorite_team(n_clicks, pathname):
         Input("sort-mode-toggle", "value"),
         Input("event-favorites-store", "data"),
     ],
+    suppress_callback_exceptions=True,
 )
 def update_events_tab_content(
     active_tab,
@@ -1045,6 +1069,7 @@ def set_event_tabs_active_tab(tab):
     State("store-event-matches", "data"),
     State("store-event-year", "data"),
     State("url", "pathname"),  # get the event_key from the URL
+    suppress_callback_exceptions=True,
 )
 def update_event_display(active_tab, rankings, epa_data, event_teams, event_matches, event_year, pathname):
 
@@ -1990,29 +2015,6 @@ app.clientside_callback(
     prevent_initial_call=True
 )
 
-# Add a client-side callback for smooth page transitions
-app.clientside_callback(
-    """
-    function(pathname) {
-        var wrapper = document.getElementById('page-content-animated-wrapper');
-        if (!wrapper) return window.dash_clientside.no_update;
-
-        // Fade out
-        wrapper.classList.add('fade-out');
-        
-        // Fade back in after a short delay
-        setTimeout(function() {
-            wrapper.classList.remove('fade-out');
-        }, 200); // Half the CSS transition duration for smooth effect
-
-        return window.dash_clientside.no_update;
-    }
-    """,
-    Output('dummy-output', 'children', allow_duplicate=True),
-    Input('url', 'pathname'),
-    prevent_initial_call=True
-)
-
 @callback(
     [
         Output("teams-table", "data"),
@@ -2950,7 +2952,8 @@ def update_team_favorites_popover_content(is_open, pathname):
 @callback(
     Output("team-insights-content", "children"),
     Input("team-tabs", "active_tab"),
-    State("team-insights-store", "data")
+    State("team-insights-store", "data"),
+    suppress_callback_exceptions=True,
 )
 def update_team_insights(active_tab, store_data):
     if active_tab != "insights-tab" or not store_data:
@@ -3166,7 +3169,8 @@ def update_team_insights(active_tab, store_data):
 @callback(
     Output("team-events-content", "children"),
     Input("team-tabs", "active_tab"),
-    State("team-insights-store", "data")
+    State("team-insights-store", "data"),
+    suppress_callback_exceptions=True,
 )
 def update_team_events(active_tab, store_data):
     if active_tab != "events-tab" or not store_data:
@@ -3275,7 +3279,8 @@ def update_team_events(active_tab, store_data):
 @callback(
     Output("team-awards-content", "children"),
     Input("team-tabs", "active_tab"),
-    State("team-insights-store", "data")
+    State("team-insights-store", "data"),
+    suppress_callback_exceptions=True,
 )
 def update_team_awards(active_tab, store_data):
     if active_tab != "awards-tab" or not store_data:
