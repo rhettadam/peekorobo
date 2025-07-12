@@ -1574,8 +1574,8 @@ def teams_layout(default_year=2025):
         className="custom-input-box"
     )
     percentile_toggle = dbc.Checklist(
-        options=[{"label": "Filter Colors", "value": "filtered"}],
-        value=[],  # Empty means global by default
+        options=[{"label": "Filter Percentiles", "value": "filtered"}],
+        value=[],
         id="percentile-toggle",
         switch=True,
         style={"marginTop": "0px"}
@@ -1639,11 +1639,10 @@ def teams_layout(default_year=2025):
     filters_row = html.Div(
         [
             html.Div(teams_year_dropdown, style={"flex": "0 0 80px", "minWidth": "80px"}),
-            html.Div(country_dropdown, style={"flex": "1 1 120px", "minWidth": "120px"}),
+            html.Div(country_dropdown, style={"flex": "1 1 100px", "minWidth": "100px"}),
             html.Div(state_dropdown, style={"flex": "1 1 120px", "minWidth": "120px"}),
-            html.Div(district_dropdown, style={"flex": "1 1 120px", "minWidth": "120px"}),
-            html.Div(percentile_toggle, style={"flex": "0 0 120px", "minWidth": "120px", "display": "flex", "alignItems": "center"}),
-            html.Div(search_input, style={"flex": "2 1 200px", "minWidth": "150px"}),
+            html.Div(district_dropdown, style={"flex": "1 1 80px", "minWidth": "80px"}),
+            html.Div(percentile_toggle, style={"flex": "1 1 100px", "display": "flex", "alignItems": "center"}),
         ],
         style={
             "display": "flex",
@@ -1681,6 +1680,9 @@ def teams_layout(default_year=2025):
         page_current=0,
         page_size=50,
         
+        # Copy to clipboard functionality
+        include_headers_on_copy_paste=True,
+        
         # Export functionality
         #export_format='csv',
         #export_headers='display',
@@ -1691,6 +1693,13 @@ def teams_layout(default_year=2025):
         row_selectable='multi',
         selected_columns=[],
         selected_rows=[],
+        
+        # Cell selection (disabled)
+        cell_selectable=False,
+        
+        # Column filtering
+        filter_action="native",
+        filter_options={"case": "insensitive"},
         
         # Styling
         style_table={
@@ -1738,7 +1747,7 @@ def teams_layout(default_year=2025):
         ],
         style_filter={
             "backgroundColor": "var(--input-bg)",
-            "color": "var(--input-text)",
+            "color": "var(--text-primary)",
             "borderColor": "var(--input-border)",
         },
         style_data={
@@ -1765,7 +1774,11 @@ def teams_layout(default_year=2025):
         className="me-2",
         children=[
             dbc.DropdownMenuItem("Export as CSV", id="export-csv-dropdown"),
+            dbc.DropdownMenuItem("Export as TSV", id="export-tsv-dropdown"),
             dbc.DropdownMenuItem("Export as Excel", id="export-excel-dropdown"),
+            dbc.DropdownMenuItem("Export as JSON", id="export-json-dropdown"),
+            dbc.DropdownMenuItem("Export as HTML", id="export-html-dropdown"),
+            dbc.DropdownMenuItem("Export as LaTeX", id="export-latex-dropdown"),
         ],
         toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)" "black", "fontWeight": "bold", "borderColor": "transparent"},
         style={"display": "inline-block"}
@@ -1778,22 +1791,68 @@ def teams_layout(default_year=2025):
         className="me-2",
         children=[
             dbc.DropdownMenuItem("Export Selected as CSV", id="export-selected-csv-dropdown"),
+            dbc.DropdownMenuItem("Export Selected as TSV", id="export-selected-tsv-dropdown"),
             dbc.DropdownMenuItem("Export Selected as Excel", id="export-selected-excel-dropdown"),
+            dbc.DropdownMenuItem("Export Selected as JSON", id="export-selected-json-dropdown"),
+            dbc.DropdownMenuItem("Export Selected as HTML", id="export-selected-html-dropdown"),
+            dbc.DropdownMenuItem("Export Selected as LaTeX", id="export-selected-latex-dropdown"),
         ],
         toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
         style={"display": "inline-block"}
     )
 
-    export_buttons = html.Div([
-        export_dropdown,
-        export_selected_dropdown,
-        dcc.Download(id="download-dataframe-csv"),
-        dcc.Download(id="download-dataframe-excel"),
-    ], style={"marginBottom": "15px", "textAlign": "right"})
+    # Search and export container
+    search_export_container = html.Div([
+        # Collapsible search container
+        html.Div([
+            # Search icon button
+            html.Button(
+                html.I(className="fas fa-search"),
+                id="search-toggle",
+                style={
+                    "background": "none",
+                    "border": "none",
+                    "color": "var(--text-primary)",
+                    "fontSize": "16px",
+                    "cursor": "pointer",
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "transition": "all 0.2s ease"
+                }
+            ),
+            # Expandable search input
+            html.Div(
+                search_input,
+                id="search-container",
+                style={
+                    "display": "none",
+                    "flex": "1",
+                    "maxWidth": "300px",
+                    "transition": "all 0.3s ease"
+                }
+            )
+        ], style={"display": "flex", "alignItems": "center", "gap": "8px"}),
+        html.Div([
+            export_dropdown,
+            export_selected_dropdown,
+            dcc.Download(id="download-dataframe-csv"),
+            dcc.Download(id="download-dataframe-excel"),
+            dcc.Download(id="download-dataframe-tsv"),
+            dcc.Download(id="download-dataframe-json"),
+            dcc.Download(id="download-dataframe-html"),
+            dcc.Download(id="download-dataframe-latex"),
+        ], style={"textAlign": "right"}),
+    ], style={
+        "display": "flex",
+        "justifyContent": "space-between",
+        "alignItems": "center",
+        "marginBottom": "5px",
+        "gap": "10px"
+    })
     
     content = html.Div(id="teams-tab-content", children=[
         html.Div(id="teams-table-container", children=[
-            export_buttons,
+            search_export_container,
             teams_table
         ]),
         html.Div(id="avatar-gallery", className="d-flex flex-wrap justify-content-center", style={"gap": "5px", "padding": "1rem", "display": "none"}),

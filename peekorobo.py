@@ -2130,39 +2130,42 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         dbc.Alert("No playoff matches found.", color="info"),
     ]
 
-    # Calculate overall prediction accuracy (only for completed matches)
-    total_matches = 0
-    correct_predictions = 0
-    
-    for match_data in qual_data + playoff_data:
-        winner = match_data.get("Winner", "").lower()
-        # Only count matches that have been played (have a winner)
-        if winner and winner in ["red", "blue"]:
-            total_matches += 1
-            # Handle both table styles
-            if "Pred Winner" in match_data:
-                # Both alliances view
-                pred_winner = match_data.get("Pred Winner", "").lower()
-                if pred_winner and winner == pred_winner:
-                    correct_predictions += 1
-            else:
-                # Team focus view - use the prediction percentage to determine if prediction was correct
-                prediction_percent = match_data.get("Prediction %", 0)
-                if prediction_percent is not None:
-                    # If prediction was >50% and team won, or <50% and team lost, it's correct
-                    team_alliance = match_data.get("Alliance", "").lower()
-                    if team_alliance == winner and prediction_percent > 50:
-                        correct_predictions += 1
-                    elif team_alliance != winner and prediction_percent < 50:
-                        correct_predictions += 1
-    
-    accuracy_percentage = (correct_predictions / total_matches * 100) if total_matches > 0 else 0
-    
+    # Calculate overall prediction accuracy for both table styles
+    def compute_accuracy(match_data_list, style):
+        total = 0
+        correct = 0
+        for match_data in match_data_list:
+            winner = match_data.get("Winner", "").lower()
+            if winner and winner in ["red", "blue"]:
+                total += 1
+                if style == "both":
+                    pred_winner = match_data.get("Pred Winner", "").lower()
+                    if pred_winner and winner == pred_winner:
+                        correct += 1
+                else:
+                    prediction_percent = match_data.get("Prediction %", 0)
+                    if prediction_percent is not None:
+                        team_alliance = match_data.get("Alliance", "").lower()
+                        if team_alliance == winner and prediction_percent > 50:
+                            correct += 1
+                        elif team_alliance != winner and prediction_percent < 50:
+                            correct += 1
+        return correct, total, (correct / total * 100) if total > 0 else 0
+
+    correct_both, total_both, acc_both = compute_accuracy(build_match_rows(qual_matches + playoff_matches, "both"), "both")
+    correct_team, total_team, acc_team = compute_accuracy(build_match_rows(qual_matches + playoff_matches, "team"), "team")
+
+    # Pick the most accurate one
+    if acc_both >= acc_team:
+        best_correct, best_total, best_acc = correct_both, total_both, acc_both
+    else:
+        best_correct, best_total, best_acc = correct_team, total_team, acc_team
+
     accuracy_card = html.Div([
         html.Span("Prediction Accuracy: ", style={"fontWeight": "bold"}),
-        html.Span(f"{correct_predictions}/{total_matches} correct ({accuracy_percentage:.1f}%)", style={"color": "var(--text-secondary)"})
+        html.Span(f"{best_correct}/{best_total} correct ({best_acc:.1f}%)", style={"color": "var(--text-secondary)"})
     ], style={"textAlign": "center", "marginBottom": "20px", "fontSize": "1rem"})
-    
+
     return html.Div([
         accuracy_card,
         html.Div(qual_table, className="recent-events-table"),
@@ -2872,88 +2875,120 @@ def toggle_avatar_background(n_clicks, button_style, container_style):
 
 # Export callbacks for teams table
 @app.callback(
-    Output("download-dataframe-csv", "data"),
-    Input("export-csv-dropdown", "n_clicks"),
-    State("teams-table", "data"),
-    State("teams-table", "selected_rows"),
+    [Output("download-dataframe-csv", "data"),
+     Output("download-dataframe-excel", "data"),
+     Output("download-dataframe-tsv", "data"),
+     Output("download-dataframe-json", "data"),
+     Output("download-dataframe-html", "data"),
+     Output("download-dataframe-latex", "data")],
+    [Input("export-csv-dropdown", "n_clicks"),
+     Input("export-excel-dropdown", "n_clicks"),
+     Input("export-tsv-dropdown", "n_clicks"),
+     Input("export-json-dropdown", "n_clicks"),
+     Input("export-html-dropdown", "n_clicks"),
+     Input("export-latex-dropdown", "n_clicks"),
+     Input("export-selected-csv-dropdown", "n_clicks"),
+     Input("export-selected-excel-dropdown", "n_clicks"),
+     Input("export-selected-tsv-dropdown", "n_clicks"),
+     Input("export-selected-json-dropdown", "n_clicks"),
+     Input("export-selected-html-dropdown", "n_clicks"),
+     Input("export-selected-latex-dropdown", "n_clicks")],
+    [State("teams-table", "data"),
+     State("teams-table", "selected_rows")],
     prevent_initial_call=True
 )
-def export_csv(n_clicks, data, selected_rows):
-    if not n_clicks or not data:
-        return None
-    
+def export_data(csv_clicks, excel_clicks, tsv_clicks, json_clicks, html_clicks, latex_clicks,
+                selected_csv_clicks, selected_excel_clicks, selected_tsv_clicks, selected_json_clicks, selected_html_clicks, selected_latex_clicks,
+                data, selected_rows):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return [None] * 6
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    if not data:
+        return [None] * 6
     df = pd.DataFrame(data)
-    
-    # If rows are selected, export only those
-    if selected_rows:
+    export_selected = triggered_id in [
+        "export-selected-csv-dropdown", "export-selected-excel-dropdown", "export-selected-tsv-dropdown",
+        "export-selected-json-dropdown", "export-selected-html-dropdown", "export-selected-latex-dropdown",
+    ]
+    if export_selected:
+        if not selected_rows:
+            return [None] * 6
         df = df.iloc[selected_rows]
-    
-    # Clean up the data for export
+        filename_prefix = "selected_teams"
+    else:
+        filename_prefix = "teams_data"
     df_export = df.copy()
-    # Remove markdown formatting from team column
     if 'team_display' in df_export.columns:
         df_export['team_display'] = df_export['team_display'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
-    
-    return dcc.send_data_frame(df_export.to_csv, f"teams_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", index=False)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    # Prepare outputs for all formats
+    outputs = [None] * 6
+    if triggered_id in ["export-csv-dropdown", "export-selected-csv-dropdown"]:
+        outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
+    if triggered_id in ["export-excel-dropdown", "export-selected-excel-dropdown"]:
+        outputs[1] = dcc.send_data_frame(df_export.to_excel, f"{filename_prefix}_{timestamp}.xlsx", index=False)
+    if triggered_id in ["export-tsv-dropdown", "export-selected-tsv-dropdown"]:
+        outputs[2] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.tsv", sep='\t', index=False)
+    if triggered_id in ["export-json-dropdown", "export-selected-json-dropdown"]:
+        outputs[3] = dict(content=df_export.to_json(orient='records', indent=2), filename=f"{filename_prefix}_{timestamp}.json")
+    if triggered_id in ["export-html-dropdown", "export-selected-html-dropdown"]:
+        outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
+    if triggered_id in ["export-latex-dropdown", "export-selected-latex-dropdown"]:
+        outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
+    return outputs
 
+# Search toggle callback
 @app.callback(
-    Output("download-dataframe-excel", "data"),
-    Input("export-excel-dropdown", "n_clicks"),
-    State("teams-table", "data"),
-    State("teams-table", "selected_rows"),
+    [Output("search-container", "style"),
+     Output("search-toggle", "style")],
+    [Input("search-toggle", "n_clicks")],
+    [State("search-container", "style")],
     prevent_initial_call=True
 )
-def export_excel(n_clicks, data, selected_rows):
-    if not n_clicks or not data:
-        return None
+def toggle_search_bar(n_clicks, current_style):
+    if not n_clicks:
+        return dash.no_update, dash.no_update
     
-    df = pd.DataFrame(data)
+    # Toggle the search container visibility
+    if current_style and current_style.get("display") == "none":
+        # Show search bar
+        new_container_style = {
+            "display": "flex",
+            "flex": "1",
+            "maxWidth": "300px",
+            "transition": "all 0.3s ease"
+        }
+        new_button_style = {
+            "background": "var(--input-bg)",
+            "border": "1px solid var(--input-border)",
+            "color": "var(--text-primary)",
+            "fontSize": "16px",
+            "cursor": "pointer",
+            "padding": "8px",
+            "borderRadius": "4px",
+            "transition": "all 0.2s ease"
+        }
+    else:
+        # Hide search bar
+        new_container_style = {
+            "display": "none",
+            "flex": "1",
+            "maxWidth": "300px",
+            "transition": "all 0.3s ease"
+        }
+        new_button_style = {
+            "background": "none",
+            "border": "none",
+            "color": "var(--text-primary)",
+            "fontSize": "16px",
+            "cursor": "pointer",
+            "padding": "8px",
+            "borderRadius": "4px",
+            "transition": "all 0.2s ease"
+        }
     
-    # If rows are selected, export only those
-    if selected_rows:
-        df = df.iloc[selected_rows]
-    
-    # Clean up the data for export
-    df_export = df.copy()
-    # Remove markdown formatting from team column
-    if 'team_display' in df_export.columns:
-        df_export['team_display'] = df_export['team_display'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
-    
-    return dcc.send_data_frame(df_export.to_excel, f"teams_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", index=False)
-
-@app.callback(
-    Output("download-dataframe-csv", "data", allow_duplicate=True),
-    Input("export-selected-csv-dropdown", "n_clicks"),
-    State("teams-table", "data"),
-    State("teams-table", "selected_rows"),
-    prevent_initial_call=True
-)
-def export_selected_csv(n_clicks, data, selected_rows):
-    if not n_clicks or not data or not selected_rows:
-        return None
-    df = pd.DataFrame(data)
-    df_selected = df.iloc[selected_rows]
-    df_export = df_selected.copy()
-    if 'team_display' in df_export.columns:
-        df_export['team_display'] = df_export['team_display'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
-    return dcc.send_data_frame(df_export.to_csv, f"selected_teams_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", index=False)
-
-@app.callback(
-    Output("download-dataframe-excel", "data", allow_duplicate=True),
-    Input("export-selected-excel-dropdown", "n_clicks"),
-    State("teams-table", "data"),
-    State("teams-table", "selected_rows"),
-    prevent_initial_call=True
-)
-def export_selected_excel(n_clicks, data, selected_rows):
-    if not n_clicks or not data or not selected_rows:
-        return None
-    df = pd.DataFrame(data)
-    df_selected = df.iloc[selected_rows]
-    df_export = df_selected.copy()
-    if 'team_display' in df_export.columns:
-        df_export['team_display'] = df_export['team_display'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
-    return dcc.send_data_frame(df_export.to_excel, f"selected_teams_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", index=False)
+    return new_container_style, new_button_style
 
 @app.callback(
     Output("compare-teams", "options"),

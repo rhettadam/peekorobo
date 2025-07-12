@@ -885,6 +885,48 @@ label {
 .dash-table-container .dash-header .column-header--sort.is-active {
     color: #FFDD00 !important; /* Highlight yellow when sorted */
 }
-  
-  
-  
+
+.dash-table-container .dash-filter .dash-filter-icon:hover {
+    color: #FFDD00 !important;
+    fill: #FFDD00 !important;
+    opacity: 0.8;
+}
+
+/* Dash DataTable filter styling */
+.dash-table-container .dash-filter input {
+    color: #FFDD00 !important;
+}
+
+.dash-table-container .dash-filter input::placeholder {
+    color: var(--text-primary) !important;
+    opacity: 0.1 !important; /* Very low opacity by default */
+    transition: opacity 0.2s ease;
+}
+
+.dash-table-container .dash-filter input:hover::placeholder,
+.dash-table-container .dash-filter input:focus::placeholder {
+    opacity: 0.7 !important; /* Higher opacity on hover/focus */
+}
+
+/* Filter icon (Aa) styling */
+.dash-table-container .dash-filter .dash-filter-icon {
+    color: #FFDD00 !important; /* Yellow color for filter icon */
+    fill: #FFDD00 !important;
+}
+
+.dash-table-container .dash-filter .dash-filter-icon:hover {
+    color: #FFDD00 !important;
+    fill: #FFDD00 !important;
+    opacity: 0.8;
+}
+
+/* Search toggle button hover effects */
+#search-toggle:hover {
+    background-color: var(--input-bg) !important;
+    border: 1px solid var(--input-border) !important;
+    transform: scale(1.05);
+}
+
+#search-toggle:active {
+    transform: scale(0.95);
+}
