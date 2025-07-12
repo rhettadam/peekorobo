@@ -774,9 +774,6 @@ home_layout = html.Div([
                                             "height": "auto",
                                         },
                                     ),
-                                    href="https://github.com/rhettadam/peekorobo",
-                                    target="_blank",
-                                    rel="noopener noreferrer"
                                 ),
                             ],
                             className="logo-container",
