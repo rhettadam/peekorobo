@@ -2268,7 +2268,33 @@ def load_teams(
                     href=f"/team/{team_number}/{selected_year}",
                     style={"display": "inline-block"}
                 ))
-        return table_rows, state_options, top_teams_layout, {"display": "none"}, avatars, {"display": "flex"}, go.Figure(), {"display": "none"}, query_string, style_data_conditional
+        
+        # Add toggle background button
+        toggle_button = dbc.Button(
+            "Toggle Background Color",
+            id="avatar-bg-toggle",
+            color="primary",
+            style={
+                "marginBottom": "20px",
+                "backgroundColor": "#0066B3",
+                "borderColor": "#0066B3"
+            }
+        )
+        
+        avatars_container = html.Div(
+            avatars,
+            id="avatars-container",
+            style={
+                "display": "flex",
+                "flexWrap": "wrap",
+                "gap": "10px",
+                "padding": "20px",
+                "backgroundColor": "#0066B3",
+                "borderRadius": "8px"
+            }
+        )
+        
+        return table_rows, state_options, top_teams_layout, {"display": "none"}, [toggle_button, avatars_container], {"display": "flex", "flexDirection": "column"}, go.Figure(), {"display": "none"}, query_string, style_data_conditional
 
     # Bubble Chart Tab
     elif active_tab == "bubble-chart-tab":
@@ -3766,6 +3792,39 @@ def update_nav_active_state(pathname):
     challenges_active = active_class if pathname and pathname.startswith("/challenges") else default_class
     
     return teams_active, map_active, events_active, challenges_active
+
+# Avatar background toggle callback
+@app.callback(
+    [Output("avatar-bg-toggle", "style"),
+     Output("avatars-container", "style")],
+    [Input("avatar-bg-toggle", "n_clicks")],
+    [State("avatar-bg-toggle", "style"),
+     State("avatars-container", "style")],
+    prevent_initial_call=True
+)
+def toggle_avatar_background(n_clicks, button_style, container_style):
+    if not n_clicks:
+        return button_style, container_style
+    
+    # Get current background color from button style
+    current_bg = button_style.get("backgroundColor", "#0066B3")
+    
+    # Toggle between blue and red
+    if current_bg == "#0066B3":
+        new_bg = "#ED1C24"
+    else:
+        new_bg = "#0066B3"
+    
+    # Update button style
+    new_button_style = button_style.copy()
+    new_button_style["backgroundColor"] = new_bg
+    new_button_style["borderColor"] = new_bg
+    
+    # Update container style
+    new_container_style = container_style.copy()
+    new_container_style["backgroundColor"] = new_bg
+    
+    return new_button_style, new_container_style
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
