@@ -508,7 +508,7 @@ def topbar():
                             [
                                 dbc.InputGroup(
                                     [
-                                        dbc.Input(id="mobile-search-input", placeholder="Search Teams or Events", type="text", className="custom-input-box"),
+                                        dbc.Input(id="mobile-search-input", placeholder="Search", type="text", className="custom-input-box"),
                                         dbc.Button(
                                             html.Img(src="/assets/magnifier.svg", style={
                                                 "width": "20px",
@@ -527,7 +527,8 @@ def topbar():
                                                 "padding": "0.375rem 0.75rem"
                                             }
                                         ),
-                                    ]
+                                    ],
+                                    style={"width": "100%"}
                                 ),
                                 html.Div(id="mobile-search-preview", style={
                                     "backgroundColor": "var(--card-bg)",
@@ -539,7 +540,7 @@ def topbar():
                                     "maxHeight": "200px",
                                     "overflowY": "auto",
                                     "overflowX": "hidden",
-                                    "width": "180px",
+                                    "width": "100%",
                                     "zIndex": "9999",
                                     "position": "absolute",
                                     "left": "0",
@@ -548,9 +549,9 @@ def topbar():
                                     "display": "none",
                                 }),
                             ],
-                            width="auto",
-                            className="d-md-none align-self-center",
-                            style={"position": "relative", "textAlign": "center"},
+                            width=True,
+                            className="d-md-none align-self-center mobile-search-group",
+                            style={"position": "relative", "textAlign": "center", "flexGrow": "1"},
                         ),
                         dbc.Col(
                             dbc.NavbarToggler(id="navbar-toggler", n_clicks=0, className="navbar-toggler-custom",style={"padding": "0px"}),
@@ -648,7 +649,8 @@ def topbar():
                                         "padding": "0.375rem 0.75rem"
                                     }
                                 ),
-                            ]
+                            ],
+                            style={"width": "100%"}
                         ),
                         html.Div(id="desktop-search-preview", style={
                             "backgroundColor": "var(--card-bg)",

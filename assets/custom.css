@@ -503,6 +503,12 @@ img:hover {
     .body {
         font-size: 14px;
     }
+    
+    /* Make mobile search input stretch to fill available space */
+    .mobile-search-group {
+        flex-grow: 1;
+        min-width: 0;
+    }
 }
 
 /* Input box theming */
