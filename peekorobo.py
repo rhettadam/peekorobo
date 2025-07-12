@@ -2823,6 +2823,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
                     "Score": red_score if team_alliance == "Red" else blue_score if team_alliance == "Blue" else "N/A",
                     "Opponent Score": blue_score if team_alliance == "Red" else red_score if team_alliance == "Blue" else "N/A",
                     "Winner": winner.title() if winner else "Tie",
+                    "Pred Winner": pred_winner,
                     "Prediction": team_prediction,
                     "Prediction %": team_prediction_percent,
                     "Outcome": "",
@@ -2990,10 +2991,15 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
                 if pred_winner and winner == pred_winner:
                     correct_predictions += 1
             else:
-                # Team focus view - check if team's alliance won
-                team_alliance = match_data.get("Alliance", "").lower()
-                if team_alliance and team_alliance == winner:
-                    correct_predictions += 1
+                # Team focus view - use the prediction percentage to determine if prediction was correct
+                prediction_percent = match_data.get("Prediction %", 0)
+                if prediction_percent is not None:
+                    # If prediction was >50% and team won, or <50% and team lost, it's correct
+                    team_alliance = match_data.get("Alliance", "").lower()
+                    if team_alliance == winner and prediction_percent > 50:
+                        correct_predictions += 1
+                    elif team_alliance != winner and prediction_percent < 50:
+                        correct_predictions += 1
     
     accuracy_percentage = (correct_predictions / total_matches * 100) if total_matches > 0 else 0
     
