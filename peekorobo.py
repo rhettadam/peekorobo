@@ -2974,7 +2974,28 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         dbc.Alert("No playoff matches found.", color="info"),
     ]
 
+    # Calculate overall prediction accuracy (only for completed matches)
+    total_matches = 0
+    correct_predictions = 0
+    
+    for match_data in qual_data + playoff_data:
+        winner = match_data.get("Winner", "").lower()
+        # Only count matches that have been played (have a winner)
+        if winner and winner in ["red", "blue"]:
+            total_matches += 1
+            pred_winner = match_data.get("Pred Winner", "").lower()
+            if pred_winner and winner == pred_winner:
+                correct_predictions += 1
+    
+    accuracy_percentage = (correct_predictions / total_matches * 100) if total_matches > 0 else 0
+    
+    accuracy_card = html.Div([
+        html.Span("Prediction Accuracy: ", style={"fontWeight": "bold"}),
+        html.Span(f"{correct_predictions}/{total_matches} correct ({accuracy_percentage:.1f}%)", style={"color": "var(--text-secondary)"})
+    ], style={"textAlign": "center", "marginBottom": "20px", "fontSize": "1rem"})
+    
     return html.Div([
+        accuracy_card,
         html.Div(qual_table, className="recent-events-table"),
         html.Div(playoff_table, className="recent-events-table"),
     ])
