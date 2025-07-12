@@ -1770,7 +1770,7 @@ def teams_layout(default_year=2025):
             dbc.DropdownMenuItem("Export as CSV", id="export-csv-dropdown"),
             dbc.DropdownMenuItem("Export as Excel", id="export-excel-dropdown"),
         ],
-        toggle_style={"backgroundColor": "#198754", "color": "black", "fontWeight": "bold"},
+        toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)" "black", "fontWeight": "bold", "borderColor": "transparent"},
         style={"display": "inline-block"}
     )
 
@@ -1783,7 +1783,7 @@ def teams_layout(default_year=2025):
             dbc.DropdownMenuItem("Export Selected as CSV", id="export-selected-csv-dropdown"),
             dbc.DropdownMenuItem("Export Selected as Excel", id="export-selected-excel-dropdown"),
         ],
-        toggle_style={"backgroundColor": "#ffc107", "color": "black", "fontWeight": "bold"},
+        toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
         style={"display": "inline-block"}
     )
 
