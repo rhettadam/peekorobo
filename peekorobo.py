@@ -2983,9 +2983,17 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         # Only count matches that have been played (have a winner)
         if winner and winner in ["red", "blue"]:
             total_matches += 1
-            pred_winner = match_data.get("Pred Winner", "").lower()
-            if pred_winner and winner == pred_winner:
-                correct_predictions += 1
+            # Handle both table styles
+            if "Pred Winner" in match_data:
+                # Both alliances view
+                pred_winner = match_data.get("Pred Winner", "").lower()
+                if pred_winner and winner == pred_winner:
+                    correct_predictions += 1
+            else:
+                # Team focus view - check if team's alliance won
+                team_alliance = match_data.get("Alliance", "").lower()
+                if team_alliance and team_alliance == winner:
+                    correct_predictions += 1
     
     accuracy_percentage = (correct_predictions / total_matches * 100) if total_matches > 0 else 0
     
