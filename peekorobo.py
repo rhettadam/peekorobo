@@ -5606,7 +5606,7 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
         all_team_stats["Teleop EPA"].append(float(epa.get("teleop_epa", 0)))
         all_team_stats["Endgame EPA"].append(float(epa.get("endgame_epa", 0)))
         all_team_stats["Confidence"].append(float(epa.get("confidence", 0)))
-        all_team_stats["EPA"].append(float(epa.get("", 0)))
+        all_team_stats["EPA"].append(float(epa.get("normal_epa", 0)))
         all_team_stats["ACE"].append(float(epa.get("epa", 0)))
         all_team_stats["Avg Score"].append(avg_score_map.get(tnum, 0))
         all_team_stats["SoS"].append(sos_map.get(tnum, 0))
