@@ -219,14 +219,20 @@ footer = dbc.Container(
             html.P(
                 [
                     "Built With:  ",
+                    html.A(
+                        html.Img(src="/assets/tba.png", style={"height": "16px", "width": "auto", "verticalAlign": "middle", "marginRight": "4px"}),
+                        href="https://www.thebluealliance.com/", 
+                        target="_blank", 
+                        style={"textDecoration": "none"}
+                    ),
                     html.A("The Blue Alliance ", href="https://www.thebluealliance.com/", target="_blank", style={"color": "#3366CC", "textDecoration": "line"}),
-                    "| View Peekorobo on ",
+                    "| ",
                     html.A("GitHub", href="https://github.com/rhettadam/peekorobo", target="_blank", style={"color": "#3366CC", "textDecoration": "line"}),
                 ],
                 style={
                     "textAlign": "center",
                     "color": "var(--text-primary)",
-                    "fontSize": "12px",
+                    "fontSize": "15px",
                     "margin": "0",  # Minimized margin
                     "padding": "0",  # Minimized padding
                 }
