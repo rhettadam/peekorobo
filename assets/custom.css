@@ -153,14 +153,25 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 }
 
 /* Navbar links: white by default, yellow on hover */
-.custom-navlink, .custom-navlink:visited, .custom-navlink:active {
+.custom-navlink {
     color: var(--navbar-text) !important;
     background-color: transparent;
     text-decoration: none;
     transition: color 0.2s, background-color 0.2s;
 }
 
-.custom-navlink:hover, .custom-navlink:focus, .custom-navlink:active {
+.custom-navlink:hover, .custom-navlink:focus {
+    color: var(--navbar-hover) !important;
+    text-decoration: none;
+}
+
+/* Active navigation link styling */
+.nav-active {
+    color: var(--navbar-hover) !important;
+    font-weight: bold;
+}
+
+.nav-active:hover, .nav-active:focus {
     color: var(--navbar-hover) !important;
 }
 
