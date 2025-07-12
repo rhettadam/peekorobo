@@ -1669,9 +1669,7 @@ def teams_layout(default_year=2025):
             {"name": "ACE Rank", "id": "epa_rank"},
             {"name": "Team", "id": "team_display", "presentation": "markdown"},
             {"name": "EPA", "id": "epa"},
-            {"name": "×", "id": "mult_symbol"},
             {"name": "Confidence", "id": "confidence"},
-            {"name": "=", "id": "equals_symbol"},
             {"name": "ACE", "id": "ace"},
             {"name": "Auto ACE", "id": "auto_epa"},
             {"name": "Teleop ACE", "id": "teleop_epa"},
@@ -1679,30 +1677,56 @@ def teams_layout(default_year=2025):
             {"name": "Record", "id": "record"},
         ],
         data=[],
+        # Enhanced features
+        sort_action="native",
+        sort_mode="multi",
+        page_action="native",
+        page_current=0,
         page_size=50,
+        
+        # Export functionality
+        #export_format='csv',
+        #export_headers='display',
+        #export_columns='visible',
+        
+        # Column and row selection
+        column_selectable='multi',
+        row_selectable='multi',
+        selected_columns=[],
+        selected_rows=[],
+        
+        # Styling
         style_table={
             "overflowX": "auto", 
             "borderRadius": "10px", 
             "border": "none", 
             "backgroundColor": "var(--card-bg)",
-            "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)" # Added shadow
+            "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
+            "minHeight": "400px"
         },
         style_header={
-            "backgroundColor": "var(--card-bg)",        # Match the table background
+            "backgroundColor": "var(--card-bg)",
             "color": "var(--text)",
-            "fontWeight": "bold",              # Keep column labels strong
+            "fontWeight": "bold",
             "textAlign": "center",
-            "borderBottom": "1px solid #ccc",  # Thin line under header only
-            "padding": "6px",                  # Reduce banner size
-            "fontSize": "13px",                # Optional: shrink text slightly
+            "borderBottom": "1px solid #ccc",
+            "padding": "8px",
+            "fontSize": "13px",
+            "position": "sticky",
+            "top": 0,
+            "zIndex": 1
         },
-
         style_cell={
             "textAlign": "center",
-            "padding": "10px",
+            "padding": "8px",
             "border": "none",
             "fontSize": "14px",
             "backgroundColor": "var(--card-bg)",
+            "color": "var(--text)",
+            "minWidth": "80px",
+            "maxWidth": "120px",
+            "overflow": "hidden",
+            "textOverflow": "ellipsis"
         },
         style_data_conditional=[
             {
@@ -1710,7 +1734,19 @@ def teams_layout(default_year=2025):
                 "backgroundColor": "rgba(255, 221, 0, 0.5)",
                 "border": "none",
             },
+            {
+                "if": {"row_index": "odd"},
+                "backgroundColor": "rgba(0, 0, 0, 0.05)",
+            },
         ],
+        style_filter={
+            "backgroundColor": "var(--input-bg)",
+            "color": "var(--input-text)",
+            "borderColor": "var(--input-border)",
+        },
+        style_data={
+            "border": "none",
+        },
     )
 
     avatar_gallery = html.Div(
@@ -1725,8 +1761,44 @@ def teams_layout(default_year=2025):
         dbc.Tab(label="Bubble Chart", tab_id="bubble-chart-tab", active_label_style=tab_style),
     ], id="teams-tabs", active_tab="table-tab", className="mb-3")
 
+    # Export dropdown button
+    export_dropdown = dbc.DropdownMenu(
+        label="Export",
+        color="primary",
+        className="me-2",
+        children=[
+            dbc.DropdownMenuItem("Export as CSV", id="export-csv-dropdown"),
+            dbc.DropdownMenuItem("Export as Excel", id="export-excel-dropdown"),
+        ],
+        toggle_style={"backgroundColor": "#198754", "color": "black", "fontWeight": "bold"},
+        style={"display": "inline-block"}
+    )
+
+    export_selected_dropdown = dbc.DropdownMenu(
+        label="Export Selected",
+        color="warning",
+        size="sm",
+        className="me-2",
+        children=[
+            dbc.DropdownMenuItem("Export Selected as CSV", id="export-selected-csv-dropdown"),
+            dbc.DropdownMenuItem("Export Selected as Excel", id="export-selected-excel-dropdown"),
+        ],
+        toggle_style={"backgroundColor": "#ffc107", "color": "black", "fontWeight": "bold"},
+        style={"display": "inline-block"}
+    )
+
+    export_buttons = html.Div([
+        export_dropdown,
+        export_selected_dropdown,
+        dcc.Download(id="download-dataframe-csv"),
+        dcc.Download(id="download-dataframe-excel"),
+    ], style={"marginBottom": "15px", "textAlign": "right"})
+    
     content = html.Div(id="teams-tab-content", children=[
-        html.Div(id="teams-table-container", children=[teams_table]),
+        html.Div(id="teams-table-container", children=[
+            export_buttons,
+            teams_table
+        ]),
         html.Div(id="avatar-gallery", className="d-flex flex-wrap justify-content-center", style={"gap": "5px", "padding": "1rem", "display": "none"}),
         dcc.Graph(id="bubble-chart", style={"display": "none", "height": "700px"})
     ])
@@ -2228,6 +2300,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     {"name": "Outcome", "id": "Outcome"},
                     {"name": "Prediction", "id": "Prediction"},
                 ],
+                sort_action="native",
+                sort_mode="multi",
                 data=match_rows,
                 page_size=10,
                 style_table={

@@ -224,14 +224,6 @@ h1, h2, h3, h4, h5, h6, p, span, div {
     border-color: var(--table-border);
 }
 
-.table-striped tbody tr:nth-of-type(odd) {
-    background-color: var(--table-stripe);
-}
-
-.table-hover tbody tr:hover {
-    background-color: var(--bg-primary);
-}
-
 /* Dropdowns */
 .dropdown-menu {
     background-color: var(--dropdown-bg);
@@ -401,7 +393,7 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 }
 
 /* Links */
-a, a:visited, a:active {
+a, a:active {
     color: #007bff;
     text-decoration: underline;
     transition: color 0.2s;
@@ -539,24 +531,6 @@ img:hover {
     background-color: #ffe066 !important;
     color: #222 !important;
     border-color: #222 !important;
-}
-
-/* Simplify to just these rules */
-#teams-table .dash-cell {
-    color: var(--text-primary); 
-    font-weight: 500;                  
-    font-size: 15px;              
-}
-
-/* Add this to see what's happening */
-#teams-table [style*="background-color"] {
-    color: white !important; /* Force white text on colored backgrounds */
-}
-
-
-.recent-events-table .dash-header {
-    background: var(--card-bg) !important;
-    font-weight: bold;
 }
 
 .custom-view-btn {
@@ -812,6 +786,105 @@ label {
   text-decoration-color: #ffdd00;
 }
 
+/* Export buttons styling */
+.export-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.export-buttons .btn {
+    font-size: 0.875rem;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.export-buttons .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Table pagination styling */
+.dash-spreadsheet-pagination {
+    background-color: var(--card-bg) !important;
+    color: var(--text) !important;
+    border-top: 1px solid var(--input-border) !important;
+    padding: 10px !important;
+}
+
+.dash-spreadsheet-pagination .Select-control {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+}
+
+.dash-spreadsheet-pagination .Select-value-label {
+    color: var(--text) !important;
+}
+
+/* Column selector styling */
+.dash-spreadsheet-menu {
+    background-color: var(--card-bg) !important;
+    border: 1px solid var(--input-border) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+.dash-spreadsheet-menu .dash-spreadsheet-menu-item {
+    color: var(--text) !important;
+    padding: 8px 12px !important;
+}
+
+.dash-spreadsheet-menu .dash-spreadsheet-menu-item:hover {
+    background-color: var(--primary-color) !important;
+    color: #000 !important;
+}
+
+/* Only apply row hover/selected background if the cell does NOT have an inline background color */
+.dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell:not([style*="background-color"]) {
+    background-color: rgba(255, 221, 0, 0.1) !important;
+}
+.dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell:not([style*="background-color"]) {
+    background-color: rgba(255, 221, 0, 0.3) !important;
+}
+
+/* Responsive table improvements */
+@media (max-width: 768px) {
+    .dash-table-container {
+        font-size: 12px;
+    }
+    
+    .dash-spreadsheet-inner .dash-spreadsheet-cell {
+        padding: 4px 6px !important;
+        min-width: 60px !important;
+        max-width: 100px !important;
+    }
+    
+    .export-buttons {
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+    
+    .export-buttons .btn {
+        font-size: 0.8rem;
+        padding: 4px 8px;
+    }
+}
+
+/* Dash DataTable sort arrow color override */
+.dash-table-container .dash-header .column-header--sort {
+    color: var(--navbar-text) !important; /* Default arrow color */
+    transition: color 0.2s;
+}
+.dash-table-container .dash-header .column-header--sort:hover,
+.dash-table-container .dash-header .column-header--sort:focus {
+    color: #FFDD00 !important; /* Highlight yellow on hover/focus */
+}
+.dash-table-container .dash-header .column-header--sort.is-active {
+    color: #FFDD00 !important; /* Highlight yellow when sorted */
+}
   
   
   

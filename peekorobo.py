@@ -47,6 +47,26 @@ app = dash.Dash(
     title="Peekorobo",
 )
 
+server = app.server
+server.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-placeholder-key")
+
+def serve_layout():
+    return html.Div([
+        dcc.Location(id='url', refresh=False),
+        dcc.Store(id='tab-title', data='Peekorobo'),
+        dcc.Store(id='theme-store'),
+        html.Div(
+            id='page-content-animated-wrapper',
+            children=html.Div(id='page-content'),
+            className='fade-page',
+        ),
+        universal_profile_icon_or_toast(),
+        html.Div(id='dummy-output', style={'display': 'none'}),
+        html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'})
+    ])
+
+app.layout = serve_layout
+
 # client-side callback for smooth page transitions
 app.clientside_callback(
     """
@@ -95,25 +115,492 @@ app.index_string = '''
 </html>
 '''
 
-server = app.server
-server.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-placeholder-key")
+# Theme switching callbacks
+app.clientside_callback(
+    """
+    function(n_clicks, current_theme) {
+        if (!n_clicks) {
+            return window.dash_clientside.no_update;
+        }
+        
+        const new_theme = current_theme === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', new_theme);
+        
+        // Update theme toggle icon
+        const themeIcon = document.querySelector('#theme-toggle i');
+        if (themeIcon) {
+            themeIcon.className = new_theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+        }
+        
+        return new_theme;
+    }
+    """,
+    Output("theme-store", "data"),
+    Input("theme-toggle", "n_clicks"),
+    State("theme-store", "data"),
+    prevent_initial_call=True
+)
 
-def serve_layout():
-    return html.Div([
-        dcc.Location(id='url', refresh=False),
-        dcc.Store(id='tab-title', data='Peekorobo'),
-        dcc.Store(id='theme-store'),
-        html.Div(
-            id='page-content-animated-wrapper',
-            children=html.Div(id='page-content'),
-            className='fade-page',
-        ),
-        universal_profile_icon_or_toast(),
-        html.Div(id='dummy-output', style={'display': 'none'}),
-        html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'})
-    ])
+# Initialize theme on page load
+app.clientside_callback(
+    """
+    function() {
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        
+        // Update theme toggle icon
+        const themeIcon = document.querySelector('#theme-toggle i');
+        if (themeIcon) {
+            themeIcon.className = savedTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+        }
+        
+        return savedTheme;
+    }
+    """,
+    Output("theme-store", "data", allow_duplicate=True),
+    Input("page-load-trigger", "n_clicks"),
+    prevent_initial_call=True
+)
 
-app.layout = serve_layout
+# Save theme preference
+app.clientside_callback(
+    """
+    function(theme) {
+        if (theme) {
+            localStorage.setItem('theme', theme);
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("theme-store", "data", allow_duplicate=True),
+    Input("theme-store", "data"),
+    prevent_initial_call=True
+)
+
+# Add a callback to update navigation link styles based on current page
+@app.callback(
+    [Output("nav-teams", "className"),
+     Output("nav-map", "className"),
+     Output("nav-events", "className"),
+     Output("nav-challenges", "className")],
+    [Input("url", "pathname")]
+)
+def update_nav_active_state(pathname):
+    # Default class for all nav links
+    default_class = "custom-navlink"
+    active_class = "custom-navlink nav-active"
+    
+    # Determine which page is active based on pathname
+    teams_active = active_class if pathname and pathname.startswith("/teams") else default_class
+    map_active = active_class if pathname and pathname.startswith("/map") else default_class
+    events_active = active_class if pathname and pathname.startswith("/events") else default_class
+    challenges_active = active_class if pathname and pathname.startswith("/challenges") else default_class
+    
+    return teams_active, map_active, events_active, challenges_active
+
+@app.callback(
+    Output("page-content", "children"),
+    Input("url", "pathname")
+)
+def display_page(pathname):
+    path_parts = pathname.strip("/").split("/")
+
+    if len(path_parts) >= 2 and path_parts[0] == "team":
+        team_number = path_parts[1]
+        year = path_parts[2] if len(path_parts) > 2 else None
+        
+        # If year is specified and it's not 2025, load that year's data
+        if year and year != "2025":
+            try:
+                year = int(year)
+                if year != 2025:
+                    # Load data for the specific year
+                    year_team_data, year_event_data, year_event_teams, year_event_rankings, year_event_awards, year_event_matches = load_year_data(year)
+                    
+                    # Create year-specific databases
+                    year_team_database = {year: year_team_data}
+                    year_event_database = {year: year_event_data}
+                    
+                    return team_layout(
+                        team_number, year, 
+                        year_team_database, year_event_database, 
+                        year_event_matches, year_event_awards, 
+                        year_event_rankings, year_event_teams
+                    )
+            except (ValueError, TypeError):
+                # If year parsing fails, fall back to 2025
+                pass
+        
+        # Use global 2025 data for current year or fallback
+        return team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS)
+    
+    if pathname.startswith("/event/"):
+        event_key = pathname.split("/")[-1]
+        return event_layout(event_key)
+    
+    if pathname == "/teams":
+        return teams_layout()
+    
+    if pathname == "/map":
+        return teams_map_layout()
+    
+    if pathname == "/events":
+        return events_layout()
+    
+    if pathname == "/challenges":
+        return challenges_layout()
+
+    if pathname == "/blog":
+        return blog_layout
+
+    if pathname == "/login":
+        return login_layout()
+
+    if pathname == "/user":
+        return html.Div([
+                    dcc.Store(id="favorites-store", data={"deleted": []}),
+                    dcc.Store(id="user-session", data={"user_id": session.get("user_id")}),
+                    html.Div(id="user-layout-wrapper", children=user_layout())
+                ])
+
+
+    if len(path_parts) == 2 and path_parts[0] == "user":
+        try:
+            username = pathname.split("/user/")[1]
+            return other_user_layout(username)
+        except ValueError:
+            pass
+    
+    if pathname.startswith("/challenge/"):
+        year = pathname.split("/")[-1]
+        try:
+            year = int(year)
+        except ValueError:
+            year = None
+        return challenge_details_layout(year)
+
+    if pathname == "/compare":
+        return compare_layout()
+
+    if pathname.startswith("/match/"):
+        # /match/<event_key>/<match_key>
+        parts = pathname.split("/")
+        if len(parts) >= 4:
+            event_key = parts[2]
+            match_key = parts[3]
+            return match_layout(event_key, match_key)
+        else:
+            return dbc.Alert("Invalid match URL.", color="danger")
+
+    return home_layout
+
+@app.callback(
+    Output('tab-title', 'data'),
+    Input('url', 'pathname'),
+)
+def update_tab_title(pathname):
+    if pathname.startswith('/team/'):
+        team_number = pathname.split('/team/')[1].split('/')[0]
+        return f'Team {team_number} - Peekorobo'
+    elif pathname.startswith('/teams'):
+        return 'Teams - Peekorobo'
+    elif pathname.startswith('/event/'):
+        event_key = pathname.split('/event/')[1].split('/')[0]
+        return f'{event_key} - Peekorobo'
+    elif pathname.startswith('/events'):
+        return 'Events - Peekorobo'
+    elif pathname.startswith('/map'):
+        return 'Map - Peekorobo'
+    elif pathname.startswith('/compare'):
+        return 'Compare - Peekorobo'
+    elif pathname.startswith('/blog'):
+        return 'Blog - Peekorobo'
+    elif pathname.startswith('/challenges'):
+        return 'Challenges - Peekorobo'
+    elif pathname.startswith('/challenge/'):
+        challenge = pathname.split('/challenge/')[1].split('/')[0]
+        return f'{challenge} Season - Peekorobo'
+    elif pathname.startswith('/user/'):
+        username = pathname.split('/user/')[1].split('/')[0]
+        return f'{username} - Peekorobo'
+    else:
+        return 'Peekorobo'
+
+app.clientside_callback(
+    """
+    function(title) {
+        document.title = title;
+        return '';
+    }
+    """,
+    Output('dummy-output', 'children'),
+    Input('tab-title', 'data')
+)
+
+@app.callback(
+    Output("navbar-collapse", "is_open"),
+    [Input("navbar-toggler", "n_clicks")],
+    [State("navbar-collapse", "is_open")],
+)
+def toggle_navbar(n_clicks, is_open):
+    if n_clicks:
+        return not is_open
+    return is_open
+
+@app.callback(
+    [Output("desktop-search-preview", "children"), Output("desktop-search-preview", "style"),
+     Output("mobile-search-preview", "children"), Output("mobile-search-preview", "style")],
+    [Input("desktop-search-input", "value"), Input("mobile-search-input", "value")],
+    [State("theme-store", "data")] # Add theme state
+)
+def update_search_preview(desktop_value, mobile_value, current_theme):
+    desktop_value = (desktop_value or "").strip().lower()
+    mobile_value = (mobile_value or "").strip().lower()
+
+    # Use search-specific data: 2025 teams and all events
+    teams_data = list(SEARCH_TEAM_DATA[2025].values())
+    events_data = [ev for year_dict in SEARCH_EVENT_DATA.values() for ev in year_dict.values()]
+
+    def get_children_and_style(val):
+        if not val:
+            return [], {"display": "none"}
+
+                # --- Filter Users from PostgreSQL ---
+        try:
+            with DatabaseConnection() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT username, avatar_key FROM users WHERE username ILIKE %s LIMIT 10", (f"%{val}%",))
+                user_rows = cur.fetchall()
+        except Exception as e:
+            print("User search error:", e)
+            user_rows = []
+
+        # --- Filter Teams ---
+        filtered_teams = [
+            t for t in teams_data
+            if val in str(t.get("team_number", "")).lower()
+            or val in (t.get("nickname", "") or "").lower()
+        ][:20]
+
+        # Closest team
+        closest_team_number = None
+        closest_team_nickname = None
+        if val.isdigit() and filtered_teams:
+            input_number = int(val)
+            closest_team_number = min(
+                filtered_teams,
+                key=lambda t: abs(input_number - int(t["team_number"])),
+                default=None,
+            )
+        elif filtered_teams:
+            closest_team_nickname = min(
+                filtered_teams,
+                key=lambda t: len(set(val) & set((t.get("nickname", "") or "").lower())),
+                default=None,
+            )
+
+        # --- Filter Events (simplified) ---
+        filtered_events = []
+        search_terms = val.split()
+        
+        for e in events_data:
+            event_key = (e.get("k") or "").lower()
+            event_name = (e.get("n") or "").lower()
+            
+            # Create a combined string for searching
+            searchable_text = f"{event_key} {event_name}".lower()
+
+            # Check if all search terms are present in the searchable text
+            if all(term in searchable_text for term in search_terms):
+                filtered_events.append(e)
+        
+        # Sort events by key (newest first since keys are chronological)
+        filtered_events.sort(key=lambda x: x.get("k", ""), reverse=True)
+
+        closest_event = None
+        if filtered_events:
+            closest_event = max(
+                filtered_events,
+                key=lambda e: (
+                    len(set(val) & set((e.get("k") or "").lower())) +
+                    len(set(val) & set((e.get("n") or "").lower()))
+                )
+            )
+
+        children = []
+
+        # Determine default text color based on theme
+        default_text_color = "white" if current_theme == "dark" else "black"
+
+        # Teams section
+        if filtered_teams:
+            children.append(
+                dbc.Row(
+                    dbc.Col(
+                        html.Div("Teams", style={"fontWeight": "bold", "padding": "5px"}),
+                    ),
+                    style={"backgroundColor": "var(--card-bg)"}
+                )
+            )
+            for team in filtered_teams:
+                tn = team.get("team_number", "???")
+                nm = team.get("nickname", "")
+                background_color = "var(--card-bg)"
+                is_highlighted = False
+                if (closest_team_number and tn == closest_team_number["team_number"]) or \
+                   (closest_team_nickname and nm == closest_team_nickname["nickname"]):
+                    background_color = "#FFDD0080"
+                    is_highlighted = True
+
+                team_link_element = html.A([
+                    html.Img(src=get_team_avatar(tn), style={
+                        "height": "20px", "width": "20px", "borderRadius": "50%", "marginRight": "8px"
+                    }),
+                    html.Span(f"{tn} | {nm}")
+                ], href=f"/team/{tn}/2025", style={
+                    "textDecoration": "none",
+                    "color": "black" if is_highlighted else default_text_color
+                })
+
+                row_el = dbc.Row(
+                    dbc.Col(team_link_element),
+                    style={
+                        "padding": "5px",
+                        "backgroundColor": background_color,
+                    },
+                )
+
+                children.append(row_el)
+
+        # Events section
+        if filtered_events:
+            children.append(
+                dbc.Row(
+                    dbc.Col(
+                        html.Div("Events", style={"fontWeight": "bold", "padding": "5px"}),
+                    ),
+                    style={"backgroundColor": "var(--card-bg)", "marginTop": "5px"}
+                )
+            )
+            for evt in filtered_events:
+                event_key = evt.get("k", "???")
+                e_name = evt.get("n", "")
+                e_year = event_key[:4] if len(event_key) >= 4 else ""
+                background_color = "var(--card-bg)"
+
+                if closest_event and event_key == closest_event.get("k"):
+                    background_color = "#FFDD0080"
+
+                display_text = f"{event_key} | {e_year} {e_name}"
+                row_el = dbc.Row(
+                    dbc.Col(
+                        html.A(
+                            display_text,
+                            href=f"/event/{event_key}",
+                            style={
+                                "lineHeight": "20px",
+                                "textDecoration": "none",
+                                "color": "black" if background_color == "#FFDD00" else default_text_color,
+                            },
+                        ),
+                        width=True,
+                    ),
+                    style={
+                        "padding": "5px",
+                        "backgroundColor": background_color
+                    },
+                )
+                children.append(row_el)
+
+        # Users section
+        if user_rows:
+            children.append(
+                dbc.Row(
+                    dbc.Col(
+                        html.Div("Users", style={"fontWeight": "bold", "padding": "5px"}),
+                    ),
+                    style={"backgroundColor": "var(--card-bg)", "marginTop": "5px"}
+                )
+            )
+            for username, avatar_key in user_rows:
+                avatar_src = f"/assets/avatars/{avatar_key or 'stock'}"
+                row_el = dbc.Row(
+                    dbc.Col(
+                        html.A([
+                            html.Img(src=avatar_src, style={"height": "20px", "width": "20px", "borderRadius": "50%", "marginRight": "8px"}),
+                            username
+                        ], href=f"/user/{username}", style={
+                            "textDecoration": "none",
+                            "color": default_text_color
+                            }),
+                    ),
+                    style={"padding": "5px", "backgroundColor": "transparent"},
+                )
+                children.append(row_el)
+
+
+        if not filtered_teams and not filtered_events:
+            children.append(html.Div("No results found.", style={"padding": "5px", "color": "#555"}))
+
+        style_dict = {
+            "display": "block",
+            "backgroundColor": "var(--card-bg)",
+            "color": "var(--text-primary)",
+            "border": "1px solid #ddd",
+            "borderRadius": "8px",
+            "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
+            "marginTop": "5px",
+            "padding": "5px",
+            "maxHeight": "200px",
+            "overflowY": "auto",
+            "overflowX": "hidden",
+            "width": "100%",
+            "zIndex": "9999",
+            "position": "absolute",
+            "left": "0",
+            "top": "100%",
+        }
+        return children, style_dict
+
+    desktop_children, desktop_style = get_children_and_style(desktop_value)
+    mobile_children, mobile_style = get_children_and_style(mobile_value)
+
+    return desktop_children, desktop_style, mobile_children, mobile_style
+
+# Callback to update account link based on login status
+@callback(
+    Output("account-link", "href"),
+    Input("user-session", "data")
+)
+def update_account_link(session_data):
+    if session_data and session_data.get("user_id"):
+        return "/user/"
+    else:
+        return "/login"
+
+@callback(
+    Output("followers-hidden", "style"),
+    Input("followers-see-more", "n_clicks"),
+    prevent_initial_call=True
+)
+def toggle_followers_list(n_clicks):
+    if n_clicks is None:
+        return dash.no_update
+    
+    # Toggle between hidden and visible
+    return {"display": "block", "marginTop": "5px", "paddingLeft": "0", "listStyleType": "none", "marginBottom": "0"}
+
+@callback(
+    Output("following-hidden", "style"),
+    Input("following-see-more", "n_clicks"),
+    prevent_initial_call=True
+)
+def toggle_following_list(n_clicks):
+    if n_clicks is None:
+        return dash.no_update
+    
+    # Toggle between hidden and visible
+    return {"display": "block", "marginTop": "5px", "paddingLeft": "0", "listStyleType": "none", "marginBottom": "0"}
 
 @app.server.route("/logout")
 def logout():
@@ -465,237 +952,6 @@ def handle_login(login_clicks, register_clicks, username, password):
             return message, dash.no_update
 
 @app.callback(
-    Output("navbar-collapse", "is_open"),
-    [Input("navbar-toggler", "n_clicks")],
-    [State("navbar-collapse", "is_open")],
-)
-def toggle_navbar(n_clicks, is_open):
-    if n_clicks:
-        return not is_open
-    return is_open
-
-@app.callback(
-    [Output("desktop-search-preview", "children"), Output("desktop-search-preview", "style"),
-     Output("mobile-search-preview", "children"), Output("mobile-search-preview", "style")],
-    [Input("desktop-search-input", "value"), Input("mobile-search-input", "value")],
-    [State("theme-store", "data")] # Add theme state
-)
-def update_search_preview(desktop_value, mobile_value, current_theme):
-    desktop_value = (desktop_value or "").strip().lower()
-    mobile_value = (mobile_value or "").strip().lower()
-
-    # Use search-specific data: 2025 teams and all events
-    teams_data = list(SEARCH_TEAM_DATA[2025].values())
-    events_data = [ev for year_dict in SEARCH_EVENT_DATA.values() for ev in year_dict.values()]
-
-    def get_children_and_style(val):
-        if not val:
-            return [], {"display": "none"}
-
-                # --- Filter Users from PostgreSQL ---
-        try:
-            with DatabaseConnection() as conn:
-                cur = conn.cursor()
-                cur.execute("SELECT username, avatar_key FROM users WHERE username ILIKE %s LIMIT 10", (f"%{val}%",))
-                user_rows = cur.fetchall()
-        except Exception as e:
-            print("User search error:", e)
-            user_rows = []
-
-        # --- Filter Teams ---
-        filtered_teams = [
-            t for t in teams_data
-            if val in str(t.get("team_number", "")).lower()
-            or val in (t.get("nickname", "") or "").lower()
-        ][:20]
-
-        # Closest team
-        closest_team_number = None
-        closest_team_nickname = None
-        if val.isdigit() and filtered_teams:
-            input_number = int(val)
-            closest_team_number = min(
-                filtered_teams,
-                key=lambda t: abs(input_number - int(t["team_number"])),
-                default=None,
-            )
-        elif filtered_teams:
-            closest_team_nickname = min(
-                filtered_teams,
-                key=lambda t: len(set(val) & set((t.get("nickname", "") or "").lower())),
-                default=None,
-            )
-
-        # --- Filter Events (simplified) ---
-        filtered_events = []
-        search_terms = val.split()
-        
-        for e in events_data:
-            event_key = (e.get("k") or "").lower()
-            event_name = (e.get("n") or "").lower()
-            
-            # Create a combined string for searching
-            searchable_text = f"{event_key} {event_name}".lower()
-
-            # Check if all search terms are present in the searchable text
-            if all(term in searchable_text for term in search_terms):
-                filtered_events.append(e)
-        
-        # Sort events by key (newest first since keys are chronological)
-        filtered_events.sort(key=lambda x: x.get("k", ""), reverse=True)
-
-        closest_event = None
-        if filtered_events:
-            closest_event = max(
-                filtered_events,
-                key=lambda e: (
-                    len(set(val) & set((e.get("k") or "").lower())) +
-                    len(set(val) & set((e.get("n") or "").lower()))
-                )
-            )
-
-        children = []
-
-        # Determine default text color based on theme
-        default_text_color = "white" if current_theme == "dark" else "black"
-
-        # Teams section
-        if filtered_teams:
-            children.append(
-                dbc.Row(
-                    dbc.Col(
-                        html.Div("Teams", style={"fontWeight": "bold", "padding": "5px"}),
-                    ),
-                    style={"backgroundColor": "var(--card-bg)"}
-                )
-            )
-            for team in filtered_teams:
-                tn = team.get("team_number", "???")
-                nm = team.get("nickname", "")
-                background_color = "var(--card-bg)"
-                is_highlighted = False
-                if (closest_team_number and tn == closest_team_number["team_number"]) or \
-                   (closest_team_nickname and nm == closest_team_nickname["nickname"]):
-                    background_color = "#FFDD0080"
-                    is_highlighted = True
-
-                team_link_element = html.A([
-                    html.Img(src=get_team_avatar(tn), style={
-                        "height": "20px", "width": "20px", "borderRadius": "50%", "marginRight": "8px"
-                    }),
-                    html.Span(f"{tn} | {nm}")
-                ], href=f"/team/{tn}/2025", style={
-                    "textDecoration": "none",
-                    "color": "black" if is_highlighted else default_text_color
-                })
-
-                row_el = dbc.Row(
-                    dbc.Col(team_link_element),
-                    style={
-                        "padding": "5px",
-                        "backgroundColor": background_color,
-                    },
-                )
-
-                children.append(row_el)
-
-        # Events section
-        if filtered_events:
-            children.append(
-                dbc.Row(
-                    dbc.Col(
-                        html.Div("Events", style={"fontWeight": "bold", "padding": "5px"}),
-                    ),
-                    style={"backgroundColor": "var(--card-bg)", "marginTop": "5px"}
-                )
-            )
-            for evt in filtered_events:
-                event_key = evt.get("k", "???")
-                e_name = evt.get("n", "")
-                e_year = event_key[:4] if len(event_key) >= 4 else ""
-                background_color = "var(--card-bg)"
-
-                if closest_event and event_key == closest_event.get("k"):
-                    background_color = "#FFDD0080"
-
-                display_text = f"{event_key} | {e_year} {e_name}"
-                row_el = dbc.Row(
-                    dbc.Col(
-                        html.A(
-                            display_text,
-                            href=f"/event/{event_key}",
-                            style={
-                                "lineHeight": "20px",
-                                "textDecoration": "none",
-                                "color": "black" if background_color == "#FFDD00" else default_text_color,
-                            },
-                        ),
-                        width=True,
-                    ),
-                    style={
-                        "padding": "5px",
-                        "backgroundColor": background_color
-                    },
-                )
-                children.append(row_el)
-
-        # Users section
-        if user_rows:
-            children.append(
-                dbc.Row(
-                    dbc.Col(
-                        html.Div("Users", style={"fontWeight": "bold", "padding": "5px"}),
-                    ),
-                    style={"backgroundColor": "var(--card-bg)", "marginTop": "5px"}
-                )
-            )
-            for username, avatar_key in user_rows:
-                avatar_src = f"/assets/avatars/{avatar_key or 'stock'}"
-                row_el = dbc.Row(
-                    dbc.Col(
-                        html.A([
-                            html.Img(src=avatar_src, style={"height": "20px", "width": "20px", "borderRadius": "50%", "marginRight": "8px"}),
-                            username
-                        ], href=f"/user/{username}", style={
-                            "textDecoration": "none",
-                            "color": default_text_color
-                            }),
-                    ),
-                    style={"padding": "5px", "backgroundColor": "transparent"},
-                )
-                children.append(row_el)
-
-
-        if not filtered_teams and not filtered_events:
-            children.append(html.Div("No results found.", style={"padding": "5px", "color": "#555"}))
-
-        style_dict = {
-            "display": "block",
-            "backgroundColor": "var(--card-bg)",
-            "color": "var(--text-primary)",
-            "border": "1px solid #ddd",
-            "borderRadius": "8px",
-            "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
-            "marginTop": "5px",
-            "padding": "5px",
-            "maxHeight": "200px",
-            "overflowY": "auto",
-            "overflowX": "hidden",
-            "width": "100%",
-            "zIndex": "9999",
-            "position": "absolute",
-            "left": "0",
-            "top": "100%",
-        }
-        return children, style_dict
-
-    desktop_children, desktop_style = get_children_and_style(desktop_value)
-    mobile_children, mobile_style = get_children_and_style(mobile_value)
-
-    return desktop_children, desktop_style, mobile_children, mobile_style
-
-
-@app.callback(
     Output("favorite-alert", "children"),
     Output("favorite-alert", "is_open"),
     Input("favorite-team-btn", "n_clicks"),
@@ -843,9 +1099,6 @@ def update_events_tab_content(
         except:
             return datetime.date(1900, 1, 1)
 
-    def truncate_name(name, max_length=32):
-        return name if len(name) <= max_length else name[:max_length-3] + '...'
-
     def compute_event_insights_from_data(EVENT_TEAMS, EVENT_DATABASE, TEAM_DATABASE, selected_year, filtered_event_keys=None):
         rows = []
     
@@ -987,6 +1240,8 @@ def update_events_tab_content(
                 {"name": "Top 8 ACE", "id": "Top 8 ACE"},
                 {"name": "Top 24 ACE", "id": "Top 24 ACE"},
             ],
+            sort_action="native",
+            sort_mode="multi",
             data=df.to_dict("records"),
             style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
             style_header={
@@ -1257,7 +1512,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
 
             data_rows.append({
                 "Rank": rank_info.get("rk", "N/A"),
-                "Team": f"[{tstr} | {nickname}](/team/{tstr}/{event_year})",
+                "Team": f"[{tstr} | {truncate_name(nickname)}](/team/{tstr}/{event_year})",
                 "Wins": rank_info.get("w", "N/A"),
                 "Losses": rank_info.get("l", "N/A"),
                 "Ties": rank_info.get("t", "N/A"),
@@ -1283,6 +1538,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             epa_legend_layout(),
             dash_table.DataTable(
                 columns=columns,
+                sort_action="native",
+                sort_mode="multi",
                 data=data_rows,
                 page_size=10,
                 style_table=common_style_table,
@@ -1327,7 +1584,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 "Auto": f"{team_data.get('auto_epa', 0):.2f}",
                 "Teleop": f"{team_data.get('teleop_epa', 0):.2f}",
                 "Endgame": f"{team_data.get('endgame_epa', 0):.2f}",
-                "Team": f"[{tstr} | {t.get('nn', 'Unknown')}](/team/{tstr}/{event_year})",
+                "Team": f"[{tstr} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tstr}/{event_year})",
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
 
@@ -1372,6 +1629,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             epa_legend_layout(),
             dash_table.DataTable(
                 columns=columns,
+                sort_action="native",
+                sort_mode="multi",
                 data=rows,
                 page_size=10,
                 style_table=common_style_table,
@@ -1492,7 +1751,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 label = m.get("k", "").split("_", 1)[-1].upper()
                 return f"[{label}](/match/{m.get('ek', '')}/{label})"
             team_sos_rows.append({
-                "Team": f"[{team_num} | {nickname}](/team/{team_num}/{event_year})",
+                "Team": f"[{team_num} | {truncate_name(nickname)}](/team/{team_num}/{event_year})",
                 "SoS": f"{sos_metric:.3f}",
                 "Avg Opponent ACE": f"{avg_opp_ace:.2f}",
                 "Avg Win Prob": f"{avg_win_prob:.2%}",
@@ -1519,6 +1778,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             html.H4("Strength of Schedule (SoS)", className="mb-3 mt-3"),
             dash_table.DataTable(
                 columns=sos_columns,
+                sort_action="native",
+                sort_mode="multi",
                 data=team_sos_rows,
                 page_size=15,
                 style_table=common_style_table,
@@ -1837,6 +2098,8 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         html.H5("Qualification Matches", className="mb-3 mt-3"),
         dash_table.DataTable(
             columns=match_columns,
+            sort_action="native",
+            sort_mode="multi",
             data=qual_data,
             page_size=10,
             style_table=style_table,
@@ -1853,6 +2116,8 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         html.H5("Playoff Matches", className="mb-3 mt-5"),
         dash_table.DataTable(
             columns=match_columns,
+            sort_action="native",
+            sort_mode="multi",
             data=playoff_data,
             page_size=10,
             style_table=style_table,
@@ -1902,6 +2167,203 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         accuracy_card,
         html.Div(qual_table, className="recent-events-table"),
         html.Div(playoff_table, className="recent-events-table"),
+    ])
+
+# Add a callback for the compare teams table
+@app.callback(
+    Output("compare-teams-table-container", "children"),
+    Input("compare-teams-dropdown", "value"),
+    State("store-event-epa", "data"),
+    State("store-event-teams", "data"),
+    State("store-rankings", "data"),
+    State("store-event-year", "data"),
+    State("store-event-matches", "data"),
+)
+def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, event_year, event_matches):
+    if not selected_teams:
+        return dbc.Alert("Select two or more teams to compare.", color="info")
+    # Build lookup for event_teams
+    team_lookup = {str(t["tk"]): t for t in event_teams}
+    # Build rows for each team
+    rows = []
+    for tnum in selected_teams:
+        t = team_lookup.get(str(tnum), {})
+        epa = epa_data.get(str(tnum), {})
+        rank_info = (rankings or {}).get(str(tnum), {})
+        rows.append({
+            "Team": f"[{tnum} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tnum}/{event_year})",
+            "Rank": rank_info.get("rk", "N/A"),
+            "W-L-T": f"{rank_info.get('w', 'N/A')}-{rank_info.get('l', 'N/A')}-{rank_info.get('t', 'N/A')}",
+            "DQ": rank_info.get("dq", "N/A"),
+            "EPA": float(epa.get('normal_epa', 0)),
+            "Auto EPA": float(epa.get('auto_epa', 0)),
+            "Teleop EPA": float(epa.get('teleop_epa', 0)),
+            "Endgame EPA": float(epa.get('endgame_epa', 0)),
+            "Confidence": float(epa.get('confidence', 0)),
+            "ACE": float(epa.get('epa', 0)),
+        })
+    # Compute global percentiles for coloring
+    if event_year == 2025:
+        global_teams = TEAM_DATABASE.get(event_year, {}).values()
+    else:
+        year_team_data, _, _, _, _, _ = load_year_data(event_year)
+        global_teams = year_team_data.values()
+    global_ace_values = [t.get("epa", 0) for t in global_teams]
+    global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
+    global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
+    global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
+    global_confidence_values = [t.get("confidence", 0) for t in global_teams]
+    percentiles_dict = {
+        "Auto EPA": compute_percentiles(global_auto_values),
+        "Teleop EPA": compute_percentiles(global_teleop_values),
+        "Endgame EPA": compute_percentiles(global_endgame_values),
+        "Confidence": compute_percentiles(global_confidence_values),
+        "ACE": compute_percentiles(global_ace_values),
+    }
+    style_data_conditional = get_epa_styling(percentiles_dict)
+    columns = [
+        {"name": "Team", "id": "Team", "presentation": "markdown"},
+        {"name": "Rank", "id": "Rank"},
+        {"name": "W-L-T", "id": "W-L-T"},
+        {"name": "DQ", "id": "DQ"},
+        {"name": "EPA", "id": "EPA"},
+        {"name": "Auto EPA", "id": "Auto EPA"},
+        {"name": "Teleop EPA", "id": "Teleop EPA"},
+        {"name": "Endgame EPA", "id": "Endgame EPA"},
+        {"name": "Confidence", "id": "Confidence"},
+        {"name": "ACE", "id": "ACE"},
+    ]
+    # Radar chart for visual comparison
+    
+    # Compute avg score and SoS for each team
+    avg_score_map = {}
+    sos_map = {}
+    matches = event_matches or []
+    for tnum in selected_teams:
+        tnum_str = str(tnum)
+        team_matches = [m for m in matches if tnum_str in m.get("rt", "").split(",") or tnum_str in m.get("bt", "").split(",")]
+        scores = []
+        win_probs = []
+        for m in team_matches:
+            # Determine alliance
+            if tnum_str in m.get("rt", "").split(","):
+                alliance = "red"
+                score = m.get("rs", 0)
+                opp_teams = [int(t) for t in m.get("bt", "").split(",") if t.strip().isdigit()]
+            else:
+                alliance = "blue"
+                score = m.get("bs", 0)
+                opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
+            scores.append(score)
+            # Win probability (use adaptive prediction)
+            red_info = [
+                {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
+                for t in m.get("rt", "").split(",") if t.strip().isdigit()
+            ]
+            blue_info = [
+                {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
+                for t in m.get("bt", "").split(",") if t.strip().isdigit()
+            ]
+            p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, m.get("ek", ""), m.get("k", ""))
+            win_prob = p_red if alliance == "red" else p_blue
+            win_probs.append(win_prob)
+        avg_score_map[tnum_str] = sum(scores) / len(scores) if scores else 0
+        sos_map[tnum_str] = sum(win_probs) / len(win_probs) if win_probs else 0
+    radar_stats = ["Auto EPA", "Teleop EPA", "Endgame EPA", "Confidence", "EPA", "ACE", "Avg Score", "SoS"]
+    # Gather all event teams' stats for normalization
+    all_team_stats = {stat: [] for stat in radar_stats}
+    for t in event_teams:
+        tnum = str(t["tk"])
+        epa = epa_data.get(tnum, {})
+        all_team_stats["Auto EPA"].append(float(epa.get("auto_epa", 0)))
+        all_team_stats["Teleop EPA"].append(float(epa.get("teleop_epa", 0)))
+        all_team_stats["Endgame EPA"].append(float(epa.get("endgame_epa", 0)))
+        all_team_stats["Confidence"].append(float(epa.get("confidence", 0)))
+        all_team_stats["EPA"].append(float(epa.get("normal_epa", 0)))
+        all_team_stats["ACE"].append(float(epa.get("epa", 0)))
+        all_team_stats["Avg Score"].append(avg_score_map.get(tnum, 0))
+        all_team_stats["SoS"].append(sos_map.get(tnum, 0))
+    # Compute min/max for each stat
+    stat_minmax = {}
+    for stat in radar_stats:
+        vals = all_team_stats[stat]
+        if vals:
+            stat_min = min(vals)
+            stat_max = max(vals)
+            stat_minmax[stat] = (stat_min, stat_max)
+        else:
+            stat_minmax[stat] = (0, 1)
+    # Radar chart with normalized values
+    fig = go.Figure()
+    for row in rows:
+        tnum = row["Team"].split("|")[0].replace("[", "").strip()
+        tnum_key = tnum
+        values = [
+            row["Auto EPA"],
+            row["Teleop EPA"],
+            row["Endgame EPA"],
+            row["Confidence"],
+            row["EPA"],
+            row["ACE"],
+            avg_score_map.get(tnum_key, 0),
+            sos_map.get(tnum_key, 0),
+        ]
+        norm_values = []
+        for v, stat in zip(values, radar_stats):
+            stat_min, stat_max = stat_minmax[stat]
+            if stat_max > stat_min:
+                norm = (v - stat_min) / (stat_max - stat_min)
+            else:
+                norm = 0.5
+            norm_values.append(norm)
+        fig.add_trace(go.Scatterpolar(
+            r=norm_values,
+            theta=radar_stats,
+            fill='toself',
+            name=tnum,
+        ))
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, showticklabels=True, ticks=''),
+            bgcolor='rgba(0,0,0,0)'
+        ),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        showlegend=True,
+        margin=dict(l=30, r=30, t=30, b=30),
+        height=400,
+        template="plotly_dark"
+    )
+    return html.Div([
+        dash_table.DataTable(
+            columns=columns,
+            sort_action="native",
+            sort_mode="multi",
+            data=[{k: (f"{v:.2f}" if isinstance(v, float) else v) for k, v in row.items()} for row in rows],
+            style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
+            style_header={
+                "backgroundColor": "var(--card-bg)",
+                "fontWeight": "bold",
+                "textAlign": "center",
+                "borderBottom": "1px solid #ccc",
+                "padding": "6px",
+                "fontSize": "13px",
+            },
+            style_cell={
+                "backgroundColor": "var(--card-bg)",
+                "textAlign": "center",
+                "padding": "10px",
+                "border": "none",
+                "fontSize": "14px",
+            },
+            style_data_conditional=style_data_conditional,
+            style_as_list_view=True,
+        ),
+        html.Div([
+            html.Hr(),
+            html.H5("Radar Chart Comparison", style={"marginTop": "20px"}),
+            dcc.Graph(figure=fig)
+        ])
     ])
 
 # Add a client-side callback to handle opening the playlist in a new tab
@@ -2229,7 +2691,6 @@ def load_teams(
             "auto_epa": round(abs(t.get("auto_epa") or 0), 2),
             "teleop_epa": round(abs(t.get("teleop_epa") or 0), 2),
             "endgame_epa": round(abs(t.get("endgame_epa") or 0), 2),
-            "location_display": ", ".join(filter(None, [t.get("city", ""), t.get("state_prov", ""), t.get("country", "")])),
             "record": record,
         })
 
@@ -2376,206 +2837,123 @@ def toggle_axis_dropdowns(active_tab):
         return {"display": "block", "marginBottom": "15px"}
     return {"display": "none"}
 
-# Theme switching callbacks
-app.clientside_callback(
-    """
-    function(n_clicks, current_theme) {
-        if (!n_clicks) {
-            return window.dash_clientside.no_update;
-        }
-        
-        const new_theme = current_theme === 'light' ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', new_theme);
-        
-        // Update theme toggle icon
-        const themeIcon = document.querySelector('#theme-toggle i');
-        if (themeIcon) {
-            themeIcon.className = new_theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
-        }
-        
-        return new_theme;
-    }
-    """,
-    Output("theme-store", "data"),
-    Input("theme-toggle", "n_clicks"),
-    State("theme-store", "data"),
-    prevent_initial_call=True
-)
-
-# Initialize theme on page load
-app.clientside_callback(
-    """
-    function() {
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        
-        // Update theme toggle icon
-        const themeIcon = document.querySelector('#theme-toggle i');
-        if (themeIcon) {
-            themeIcon.className = savedTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
-        }
-        
-        return savedTheme;
-    }
-    """,
-    Output("theme-store", "data", allow_duplicate=True),
-    Input("page-load-trigger", "n_clicks"),
-    prevent_initial_call=True
-)
-
-# Save theme preference
-app.clientside_callback(
-    """
-    function(theme) {
-        if (theme) {
-            localStorage.setItem('theme', theme);
-        }
-        return window.dash_clientside.no_update;
-    }
-    """,
-    Output("theme-store", "data", allow_duplicate=True),
-    Input("theme-store", "data"),
-    prevent_initial_call=True
-)
-
+# Avatar background toggle callback
 @app.callback(
-    Output("page-content", "children"),
-    Input("url", "pathname")
+    [Output("avatar-bg-toggle", "style"),
+     Output("avatars-container", "style")],
+    [Input("avatar-bg-toggle", "n_clicks")],
+    [State("avatar-bg-toggle", "style"),
+     State("avatars-container", "style")],
+    prevent_initial_call=True
 )
-def display_page(pathname):
-    path_parts = pathname.strip("/").split("/")
-
-    if len(path_parts) >= 2 and path_parts[0] == "team":
-        team_number = path_parts[1]
-        year = path_parts[2] if len(path_parts) > 2 else None
-        
-        # If year is specified and it's not 2025, load that year's data
-        if year and year != "2025":
-            try:
-                year = int(year)
-                if year != 2025:
-                    # Load data for the specific year
-                    year_team_data, year_event_data, year_event_teams, year_event_rankings, year_event_awards, year_event_matches = load_year_data(year)
-                    
-                    # Create year-specific databases
-                    year_team_database = {year: year_team_data}
-                    year_event_database = {year: year_event_data}
-                    
-                    return team_layout(
-                        team_number, year, 
-                        year_team_database, year_event_database, 
-                        year_event_matches, year_event_awards, 
-                        year_event_rankings, year_event_teams
-                    )
-            except (ValueError, TypeError):
-                # If year parsing fails, fall back to 2025
-                pass
-        
-        # Use global 2025 data for current year or fallback
-        return team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS)
+def toggle_avatar_background(n_clicks, button_style, container_style):
+    if not n_clicks:
+        return button_style, container_style
     
-    if pathname.startswith("/event/"):
-        event_key = pathname.split("/")[-1]
-        return event_layout(event_key)
+    # Get current background color from button style
+    current_bg = button_style.get("backgroundColor", "#0066B3")
     
-    if pathname == "/teams":
-        return teams_layout()
-    
-    if pathname == "/map":
-        return teams_map_layout()
-    
-    if pathname == "/events":
-        return events_layout()
-    
-    if pathname == "/challenges":
-        return challenges_layout()
-
-    if pathname == "/blog":
-        return blog_layout
-
-    if pathname == "/login":
-        return login_layout()
-
-    if pathname == "/user":
-        return html.Div([
-            dcc.Store(id="favorites-store", data={"deleted": []}),
-            dcc.Store(id="user-session", data={"user_id": session.get("user_id")}),
-            html.Div(id="user-layout-wrapper", children=user_layout())
-        ])
-
-
-    if len(path_parts) == 2 and path_parts[0] == "user":
-        try:
-            username = pathname.split("/user/")[1]
-            return other_user_layout(username)
-        except ValueError:
-            pass
-    
-    if pathname.startswith("/challenge/"):
-        year = pathname.split("/")[-1]
-        try:
-            year = int(year)
-        except ValueError:
-            year = None
-        return challenge_details_layout(year)
-
-    if pathname == "/compare":
-        return compare_layout()
-
-    if pathname.startswith("/match/"):
-        # /match/<event_key>/<match_key>
-        parts = pathname.split("/")
-        if len(parts) >= 4:
-            event_key = parts[2]
-            match_key = parts[3]
-            return match_layout(event_key, match_key)
-        else:
-            return dbc.Alert("Invalid match URL.", color="danger")
-
-    return home_layout
-
-@app.callback(
-    Output('tab-title', 'data'),
-    Input('url', 'pathname'),
-)
-def update_tab_title(pathname):
-    if pathname.startswith('/team/'):
-        team_number = pathname.split('/team/')[1].split('/')[0]
-        return f'Team {team_number} - Peekorobo'
-    elif pathname.startswith('/teams'):
-        return 'Teams - Peekorobo'
-    elif pathname.startswith('/event/'):
-        event_key = pathname.split('/event/')[1].split('/')[0]
-        return f'{event_key} - Peekorobo'
-    elif pathname.startswith('/events'):
-        return 'Events - Peekorobo'
-    elif pathname.startswith('/map'):
-        return 'Map - Peekorobo'
-    elif pathname.startswith('/compare'):
-        return 'Compare - Peekorobo'
-    elif pathname.startswith('/blog'):
-        return 'Blog - Peekorobo'
-    elif pathname.startswith('/challenges'):
-        return 'Challenges - Peekorobo'
-    elif pathname.startswith('/challenge/'):
-        challenge = pathname.split('/challenge/')[1].split('/')[0]
-        return f'{challenge} Season - Peekorobo'
-    elif pathname.startswith('/user/'):
-        username = pathname.split('/user/')[1].split('/')[0]
-        return f'{username} - Peekorobo'
+    # Toggle between blue and red
+    if current_bg == "#0066B3":
+        new_bg = "#ED1C24"
     else:
-        return 'Peekorobo'
+        new_bg = "#0066B3"
+    
+    # Update button style
+    new_button_style = button_style.copy()
+    new_button_style["backgroundColor"] = new_bg
+    new_button_style["borderColor"] = new_bg
+    
+    # Update container style
+    new_container_style = container_style.copy()
+    new_container_style["backgroundColor"] = new_bg
+    
+    return new_button_style, new_container_style
 
-app.clientside_callback(
-    """
-    function(title) {
-        document.title = title;
-        return '';
-    }
-    """,
-    Output('dummy-output', 'children'),
-    Input('tab-title', 'data')
+# Export callbacks for teams table
+@app.callback(
+    Output("download-dataframe-csv", "data"),
+    Input("export-csv-dropdown", "n_clicks"),
+    State("teams-table", "data"),
+    State("teams-table", "selected_rows"),
+    prevent_initial_call=True
 )
+def export_csv(n_clicks, data, selected_rows):
+    if not n_clicks or not data:
+        return None
+    
+    df = pd.DataFrame(data)
+    
+    # If rows are selected, export only those
+    if selected_rows:
+        df = df.iloc[selected_rows]
+    
+    # Clean up the data for export
+    df_export = df.copy()
+    # Remove markdown formatting from team column
+    if 'team_display' in df_export.columns:
+        df_export['team_display'] = df_export['team_display'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    
+    return dcc.send_data_frame(df_export.to_csv, f"teams_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", index=False)
+
+@app.callback(
+    Output("download-dataframe-excel", "data"),
+    Input("export-excel-dropdown", "n_clicks"),
+    State("teams-table", "data"),
+    State("teams-table", "selected_rows"),
+    prevent_initial_call=True
+)
+def export_excel(n_clicks, data, selected_rows):
+    if not n_clicks or not data:
+        return None
+    
+    df = pd.DataFrame(data)
+    
+    # If rows are selected, export only those
+    if selected_rows:
+        df = df.iloc[selected_rows]
+    
+    # Clean up the data for export
+    df_export = df.copy()
+    # Remove markdown formatting from team column
+    if 'team_display' in df_export.columns:
+        df_export['team_display'] = df_export['team_display'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    
+    return dcc.send_data_frame(df_export.to_excel, f"teams_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", index=False)
+
+@app.callback(
+    Output("download-dataframe-csv", "data", allow_duplicate=True),
+    Input("export-selected-csv-dropdown", "n_clicks"),
+    State("teams-table", "data"),
+    State("teams-table", "selected_rows"),
+    prevent_initial_call=True
+)
+def export_selected_csv(n_clicks, data, selected_rows):
+    if not n_clicks or not data or not selected_rows:
+        return None
+    df = pd.DataFrame(data)
+    df_selected = df.iloc[selected_rows]
+    df_export = df_selected.copy()
+    if 'team_display' in df_export.columns:
+        df_export['team_display'] = df_export['team_display'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    return dcc.send_data_frame(df_export.to_csv, f"selected_teams_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", index=False)
+
+@app.callback(
+    Output("download-dataframe-excel", "data", allow_duplicate=True),
+    Input("export-selected-excel-dropdown", "n_clicks"),
+    State("teams-table", "data"),
+    State("teams-table", "selected_rows"),
+    prevent_initial_call=True
+)
+def export_selected_excel(n_clicks, data, selected_rows):
+    if not n_clicks or not data or not selected_rows:
+        return None
+    df = pd.DataFrame(data)
+    df_selected = df.iloc[selected_rows]
+    df_export = df_selected.copy()
+    if 'team_display' in df_export.columns:
+        df_export['team_display'] = df_export['team_display'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    return dcc.send_data_frame(df_export.to_excel, f"selected_teams_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", index=False)
 
 @app.callback(
     Output("compare-teams", "options"),
@@ -2833,30 +3211,6 @@ def compare_multiple_teams(team_ids, year): # Update function signature
             ),
         ], className="justify-content-center"), # Center the main row
     ], style={"padding": "10px 0"})
-
-@callback(
-    Output("followers-hidden", "style"),
-    Input("followers-see-more", "n_clicks"),
-    prevent_initial_call=True
-)
-def toggle_followers_list(n_clicks):
-    if n_clicks is None:
-        return dash.no_update
-    
-    # Toggle between hidden and visible
-    return {"display": "block", "marginTop": "5px", "paddingLeft": "0", "listStyleType": "none", "marginBottom": "0"}
-
-@callback(
-    Output("following-hidden", "style"),
-    Input("following-see-more", "n_clicks"),
-    prevent_initial_call=True
-)
-def toggle_following_list(n_clicks):
-    if n_clicks is None:
-        return dash.no_update
-    
-    # Toggle between hidden and visible
-    return {"display": "block", "marginTop": "5px", "paddingLeft": "0", "listStyleType": "none", "marginBottom": "0"}
 
 @callback(
     Output("favorite-alert", "children", allow_duplicate=True),
@@ -3276,6 +3630,8 @@ def update_team_events(active_tab, store_data):
             {"name": "Start Date", "id": "start_date"},
             {"name": "End Date", "id": "end_date"},
         ],
+        sort_action="native",
+        sort_mode="multi",
         data=events_data,
         page_size=10,
         style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"},
@@ -3380,6 +3736,8 @@ def update_team_awards(active_tab, store_data):
             {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
             {"name": "Year", "id": "award_year"},
         ],
+        sort_action="native",
+        sort_mode="multi",
         data=awards_data,
         page_size=10,
         style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"},
@@ -3508,201 +3866,6 @@ app.clientside_callback(
     prevent_initial_call=True
 )
 
-# Add a callback for the compare teams table
-@app.callback(
-    Output("compare-teams-table-container", "children"),
-    Input("compare-teams-dropdown", "value"),
-    State("store-event-epa", "data"),
-    State("store-event-teams", "data"),
-    State("store-rankings", "data"),
-    State("store-event-year", "data"),
-    State("store-event-matches", "data"),
-)
-def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, event_year, event_matches):
-    if not selected_teams:
-        return dbc.Alert("Select two or more teams to compare.", color="info")
-    # Build lookup for event_teams
-    team_lookup = {str(t["tk"]): t for t in event_teams}
-    # Build rows for each team
-    rows = []
-    for tnum in selected_teams:
-        t = team_lookup.get(str(tnum), {})
-        epa = epa_data.get(str(tnum), {})
-        rank_info = (rankings or {}).get(str(tnum), {})
-        rows.append({
-            "Team": f"[{tnum} | {t.get('nn', 'Unknown')}](/team/{tnum}/{event_year})",
-            "Rank": rank_info.get("rk", "N/A"),
-            "W-L-T": f"{rank_info.get('w', 'N/A')}-{rank_info.get('l', 'N/A')}-{rank_info.get('t', 'N/A')}",
-            "DQ": rank_info.get("dq", "N/A"),
-            "EPA": float(epa.get('normal_epa', 0)),
-            "Auto EPA": float(epa.get('auto_epa', 0)),
-            "Teleop EPA": float(epa.get('teleop_epa', 0)),
-            "Endgame EPA": float(epa.get('endgame_epa', 0)),
-            "Confidence": float(epa.get('confidence', 0)),
-            "ACE": float(epa.get('epa', 0)),
-        })
-    # Compute global percentiles for coloring
-    if event_year == 2025:
-        global_teams = TEAM_DATABASE.get(event_year, {}).values()
-    else:
-        year_team_data, _, _, _, _, _ = load_year_data(event_year)
-        global_teams = year_team_data.values()
-    global_ace_values = [t.get("epa", 0) for t in global_teams]
-    global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
-    global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
-    global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
-    global_confidence_values = [t.get("confidence", 0) for t in global_teams]
-    percentiles_dict = {
-        "Auto EPA": compute_percentiles(global_auto_values),
-        "Teleop EPA": compute_percentiles(global_teleop_values),
-        "Endgame EPA": compute_percentiles(global_endgame_values),
-        "Confidence": compute_percentiles(global_confidence_values),
-        "ACE": compute_percentiles(global_ace_values),
-    }
-    style_data_conditional = get_epa_styling(percentiles_dict)
-    columns = [
-        {"name": "Team", "id": "Team", "presentation": "markdown"},
-        {"name": "Rank", "id": "Rank"},
-        {"name": "W-L-T", "id": "W-L-T"},
-        {"name": "DQ", "id": "DQ"},
-        {"name": "EPA", "id": "EPA"},
-        {"name": "Auto EPA", "id": "Auto EPA"},
-        {"name": "Teleop EPA", "id": "Teleop EPA"},
-        {"name": "Endgame EPA", "id": "Endgame EPA"},
-        {"name": "Confidence", "id": "Confidence"},
-        {"name": "ACE", "id": "ACE"},
-    ]
-    # Radar chart for visual comparison
-    
-    # Compute avg score and SoS for each team
-    avg_score_map = {}
-    sos_map = {}
-    matches = event_matches or []
-    for tnum in selected_teams:
-        tnum_str = str(tnum)
-        team_matches = [m for m in matches if tnum_str in m.get("rt", "").split(",") or tnum_str in m.get("bt", "").split(",")]
-        scores = []
-        win_probs = []
-        for m in team_matches:
-            # Determine alliance
-            if tnum_str in m.get("rt", "").split(","):
-                alliance = "red"
-                score = m.get("rs", 0)
-                opp_teams = [int(t) for t in m.get("bt", "").split(",") if t.strip().isdigit()]
-            else:
-                alliance = "blue"
-                score = m.get("bs", 0)
-                opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
-            scores.append(score)
-            # Win probability (use adaptive prediction)
-            red_info = [
-                {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
-                for t in m.get("rt", "").split(",") if t.strip().isdigit()
-            ]
-            blue_info = [
-                {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
-                for t in m.get("bt", "").split(",") if t.strip().isdigit()
-            ]
-            p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, m.get("ek", ""), m.get("k", ""))
-            win_prob = p_red if alliance == "red" else p_blue
-            win_probs.append(win_prob)
-        avg_score_map[tnum_str] = sum(scores) / len(scores) if scores else 0
-        sos_map[tnum_str] = sum(win_probs) / len(win_probs) if win_probs else 0
-    radar_stats = ["Auto EPA", "Teleop EPA", "Endgame EPA", "Confidence", "EPA", "ACE", "Avg Score", "SoS"]
-    # Gather all event teams' stats for normalization
-    all_team_stats = {stat: [] for stat in radar_stats}
-    for t in event_teams:
-        tnum = str(t["tk"])
-        epa = epa_data.get(tnum, {})
-        all_team_stats["Auto EPA"].append(float(epa.get("auto_epa", 0)))
-        all_team_stats["Teleop EPA"].append(float(epa.get("teleop_epa", 0)))
-        all_team_stats["Endgame EPA"].append(float(epa.get("endgame_epa", 0)))
-        all_team_stats["Confidence"].append(float(epa.get("confidence", 0)))
-        all_team_stats["EPA"].append(float(epa.get("normal_epa", 0)))
-        all_team_stats["ACE"].append(float(epa.get("epa", 0)))
-        all_team_stats["Avg Score"].append(avg_score_map.get(tnum, 0))
-        all_team_stats["SoS"].append(sos_map.get(tnum, 0))
-    # Compute min/max for each stat
-    stat_minmax = {}
-    for stat in radar_stats:
-        vals = all_team_stats[stat]
-        if vals:
-            stat_min = min(vals)
-            stat_max = max(vals)
-            stat_minmax[stat] = (stat_min, stat_max)
-        else:
-            stat_minmax[stat] = (0, 1)
-    # Radar chart with normalized values
-    fig = go.Figure()
-    for row in rows:
-        tnum = row["Team"].split("|")[0].replace("[", "").strip()
-        tnum_key = tnum
-        values = [
-            row["Auto EPA"],
-            row["Teleop EPA"],
-            row["Endgame EPA"],
-            row["Confidence"],
-            row["EPA"],
-            row["ACE"],
-            avg_score_map.get(tnum_key, 0),
-            sos_map.get(tnum_key, 0),
-        ]
-        norm_values = []
-        for v, stat in zip(values, radar_stats):
-            stat_min, stat_max = stat_minmax[stat]
-            if stat_max > stat_min:
-                norm = (v - stat_min) / (stat_max - stat_min)
-            else:
-                norm = 0.5
-            norm_values.append(norm)
-        fig.add_trace(go.Scatterpolar(
-            r=norm_values,
-            theta=radar_stats,
-            fill='toself',
-            name=tnum,
-        ))
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=True, showticklabels=True, ticks=''),
-            bgcolor='rgba(0,0,0,0)'
-        ),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        showlegend=True,
-        margin=dict(l=30, r=30, t=30, b=30),
-        height=400,
-        template="plotly_dark"
-    )
-    return html.Div([
-        dash_table.DataTable(
-            columns=columns,
-            data=[{k: (f"{v:.2f}" if isinstance(v, float) else v) for k, v in row.items()} for row in rows],
-            style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
-            style_header={
-                "backgroundColor": "var(--card-bg)",
-                "fontWeight": "bold",
-                "textAlign": "center",
-                "borderBottom": "1px solid #ccc",
-                "padding": "6px",
-                "fontSize": "13px",
-            },
-            style_cell={
-                "backgroundColor": "var(--card-bg)",
-                "textAlign": "center",
-                "padding": "10px",
-                "border": "none",
-                "fontSize": "14px",
-            },
-            style_data_conditional=style_data_conditional,
-            style_as_list_view=True,
-        ),
-        html.Div([
-            html.Hr(),
-            html.H5("Radar Chart Comparison", style={"marginTop": "20px"}),
-            dcc.Graph(figure=fig)
-        ])
-    ])
-
 @app.server.route('/api/playlist/<event_key>/<team_number>')
 def create_team_event_playlist(event_key, team_number):
     """Create a YouTube playlist for a specific team at a specific event."""
@@ -3760,71 +3923,6 @@ def create_team_event_playlist(event_key, team_number):
         
     except Exception as e:
         return f"Error creating playlist: {str(e)}", 500
-
-# Callback to update account link based on login status
-@callback(
-    Output("account-link", "href"),
-    Input("user-session", "data")
-)
-def update_account_link(session_data):
-    if session_data and session_data.get("user_id"):
-        return f"/user/{session_data['user_id']}"
-    else:
-        return "/login"
-
-# Add a callback to update navigation link styles based on current page
-@app.callback(
-    [Output("nav-teams", "className"),
-     Output("nav-map", "className"),
-     Output("nav-events", "className"),
-     Output("nav-challenges", "className")],
-    [Input("url", "pathname")]
-)
-def update_nav_active_state(pathname):
-    # Default class for all nav links
-    default_class = "custom-navlink"
-    active_class = "custom-navlink nav-active"
-    
-    # Determine which page is active based on pathname
-    teams_active = active_class if pathname and pathname.startswith("/teams") else default_class
-    map_active = active_class if pathname and pathname.startswith("/map") else default_class
-    events_active = active_class if pathname and pathname.startswith("/events") else default_class
-    challenges_active = active_class if pathname and pathname.startswith("/challenges") else default_class
-    
-    return teams_active, map_active, events_active, challenges_active
-
-# Avatar background toggle callback
-@app.callback(
-    [Output("avatar-bg-toggle", "style"),
-     Output("avatars-container", "style")],
-    [Input("avatar-bg-toggle", "n_clicks")],
-    [State("avatar-bg-toggle", "style"),
-     State("avatars-container", "style")],
-    prevent_initial_call=True
-)
-def toggle_avatar_background(n_clicks, button_style, container_style):
-    if not n_clicks:
-        return button_style, container_style
-    
-    # Get current background color from button style
-    current_bg = button_style.get("backgroundColor", "#0066B3")
-    
-    # Toggle between blue and red
-    if current_bg == "#0066B3":
-        new_bg = "#ED1C24"
-    else:
-        new_bg = "#0066B3"
-    
-    # Update button style
-    new_button_style = button_style.copy()
-    new_button_style["backgroundColor"] = new_bg
-    new_button_style["borderColor"] = new_bg
-    
-    # Update container style
-    new_container_style = container_style.copy()
-    new_container_style["backgroundColor"] = new_bg
-    
-    return new_button_style, new_container_style
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
