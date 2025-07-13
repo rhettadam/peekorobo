@@ -767,10 +767,21 @@ home_layout = html.Div([
                                 html.A(
                                     html.Img(
                                         src="/assets/home.png",
-                                        className='homelogo',
+                                        className='homelogo d-none d-md-block',
                                         style={
                                             "width": "100%",
                                             "maxWidth": "700px",
+                                            "height": "auto",
+                                        },
+                                    ),
+                                ),
+                                html.A(
+                                    html.Img(
+                                        src="/assets/mobilehome.png",
+                                        className='homelogo d-block d-md-none',
+                                        style={
+                                            "width": "100%",
+                                            "maxWidth": "350px",
                                             "height": "auto",
                                         },
                                     ),
