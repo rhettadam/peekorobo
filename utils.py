@@ -2,12 +2,40 @@ import numpy as np
 import math
 import os
 from collections import defaultdict
+import re
+import pandas as pd
 
 import dash_bootstrap_components as dbc
 from dash import html
 from flask import session
 from datagather import DatabaseConnection
 from datetime import datetime, date
+
+def apply_simple_filter(df, filter_query):
+    # Only supports simple "{"col"} op value" and "and"/"or"
+    if not filter_query:
+        return df
+    # Split on " && " for AND logic
+    for clause in filter_query.split(" && "):
+        m = re.match(r'\{(.+?)\} ([=><!]+) (.+)', clause)
+        if m:
+            col, op, val = m.groups()
+            col = col.strip()
+            val = val.strip().strip('"').strip("'")
+            if op == '=':
+                df = df[df[col].astype(str) == val]
+            elif op == '!=':
+                df = df[df[col].astype(str) != val]
+            elif op == '>':
+                df = df[pd.to_numeric(df[col], errors='coerce') > float(val)]
+            elif op == '<':
+                df = df[pd.to_numeric(df[col], errors='coerce') < float(val)]
+            elif op == '>=':
+                df = df[pd.to_numeric(df[col], errors='coerce') >= float(val)]
+            elif op == '<=':
+                df = df[pd.to_numeric(df[col], errors='coerce') <= float(val)]
+            # Add more ops as needed
+    return df
 
 #### PREDICTIONS
 
