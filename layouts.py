@@ -3826,6 +3826,7 @@ def event_layout(event_key):
         [
             dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Rankings", tab_id="rankings", label_style=tab_style, active_label_style=tab_style),
+            dbc.Tab(label="Alliances", tab_id="alliances", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Matches", tab_id="matches", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="SoS", tab_id="sos", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Compare", tab_id="compare", label_style=tab_style, active_label_style=tab_style),
@@ -3834,6 +3835,9 @@ def event_layout(event_key):
         active_tab=None,  # Will be set by callback
         className="mb-4",
     )
+
+    # Add alliances content div
+    alliances_content = html.Div(id="event-alliances-content")
 
     return html.Div(
         [
@@ -3851,6 +3855,7 @@ def event_layout(event_key):
                     dcc.Store(id="store-event-matches", data=event_matches),
                     dcc.Store(id="store-event-year", data=parsed_year),
                     html.Div(id="data-display-container"),
+                    html.Div(id="event-alliances-content"), 
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),

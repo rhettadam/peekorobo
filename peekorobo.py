@@ -13,6 +13,8 @@ import datetime
 from datetime import datetime, date
 
 import re
+import random
+import requests
 from urllib.parse import parse_qs, urlencode, quote
 import json
 import pandas as pd
@@ -372,7 +374,6 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
                 cur.execute("SELECT username, avatar_key FROM users WHERE username ILIKE %s LIMIT 10", (f"%{val}%",))
                 user_rows = cur.fetchall()
         except Exception as e:
-            print("User search error:", e)
             user_rows = []
 
         # --- Filter Teams ---
@@ -677,7 +678,6 @@ def handle_profile_edit(
                 text_color = get_contrast_text_color(new_color)
 
         except Exception as e:
-            print(f"Error saving profile: {e}")
             new_role, new_team, new_bio, new_color = role, team, bio, color
             followers_count = 0
             text_color = get_contrast_text_color(color)
@@ -720,7 +720,6 @@ def handle_profile_edit(
                 followers_count = len(followers_json) if followers_json else 0
                 text_color = get_contrast_text_color(saved_color)
         except Exception as e:
-            print(f"Error loading color on edit: {e}")
             saved_color = "#f9f9f9"
             text_color = "#000"
             followers_count = 0
@@ -804,7 +803,6 @@ def toggle_follow_user(_, session_data, current_text):
             return new_label
 
     except Exception as e:
-        print("Error during follow/unfollow:", e)
         return current_text
 
 @callback(
@@ -864,7 +862,6 @@ def search_users(query, session_data):
             }))
 
     except Exception as e:
-        print(f"Error searching users: {e}")
         return []
 
 @callback(
@@ -902,7 +899,6 @@ def remove_favorite(n_clicks, store_data, session_data):
         # Rerender layout
         return new_store, user_layout(user_id, deleted)
     except Exception as e:
-        print(f"Error removing favorite: {e}")
         return dash.no_update, dash.no_update
 
 @app.callback(
@@ -946,7 +942,6 @@ def handle_login(login_clicks, register_clicks, username, password):
                 redirect_url = "/user"
                 return f"✅ Welcome, {username.strip()}!", redirect_url
             except Exception as e:
-                print(f"Error getting user ID after registration: {e}")
                 return "Registration successful but login failed. Please try logging in.", dash.no_update
         else:
             return message, dash.no_update
@@ -991,7 +986,6 @@ def save_favorite_team(n_clicks, pathname):
 
         return "Team favorited successfully!", True
     except Exception as e:
-        print(f"Error favoriting team: {e}")
         return "Error favoriting team.", True
 
 @app.callback(
@@ -1302,7 +1296,7 @@ def set_event_tab_from_url(search):
     if search and search.startswith("?"):
         params = parse_qs(search[1:])
         tab = params.get("tab", [None])[0]
-        if tab in ["teams", "rankings", "matches", "sos", "compare"]:
+        if tab in ["teams", "rankings", "matches", "sos", "compare", "alliances"]:
             return tab
     return "teams"
 
@@ -1501,14 +1495,11 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         data_rows = []
         for team_num, rank_info in (rankings or {}).items():
             tstr = str(team_num)
-            print(team_num)
             if event_year == 2025:
                 team_data = year_team_data.get(2025, {}).get(int(team_num), {})
             else:
                 team_data = year_team_data.get(int(team_num), {})
-            print(team_data)
             nickname = team_data.get("nickname", "Unknown")
-            print(nickname)
 
             data_rows.append({
                 "Rank": rank_info.get("rk", "N/A"),
@@ -1812,6 +1803,10 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             html.Div(id="compare-teams-table-container")
         ])
         return compare_layout, query_string
+
+    if active_tab == "alliances":
+        query_string = f"?tab=alliances"
+        return "", query_string
 
     return dbc.Alert("No data available.", color="warning"), query_string
 
@@ -3296,7 +3291,6 @@ def toggle_favorite_team(n_clicks_list, id_list, session_data):
                 return "Team added to favorites.", True, ["★"]
 
     except Exception as e:
-        print(f"Error toggling team favorite: {e}")
         return "Error updating favorites.", True, [dash.no_update]
 
 @callback(
@@ -3361,7 +3355,6 @@ def update_team_favorites_popover_content(is_open, pathname):
             })
 
     except Exception as e:
-        print(f"Error fetching favoriting users: {e}")
         return "Error loading favoriting users."
 
 @callback(
@@ -3470,12 +3463,10 @@ def update_team_insights(active_tab, store_data):
     else:  # History view - show year-by-year rank trends
         # Get all years this team has participated in
         years_participated = get_team_years_participated(team_number)
-        print(f"Team {team_number} participated in years: {years_participated}")
         
         # Get team's historical data across all years they participated in
         years_data = []
         for year_key in sorted(years_participated):
-            print(f"Loading data for year {year_key}")
             
             if year_key == 2025:
                 # Use global database for 2025
@@ -3484,7 +3475,6 @@ def update_team_insights(active_tab, store_data):
                 # Load data for other years
                 try:
                     year_team_data, _, _, _, _, _ = load_year_data(year_key)
-                    print(f"Successfully loaded data for {year_key}")
                 except Exception as e:
                     print(f"Failed to load data for {year_key}: {e}")
                     continue
@@ -3497,7 +3487,6 @@ def update_team_insights(active_tab, store_data):
                     'rank': global_rank,
                     'ace': team_year_data.get('epa', 0)
                 })
-                print(f"Added data for {year_key}: rank {global_rank}, ace {team_year_data.get('epa', 0)}")
             else:
                 print(f"Team {team_number} not found in {year_key} data")
         
@@ -3505,7 +3494,6 @@ def update_team_insights(active_tab, store_data):
             return "No historical data available for this team."
         
         years_data.sort(key=lambda x: x['year'])
-        print(f"Final years_data: {years_data}")
         
         # Create the chart
         fig = go.Figure()
@@ -3958,6 +3946,160 @@ def create_team_event_playlist(event_key, team_number):
         
     except Exception as e:
         return f"Error creating playlist: {str(e)}", 500
+
+@app.callback(
+    Output("event-alliances-content", "children"),
+    Input("event-data-tabs", "active_tab"),
+    State("store-event-year", "data"),
+    State("url", "pathname"),
+    prevent_initial_call=True,
+)
+def load_event_alliances(active_tab, event_year, pathname):
+    if active_tab != "alliances":
+        return ""
+    # Extract event key from URL
+    if not pathname or "/event/" not in pathname:
+        return "No event selected."
+    event_key = pathname.split("/event/")[-1].split("/")[0]
+    tba_keys = os.environ.get("TBA_API_KEYS", "").split(",")
+    tba_keys = [k.strip() for k in tba_keys if k.strip()]
+    if not tba_keys:
+        return "No TBA API key found."
+    tba_key = random.choice(tba_keys)
+    tba_url = f"https://www.thebluealliance.com/api/v3/event/{event_key}/teams/statuses"
+    headers = {"X-TBA-Auth-Key": tba_key}
+    try:
+        resp = requests.get(tba_url, headers=headers, timeout=10)
+        data = resp.json()
+    except Exception as e:
+        return f"Error loading alliances: {e}"
+
+    # Parse alliances
+    alliances = {}
+    for team, info in data.items():
+        alliance = info.get("alliance")
+        if alliance:
+            number = alliance.get("number")
+            if number not in alliances:
+                alliances[number] = []
+            alliances[number].append({
+                "team": team,
+                "pick": alliance.get("pick"),
+                "name": alliance.get("name"),
+                "status": info.get("alliance_status_str"),
+                "playoff": info.get("playoff_status_str"),
+            })
+
+    # --- Bracket Visuals ---
+    round_order = [
+        "Winner", "Finals", "Round 5", "Round 4", "Round 3", "Round 2", "Round 1"
+    ]
+    round_colors = {
+        "Winner": "#FFD700",  # Gold
+        "Finals": "#C0C0C0",  # Silver
+        "Round 5": "#1976d2",
+        "Round 4": "#388e3c",
+        "Round 3": "#f9a825",
+        "Round 2": "#ef6c00",
+        "Round 1": "#c62828",
+        "Eliminated": "#888"
+    }
+    def get_round_from_playoff(playoff_str):
+        if "Won the event" in playoff_str:
+            return "Winner"
+        for r in round_order:
+            if r in playoff_str:
+                return r
+        if "Finals" in playoff_str:
+            return "Finals"
+        return "Eliminated"
+    def alliance_box(alliance_num, members):
+        members_sorted = sorted(members, key=lambda x: x["pick"] if x["pick"] is not None else 99)
+        captain = next((m for m in members_sorted if m["pick"] == 0), None)
+        playoff_str = (captain or members_sorted[0])["playoff"] or ""
+        round_name = get_round_from_playoff(playoff_str)
+        is_winner = round_name == "Winner"
+        badge_bg = "var(--navbar-hover)" if is_winner else "var(--border-color)"
+        badge_text = "var(--text-primary)"
+        border_color = "var(--navbar-hover)" if is_winner else "var(--border-color)"
+        # Badge
+        badge = html.Div(round_name, style={
+            "background": badge_bg,
+            "color": "black" if is_winner else badge_text,
+            "padding": "6px 18px",
+            "borderRadius": "8px",
+            "fontWeight": "bold",
+            "marginRight": "14px",
+            "display": "flex",
+            "alignItems": "center",
+            "minWidth": "70px",
+            "justifyContent": "center"
+        }, className="alliance-badge")
+        # Team boxes
+        team_boxes = [
+            html.Div([
+                html.B("C" if m["pick"] == 0 else f"P{m['pick']}", style={"display": "block", "fontSize": "0.9em", "color": badge_text}),
+                html.Br(),
+                html.A(
+                    m["team"].replace("frc", ""),
+                    href=f"https://www.thebluealliance.com/team/{m['team'].replace('frc','')}",
+                    target="_blank",
+                    style={
+                        "color": "#FFDD00" if m["pick"] == 0 else badge_text,
+                        "textDecoration": "underline",
+                        "fontWeight": "bold",
+                        "fontSize": "1.1em"
+                    }
+                ),
+            ], style={
+                "background": "var(--card-bg)",
+                "color": badge_text,
+                "border": f"2px solid #FFDD00" if m["pick"] == 0 else f"1px solid var(--border-color)",
+                "borderRadius": "6px",
+                "padding": "6px 10px",
+                "margin": "2px",
+                "fontWeight": "bold",
+                "fontSize": "1.1em",
+                "textAlign": "center",
+                "minWidth": "48px"
+            }, className="alliance-team-box") for m in members_sorted
+        ]
+        # Row: badge + team boxes
+        row = html.Div([
+            badge,
+            html.Div(team_boxes, style={"display": "flex", "gap": "8px"})
+        ], style={"display": "flex", "alignItems": "center", "marginBottom": "6px"})
+        # Progress/description
+        progress = html.Div([
+            dcc.Markdown(playoff_str, dangerously_allow_html=True, style={"color": "var(--text-primary)"}, className="markdown-text")
+        ], style={"marginLeft": "2px", "color": "var(--text-secondary)", "fontSize": "0.95em"})
+        return html.Div([
+            html.Div(f"Alliance {alliance_num}", style={"fontWeight": "bold", "fontSize": "1.2em", "marginBottom": "4px", "color": "var(--text-primary)"}),
+            row,
+            progress
+        ], style={
+            "background": "var(--card-bg)",
+            "border": f"3px solid {border_color}",
+            "borderRadius": "12px",
+            "padding": "12px 18px",
+            "marginBottom": "18px",
+            "boxShadow": "0 2px 8px #0004",
+            "minWidth": "0"
+        }, className="alliance-card")
+    alliance_bracket = [
+        alliance_box(number, members)
+        for number, members in sorted(alliances.items())
+    ]
+    # Grid: 2 per row, always 4 rows for 8 alliances
+    grid_style = {
+        "display": "grid",
+        # Remove gridTemplateColumns from here; move to CSS
+        "gap": "20px 18px",
+        "maxWidth": "1250px",
+        "margin": "0 auto",
+        "marginTop": "18px"
+    }
+    return html.Div(alliance_bracket, style=grid_style, className="alliance-bracket-grid")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  

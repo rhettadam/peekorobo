@@ -930,3 +930,42 @@ label {
 #search-toggle:active {
     transform: scale(0.95);
 }
+
+.alliance-bracket-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (max-width: 600px) {
+  .alliance-bracket-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px 6px !important;
+    padding: 0 2px;
+  }
+  .alliance-card {
+    padding: 6px 4px !important;
+    margin-bottom: 8px !important;
+    border-radius: 8px !important;
+  }
+  .alliance-card > div:first-child {
+    font-size: 1em !important;
+    margin-bottom: 2px !important;
+  }
+  .alliance-badge {
+    padding: 2px 8px !important;
+    font-size: 0.92em !important;
+    min-width: 36px !important;
+    margin-right: 4px !important;
+    border-radius: 6px !important;
+  }
+  .alliance-team-box {
+    padding: 2px 4px !important;
+    min-width: 28px !important;
+    font-size: 0.92em !important;
+    margin: 1px !important;
+    border-radius: 4px !important;
+  }
+  .alliance-card .markdown-text, .alliance-card .markdown-text * {
+    font-size: 0.95em !important;
+  }
+}
