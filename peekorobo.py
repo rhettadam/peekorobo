@@ -4042,7 +4042,7 @@ def load_event_alliances(active_tab, event_year, pathname):
                 html.Br(),
                 html.A(
                     m["team"].replace("frc", ""),
-                    href=f"https://www.thebluealliance.com/team/{m['team'].replace('frc','')}",
+                    href=f"https://www.peekorobo.com/team/{m['team'].replace('frc','')}",
                     target="_blank",
                     style={
                         "color": "#FFDD00" if m["pick"] == 0 else badge_text,
