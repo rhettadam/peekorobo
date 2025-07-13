@@ -185,7 +185,8 @@ app.clientside_callback(
 
 # Add a callback to update the "Last Updated" text
 @app.callback(
-    Output("last-updated-text", "children"),
+    [Output("last-updated-text", "children"),
+     Output("last-updated-text-mobile", "children")],
     [Input("page-load-trigger", "n_clicks"),
      Input("last-updated-interval", "n_intervals")]
 )
@@ -200,7 +201,7 @@ def update_last_updated_text(n_clicks, n_intervals):
     else:
         text = f"Updated {int(time_diff.total_seconds() // 3600)}h ago"
     
-    return text
+    return text, text
 
 # Add a callback to update navigation link styles based on current page
 @app.callback(

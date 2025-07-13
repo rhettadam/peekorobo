@@ -656,6 +656,22 @@ def topbar():
                                             style={"background": "none", "border": "none", "padding": "0.5rem 1rem"},
                                         )
                                     ),
+                                    # Last Updated indicator - mobile version (only visible on mobile)
+                                    dbc.NavItem(
+                                        html.Span(
+                                            "Loading...",
+                                            id="last-updated-text-mobile",
+                                            style={
+                                                "color": "var(--text-secondary)",
+                                                "fontSize": "0.75rem",
+                                                "fontStyle": "italic",
+                                                "display": "block",
+                                                "textAlign": "center",
+                                                "padding": "0.5rem 1rem"
+                                            }
+                                        ),
+                                        className="d-md-none"  # Only show on mobile
+                                    ),
                                 ],
                                 navbar=True,
                                 className="justify-content-center",
