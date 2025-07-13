@@ -898,14 +898,22 @@ home_layout = html.Div([
             ],
             justify="center",
             align="center",
-            style={"height": "78vh"}
+            className="align-items-center h-100",
+            style={"flex": "1 0 auto"}
         ),
     ], class_name="py-5", style={
         "backgroundColor": "var(--bg-primary)",
-        "flexGrow": "1"
-        }),
+        "flexGrow": "1",
+        "display": "flex",
+        "flexDirection": "column"
+    }),
     footer
-])
+], style={
+    "display": "flex",
+    "flexDirection": "column",
+    "minHeight": "100vh",
+    "backgroundColor": "var(--bg-primary)"
+})
 
 blog_layout = html.Div([
     topbar(),
