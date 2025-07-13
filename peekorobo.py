@@ -34,6 +34,9 @@ load_dotenv()
 TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data_2025()
 SEARCH_TEAM_DATA, SEARCH_EVENT_DATA = load_search_data()
 
+# Store app startup time for "Last Updated" indicator
+APP_STARTUP_TIME = datetime.now()
+
 app = dash.Dash(
     __name__,
     meta_tags=[
@@ -64,7 +67,8 @@ def serve_layout():
         ),
         universal_profile_icon_or_toast(),
         html.Div(id='dummy-output', style={'display': 'none'}),
-        html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'})
+        html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'}),
+        dcc.Interval(id='last-updated-interval', interval=60000, n_intervals=0)  # Update every minute
     ])
 
 app.layout = serve_layout
@@ -178,6 +182,25 @@ app.clientside_callback(
     Input("theme-store", "data"),
     prevent_initial_call=True
 )
+
+# Add a callback to update the "Last Updated" text
+@app.callback(
+    Output("last-updated-text", "children"),
+    [Input("page-load-trigger", "n_clicks"),
+     Input("last-updated-interval", "n_intervals")]
+)
+def update_last_updated_text(n_clicks, n_intervals):
+    # Calculate time difference
+    time_diff = datetime.now() - APP_STARTUP_TIME
+    
+    if time_diff.total_seconds() < 60:
+        text = f"Updated {int(time_diff.total_seconds())}s ago"
+    elif time_diff.total_seconds() < 3600:
+        text = f"Updated {int(time_diff.total_seconds() // 60)}m ago"
+    else:
+        text = f"Updated {int(time_diff.total_seconds() // 3600)}h ago"
+    
+    return text
 
 # Add a callback to update navigation link styles based on current page
 @app.callback(
@@ -1222,41 +1245,72 @@ def update_events_tab_content(
                     "borderRadius": "6px",
                 })
     
-        return dash_table.DataTable(
-            id="event-insights-table",
-            columns=[
-                {"name": "Name", "id": "Name", "presentation": "markdown"},
-                {"name": "Week", "id": "Week"},
-                {"name": "District", "id": "District"},
-                {"name": "Location", "id": "Location"},
-                {"name": "Event Type", "id": "Event Type"},
-                {"name": "Max ACE", "id": "Max ACE"},
-                {"name": "Top 8 ACE", "id": "Top 8 ACE"},
-                {"name": "Top 24 ACE", "id": "Top 24 ACE"},
+        # Create export dropdown buttons for event insights table
+        event_export_dropdown = dbc.DropdownMenu(
+            label="Export",
+            color="primary",
+            className="me-2",
+            children=[
+                dbc.DropdownMenuItem("Export as CSV", id="event-export-csv-dropdown"),
+                dbc.DropdownMenuItem("Export as TSV", id="event-export-tsv-dropdown"),
+                dbc.DropdownMenuItem("Export as Excel", id="event-export-excel-dropdown"),
+                dbc.DropdownMenuItem("Export as JSON", id="event-export-json-dropdown"),
+                dbc.DropdownMenuItem("Export as HTML", id="event-export-html-dropdown"),
+                dbc.DropdownMenuItem("Export as LaTeX", id="event-export-latex-dropdown"),
             ],
-            sort_action="native",
-            sort_mode="multi",
-            data=df.to_dict("records"),
-            style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
-            style_header={
-                "backgroundColor": "var(--card-bg)",        # Match the table background
-                "fontWeight": "bold",              # Keep column labels strong
-                "textAlign": "center",
-                "borderBottom": "1px solid #ccc",  # Thin line under header only
-                "padding": "6px",                  # Reduce banner size
-                "fontSize": "13px",                # Optional: shrink text slightly
-            },
-    
-            style_cell={
-                "backgroundColor": "var(--card-bg)",
-                "textAlign": "center",
-                "padding": "10px",
-                "border": "none",
-                "fontSize": "14px",
-            },
-            style_data_conditional=style_data_conditional,
-            style_as_list_view=True,
-        ), district_options
+            toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
+            style={"display": "inline-block"}
+        )
+
+        # Export container
+        export_container = html.Div([
+            event_export_dropdown,
+            dcc.Download(id="download-event-insights-csv"),
+            dcc.Download(id="download-event-insights-excel"),
+            dcc.Download(id="download-event-insights-tsv"),
+            dcc.Download(id="download-event-insights-json"),
+            dcc.Download(id="download-event-insights-html"),
+            dcc.Download(id="download-event-insights-latex"),
+        ], style={"textAlign": "right", "marginBottom": "10px"})
+
+        return html.Div([
+            export_container,
+            dash_table.DataTable(
+                id="event-insights-table",
+                columns=[
+                    {"name": "Name", "id": "Name", "presentation": "markdown"},
+                    {"name": "Week", "id": "Week"},
+                    {"name": "District", "id": "District"},
+                    {"name": "Location", "id": "Location"},
+                    {"name": "Event Type", "id": "Event Type"},
+                    {"name": "Max ACE", "id": "Max ACE"},
+                    {"name": "Top 8 ACE", "id": "Top 8 ACE"},
+                    {"name": "Top 24 ACE", "id": "Top 24 ACE"},
+                ],
+                sort_action="native",
+                sort_mode="multi",
+                data=df.to_dict("records"),
+                style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
+                style_header={
+                    "backgroundColor": "var(--card-bg)",        # Match the table background
+                    "fontWeight": "bold",              # Keep column labels strong
+                    "textAlign": "center",
+                    "borderBottom": "1px solid #ccc",  # Thin line under header only
+                    "padding": "6px",                  # Reduce banner size
+                    "fontSize": "13px",                # Optional: shrink text slightly
+                },
+        
+                style_cell={
+                    "backgroundColor": "var(--card-bg)",
+                    "textAlign": "center",
+                    "padding": "10px",
+                    "border": "none",
+                    "fontSize": "14px",
+                },
+                style_data_conditional=style_data_conditional,
+                style_as_list_view=True,
+            )
+        ]), district_options
 
 
     # Default: cards tab
@@ -2186,16 +2240,20 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             }
         )
 
-    # Section headers with accuracy
-    qual_header = html.Div([
-        html.Span("Qualification Matches", style={"fontWeight": "bold", "fontSize": "1.15rem"}),
-        accuracy_badge(qual_correct, qual_total, qual_acc, qual_excluded)
-    ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "0.5rem"})
+    # Section headers with accuracy - only create if there are matches
+    qual_header = None
+    if qual_matches:
+        qual_header = html.Div([
+            html.Span("Qualification Matches", style={"fontWeight": "bold", "fontSize": "1.15rem"}),
+            accuracy_badge(qual_correct, qual_total, qual_acc, qual_excluded)
+        ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "0.5rem"})
 
-    playoff_header = html.Div([
-        html.Span("Playoff Matches", style={"fontWeight": "bold", "fontSize": "1.15rem"}),
-        accuracy_badge(playoff_correct, playoff_total, playoff_acc, playoff_excluded)
-    ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "0.5rem"})
+    playoff_header = None
+    if playoff_matches:
+        playoff_header = html.Div([
+            html.Span("Playoff Matches", style={"fontWeight": "bold", "fontSize": "1.15rem"}),
+            accuracy_badge(playoff_correct, playoff_total, playoff_acc, playoff_excluded)
+        ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "0.5rem"})
 
     # Calculate insights statistics with more metrics and match links
     def calculate_insights(matches):
@@ -2286,156 +2344,174 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         ], href=f"/match/{event_key}/{cleaned_key}", style={"color": "#ffc107" if icon else "inherit", "textDecoration": "underline", "fontWeight": "bold"})
     
     # Create insights card with improved layout and minimal icons
-    insights_card = dbc.Card([
-        dbc.CardHeader([
-            html.H5([
-                html.I(className="fas fa-chart-line me-2", style={"color": "#007bff"}),
-                "Event Insights"
-            ], className="mb-0", style={"color": "var(--text-primary)"}),
-        ], style={"backgroundColor": "var(--card-bg)", "borderBottom": "1px solid var(--border-color)"}),
-        dbc.CardBody([
+    # Only show sections that have actual data
+    insights_sections = []
+    
+    if playoff_matches:
+        playoff_section = dbc.Col([
+            html.H6([
+                html.I(className="fas fa-trophy me-1", style={"color": "#007bff"}),
+                "Playoff Stats"
+            ], style={"color": "#007bff", "fontWeight": "bold", "textAlign": "center", "marginBottom": "15px"}),
             dbc.Row([
                 dbc.Col([
-                    html.H6([
-                        html.I(className="fas fa-trophy me-1", style={"color": "#007bff"}),
-                        "Playoff Stats"
-                    ], style={"color": "#007bff", "fontWeight": "bold", "textAlign": "center", "marginBottom": "15px"}),
-                    dbc.Row([
-                        dbc.Col([
-                            html.Div([
-                                html.Span(f"{playoff_insights['avg_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
-                                html.Div("Avg Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6),
-                        dbc.Col([
-                            html.Div([
-                                html.Span(f"{playoff_insights['avg_win_margin']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
-                                html.Div("Avg Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6)
-                    ]),
-                    dbc.Row([
-                        dbc.Col([
-                            html.Div([
-                                html.Span(f"{playoff_insights['avg_winning_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
-                                html.Div("Avg Winning Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6),
-                        dbc.Col([
-                            html.Div([
-                                html.Span(f"{playoff_insights['avg_losing_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
-                                html.Div("Avg Losing Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6)
-                    ]),
-                    dbc.Row([
-                        dbc.Col([
-                            html.Div([
-                                match_link(*(playoff_insights['high_score_match'] or (None, None)), playoff_insights['high_score'], icon=True),
-                                html.Div("High Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6),
-                        dbc.Col([
-                            html.Div([
-                                match_link(*(playoff_insights['high_win_margin_match'] or (None, None)), playoff_insights['high_win_margin'], icon=True),
-                                html.Div("High Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6)
-                    ]),
-                    dbc.Row([
-                        dbc.Col([
-                            html.Div([
-                                match_link(*(playoff_insights['low_score_match'] or (None, None)), playoff_insights['low_score'], icon=True),
-                                html.Div("Low Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6),
-                        dbc.Col([
-                            html.Div([
-                                html.Span(playoff_insights['mode_score'] if playoff_insights['mode_score'] is not None else "-", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
-                                html.Div("Most Common Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6)
-                    ]),
                     html.Div([
-                        html.Span(f"{playoff_insights['num_matches']} matches, {playoff_insights['num_teams']} teams", style={"fontSize": "0.95rem", "color": "var(--text-secondary)"})
-                    ], style={"textAlign": "center", "marginTop": "10px"})
-                ], width=6, style={"borderRight": "1.5px solid #333"}),
+                        html.Span(f"{playoff_insights['avg_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                        html.Div("Avg Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6),
                 dbc.Col([
-                    html.H6([
-                        html.I(className="fas fa-robot me-1", style={"color": "#007bff"}),
-                        "Qualification Stats"
-                    ], style={"color": "#007bff", "fontWeight": "bold", "textAlign": "center", "marginBottom": "15px"}),
-                    dbc.Row([
-                        dbc.Col([
-                            html.Div([
-                                html.Span(f"{qual_insights['avg_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
-                                html.Div("Avg Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6),
-                        dbc.Col([
-                            html.Div([
-                                html.Span(f"{qual_insights['avg_win_margin']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
-                                html.Div("Avg Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6)
-                    ]),
-                    dbc.Row([
-                        dbc.Col([
-                            html.Div([
-                                html.Span(f"{qual_insights['avg_winning_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
-                                html.Div("Avg Winning Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6),
-                        dbc.Col([
-                            html.Div([
-                                html.Span(f"{qual_insights['avg_losing_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
-                                html.Div("Avg Losing Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6)
-                    ]),
-                    dbc.Row([
-                        dbc.Col([
-                            html.Div([
-                                match_link(*(qual_insights['high_score_match'] or (None, None)), qual_insights['high_score'], icon=True),
-                                html.Div("High Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6),
-                        dbc.Col([
-                            html.Div([
-                                match_link(*(qual_insights['high_win_margin_match'] or (None, None)), qual_insights['high_win_margin'], icon=True),
-                                html.Div("High Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6)
-                    ]),
-                    dbc.Row([
-                        dbc.Col([
-                            html.Div([
-                                match_link(*(qual_insights['low_score_match'] or (None, None)), qual_insights['low_score'], icon=True),
-                                html.Div("Low Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6),
-                        dbc.Col([
-                            html.Div([
-                                html.Span(qual_insights['mode_score'] if qual_insights['mode_score'] is not None else "-", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
-                                html.Div("Most Common Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
-                            ], style={"textAlign": "center", "padding": "10px"})
-                        ], width=6)
-                    ]),
                     html.Div([
-                        html.Span(f"{qual_insights['num_matches']} matches, {qual_insights['num_teams']} teams", style={"fontSize": "0.95rem", "color": "var(--text-secondary)"})
-                    ], style={"textAlign": "center", "marginTop": "10px"})
+                        html.Span(f"{playoff_insights['avg_win_margin']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                        html.Div("Avg Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
                 ], width=6)
-            ], className="g-0"),
-        ], style={"backgroundColor": "var(--card-bg)"})
-    ], className="mb-4 shadow-sm", style={"borderRadius": "14px", "border": "1.5px solid var(--border-color)", "overflow": "hidden", "marginTop": "3rem"})
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.Div([
+                        html.Span(f"{playoff_insights['avg_winning_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                        html.Div("Avg Winning Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6),
+                dbc.Col([
+                    html.Div([
+                        html.Span(f"{playoff_insights['avg_losing_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                        html.Div("Avg Losing Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6)
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.Div([
+                        match_link(*(playoff_insights['high_score_match'] or (None, None)), playoff_insights['high_score'], icon=True),
+                        html.Div("High Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6),
+                dbc.Col([
+                    html.Div([
+                        match_link(*(playoff_insights['high_win_margin_match'] or (None, None)), playoff_insights['high_win_margin'], icon=True),
+                        html.Div("High Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6)
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.Div([
+                        match_link(*(playoff_insights['low_score_match'] or (None, None)), playoff_insights['low_score'], icon=True),
+                        html.Div("Low Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6),
+                dbc.Col([
+                    html.Div([
+                        html.Span(playoff_insights['mode_score'] if playoff_insights['mode_score'] is not None else "-", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                        html.Div("Most Common Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6)
+            ]),
+            html.Div([
+                html.Span(f"{playoff_insights['num_matches']} matches, {playoff_insights['num_teams']} teams", style={"fontSize": "0.95rem", "color": "var(--text-secondary)"})
+            ], style={"textAlign": "center", "marginTop": "10px"})
+        ], width=6, style={"borderRight": "1.5px solid #333" if qual_matches else "none"})
+        insights_sections.append(playoff_section)
     
-    return html.Div([
-        qual_header,
-        html.Div(qual_table, className="recent-events-table"),
-        playoff_header,
-        html.Div(playoff_table, className="recent-events-table"),
-        insights_card
-    ])
+    if qual_matches:
+        qual_section = dbc.Col([
+            html.H6([
+                html.I(className="fas fa-robot me-1", style={"color": "#007bff"}),
+                "Qualification Stats"
+            ], style={"color": "#007bff", "fontWeight": "bold", "textAlign": "center", "marginBottom": "15px"}),
+            dbc.Row([
+                dbc.Col([
+                    html.Div([
+                        html.Span(f"{qual_insights['avg_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                        html.Div("Avg Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6),
+                dbc.Col([
+                    html.Div([
+                        html.Span(f"{qual_insights['avg_win_margin']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                        html.Div("Avg Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6)
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.Div([
+                        html.Span(f"{qual_insights['avg_winning_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                        html.Div("Avg Winning Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6),
+                dbc.Col([
+                    html.Div([
+                        html.Span(f"{qual_insights['avg_losing_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                        html.Div("Avg Losing Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6)
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.Div([
+                        match_link(*(qual_insights['high_score_match'] or (None, None)), qual_insights['high_score'], icon=True),
+                        html.Div("High Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6),
+                dbc.Col([
+                    html.Div([
+                        match_link(*(qual_insights['high_win_margin_match'] or (None, None)), qual_insights['high_win_margin'], icon=True),
+                        html.Div("High Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6)
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.Div([
+                        match_link(*(qual_insights['low_score_match'] or (None, None)), qual_insights['low_score'], icon=True),
+                        html.Div("Low Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6),
+                dbc.Col([
+                    html.Div([
+                        html.Span(qual_insights['mode_score'] if qual_insights['mode_score'] is not None else "-", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                        html.Div("Most Common Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "padding": "10px"})
+                ], width=6)
+            ]),
+            html.Div([
+                html.Span(f"{qual_insights['num_matches']} matches, {qual_insights['num_teams']} teams", style={"fontSize": "0.95rem", "color": "var(--text-secondary)"})
+            ], style={"textAlign": "center", "marginTop": "10px"})
+        ], width=6)
+        insights_sections.append(qual_section)
+    
+    # Only create insights card if there are matches to show
+    insights_card = None
+    if insights_sections:
+        insights_card = dbc.Card([
+            dbc.CardHeader([
+                html.H5([
+                    html.I(className="fas fa-chart-line me-2", style={"color": "#007bff"}),
+                    "Event Insights"
+                ], className="mb-0", style={"color": "var(--text-primary)"}),
+            ], style={"backgroundColor": "var(--card-bg)", "borderBottom": "1px solid var(--border-color)"}),
+            dbc.CardBody([
+                dbc.Row(insights_sections, className="g-0"),
+            ], style={"backgroundColor": "var(--card-bg)"})
+        ], className="mb-4 shadow-sm", style={"borderRadius": "14px", "border": "1.5px solid var(--border-color)", "overflow": "hidden", "marginTop": "3rem"})
+    
+    # Build the content list dynamically based on what exists
+    content = []
+    
+    if qual_header and qual_table:
+        content.extend([qual_header, html.Div(qual_table, className="recent-events-table")])
+    
+    if playoff_header and playoff_table:
+        content.extend([playoff_header, html.Div(playoff_table, className="recent-events-table")])
+    
+    # Only include insights card if it exists
+    if insights_card:
+        content.append(insights_card)
+    
+    return html.Div(content)
 
 # Add a callback for the compare teams table
 @app.callback(
@@ -3200,6 +3276,52 @@ def export_data(csv_clicks, excel_clicks, tsv_clicks, json_clicks, html_clicks, 
     if triggered_id in ["export-html-dropdown", "export-selected-html-dropdown"]:
         outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
     if triggered_id in ["export-latex-dropdown", "export-selected-latex-dropdown"]:
+        outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
+    return outputs
+
+# Export callbacks for event insights table
+@app.callback(
+    [Output("download-event-insights-csv", "data"),
+     Output("download-event-insights-excel", "data"),
+     Output("download-event-insights-tsv", "data"),
+     Output("download-event-insights-json", "data"),
+     Output("download-event-insights-html", "data"),
+     Output("download-event-insights-latex", "data")],
+    [Input("event-export-csv-dropdown", "n_clicks"),
+     Input("event-export-tsv-dropdown", "n_clicks"),
+     Input("event-export-excel-dropdown", "n_clicks"),
+     Input("event-export-json-dropdown", "n_clicks"),
+     Input("event-export-html-dropdown", "n_clicks"),
+     Input("event-export-latex-dropdown", "n_clicks")],
+    [State("event-insights-table", "data")],
+    prevent_initial_call=True
+)
+def export_event_insights_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return [None] * 6
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    if not data:
+        return [None] * 6
+    df = pd.DataFrame(data)
+    df_export = df.copy()
+    if 'Name' in df_export.columns:
+        df_export['Name'] = df_export['Name'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename_prefix = "event_insights"
+    # Prepare outputs for all formats
+    outputs = [None] * 6
+    if triggered_id == "event-export-csv-dropdown":
+        outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
+    if triggered_id == "event-export-excel-dropdown":
+        outputs[1] = dcc.send_data_frame(df_export.to_excel, f"{filename_prefix}_{timestamp}.xlsx", index=False)
+    if triggered_id == "event-export-tsv-dropdown":
+        outputs[2] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.tsv", sep='\t', index=False)
+    if triggered_id == "event-export-json-dropdown":
+        outputs[3] = dict(content=df_export.to_json(orient='records', indent=2), filename=f"{filename_prefix}_{timestamp}.json")
+    if triggered_id == "event-export-html-dropdown":
+        outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
+    if triggered_id == "event-export-latex-dropdown":
         outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
     return outputs
 

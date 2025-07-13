@@ -533,6 +533,19 @@ def topbar():
                             width="auto",
                             className="align-self-center",
                         ),
+                        # Last Updated indicator - visible on desktop
+                        dbc.Col(
+                            html.Span(
+                                id="last-updated-text",
+                                style={
+                                    "color": "var(--text-secondary)",
+                                    "fontSize": "0.75rem",
+                                    "fontStyle": "italic"
+                                }
+                            ),
+                            width="auto",
+                            className="d-none d-md-block align-self-center",
+                        ),
                         dbc.Col(
                             [
                                 dbc.InputGroup(
