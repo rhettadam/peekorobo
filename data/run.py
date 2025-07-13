@@ -14,8 +14,11 @@ from functools import wraps
 import signal
 import sys
 import threading
+import time  # <-- Added for runtime tracking
 
 from epamodels import *
+
+start_time = time.time()
 
 load_dotenv()
 
@@ -1644,6 +1647,8 @@ def main():
         for conn in active_connections:
             cleanup_connection(conn)
         print("✅ Cleanup complete.")
+        elapsed = time.time() - start_time
+        print(f"\n⏱️ Script runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
 
 if __name__ == "__main__":
     try:
@@ -1694,3 +1699,5 @@ if __name__ == "__main__":
         for conn in active_connections:
             cleanup_connection(conn)
         print("✅ Cleanup complete.")
+        elapsed = time.time() - start_time
+        print(f"\n⏱️ Script runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
