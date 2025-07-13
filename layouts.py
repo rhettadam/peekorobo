@@ -783,6 +783,8 @@ home_layout = html.Div([
                                             "width": "100%",
                                             "maxWidth": "350px",
                                             "height": "auto",
+                                            "marginTop": "0",
+                                            "marginBottom": "2rem"
                                         },
                                     ),
                                 ),
@@ -888,7 +890,8 @@ home_layout = html.Div([
                                 "display": "flex",
                                 "flexDirection": "column",
                                 "justifyContent": "center",
-                                "height": "100%"
+                                "height": "100%",
+                                "marginTop": "2.5rem"
                             }
                         )
                     ],
