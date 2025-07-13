@@ -969,3 +969,41 @@ label {
     font-size: 0.95em !important;
   }
 }
+
+@media (max-width: 767px) {
+    .insights-responsive-row > .col-md-6 {
+        border-right: none !important;
+        margin-bottom: 2rem !important;
+    }
+    .insights-number {
+        font-size: 1.3rem !important;
+    }
+    .insights-label {
+        font-size: 0.95rem !important;
+        white-space: nowrap;
+    }
+    .insights-metric {
+        padding: 0.5rem 0.2rem !important;
+    }
+    .insights-summary {
+        font-size: 0.95rem !important;
+    }
+}
+.insights-number {
+    font-size: 1.6rem;
+    font-weight: bold;
+    white-space: nowrap;
+}
+.insights-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.insights-metric {
+    text-align: center;
+    padding: 10px;
+}
+.insights-summary {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}

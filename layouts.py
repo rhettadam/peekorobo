@@ -2682,18 +2682,6 @@ def match_layout(event_key, match_key):
                         "filter_query": filter_query
                     }
                 })
-        # Red Predicted
-        for rule in stat_rules:
-            filter_query = rule["if"]["filter_query"].replace(f"{{{stat_key}}}", "{Red Predicted}")
-            red_style_data_conditional.append({
-                **rule,
-                "if": {
-                    **rule["if"],
-                    "column_id": "Red Predicted",
-                    "row_index": row_idx,
-                    "filter_query": filter_query
-                }
-            })
     # ACE row for red table
     ace_percentiles = percentiles_dict["epa"]
     ace_rules = get_epa_styling({"epa": ace_percentiles})
@@ -2710,17 +2698,6 @@ def match_layout(event_key, match_key):
                     "filter_query": filter_query
                 }
             })
-    for rule in ace_rules:
-        filter_query = rule["if"]["filter_query"].replace("{epa}", "{Red Predicted}")
-        red_style_data_conditional.append({
-            **rule,
-            "if": {
-                **rule["if"],
-                "column_id": "Red Predicted",
-                "row_index": len(phases),
-                "filter_query": filter_query
-            }
-        })
 
     # Build style_data_conditional for blue table
     blue_style_data_conditional = []
@@ -2741,18 +2718,6 @@ def match_layout(event_key, match_key):
                         "filter_query": filter_query
                     }
                 })
-        # Blue Predicted
-        for rule in stat_rules:
-            filter_query = rule["if"]["filter_query"].replace(f"{{{stat_key}}}", "{Blue Predicted}")
-            blue_style_data_conditional.append({
-                **rule,
-                "if": {
-                    **rule["if"],
-                    "column_id": "Blue Predicted",
-                    "row_index": row_idx,
-                    "filter_query": filter_query
-                }
-            })
     # ACE row for blue table
     for t in blue_epas:
         col_id = f"blue_{t['team_number']}"
@@ -2767,17 +2732,6 @@ def match_layout(event_key, match_key):
                     "filter_query": filter_query
                 }
             })
-    for rule in ace_rules:
-        filter_query = rule["if"]["filter_query"].replace("{epa}", "{Blue Predicted}")
-        blue_style_data_conditional.append({
-            **rule,
-            "if": {
-                **rule["if"],
-                "column_id": "Blue Predicted",
-                "row_index": len(phases),
-                "filter_query": filter_query
-            }
-        })
 
     # Style for red and blue headers
     red_header_style = {
@@ -2828,7 +2782,10 @@ def match_layout(event_key, match_key):
     )
 
     # Layout
-    event_name = next((ev.get("n", event_key) for ev in event_db.get(year, {}).values() if ev.get("k") == event_key), event_key)
+    if year == 2025:
+        event_name = next((ev.get("n", event_key) for ev in event_db.get(year, {}).values() if ev.get("k") == event_key), event_key)
+    else:
+        event_name = event_db.get(event_key, {}).get("n", event_key)
     event_name = f"{year} {event_name}"
     header = html.Div([
         dbc.Row([
@@ -3848,8 +3805,9 @@ def event_layout(event_key):
         [
             dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Rankings", tab_id="rankings", label_style=tab_style, active_label_style=tab_style),
-            dbc.Tab(label="Alliances", tab_id="alliances", label_style=tab_style, active_label_style=tab_style),
+            dbc.Tab(label="Metrics", tab_id="metrics", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Matches", tab_id="matches", label_style=tab_style, active_label_style=tab_style),
+            dbc.Tab(label="Alliances", tab_id="alliances", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="SoS", tab_id="sos", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Compare", tab_id="compare", label_style=tab_style, active_label_style=tab_style),
         ],
@@ -3857,9 +3815,6 @@ def event_layout(event_key):
         active_tab=None,  # Will be set by callback
         className="mb-4",
     )
-
-    # Add alliances content div
-    alliances_content = html.Div(id="event-alliances-content")
 
     return html.Div(
         [
@@ -3877,7 +3832,8 @@ def event_layout(event_key):
                     dcc.Store(id="store-event-matches", data=event_matches),
                     dcc.Store(id="store-event-year", data=parsed_year),
                     html.Div(id="data-display-container"),
-                    html.Div(id="event-alliances-content"), 
+                    html.Div(id="event-alliances-content"),
+                    html.Div(id="event-metrics-content"),
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),

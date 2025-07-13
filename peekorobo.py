@@ -307,7 +307,7 @@ def update_tab_title(pathname):
     elif pathname.startswith('/teams'):
         return 'Teams - Peekorobo'
     elif pathname.startswith('/event/'):
-        event_key = pathname.split('/event/')[1].split('/')[0]
+        event_key = pathname.split('/event/')[-1].split('/')[0]
         return f'{event_key} - Peekorobo'
     elif pathname.startswith('/events'):
         return 'Events - Peekorobo'
@@ -1649,17 +1649,19 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                     )
                 ], md=4),
                 dbc.Col([
-                    html.Label("Table Style:", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
-                    dcc.RadioItems(
-                        id="table-style-toggle",
-                        options=[
-                            {"label": "Both Alliances", "value": "both"},
-                            {"label": "Team Focus", "value": "team"}
-                        ],
-                        value="both",
-                        inline=True,
-                        labelStyle={"marginRight": "15px", "color": "var(--text-primary)"}
-                    )
+                    html.Div([
+                        html.Label("Table Style:", style={"fontWeight": "bold", "color": "var(--text-primary)", "marginRight": "18px"}),
+                        dcc.RadioItems(
+                            id="table-style-toggle",
+                            options=[
+                                {"label": "Both Alliances", "value": "both"},
+                                {"label": "Team Focus", "value": "team"}
+                            ],
+                            value="both",
+                            inline=True,
+                            labelStyle={"marginRight": "15px", "color": "var(--text-primary)"}
+                        )
+                    ], style={"display": "flex", "alignItems": "center"})
                 ], md=4),
                 dbc.Col([
                     dbc.Button(
@@ -1670,8 +1672,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                         className="custom-view-btn w-100",
                         style={"marginTop": "10px"}
                     )
-                ], md=4, className="d-flex align-items-end")
-            ], className="mb-4"),
+                ], md=4)
+            ], className="mb-4 align-items-center", align="center"),
             html.Div(id="matches-container")
         ]), query_string
 
@@ -1681,7 +1683,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         # For each team, get their matches, compute average predicted opponent EPA, avg win prob, hardest/easiest match
         team_sos_rows = []
         team_numbers = [t["tk"] for t in event_teams]
-        matches = event_matches or []
+        matches = [m for m in (event_matches or []) if m.get("cl") == "qm"]  # Only consider qualification matches
         # Build a lookup for team data
         team_lookup = {int(t["tk"]): t for t in event_teams}
         # For each team
@@ -1807,6 +1809,10 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
     if active_tab == "alliances":
         query_string = f"?tab=alliances"
         return "", query_string
+    
+    if active_tab == "metrics":
+        query_string = f"?tab=metrics"
+        return "", query_string
 
     return dbc.Alert("No data available.", color="warning"), query_string
 
@@ -1909,7 +1915,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, event_key, match.get("k", ""))
             
             # Learn from completed matches
-            winner = match.get("wa", "Unknown").lower()
+            winner = match.get("wa", "Tie").lower()
             if winner in ["red", "blue"]:
                 learn_from_match_outcome(event_key, match.get("k", ""), winner, red_score, blue_score)
             
@@ -2090,7 +2096,6 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
     }
 
     qual_table = [
-        html.H5("Qualification Matches", className="mb-3 mt-3"),
         dash_table.DataTable(
             columns=match_columns,
             sort_action="native",
@@ -2103,12 +2108,10 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             style_data_conditional=row_style,
         )
     ] if qual_data else [
-        html.H5("Qualification Matches", className="mb-3 mt-3"),
         dbc.Alert("No qualification matches found.", color="info"),
     ]
 
     playoff_table = [
-        html.H5("Playoff Matches", className="mb-3 mt-5"),
         dash_table.DataTable(
             columns=match_columns,
             sort_action="native",
@@ -2121,19 +2124,36 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             style_data_conditional=row_style,
         )
     ] if playoff_data else [
-        html.H5("Playoff Matches", className="mb-3 mt-5"),
         dbc.Alert("No playoff matches found.", color="info"),
     ]
 
-    # Calculate overall prediction accuracy for both table styles
-    def compute_accuracy(match_data_list, style):
+        # Calculate prediction accuracy for quals and playoffs
+    def compute_accuracy(matches, table_style):
         total = 0
         correct = 0
-        for match_data in match_data_list:
+        excluded_ties = 0
+        for match_data in build_match_rows(matches, table_style):
             winner = match_data.get("Winner", "").lower()
-            if winner and winner in ["red", "blue"]:
+            if winner == "tie":
+                # Only count as correct if prediction is 50%
+                if table_style == "both":
+                    pred_red = match_data.get("Red Prediction %", 50)
+                    pred_blue = match_data.get("Blue Prediction %", 50)
+                    if pred_red == 50 and pred_blue == 50:
+                        total += 1
+                        correct += 1
+                    else:
+                        excluded_ties += 1
+                else:
+                    prediction_percent = match_data.get("Prediction %", 50)
+                    if prediction_percent == 50:
+                        total += 1
+                        correct += 1
+                    else:
+                        excluded_ties += 1
+            elif winner in ["red", "blue"]:
                 total += 1
-                if style == "both":
+                if table_style == "both":
                     pred_winner = match_data.get("Pred Winner", "").lower()
                     if pred_winner and winner == pred_winner:
                         correct += 1
@@ -2145,26 +2165,276 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
                             correct += 1
                         elif team_alliance != winner and prediction_percent < 50:
                             correct += 1
-        return correct, total, (correct / total * 100) if total > 0 else 0
+        acc = (correct / total * 100) if total > 0 else 0
+        return correct, total, acc, excluded_ties
 
-    correct_both, total_both, acc_both = compute_accuracy(build_match_rows(qual_matches + playoff_matches, "both"), "both")
-    correct_team, total_team, acc_team = compute_accuracy(build_match_rows(qual_matches + playoff_matches, "team"), "team")
+    qual_correct, qual_total, qual_acc, qual_excluded = compute_accuracy(qual_matches, table_style)
+    playoff_correct, playoff_total, playoff_acc, playoff_excluded = compute_accuracy(playoff_matches, table_style)
 
-    # Pick the most accurate one
-    if acc_both >= acc_team:
-        best_correct, best_total, best_acc = correct_both, total_both, acc_both
-    else:
-        best_correct, best_total, best_acc = correct_team, total_team, acc_team
+    def accuracy_badge(correct, total, acc, excluded_ties):
+        if excluded_ties:
+            note = f" (excluding {excluded_ties} ties)" if excluded_ties > 1 else f" (excluding {excluded_ties} tie)"
+        else:
+            note = ""
+        return html.Span(
+            f"Prediction Accuracy: {correct}/{total} ({acc:.0f}%)" + note,
+            style={
+                "color": "var(--text-secondary)",
+                "fontSize": "0.98rem",
+                "marginLeft": "12px",
+                "fontWeight": "normal"
+            }
+        )
 
-    accuracy_card = html.Div([
-        html.Span("Prediction Accuracy: ", style={"fontWeight": "bold"}),
-        html.Span(f"{best_correct}/{best_total} correct ({best_acc:.1f}%)", style={"color": "var(--text-secondary)"})
-    ], style={"textAlign": "center", "marginBottom": "20px", "fontSize": "1rem"})
+    # Section headers with accuracy
+    qual_header = html.Div([
+        html.Span("Qualification Matches", style={"fontWeight": "bold", "fontSize": "1.15rem"}),
+        accuracy_badge(qual_correct, qual_total, qual_acc, qual_excluded)
+    ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "0.5rem"})
 
+    playoff_header = html.Div([
+        html.Span("Playoff Matches", style={"fontWeight": "bold", "fontSize": "1.15rem"}),
+        accuracy_badge(playoff_correct, playoff_total, playoff_acc, playoff_excluded)
+    ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "0.5rem"})
+
+    # Calculate insights statistics with more metrics and match links
+    def calculate_insights(matches):
+        if not matches:
+            return {}
+        
+        scores = []
+        win_margins = []
+        winning_scores = []
+        losing_scores = []
+        high_score = 0
+        high_score_match = None
+        low_score = float('inf')
+        low_score_match = None
+        high_win_margin = 0
+        high_win_margin_match = None
+        score_counts = {}
+        team_set = set()
+        for match in matches:
+            red_score = match.get("rs", 0)
+            blue_score = match.get("bs", 0)
+            match_key = match.get("k", "").split("_", 1)[-1].upper()
+            event_key = match.get("ek", "")
+            if red_score > 0 and blue_score > 0:
+                scores.extend([red_score, blue_score])
+                for t in match.get("rt", "").split(","):
+                    if t.strip().isdigit():
+                        team_set.add(t.strip())
+                for t in match.get("bt", "").split(","):
+                    if t.strip().isdigit():
+                        team_set.add(t.strip())
+                # Win margin
+                win_margin = abs(red_score - blue_score)
+                win_margins.append(win_margin)
+                if win_margin > high_win_margin:
+                    high_win_margin = win_margin
+                    high_win_margin_match = (event_key, match_key)
+                # Winning/losing scores
+                if red_score > blue_score:
+                    winning_scores.append(red_score)
+                    losing_scores.append(blue_score)
+                else:
+                    winning_scores.append(blue_score)
+                    losing_scores.append(red_score)
+                # High/low score
+                for score in [red_score, blue_score]:
+                    score_counts[score] = score_counts.get(score, 0) + 1
+                    if score > high_score:
+                        high_score = score
+                        high_score_match = (event_key, match_key)
+                    if score < low_score:
+                        low_score = score
+                        low_score_match = (event_key, match_key)
+        # Mode (most common score)
+        mode_score = max(score_counts.items(), key=lambda x: x[1])[0] if score_counts else None
+        return {
+            "avg_score": sum(scores) / len(scores) if scores else 0,
+            "avg_win_margin": sum(win_margins) / len(win_margins) if win_margins else 0,
+            "avg_winning_score": sum(winning_scores) / len(winning_scores) if winning_scores else 0,
+            "avg_losing_score": sum(losing_scores) / len(losing_scores) if losing_scores else 0,
+            "high_score": high_score,
+            "high_score_match": high_score_match,
+            "low_score": low_score if low_score != float('inf') else 0,
+            "low_score_match": low_score_match,
+            "high_win_margin": high_win_margin,
+            "high_win_margin_match": high_win_margin_match,
+            "mode_score": mode_score,
+            "num_matches": len(matches),
+            "num_teams": len(team_set)
+        }
+    
+    qual_insights = calculate_insights(qual_matches)
+    playoff_insights = calculate_insights(playoff_matches)
+    
+    def match_link(event_key, match_key, value, icon=None):
+        if not event_key or not match_key:
+            return html.Span(value)
+        # For SF/QF, use only the set number (e.g., SF4M1 -> SF4)
+        cleaned_key = match_key
+        if match_key.startswith("SF") or match_key.startswith("QF"):
+            m = re.match(r"(SF|QF)(\d+)", match_key)
+            if m:
+                cleaned_key = f"{m.group(1)}{m.group(2)}"
+        # Finals and quals remain unchanged
+        return html.A([
+            html.I(className=f"fas fa-link me-1", style={"fontSize": "0.9em"}) if icon else None,
+            str(value)
+        ], href=f"/match/{event_key}/{cleaned_key}", style={"color": "#ffc107" if icon else "inherit", "textDecoration": "underline", "fontWeight": "bold"})
+    
+    # Create insights card with improved layout and minimal icons
+    insights_card = dbc.Card([
+        dbc.CardHeader([
+            html.H5([
+                html.I(className="fas fa-chart-line me-2", style={"color": "#007bff"}),
+                "Event Insights"
+            ], className="mb-0", style={"color": "var(--text-primary)"}),
+        ], style={"backgroundColor": "var(--card-bg)", "borderBottom": "1px solid var(--border-color)"}),
+        dbc.CardBody([
+            dbc.Row([
+                dbc.Col([
+                    html.H6([
+                        html.I(className="fas fa-trophy me-1", style={"color": "#007bff"}),
+                        "Playoff Stats"
+                    ], style={"color": "#007bff", "fontWeight": "bold", "textAlign": "center", "marginBottom": "15px"}),
+                    dbc.Row([
+                        dbc.Col([
+                            html.Div([
+                                html.Span(f"{playoff_insights['avg_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                                html.Div("Avg Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6),
+                        dbc.Col([
+                            html.Div([
+                                html.Span(f"{playoff_insights['avg_win_margin']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                                html.Div("Avg Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6)
+                    ]),
+                    dbc.Row([
+                        dbc.Col([
+                            html.Div([
+                                html.Span(f"{playoff_insights['avg_winning_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                                html.Div("Avg Winning Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6),
+                        dbc.Col([
+                            html.Div([
+                                html.Span(f"{playoff_insights['avg_losing_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                                html.Div("Avg Losing Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6)
+                    ]),
+                    dbc.Row([
+                        dbc.Col([
+                            html.Div([
+                                match_link(*(playoff_insights['high_score_match'] or (None, None)), playoff_insights['high_score'], icon=True),
+                                html.Div("High Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6),
+                        dbc.Col([
+                            html.Div([
+                                match_link(*(playoff_insights['high_win_margin_match'] or (None, None)), playoff_insights['high_win_margin'], icon=True),
+                                html.Div("High Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6)
+                    ]),
+                    dbc.Row([
+                        dbc.Col([
+                            html.Div([
+                                match_link(*(playoff_insights['low_score_match'] or (None, None)), playoff_insights['low_score'], icon=True),
+                                html.Div("Low Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6),
+                        dbc.Col([
+                            html.Div([
+                                html.Span(playoff_insights['mode_score'] if playoff_insights['mode_score'] is not None else "-", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                                html.Div("Most Common Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6)
+                    ]),
+                    html.Div([
+                        html.Span(f"{playoff_insights['num_matches']} matches, {playoff_insights['num_teams']} teams", style={"fontSize": "0.95rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "marginTop": "10px"})
+                ], width=6, style={"borderRight": "1.5px solid #333"}),
+                dbc.Col([
+                    html.H6([
+                        html.I(className="fas fa-robot me-1", style={"color": "#007bff"}),
+                        "Qualification Stats"
+                    ], style={"color": "#007bff", "fontWeight": "bold", "textAlign": "center", "marginBottom": "15px"}),
+                    dbc.Row([
+                        dbc.Col([
+                            html.Div([
+                                html.Span(f"{qual_insights['avg_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                                html.Div("Avg Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6),
+                        dbc.Col([
+                            html.Div([
+                                html.Span(f"{qual_insights['avg_win_margin']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                                html.Div("Avg Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6)
+                    ]),
+                    dbc.Row([
+                        dbc.Col([
+                            html.Div([
+                                html.Span(f"{qual_insights['avg_winning_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                                html.Div("Avg Winning Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6),
+                        dbc.Col([
+                            html.Div([
+                                html.Span(f"{qual_insights['avg_losing_score']:.1f}", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                                html.Div("Avg Losing Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6)
+                    ]),
+                    dbc.Row([
+                        dbc.Col([
+                            html.Div([
+                                match_link(*(qual_insights['high_score_match'] or (None, None)), qual_insights['high_score'], icon=True),
+                                html.Div("High Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6),
+                        dbc.Col([
+                            html.Div([
+                                match_link(*(qual_insights['high_win_margin_match'] or (None, None)), qual_insights['high_win_margin'], icon=True),
+                                html.Div("High Win Margin", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6)
+                    ]),
+                    dbc.Row([
+                        dbc.Col([
+                            html.Div([
+                                match_link(*(qual_insights['low_score_match'] or (None, None)), qual_insights['low_score'], icon=True),
+                                html.Div("Low Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6),
+                        dbc.Col([
+                            html.Div([
+                                html.Span(qual_insights['mode_score'] if qual_insights['mode_score'] is not None else "-", style={"fontSize": "1.6rem", "fontWeight": "bold"}),
+                                html.Div("Most Common Score", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                            ], style={"textAlign": "center", "padding": "10px"})
+                        ], width=6)
+                    ]),
+                    html.Div([
+                        html.Span(f"{qual_insights['num_matches']} matches, {qual_insights['num_teams']} teams", style={"fontSize": "0.95rem", "color": "var(--text-secondary)"})
+                    ], style={"textAlign": "center", "marginTop": "10px"})
+                ], width=6)
+            ], className="g-0"),
+        ], style={"backgroundColor": "var(--card-bg)"})
+    ], className="mb-4 shadow-sm", style={"borderRadius": "14px", "border": "1.5px solid var(--border-color)", "overflow": "hidden", "marginTop": "3rem"})
+    
     return html.Div([
-        accuracy_card,
+        qual_header,
         html.Div(qual_table, className="recent-events-table"),
+        playoff_header,
         html.Div(playoff_table, className="recent-events-table"),
+        insights_card
     ])
 
 # Add a callback for the compare teams table
@@ -4100,6 +4370,170 @@ def load_event_alliances(active_tab, event_year, pathname):
         "marginTop": "18px"
     }
     return html.Div(alliance_bracket, style=grid_style, className="alliance-bracket-grid")
+
+@app.callback(
+    Output("event-metrics-content", "children"),
+    Input("event-data-tabs", "active_tab"),
+    State("url", "pathname"),
+    prevent_initial_call=True,
+)
+def load_event_metrics(active_tab, pathname):
+    if active_tab != "metrics":
+        return ""
+    
+    # Extract event key from URL
+    if not pathname or "/event/" not in pathname:
+        return "No event selected."
+    event_key = pathname.split("/event/")[-1].split("/")[0]
+    
+    # Get TBA API key
+    tba_keys = os.environ.get("TBA_API_KEYS", "").split(",")
+    tba_keys = [k.strip() for k in tba_keys if k.strip()]
+    if not tba_keys:
+        return "No TBA API key found."
+    
+    tba_key = random.choice(tba_keys)
+    
+    # Fetch both COPRs and OPRs data
+    coprs_url = f"https://www.thebluealliance.com/api/v3/event/{event_key}/coprs"
+    oprs_url = f"https://www.thebluealliance.com/api/v3/event/{event_key}/oprs"
+    headers = {"X-TBA-Auth-Key": tba_key}
+    
+    all_metrics = {}
+    
+    # Fetch COPRs data
+    try:
+        coprs_resp = requests.get(coprs_url, headers=headers, timeout=10)
+        coprs_data = coprs_resp.json()
+        if coprs_data:
+            all_metrics.update(coprs_data)
+    except Exception as e:
+        print(f"Error loading COPRs data: {e}")
+    
+    # Fetch OPRs data
+    try:
+        oprs_resp = requests.get(oprs_url, headers=headers, timeout=10)
+        oprs_data = oprs_resp.json()
+        if oprs_data:
+            all_metrics.update(oprs_data)
+    except Exception as e:
+        print(f"Error loading OPRs data: {e}")
+    
+    if not all_metrics:
+        return "No metrics data available for this event."
+    
+    # Create dropdown options from available metrics
+    metric_options = [{"label": metric, "value": metric} for metric in all_metrics.keys()]
+    
+    # Create the layout with dropdown and table
+    layout = html.Div([
+        html.P("Select an option to view team performance metrics:", style={"marginBottom": "15px", "color": "var(--text-secondary)"}),
+        dcc.Dropdown(
+            id="metrics-metric-dropdown",
+            options=metric_options,
+            placeholder="Select a metric...",
+            style={"marginBottom": "20px"},
+            className="custom-input-box"
+        ),
+        html.Div(id="metrics-table-container", children="Select a metric to view data.")
+    ])
+    
+    return layout
+
+@app.callback(
+    Output("metrics-table-container", "children"),
+    Input("metrics-metric-dropdown", "value"),
+    State("url", "pathname"),
+    prevent_initial_call=True,
+)
+def update_metrics_table(selected_metric, pathname):
+    if not selected_metric or not pathname or "/event/" not in pathname:
+        return "Select a metric to view data."
+    
+    event_key = pathname.split("/event/")[-1].split("/")[0]
+    
+    # Get TBA API key
+    tba_keys = os.environ.get("TBA_API_KEYS", "").split(",")
+    tba_keys = [k.strip() for k in tba_keys if k.strip()]
+    if not tba_keys:
+        return "No TBA API key found."
+    
+    tba_key = random.choice(tba_keys)
+    
+    # Determine which API endpoint to use based on the metric
+    if selected_metric in ["oprs", "dprs", "ccwms"]:
+        tba_url = f"https://www.thebluealliance.com/api/v3/event/{event_key}/oprs"
+    else:
+        tba_url = f"https://www.thebluealliance.com/api/v3/event/{event_key}/coprs"
+    
+    headers = {"X-TBA-Auth-Key": tba_key}
+    
+    try:
+        resp = requests.get(tba_url, headers=headers, timeout=10)
+        data = resp.json()
+    except Exception as e:
+        return f"Error loading metrics data: {e}"
+    
+    if not data or selected_metric not in data:
+        return f"No data available for {selected_metric}."
+    
+    metric_data = data[selected_metric]
+    
+    # Convert data to table format
+    table_data = []
+    for team_key, value in metric_data.items():
+        team_number = team_key.replace("frc", "")
+        table_data.append({
+            "Team": f"[{team_number}](/team/{team_number}/2025)",
+            "Value": f"{value:.3f}" if isinstance(value, (int, float)) else str(value)
+        })
+    
+    # Sort by value (descending)
+    table_data.sort(key=lambda x: float(x["Value"]) if x["Value"].replace(".", "").replace("-", "").isdigit() else 0, reverse=True)
+    
+    # Create DataTable
+    table = dash_table.DataTable(
+        columns=[
+            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": selected_metric, "id": "Value", "type": "numeric"}
+        ],
+        data=table_data,
+        sort_action="native",
+        sort_mode="single",
+        page_size=20,
+        style_table={
+            "overflowX": "auto", 
+            "borderRadius": "10px", 
+            "border": "none", 
+            "backgroundColor": "var(--card-bg)",
+            "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"
+        },
+        style_header={
+            "backgroundColor": "var(--card-bg)",
+            "color": "var(--text-primary)",
+            "fontWeight": "bold",
+            "textAlign": "center",
+            "borderBottom": "1px solid #ccc",
+            "padding": "8px",
+            "fontSize": "13px"
+        },
+        style_cell={
+            "textAlign": "center",
+            "padding": "8px",
+            "border": "none",
+            "fontSize": "14px",
+            "backgroundColor": "var(--card-bg)",
+            "color": "var(--text-primary)"
+        },
+        style_data_conditional=[
+            {
+                "if": {"row_index": "odd"},
+                "backgroundColor": "rgba(0, 0, 0, 0.05)",
+            },
+        ]
+    )
+    
+    return table
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
