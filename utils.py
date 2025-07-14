@@ -10,7 +10,6 @@ from dash import html
 from flask import session
 from datagather import DatabaseConnection
 from datetime import datetime, date
-import secrets
 
 def apply_simple_filter(df, filter_query):
     # Only supports simple "{"col"} op value" and "and"/"or"
@@ -738,9 +737,3 @@ def find_similar_teams(team_number, year, TEAM_DATABASE):
     similar_teams.sort(key=lambda x: x["similarity_score"], reverse=True)
     
     return similar_teams
-
-def generate_api_key():
-    """Generate a secure 64-character API key."""
-    return secrets.token_hex(32)
-            
-

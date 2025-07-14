@@ -23,10 +23,9 @@ import plotly.graph_objects as go
 
 from datagather import COUNTRIES,STATES,load_data_2025,load_search_data,load_year_data,get_team_avatar,DISTRICT_STATES,DISTRICT_STATES_A,DatabaseConnection,get_team_years_participated
 
-from layouts import api_explorer_layout,team_layout,match_layout,user_layout,other_user_layout,home_layout,footer,topbar,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,epa_legend_layout,events_layout,build_recent_events_section,compare_layout
+from layouts import team_layout,match_layout,user_layout,other_user_layout,home_layout,footer,topbar,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,epa_legend_layout,events_layout,build_recent_events_section,compare_layout
 
-from utils import find_similar_teams,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name, generate_api_key
-import api
+from utils import find_similar_teams,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -102,14 +101,14 @@ app.index_string = '''
 <!DOCTYPE html>
 <html>
     <head>
-        <script>
-            const savedTheme = localStorage.getItem('theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        </script>
         {%metas%}
         <title>{%title%}</title>
         {%favicon%}
         {%css%}
+        <script>
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        </script>
     </head>
     <body>
         {%app_entry%}
@@ -183,16 +182,6 @@ app.clientside_callback(
     Input("theme-store", "data"),
     prevent_initial_call=True
 )
-
-# Register API routes
-api.register_api_routes(server)
-
-# Initialize API with global data
-api.init_api_data(TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES)
-
-@server.route("/openapi.json")
-def openapi_spec():
-    return flask.send_file("openapi.json", mimetype="application/json")
 
 # Add a callback to update the "Last Updated" text
 @app.callback(
@@ -328,10 +317,6 @@ def display_page(pathname):
             return match_layout(event_key, match_key)
         else:
             return dbc.Alert("Invalid match URL.", color="danger")
-
-    if pathname == "/api-explorer":
-        # Custom API Explorer layout with dark/light mode and Peekorobo branding
-      return api_explorer_layout()
 
     return home_layout
 
@@ -4560,19 +4545,8 @@ def load_event_metrics(active_tab, pathname):
     if not all_metrics:
         return "No metrics data available for this event."
     
-    # Create dropdown options from available metrics with custom sorting
-    # Priority order: oprs, dprs, ccwms, then everything else
-    priority_metrics = ["oprs", "dprs", "ccwms"]
-    
-    # Sort metrics: priority ones first, then alphabetically
-    def sort_key(metric):
-        if metric in priority_metrics:
-            return priority_metrics.index(metric)
-        else:
-            return len(priority_metrics) + ord(metric[0])  # Put non-priority after priority
-    
-    sorted_metrics = sorted(all_metrics.keys(), key=sort_key)
-    metric_options = [{"label": metric, "value": metric} for metric in sorted_metrics]
+    # Create dropdown options from available metrics
+    metric_options = [{"label": metric, "value": metric} for metric in all_metrics.keys()]
     
     # Create the layout with dropdown and table
     layout = html.Div([
@@ -4683,60 +4657,6 @@ def update_metrics_table(selected_metric, pathname):
     )
     
     return table
-
-# --- API Key Management in User Profile ---
-@callback(
-    Output("user-api-key-display", "children"),
-    Input("generate-api-key-btn", "n_clicks"),
-    Input("regenerate-api-key-btn", "n_clicks"),
-    State("user-session", "data"),
-    prevent_initial_call=True
-)
-def handle_api_key_buttons(gen_clicks, regen_clicks, session_data):
-    user_id = session_data.get("user_id") if session_data else None
-    if not user_id:
-        return "Log in to manage your API key."
-    triggered = ctx.triggered_id
-    if triggered in ["generate-api-key-btn", "regenerate-api-key-btn"]:
-        new_key = generate_api_key()
-        try:
-            with DatabaseConnection() as conn:
-                cur = conn.cursor()
-                cur.execute("UPDATE users SET api_key = %s WHERE id = %s", (new_key, user_id))
-                conn.commit()
-            return api_key_section(new_key)
-        except Exception as e:
-            return f"Error generating API key: {e}"
-    # Fallback: fetch current key
-    try:
-        with DatabaseConnection() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT api_key FROM users WHERE id = %s", (user_id,))
-            row = cur.fetchone()
-            api_key = row[0] if row else None
-        return api_key_section(api_key)
-    except Exception as e:
-        return f"Error loading API key: {e}"
-
-# --- Helper: API Key Section Layout ---
-def api_key_section(api_key):
-    if api_key:
-        return html.Div([
-            html.Div([
-                dcc.Input(value=api_key, readOnly=True, style={"width": "80%", "marginRight": "8px"}),
-                dbc.Button("Copy", id="copy-api-key-btn", color="secondary", outline=True, style={"marginRight": "8px"}),
-                dbc.Button("Regenerate", id="regenerate-api-key-btn", color="danger", outline=True)
-            ], style={"display": "flex", "alignItems": "center", "marginBottom": "8px"}),
-            html.Div("Keep your API key secret. Regenerate if you think it is compromised.", style={"fontSize": "0.95rem", "color": "var(--text-secondary)"})
-        ])
-    else:
-        return dbc.Button("Generate API Key", id="generate-api-key-btn", color="primary")
-
-# --- Add to user_layout ---
-# In user_layout, add:
-# html.Div(id="user-api-key-display", style={"marginTop": "2rem"}),
-# and ensure it is included in the returned layout.
-# The callback will populate this section.
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
