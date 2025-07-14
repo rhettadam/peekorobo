@@ -3369,7 +3369,7 @@ def user_layout(_user_id=None, deleted_items=None):
             html.Hr(),
 
         ], style={"padding": "20px", "maxWidth": "1000px"}),
-        footer
+        footer,
     ])
 
 def other_user_layout(username):
@@ -3869,3 +3869,82 @@ def event_layout(event_key):
             footer,
         ]
     )
+
+def api_explorer_layout():
+    return html.Div([
+        topbar(),
+        dbc.Container([
+            html.H2("Peekorobo API Explorer", style={
+                "marginTop": "2rem",
+                "marginBottom": "0.5rem",
+                "color": "black",
+                "fontWeight": "bold",
+                "letterSpacing": "-1px"
+            }),
+            html.P(
+                [
+                    html.Span("Interactively explore and test the Peekorobo API. ", style={"color": "#333"}),
+                    html.Span("All endpoints require an API key in the ", style={"color": "#333"}),
+                    html.Code("X-API-Key", style={"background": "#222", "color": "#FFDD00", "padding": "2px 6px", "borderRadius": "4px", "fontWeight": "bold"}),
+                    html.Span(" header. You can obtain an API key from your account page.", style={"color": "#333"})
+                ],
+                style={"marginBottom": "1.5rem", "fontSize": "1.1rem", "color": "var(--text-secondary)"}
+            ),
+            dbc.Row([
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardHeader("Usage", style={
+                            "background": "#222", "color": "white", "fontWeight": "bold", "fontSize": "1.1rem", "borderBottom": "2px solid #777"
+                        }),
+                        dbc.CardBody([
+                            html.Ul([
+                                html.Li("Click 'Authorize' and enter your API key to try endpoints."),
+                                html.Li("All endpoints are prefixed with /api/v1/."),
+                                html.Li("Use the 'Try it out' button to make live requests."),
+                                html.Li([
+                                    "Example curl: ",
+                                    html.Code(
+                                        "curl -H \"X-API-Key: YOUR_KEY\" https://peekorobo.com/api/v1/teams",
+                                        style={"background": "#222", "color": "#FFDD00", "padding": "2px 6px", "borderRadius": "4px"}
+                                    )
+                                ]),
+                            ], style={"color": "var(--text-secondary)", "fontSize": "1rem", "paddingLeft": "18px"}),
+                        ]),
+                    ], style={
+                        "background": "var(--card-bg)",
+                        "border": "2px solid #555",
+                        "borderRadius": "12px",
+                        "boxShadow": "0 2px 8px #0002",
+                        "marginBottom": "2rem"
+                    }),
+                    width=3,
+                    style={"minWidth": "260px"}
+                ),
+                dbc.Col(
+                    html.Div([
+                        html.Div(
+                            html.Iframe(
+                                src="/assets/swaggerui/index.html",
+                                style={
+                                    "width": "100%",
+                                    "height": "80vh",
+                                    "border": "2px solid #777",
+                                    "borderRadius": "12px",
+                                    "background": "var(--card-bg)",
+                                    "boxShadow": "0 2px 8px #0002"
+                                },
+                                id="swagger-ui-iframe"
+                            ),
+                            style={
+                                "background": "var(--card-bg)",
+                                "padding": "0.5rem",
+                                "borderRadius": "12px"
+                            }
+                        )
+                    ]),
+                    width=9
+                ),
+            ], style={"marginBottom": "2rem"}),
+        ], style={"maxWidth": "1400px", "margin": "0 auto", "padding": "20px"}),
+        footer
+    ])
