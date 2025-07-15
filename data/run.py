@@ -193,6 +193,12 @@ def create_epa_tables():
         wins INTEGER,
         losses INTEGER,
         event_epas JSONB,
+        l1_epa REAL,
+        l2_epa REAL,
+        l3_epa REAL,
+        l4_epa REAL,
+        net_epa REAL,
+        processor_epa REAL,
         PRIMARY KEY (team_number, year)
     );
     """
@@ -299,10 +305,13 @@ def insert_team_epa(result, year):
     conn = get_pg_connection()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO team_epas (team_number, year, nickname, city, state_prov, country, website,
-                               normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                               wins, losses, event_epas)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO team_epas (
+            team_number, year, nickname, city, state_prov, country, website,
+            normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+            wins, losses, event_epas,
+            l1_epa, l2_epa, l3_epa, l4_epa, net_epa, processor_epa
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (team_number, year) DO UPDATE SET
             nickname = EXCLUDED.nickname,
             city = EXCLUDED.city,
@@ -317,7 +326,13 @@ def insert_team_epa(result, year):
             endgame_epa = EXCLUDED.endgame_epa,
             wins = EXCLUDED.wins,
             losses = EXCLUDED.losses,
-            event_epas = EXCLUDED.event_epas
+            event_epas = EXCLUDED.event_epas,
+            l1_epa = EXCLUDED.l1_epa,
+            l2_epa = EXCLUDED.l2_epa,
+            l3_epa = EXCLUDED.l3_epa,
+            l4_epa = EXCLUDED.l4_epa,
+            net_epa = EXCLUDED.net_epa,
+            processor_epa = EXCLUDED.processor_epa
     """, (
         result.get("team_number"),
         year,
@@ -334,7 +349,13 @@ def insert_team_epa(result, year):
         result.get("endgame_epa"),
         result.get("wins"),
         result.get("losses"),
-        json.dumps(result.get("event_epas", []))
+        json.dumps(result.get("event_epas", [])),
+        result.get("l1_epa"),
+        result.get("l2_epa"),
+        result.get("l3_epa"),
+        result.get("l4_epa"),
+        result.get("net_epa"),
+        result.get("processor_epa"),
     ))
     conn.commit()
     cur.close()
