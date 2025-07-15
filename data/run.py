@@ -99,8 +99,31 @@ def get_pg_connection():
     active_connections.append(conn)
     return conn
 
+def ensure_team_epas_columns():
+    """Ensure per-element EPA columns exist in team_epas table."""
+    columns = [
+        ("l1_epa", "REAL"),
+        ("l2_epa", "REAL"),
+        ("l3_epa", "REAL"),
+        ("l4_epa", "REAL"),
+        ("net_epa", "REAL"),
+        ("processor_epa", "REAL"),
+    ]
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    for col, coltype in columns:
+        try:
+            cur.execute(f"ALTER TABLE team_epas ADD COLUMN IF NOT EXISTS {col} {coltype}")
+        except Exception as e:
+            print(f"Warning: Could not add column {col}: {e}")
+    conn.commit()
+    cur.close()
+    conn.close()
+
 def create_epa_tables():
     """Create all necessary tables if they don't exist."""
+    # Ensure new columns exist before creating table (safe for existing DBs)
+    ensure_team_epas_columns()
     schema = """
     CREATE TABLE IF NOT EXISTS events (
         event_key TEXT PRIMARY KEY,
