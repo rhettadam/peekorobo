@@ -4,11 +4,11 @@ import math
 def auto_2025(breakdowns, team_count):
     def score_per_breakdown(b):
         reef = b.get("autoReef", {})
-        trough = reef.get("trough", 0)
-        bot = reef.get("tba_botRowCount", 0)
-        mid = reef.get("tba_midRowCount", 0)
-        top = reef.get("tba_topRowCount", 0)
-        coral_score = trough * 3 + bot * 4 + mid * 6 + top * 7
+        l1 = reef.get("trough", 0)
+        l2 = reef.get("tba_botRowCount", 0)
+        l3 = reef.get("tba_midRowCount", 0)
+        l4 = reef.get("tba_topRowCount", 0)
+        coral_score = l1 * 3 + l2 * 4 + l3 * 6 + l4 * 7
         mobility = b.get("autoMobilityPoints", 0)
         
         # Scale entire contribution based on alliance size
@@ -44,13 +44,13 @@ def auto_2025(breakdowns, team_count):
 def teleop_2025(breakdowns, team_count):
     def score_per_breakdown(b):
         reef = b.get("teleopReef", {})
-        bot = reef.get("tba_botRowCount", 0)
-        mid = reef.get("tba_midRowCount", 0)
-        top = reef.get("tba_topRowCount", 0)
-        trough = reef.get("trough", 0)
+        l1 = reef.get("tba_botRowCount", 0)
+        l2 = reef.get("tba_midRowCount", 0)
+        l3 = reef.get("tba_topRowCount", 0)
+        l4 = reef.get("trough", 0)
         net = b.get("netAlgaeCount", 0)
         processor = b.get("wallAlgaeCount", 0)
-        estimated_teleop = (bot * 3 + mid * 4 + top * 5 + trough * 2 + net * 4 + processor * 2.5)
+        estimated_teleop = (l2 * 3 + l3 * 4 + l4 * 5 + l1 * 2 + net * 4 + processor * 2.5)
         scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
         return estimated_teleop * scaling_factor
 
