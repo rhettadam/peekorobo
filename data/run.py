@@ -99,31 +99,8 @@ def get_pg_connection():
     active_connections.append(conn)
     return conn
 
-def ensure_team_epas_columns():
-    """Ensure per-element EPA columns exist in team_epas table."""
-    columns = [
-        ("l1_epa", "REAL"),
-        ("l2_epa", "REAL"),
-        ("l3_epa", "REAL"),
-        ("l4_epa", "REAL"),
-        ("net_epa", "REAL"),
-        ("processor_epa", "REAL"),
-    ]
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    for col, coltype in columns:
-        try:
-            cur.execute(f"ALTER TABLE team_epas ADD COLUMN IF NOT EXISTS {col} {coltype}")
-        except Exception as e:
-            print(f"Warning: Could not add column {col}: {e}")
-    conn.commit()
-    cur.close()
-    conn.close()
-
 def create_epa_tables():
     """Create all necessary tables if they don't exist."""
-    # Ensure new columns exist before creating table (safe for existing DBs)
-    ensure_team_epas_columns()
     schema = """
     CREATE TABLE IF NOT EXISTS events (
         event_key TEXT PRIMARY KEY,
@@ -193,12 +170,6 @@ def create_epa_tables():
         wins INTEGER,
         losses INTEGER,
         event_epas JSONB,
-        l1_epa REAL,
-        l2_epa REAL,
-        l3_epa REAL,
-        l4_epa REAL,
-        net_epa REAL,
-        processor_epa REAL,
         PRIMARY KEY (team_number, year)
     );
     """
@@ -305,13 +276,10 @@ def insert_team_epa(result, year):
     conn = get_pg_connection()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO team_epas (
-            team_number, year, nickname, city, state_prov, country, website,
-            normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-            wins, losses, event_epas,
-            l1_epa, l2_epa, l3_epa, l4_epa, net_epa, processor_epa
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO team_epas (team_number, year, nickname, city, state_prov, country, website,
+                               normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+                               wins, losses, event_epas)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (team_number, year) DO UPDATE SET
             nickname = EXCLUDED.nickname,
             city = EXCLUDED.city,
@@ -326,13 +294,7 @@ def insert_team_epa(result, year):
             endgame_epa = EXCLUDED.endgame_epa,
             wins = EXCLUDED.wins,
             losses = EXCLUDED.losses,
-            event_epas = EXCLUDED.event_epas,
-            l1_epa = EXCLUDED.l1_epa,
-            l2_epa = EXCLUDED.l2_epa,
-            l3_epa = EXCLUDED.l3_epa,
-            l4_epa = EXCLUDED.l4_epa,
-            net_epa = EXCLUDED.net_epa,
-            processor_epa = EXCLUDED.processor_epa
+            event_epas = EXCLUDED.event_epas
     """, (
         result.get("team_number"),
         year,
@@ -349,13 +311,7 @@ def insert_team_epa(result, year):
         result.get("endgame_epa"),
         result.get("wins"),
         result.get("losses"),
-        json.dumps(result.get("event_epas", [])),
-        result.get("l1_epa"),
-        result.get("l2_epa"),
-        result.get("l3_epa"),
-        result.get("l4_epa"),
-        result.get("net_epa"),
-        result.get("processor_epa"),
+        json.dumps(result.get("event_epas", []))
     ))
     conn.commit()
     cur.close()
@@ -1149,16 +1105,9 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
     event_losses = 0
     event_ties = 0  # Add tie counter
 
-    # --- Per-element EPA for 2025 ---
-    l1_points_sum = l2_points_sum = l3_points_sum = l4_points_sum = 0.0
-    net_points_sum = processor_points_sum = 0.0
-    l1_count = l2_count = l3_count = l4_count = 0
-    net_count = processor_count = 0
-    # ---
-
     # Get the year from the first match's event key
     year = matches[0]["event_key"][:4] if matches else "2025"
-
+    
     # Get the appropriate scoring functions for this year
     try:
         auto_func = globals()[f"auto_{year}"]
@@ -1193,90 +1142,78 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
 
         # Safely get and validate breakdown
         breakdown = match.get("score_breakdown", {})
+        
+        # Handle case where breakdown might be a string
         if isinstance(breakdown, str):
             try:
                 breakdown = json.loads(breakdown)
             except json.JSONDecodeError:
                 print(f"Warning: Could not parse breakdown JSON for match {match.get('key', 'unknown')}")
                 continue
+        
         if not isinstance(breakdown, dict):
             print(f"Warning: Invalid breakdown format for match {match.get('key', 'unknown')}: {type(breakdown)}")
             continue
+            
         alliance_breakdown = breakdown.get(alliance, {})
         if not isinstance(alliance_breakdown, dict):
             print(f"Warning: Invalid alliance breakdown format for match {match.get('key', 'unknown')}: {type(alliance_breakdown)}")
             continue
+
         breakdowns.append(alliance_breakdown)
-
-        # --- Per-element EPA for 2025 ---
-        if year == "2025":
-            # Auto phase
-            auto_reef = alliance_breakdown.get("autoReef", {})
-            l1_auto = auto_reef.get("trough", 0)
-            l2_auto = auto_reef.get("tba_botRowCount", 0)
-            l3_auto = auto_reef.get("tba_midRowCount", 0)
-            l4_auto = auto_reef.get("tba_topRowCount", 0)
-            # Teleop phase
-            teleop_reef = alliance_breakdown.get("teleopReef", {})
-            l1_teleop = teleop_reef.get("tba_botRowCount", 0)
-            l2_teleop = teleop_reef.get("tba_midRowCount", 0)
-            l3_teleop = teleop_reef.get("tba_topRowCount", 0)
-            l4_teleop = teleop_reef.get("trough", 0)
-            # Points: auto (l1:3, l2:4, l3:6, l4:7), teleop (l1:2, l2:3, l3:4, l4:5)
-            l1_points_sum += l1_auto * 3 + l1_teleop * 2
-            l2_points_sum += l2_auto * 4 + l2_teleop * 3
-            l3_points_sum += l3_auto * 6 + l3_teleop * 4
-            l4_points_sum += l4_auto * 7 + l4_teleop * 5
-            l1_count += 1
-            l2_count += 1
-            l3_count += 1
-            l4_count += 1
-            # net: netAlgaeCount (4 pts, teleop only)
-            net = alliance_breakdown.get("netAlgaeCount", 0)
-            net_points_sum += net * 4
-            net_count += 1
-            # processor: wallAlgaeCount (2.5 pts, teleop only)
-            processor = alliance_breakdown.get("wallAlgaeCount", 0)
-            processor_points_sum += processor * 2.5
-            processor_count += 1
-        # ---
-
+        
         try:
+            # Debug print the breakdown structure
+            #print(f"\nProcessing match {match.get('key', 'unknown')}")
+            #print(f"Breakdown keys: {list(alliance_breakdown.keys())}")
+            
             actual_auto = auto_func(breakdowns, team_count)
             actual_teleop = teleop_func(breakdowns, team_count)
-            if year == "2023" or year == "2017" or year == "2016":
+            
+            # Handle endgame differently based on year
+            if year == "2023" or year == "2017" or year == "2016": # Add 2016 to the list of years expecting breakdowns and team_count
                 actual_endgame = endgame_func(breakdowns, team_count)
-            else:
+            else:  # 2024, 2025, etc. still expect alliance_breakdown and index
                 actual_endgame = endgame_func(alliance_breakdown, index)
+                
             actual_overall = actual_auto + actual_teleop + actual_endgame
+            
             opponent_score = match["alliances"][opponent_alliance]["score"] / team_count
             margin = actual_overall - opponent_score
             scaled_margin = margin / (opponent_score + 1e-6)
             norm_margin = (scaled_margin + 1) / 1.3
             dominance_scores.append(min(1.0, max(0.0, norm_margin)))
+
             match_importance = importance.get(match.get("comp_level", "qm"), 1.0)
+
+            # Decay simplified for event-specific EPA
             decay = 1.0 
-            if overall_epa is None:
+
+            if overall_epa is None: # Initial EPA for the event
                 overall_epa = actual_overall
                 auto_epa = actual_auto
                 endgame_epa = actual_endgame
                 teleop_epa = actual_teleop
                 continue
+
             K = 0.4
             K *= match_importance * decay
+
             delta_auto = K * (actual_auto - auto_epa)
             delta_teleop = K * (actual_teleop - teleop_epa)
             delta_endgame = K * (actual_endgame - endgame_epa)
+
             auto_epa += delta_auto
             teleop_epa += delta_teleop
             endgame_epa += delta_endgame
             overall_epa = auto_epa + teleop_epa + endgame_epa
+
             contributions.append(actual_overall)
         except Exception as e:
             print(f"Warning: Error processing match {match.get('key', 'unknown')}: {str(e)}")
 
     if not match_count:
-        base = {
+        return {
             "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
             "confidence": 0.0, "actual_epa": 0.0,
             "match_count": 0, "raw_confidence": 0.0,
@@ -1286,12 +1223,6 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             "record_alignment": 0.0, "wins": event_wins,
             "losses": event_losses, "ties": event_ties
         }
-        if year == "2025":
-            base.update({
-                "l1_epa": 0.0, "l2_epa": 0.0, "l3_epa": 0.0, "l4_epa": 0.0,
-                "net_epa": 0.0, "processor_epa": 0.0
-            })
-        return base
 
     if len(contributions) >= 2:
         peak = max(contributions)
@@ -1302,15 +1233,22 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
 
     dominance = min(1., statistics.mean(dominance_scores)) if dominance_scores else 0.0
 
+    # Get total number of events for this team
     event_keys = get_team_events(team_number, int(year))
     total_events = len(event_keys)
+
+    # Calculate event boost based on number of events
     event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])
+    
+    # Calculate confidence using universal function
     raw_confidence, confidence, record_alignment = calculate_confidence(consistency, dominance, event_boost, team_number, event_wins, event_losses, int(year))
     actual_epa = (overall_epa * confidence) if overall_epa is not None else 0.0
+
+    # Get years of experience for display
     years = get_team_experience(team_number, int(year))
     veteran_boost = get_veteran_boost(years)
 
-    result = {
+    return {
         "overall": round(overall_epa, 2) if overall_epa is not None else 0.0,
         "auto": round(auto_epa, 2) if auto_epa is not None else 0.0,
         "teleop": round(teleop_epa, 2) if teleop_epa is not None else 0.0,
@@ -1330,31 +1268,14 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         "losses": event_losses,
         "ties": event_ties
     }
-    if year == "2025":
-        # Compute per-element EPA as average points per match
-        result.update({
-            "l1_epa": round(l1_points_sum / l1_count, 2) if l1_count else 0.0,
-            "l2_epa": round(l2_points_sum / l2_count, 2) if l2_count else 0.0,
-            "l3_epa": round(l3_points_sum / l3_count, 2) if l3_count else 0.0,
-            "l4_epa": round(l4_points_sum / l4_count, 2) if l4_count else 0.0,
-            "net_epa": round(net_points_sum / net_count, 2) if net_count else 0.0,
-            "processor_epa": round(processor_points_sum / processor_count, 2) if processor_count else 0.0
-        })
-    return result
 
 def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
     if not event_epas:
-        base = {
+        return {
             "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
             "confidence": 0.0, "actual_epa": 0.0,
             "wins": 0, "losses": 0, "ties": 0
         }
-        # Add per-element EPA for 2025
-        base.update({
-            "l1_epa": 0.0, "l2_epa": 0.0, "l3_epa": 0.0, "l4_epa": 0.0,
-            "net_epa": 0.0, "processor_epa": 0.0
-        })
-        return base
 
     # Filter out events with no valid matches or zero EPAs
     valid_events = [
@@ -1363,16 +1284,11 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
     ]
 
     if not valid_events:
-        base = {
+        return {
             "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
             "confidence": 0.0, "actual_epa": 0.0,
             "wins": 0, "losses": 0, "ties": 0
         }
-        base.update({
-            "l1_epa": 0.0, "l2_epa": 0.0, "l3_epa": 0.0, "l4_epa": 0.0,
-            "net_epa": 0.0, "processor_epa": 0.0
-        })
-        return base
 
     total_overall = 0.0
     total_auto = 0.0
@@ -1390,17 +1306,13 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
     total_wins = 0
     total_losses = 0
     total_ties = 0
-    # Per-element EPA sums for 2025
-    l1_sum = l2_sum = l3_sum = l4_sum = 0.0
-    net_sum = processor_sum = 0.0
-    l1_count = l2_count = l3_count = l4_count = 0
-    net_count = processor_count = 0
 
     # Use a weighted average based on match count per event
     for epa_data in valid_events:
         match_count = epa_data.get("match_count", 0)
         if match_count == 0: # Skip events with no matches
             continue
+        
         total_overall += epa_data["overall"] * match_count
         total_auto += epa_data["auto"] * match_count
         total_teleop += epa_data["teleop"] * match_count
@@ -1417,36 +1329,13 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
         total_losses += epa_data["losses"]
         total_ties += epa_data.get("ties", 0)
         total_events += 1
-        # Per-element EPA for 2025
-        if "l1_epa" in epa_data:
-            l1_sum += epa_data["l1_epa"] * match_count
-            l1_count += match_count
-        if "l2_epa" in epa_data:
-            l2_sum += epa_data["l2_epa"] * match_count
-            l2_count += match_count
-        if "l3_epa" in epa_data:
-            l3_sum += epa_data["l3_epa"] * match_count
-            l3_count += match_count
-        if "l4_epa" in epa_data:
-            l4_sum += epa_data["l4_epa"] * match_count
-            l4_count += match_count
-        if "net_epa" in epa_data:
-            net_sum += epa_data["net_epa"] * match_count
-            net_count += match_count
-        if "processor_epa" in epa_data:
-            processor_sum += epa_data["processor_epa"] * match_count
-            processor_count += match_count
+    
     if total_match_count == 0:
-        base = {
+        return {
             "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
             "confidence": 0.0, "actual_epa": 0.0,
             "wins": 0, "losses": 0, "ties": 0
         }
-        base.update({
-            "l1_epa": 0.0, "l2_epa": 0.0, "l3_epa": 0.0, "l4_epa": 0.0,
-            "net_epa": 0.0, "processor_epa": 0.0
-        })
-        return base
 
     avg_confidence = total_confidence / total_match_count
     avg_consistency = total_consistency / total_match_count
@@ -1454,12 +1343,16 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
     avg_veteran_boost = total_veteran_boost / total_match_count
     avg_event_boost = total_event_boost / total_match_count
     avg_record_alignment = total_record_alignment / total_match_count
+
+    # Calculate the weighted components for display
     weights = valid_events[0]["weights"]  # Weights are constant across events
     consistency_component = weights["consistency"] * avg_consistency
     record_component = weights["record_alignment"] * avg_record_alignment
     veteran_component = weights["veteran"] * avg_veteran_boost
     dominance_component = weights["dominance"] * avg_dominance
     event_component = weights["events"] * avg_event_boost
+
+    # Calculate raw confidence from components
     raw_confidence = (
         consistency_component +
         record_component +
@@ -1467,12 +1360,16 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
         dominance_component +
         event_component
     )
+
+    # Apply non-linear scaling
     if raw_confidence > CONFIDENCE_THRESHOLDS["high"]:
         raw_confidence = CONFIDENCE_THRESHOLDS["high"] + (raw_confidence - CONFIDENCE_THRESHOLDS["high"]) * CONFIDENCE_MULTIPLIERS["high_boost"]
     elif raw_confidence < CONFIDENCE_THRESHOLDS["low"]:
         raw_confidence = raw_confidence * CONFIDENCE_MULTIPLIERS["low_reduction"]
+    
     final_confidence = max(0.0, min(1.0, raw_confidence))
-    result = {
+
+    return {
         "overall": round(total_overall / total_match_count, 2),
         "auto": round(total_auto / total_match_count, 2),
         "teleop": round(total_teleop / total_match_count, 2),
@@ -1497,17 +1394,6 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
             "raw": raw_confidence
         }
     }
-    # Only add per-element EPA if any event has it (2025)
-    if l1_count or l2_count or l3_count or l4_count or net_count or processor_count:
-        result.update({
-            "l1_epa": round(l1_sum / l1_count, 2) if l1_count else 0.0,
-            "l2_epa": round(l2_sum / l2_count, 2) if l2_count else 0.0,
-            "l3_epa": round(l3_sum / l3_count, 2) if l3_count else 0.0,
-            "l4_epa": round(l4_sum / l4_count, 2) if l4_count else 0.0,
-            "net_epa": round(net_sum / net_count, 2) if net_count else 0.0,
-            "processor_epa": round(processor_sum / processor_count, 2) if processor_count else 0.0
-        })
-    return result
 
 # Retry wrapper for fetch_team_components
 def retry_team_fetch(max_attempts=3):
