@@ -1016,6 +1016,7 @@ def save_favorite_team(n_clicks, pathname):
     [
         Output("events-tab-content", "children"),
         Output("district-dropdown", "options"),
+        Output("sort-direction-toggle", "children"),
     ],
     [
         Input("events-tabs", "active_tab"),
@@ -1025,6 +1026,7 @@ def save_favorite_team(n_clicks, pathname):
         Input("search-input", "value"),
         Input("district-dropdown", "value"),
         Input("sort-mode-toggle", "value"),
+        Input("sort-direction-toggle", "n_clicks"),
         Input("event-favorites-store", "data"),
     ],
     suppress_callback_exceptions=True,
@@ -1037,6 +1039,7 @@ def update_events_tab_content(
     search_query,
     selected_district,
     sort_mode,
+    sort_direction_clicks,
     store_data,
 ):
     user_favorites = set(store_data or [])
@@ -1204,10 +1207,14 @@ def update_events_tab_content(
             if q in ev.get("n", "").lower() or q in ev.get("c", "").lower()
         ]
 
+    # Determine sort direction based on button clicks
+    is_reverse = (sort_direction_clicks or 0) % 2 == 1
+    
+    # Apply sorting with direction
     if sort_mode == "time":
-        events_data.sort(key=lambda x: x["_start_date_obj"])
+        events_data.sort(key=lambda x: x["_start_date_obj"], reverse=is_reverse)
     elif sort_mode == "alpha":
-        events_data.sort(key=lambda x: x.get("n", "").lower())
+        events_data.sort(key=lambda x: x.get("n", "").lower(), reverse=is_reverse)
 
     if active_tab == "table-tab":
         # Create year-specific databases for the compute function
@@ -1274,6 +1281,9 @@ def update_events_tab_content(
             dcc.Download(id="download-event-insights-latex"),
         ], style={"textAlign": "right", "marginBottom": "10px"})
 
+        # Update direction button text
+        direction_text = "▲" if is_reverse else "▼"
+        
         return html.Div([
             export_container,
             dash_table.DataTable(
@@ -1311,7 +1321,7 @@ def update_events_tab_content(
                 style_data_conditional=style_data_conditional,
                 style_as_list_view=True,
             )
-        ]), district_options
+        ]), district_options, direction_text
 
 
     # Default: cards tab
@@ -1328,19 +1338,28 @@ def update_events_tab_content(
 
     all_event_cards = [event_card(ev, favorited=(ev["k"] in user_favorites)) for ev in events_data]
 
-        # Conditionally render Upcoming Events section
+    # Conditionally render Upcoming Events section
     upcoming_section = html.Div([
         html.H3("Upcoming Events", className="mb-4 mt-4 text-center"),
         dbc.Row(up_cards, className="justify-content-center"),
     ]) if upcoming else html.Div()
+    
+    # All Events section
+    all_events_section = html.Div([
+        html.H3("All Events", className="mb-4 mt-4 text-center"),
+        html.Div(all_event_cards, className="d-flex flex-wrap justify-content-center"),
+    ]) if events_data else html.Div()
+    
+    # Update direction button text
+    direction_text = "▲" if is_reverse else "▼"
     
     return html.Div([
         upcoming_section,
         html.Br(),
         ongoing_section,
         html.Br(),
-        html.Div(all_event_cards, className="d-flex flex-wrap justify-content-center"),
-    ]), district_options
+        all_events_section,
+    ]), district_options, direction_text
 
 # Add a callback to set the event-tab-store from the URL's search string
 @app.callback(

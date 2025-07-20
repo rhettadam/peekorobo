@@ -1983,11 +1983,33 @@ def events_layout(year=2025):
         value="time",
         labelStyle={"display": "inline-block", "margin-right": "15px", "color": "var(--text-primary)"},
         style={
-            # Apply basic styling here, leave theme to CSS
-            "padding": "4px 8px",
-            "borderRadius": "6px"
-        },
-        className="custom-input-box"
+            "backgroundColor": "transparent",
+            "border": "none",
+            "padding": "0"
+        }
+    )
+    
+    sort_direction_toggle = dbc.Button(
+        "▼",
+        id="sort-direction-toggle",
+        size="sm",
+        color="secondary",
+        outline=False,
+        style={
+            "marginLeft": "5px",
+            "padding": "2px 6px",
+            "fontSize": "10px",
+            "borderRadius": "4px",
+            "border": "none",
+            "backgroundColor": "transparent",
+            "color": "var(--text-primary)",
+            "minWidth": "20px",
+            "height": "20px",
+            "display": "flex",
+            "alignItems": "center",
+            "justifyContent": "center",
+            "fontWeight": "bold"
+        }
     )
     search_input = dbc.Input(
         id="search-input",
@@ -2007,7 +2029,19 @@ def events_layout(year=2025):
             html.Div(event_type_dropdown, style={"flex": "1 1 150px", "minWidth": "140px"}),
             html.Div(week_dropdown, style={"flex": "0 0 80px", "minWidth": "80px"}),
             html.Div(district_dropdown, style={"flex": "1 1 80px", "minWidth": "80px"}),
-            html.Div(sort_toggle, style={"flex": "1 1 175px", "minWidth": "175px"}),
+            html.Div([
+                html.Div(sort_toggle, style={"flex": "1"}),
+                sort_direction_toggle
+            ], style={
+                "flex": "1 1 200px", 
+                "minWidth": "200px", 
+                "display": "flex", 
+                "alignItems": "center",
+                "backgroundColor": "var(--input-bg)",
+                "borderRadius": "6px",
+                "padding": "4px 8px",
+                "border": "1px solid var(--input-border)"
+            }),
             html.Div(search_input, style={"flex": "2 1 100px", "minWidth": "100px"}),
         ],
         style={
