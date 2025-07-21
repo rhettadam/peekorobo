@@ -623,7 +623,8 @@ def universal_profile_icon_or_toast():
             "backgroundColor": "var(--card-bg)",
             "bottom": 20,
             "right": 20,
-            "width": 250,
+            "width": 215,
+            "height": 170,
             "zIndex": 9999
         },
     )

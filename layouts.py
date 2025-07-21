@@ -745,9 +745,9 @@ def topbar():
         ),
         color="var(--text-primary)",
         dark=True,
-        className="mb-4",
+        className="",  # Removed mb-4
         style={
-            "padding": "5px 0px",
+            "padding": "4px 0 4px 0",  # 4px top and bottom padding only
             "position": "sticky",
             "top": "0",
             "zIndex": "1020",
@@ -1412,7 +1412,9 @@ def teams_map_layout():
                         "border": "none",
                         "minHeight": "0",
                         "flexGrow": 1,
-                        "display": "block"
+                        "display": "block",
+                        "marginTop": 0,
+                        "paddingTop": 0,
                     },
                 ),
             ],
@@ -1424,7 +1426,9 @@ def teams_map_layout():
                 "height": "100%",
                 "minHeight": "0",
                 "display": "flex",
-                "flexDirection": "column"
+                "flexDirection": "column",
+                "paddingTop": 0,
+                "marginTop": 0,
             }
         ),
         footer,
