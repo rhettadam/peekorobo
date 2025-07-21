@@ -1448,10 +1448,8 @@ def fetch_team_components(team, year):
                 # Calculate EPA after processing all matches
                 event_epa = calculate_event_epa(matches, team_key, team_number)
                 event_epa["event_key"] = event_key  # Ensure event_key is included
-                
                 # Keep full data for aggregation
                 event_epa_full.append(event_epa)
-                
                 # Only keep essential fields for final event_epas
                 simplified_event_epa = {
                     "event_key": event_key,
@@ -1472,6 +1470,27 @@ def fetch_team_components(team, year):
     overall_epa_data["wins"] = total_wins
     overall_epa_data["losses"] = total_losses
     overall_epa_data["ties"] = total_ties
+
+    # DEMO TEAM LOGIC: If team number is between 9970 and 9999, zero out overall stats
+    if 9970 <= team_number <= 9999:
+        return {
+            "team_number": team.get("team_number"),
+            "nickname": team.get("nickname"),
+            "city": team.get("city"),
+            "state_prov": team.get("state_prov"),
+            "country": team.get("country"),
+            "website": website,
+            "normal_epa": 0,
+            "confidence": 0,
+            "epa": 0,
+            "auto_epa": 0,
+            "teleop_epa": 0,
+            "endgame_epa": 0,
+            "wins": 0,
+            "losses": 0,
+            "ties": 0,
+            "event_epas": event_epa_results, # List of event-specific EPA results
+        }
 
     return {
         "team_number": team.get("team_number"),
