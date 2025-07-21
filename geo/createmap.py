@@ -8,7 +8,13 @@ from dotenv import load_dotenv
 from folium.features import GeoJson, CustomIcon
 from folium import IFrame
 import requests
-from auth import get_pg_connection
+import sys
+from datetime import datetime
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import the pooled connection getter from datagather.py
+from datagather import get_pg_connection, get_connection_pool
 
 # Define database paths relative to the data directory
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -20,12 +26,19 @@ load_dotenv()
 
 # FRC District definitions
 DISTRICT_STATES = {
-    "NE": ["CT", "MA", "ME", "NH", "NJ", "NY", "PA", "RI", "VT"],
-    "NC": ["IL", "IN", "MI", "OH", "WI"],
-    "SE": ["AL", "FL", "GA", "LA", "MS", "NC", "SC", "TN", "VA", "WV"],
-    "SW": ["AR", "CO", "KS", "MO", "NM", "OK", "TX"],
-    "NW": ["AK", "ID", "MT", "OR", "WA", "WY"],
-    "SC": ["AZ", "CA", "HI", "NV", "UT"]
+    "ONT": ["Ontario"],
+    "FMA": ["Delaware", "New Jersey", "Pennsylvania"],
+    "ISR": ["Israel"],
+    "CHS": ["Maryland", "Virginia", "District of Columbia"],
+    "FIT": ["Texas", "New Mexico"],
+    "PCH": ["Georgia"],
+    "PNW": ["Washington", "Oregon"],
+    "FIM": ["Michigan"],
+    "FSC": ["South Carolina"],
+    "FNC": ["North Carolina"],
+    "FIN": ["Indiana"],
+    "NE": ["Connecticut", "Massachusetts", "Maine", "New Hampshire", "Vermont"],
+    "CA": ["California"],  # California district added
 }
 
 # District colors
@@ -42,6 +55,7 @@ DISTRICT_COLORS = {
     "FNC": "#17becf",  # cyan
     "FIN": "#ff9896",  # light red
     "NE": "#98df8a",   # light green
+    "CA": "#00bfff",   # Deep Sky Blue for California
 }
 
 def load_team_data(locations_file="2025_geo_teams.json", epa_db=None):
@@ -51,7 +65,7 @@ def load_team_data(locations_file="2025_geo_teams.json", epa_db=None):
     with open(locations_file, "r") as f:
         locations = json.load(f)
     
-    # Load EPA data from PostgreSQL
+    # Load EPA data from PostgreSQL using connection pool
     conn = get_pg_connection()
     cursor = conn.cursor()
     
@@ -85,7 +99,9 @@ def load_team_data(locations_file="2025_geo_teams.json", epa_db=None):
         }
     
     cursor.close()
-    conn.close()
+    # Return connection to pool
+    pool_obj = get_connection_pool()
+    pool_obj.putconn(conn)
     
     # Combine location and EPA data
     teams = []
@@ -268,9 +284,40 @@ def generate_team_event_map(output_file="teams_map.html"):
     map_teams = [t for t in teams_data if t.get("lat") and t.get("lng")]
     map_teams = calculate_global_rankings(map_teams)
 
+    # Load week ranges
+    with open(os.path.join(os.path.dirname(__file__), '../data/week_ranges.json'), 'r', encoding='utf-8') as f:
+        week_ranges = json.load(f)
+
     # Load events
     with open("2025_geo_events.json", "r", encoding="utf-8") as f:
         events_data = json.load(f)
+    
+    # Add week number to each event
+    for event in events_data:
+        start_date = event.get('start_date')
+        year = str(event.get('year', '2025'))
+        if not start_date or year not in week_ranges:
+            event['week'] = None
+            continue
+        try:
+            event_date = datetime.strptime(start_date, "%Y-%m-%d")
+        except Exception:
+            event['week'] = None
+            continue
+        week_found = False
+        for i, (range_start, range_end) in enumerate(week_ranges[year], 1):
+            try:
+                range_start_dt = datetime.strptime(range_start, "%Y-%m-%d")
+                range_end_dt = datetime.strptime(range_end, "%Y-%m-%d")
+            except Exception:
+                continue
+            if range_start_dt <= event_date <= range_end_dt:
+                event['week'] = i
+                week_found = True
+                break
+        if not week_found:
+            event['week'] = None
+
     map_events = [e for e in events_data if e.get("lat") and e.get("lng")]
 
     m = folium.Map(location=[39.8283, -98.5795], zoom_start=4)
@@ -382,6 +429,7 @@ def generate_team_event_map(output_file="teams_map.html"):
 {event.get('city', '')}, {event.get('state_prov', '')}, {event.get('country', '')}<br>
 <b>Type:</b> {etype}<br>
 <b>Dates:</b> {event.get('start_date', '')} - {event.get('end_date', '')}<br>
+<b>Week:</b> {event.get('week', 'N/A')}<br>
 <a href='https://www.peekorobo.com/event/{event['key']}' target='_blank'>View Event</a>
 """.strip()
         iframe = IFrame(popup_html, width=350, height=150)
@@ -423,7 +471,7 @@ def generate_team_event_map(output_file="teams_map.html"):
     # --- EPA Strength Heatmap ---
     epa_weighted_heat = [[t["lat"], t["lng"], t["epa"]] for t in map_teams if t.get("epa") and t.get("lat") and t.get("lng")]
     epa_heat_layer = folium.FeatureGroup(name="ACE Heatmap", show=False)
-    HeatMap(epa_weighted_heat, radius=20, blur=15, min_opacity=0.4, max_val=max([e[2] for e in epa_weighted_heat])).add_to(epa_heat_layer)
+    HeatMap(epa_weighted_heat, radius=20, blur=15, min_opacity=0.4).add_to(epa_heat_layer)
 
     # Add all layers to map
     teams_layer.add_to(m)
@@ -438,7 +486,7 @@ def generate_team_event_map(output_file="teams_map.html"):
     Search(
         layer=search_layer,
         search_label="name",
-        placeholder="Search teams & events by name, number, code, city...",
+        placeholder="Search teams & events",
         collapsed=False
     ).add_to(m)
 
@@ -449,7 +497,7 @@ def generate_team_event_map(output_file="teams_map.html"):
     m.get_root().html.add_child(folium.Element("""
     <style>
     .leaflet-control-search input {
-        width: 250px !important;
+        width: 150px !important;
         font-size: 12px;
         padding: 3px;
     }
