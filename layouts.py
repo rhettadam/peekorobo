@@ -1,11 +1,18 @@
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
-from datagather import load_year_data,frc_games,COUNTRIES,STATES,DISTRICT_STATES,get_team_avatar,get_team_years_participated
+from datagather import load_year_data,get_team_avatar,get_team_years_participated, load_data_2025, load_search_data
 from flask import session
 from datetime import datetime, date
-from utils import calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, get_event_learning_stats, get_prediction_difference, compute_percentiles, pill
+from utils import calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, get_event_learning_stats, get_prediction_difference, compute_percentiles, pill, get_event_week_label
 import json
 import os
+
+from utils import WEEK_RANGES_BY_YEAR
+
+current_year = 2025
+
+with open('data/district_states.json', 'r', encoding='utf-8') as f:
+    DISTRICT_STATES_COMBINED = json.load(f)
 
 def team_layout(team_number, year, team_database, event_database, event_matches, event_awards, event_rankings, event_teams):
 
@@ -81,8 +88,8 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
 
     if is_history:
         year = None
-        # fallback year to use for metrics (default to 2025 or latest available)
-        performance_year = 2025
+        # fallback year to use for metrics (default to current year or latest available)
+        performance_year = current_year
     else:
         try:
             year = int(year)
@@ -173,7 +180,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         )
     )
     
-    with open("data/notables_by_year.json", "r") as f:
+    with open("data/notables.json", "r") as f:
         NOTABLES_DB = json.load(f)
     
     INCLUDED_CATEGORIES = {
@@ -1064,6 +1071,10 @@ confidence = min(1.0, sum(weight * component))
 ])
 
 def challenges_layout():
+
+    with open('data/frc_games.json', 'r', encoding='utf-8') as f:
+        frc_games = json.load(f)
+
     challenges = []
     for year, game in sorted(frc_games.items(), reverse=True):
         challenges.append(
@@ -1130,8 +1141,12 @@ def challenges_layout():
     )
 
 def challenge_details_layout(year):
+
+    with open('data/frc_games.json', 'r', encoding='utf-8') as f:
+        frc_games = json.load(f)
+        
     game = frc_games.get(
-        year,
+        str(year),
         {"name": "Unknown Game", "video": "#", "logo": "/assets/placeholder.png", "manual": "#", "summary": "No summary available."}
     )
 
@@ -1154,7 +1169,7 @@ def challenge_details_layout(year):
     # Count number of events, teams, and matches for the year
     num_events = num_teams = num_matches = 'N/A'
     try:
-        if year == 2025:
+        if year == current_year:
             from peekorobo import EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES
             year_events = EVENT_DATABASE.get(year, {})
             year_event_keys = list(year_events.keys())
@@ -1538,7 +1553,7 @@ def create_team_card(team, year, avatar_url, epa_ranks):
                         "textAlign": "center",
                         "marginBottom": "0.5rem"
                     }),
-                    html.P(f"Location: {location}", className="card-text", style={
+                    html.P(f"{location}", className="card-text", style={
                         "fontSize": "0.9rem",
                         "textAlign": "center",
                         "marginBottom": "0.5rem"
@@ -1577,7 +1592,7 @@ def create_team_card(team, year, avatar_url, epa_ranks):
         }
     )
 
-def teams_layout(default_year=2025):
+def teams_layout(default_year=current_year):
     user_id = session.get("user_id")
     teams_year_dropdown = dcc.Dropdown(
         id="teams-year-dropdown",
@@ -1588,6 +1603,9 @@ def teams_layout(default_year=2025):
         style={"width": "100%"},
         className="custom-input-box"
     )
+
+    with open('data/countries.json', 'r', encoding='utf-8') as f:
+        COUNTRIES = json.load(f)
 
     country_dropdown = dcc.Dropdown(
         id="country-dropdown",
@@ -1615,7 +1633,7 @@ def teams_layout(default_year=2025):
             {"label": "All Districts", "value": "All"},
             *[
                 {"label": acronym, "value": acronym}
-                for acronym in DISTRICT_STATES.keys()
+                for acronym in DISTRICT_STATES_COMBINED.keys()
             ]
         ],
         value="All",
@@ -1932,7 +1950,7 @@ def teams_layout(default_year=2025):
         ]
     )
 
-def events_layout(year=2025):
+def events_layout(year=current_year):
     year_dropdown = dcc.Dropdown(
         id="year-dropdown",
         options=[{"label": str(yr), "value": yr} for yr in range(2000, 2026)],
@@ -1956,12 +1974,18 @@ def events_layout(year=2025):
         clearable=False,
         className="custom-input-box"
     )
+    # Dynamically generate week options based on year
+    week_ranges = WEEK_RANGES_BY_YEAR.get(str(year), [])
+    week_options = [{"label": "All Wks", "value": "all"}]
+    if len(week_ranges) > 1:
+        for i in range(len(week_ranges) - 1):
+            week_options.append({"label": f"Wk {i+1}", "value": i})
+        week_options.append({"label": "Champs", "value": len(week_ranges) - 1})
+    elif len(week_ranges) == 1:
+        week_options.append({"label": "Champs", "value": 0})
     week_dropdown = dcc.Dropdown(
         id="week-dropdown",
-        options=(
-            [{"label": "All Wks", "value": "all"}] +
-            [{"label": f"Wk {i+1}", "value": i} for i in range(0, 6)]
-        ),
+        options=week_options,
         placeholder="Week",
         value="all",
         clearable=False
@@ -1982,11 +2006,6 @@ def events_layout(year=2025):
         ],
         value="time",
         labelStyle={"display": "inline-block", "margin-right": "15px", "color": "var(--text-primary)"},
-        style={
-            "backgroundColor": "transparent",
-            "border": "none",
-            "padding": "0"
-        }
     )
     
     sort_direction_toggle = dbc.Button(
@@ -2526,7 +2545,7 @@ def compare_layout():
     year_dropdown = dcc.Dropdown(
         id="compare-year",
         options=[{"label": str(y), "value": y} for y in range(1992, 2026)],
-        value=2025,
+        value=current_year,
         clearable=False,
         placeholder="Select Year",
         className="custom-input-box",
@@ -2561,7 +2580,7 @@ def match_layout(event_key, match_key):
         return dbc.Alert("Invalid event key.", color="danger")
     
      # Get EPA data for teams (prefer event-specific EPA)
-    if year == 2025:
+    if year == current_year:
         from peekorobo import TEAM_DATABASE, EVENT_MATCHES, EVENT_DATABASE
         team_db = TEAM_DATABASE.get(year, {})
         event_matches = EVENT_MATCHES
@@ -2845,7 +2864,7 @@ def match_layout(event_key, match_key):
     )
 
     # Layout
-    if year == 2025:
+    if year == current_year:
         event_name = next((ev.get("n", event_key) for ev in event_db.get(year, {}).values() if ev.get("k") == event_key), event_key)
     else:
         event_name = event_db.get(event_key, {}).get("n", event_key)
@@ -3002,7 +3021,7 @@ def user_layout(_user_id=None, deleted_items=None):
                 html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
                 html.Span([
                     html.Span("Team: ", style={"color": text_color, "fontWeight": "500"}),
-                    html.A(team_affil, href=f"/team/{team_affil}/2025", style={
+                    html.A(team_affil, href=f"/team/{team_affil}/{current_year}", style={
                         "color": text_color,
                         "textDecoration": "underline",
                         "fontWeight": "500"
@@ -3173,7 +3192,7 @@ def user_layout(_user_id=None, deleted_items=None):
             "endgame_epa": data.get("endgame_epa", 0),
             "confidence": data.get("confidence", 0),
         }
-        for team_num, data in TEAM_DATABASE.get(2025, {}).items()
+        for team_num, data in TEAM_DATABASE.get(current_year, {}).items()
     }
     
     team_cards = []
@@ -3183,8 +3202,8 @@ def user_layout(_user_id=None, deleted_items=None):
         except:
             continue
 
-        team_data = TEAM_DATABASE.get(2025, {}).get(team_number)
-        year_data = TEAM_DATABASE.get(2025, {})
+        team_data = TEAM_DATABASE.get(current_year, {}).get(team_number)
+        year_data = TEAM_DATABASE.get(current_year, {})
 
         delete_team_btn = html.Button(
             html.Img(
@@ -3229,7 +3248,7 @@ def user_layout(_user_id=None, deleted_items=None):
                     html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
                     html.Span("-", style={"color": "var(--text-primary)"}),
                     html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
-                    html.Span(f" in 2025.")
+                    html.Span(f" in {current_year}.")
                 ], style={"marginBottom": "6px", "fontWeight": "bold"}),
                 html.Div([
                     pill("Auto", f"{auto:.1f}", auto_color),
@@ -3244,7 +3263,7 @@ def user_layout(_user_id=None, deleted_items=None):
         team_cards.append(user_team_card(
             html.A(
                 f"{team_number} | {team_data.get('nickname', '')}",
-                href=f"/team/{team_key}/2025",
+                href=f"/team/{team_key}/{current_year}",
                 style={"textDecoration": "none", "color": "inherit"}
             ),
 
@@ -3253,7 +3272,7 @@ def user_layout(_user_id=None, deleted_items=None):
                 metrics,
                 html.Br(),
                 html.Hr(),
-                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
+                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, current_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
             ],
             delete_button=delete_team_btn
         ))
@@ -3453,7 +3472,7 @@ def other_user_layout(username):
             "endgame_epa": data.get("endgame_epa", 0),
             "confidence": data.get("confidence", 0),
         }
-        for team_num, data in TEAM_DATABASE.get(2025, {}).items()
+        for team_num, data in TEAM_DATABASE.get(current_year, {}).items()
     }
 
     team_cards = []
@@ -3463,7 +3482,7 @@ def other_user_layout(username):
         except:
             continue
 
-        team_data = TEAM_DATABASE.get(2025, {}).get(team_number)
+        team_data = TEAM_DATABASE.get(current_year, {}).get(team_number)
         if not team_data:
             continue
 
@@ -3482,7 +3501,7 @@ def other_user_layout(username):
         global_rank = 1
         country_rank = 1
         state_rank = 1
-        for other in TEAM_DATABASE.get(2025, {}).values():
+        for other in TEAM_DATABASE.get(current_year, {}).values():
             if (other.get("epa", 0) or 0) > epa:
                 global_rank += 1
                 if (other.get("country") or "").lower() == country:
@@ -3490,7 +3509,7 @@ def other_user_layout(username):
                 if (other.get("state_prov") or "").lower() == state:
                     state_rank += 1
 
-        year_data = list(TEAM_DATABASE.get(2025, {}).values())
+        year_data = list(TEAM_DATABASE.get(current_year, {}).values())
 
         auto_color = "#1976d2"     # Blue
         teleop_color = "#fb8c00"   # Orange
@@ -3507,7 +3526,7 @@ def other_user_layout(username):
                 html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
                 html.Span("-", style={"color": "var(--text-primary)"}),
                 html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
-                html.Span(f" in {year_data[0].get('year', 2025) if year_data else 2025}.")
+                html.Span(f" in {year_data[0].get('year', current_year) if year_data else current_year}.")
             ], style={"marginBottom": "6px", "fontWeight": "bold"}),
             html.Div([
                 pill("Auto", f"{auto:.1f}", auto_color),
@@ -3522,7 +3541,7 @@ def other_user_layout(username):
         team_cards.append(user_team_card(
             html.A(
                 f"{team_number} | {team_data.get('nickname', '')}",
-                href=f"/team/{team_key}/2025",
+                href=f"/team/{team_key}/{current_year}",
                 style={"textDecoration": "none", "color": "inherit"}
             ),
             [
@@ -3530,43 +3549,9 @@ def other_user_layout(username):
                 metrics,
                 html.Br(),
                 html.Hr(),
-                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
+                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, current_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
             ]
         ))
-
-    event_cards = []
-    for event_key in event_keys:
-        if event_key not in EVENT_DATABASE.get(2025, {}):
-            continue  # Skip deleted or invalid events
-        event_data = EVENT_DATABASE.get(2025, {}).get(event_key, {})
-        event_name = event_data.get("n", "Unknown Event")
-        location = ", ".join(filter(None, [event_data.get("c", ""), event_data.get("s", ""), event_data.get("co", "")]))
-
-        matches = [m for m in EVENT_MATCHES.get(2025, []) if m.get("ek") == event_key]
-        event_teams = EVENT_TEAMS.get(2025, {}).get(event_key, [])
-        fav_team_numbers = [int(k) for k in team_keys if k.isdigit()]
-        matched_team = next((t for t in event_teams if int(t["tk"]) in fav_team_numbers), None)
-
-        if matched_team:
-            team_number = int(matched_team["tk"])
-            section = build_recent_events_section(f"frc{team_number}", team_number, epa_data, 2025, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
-        else:
-            section = html.P("No favorited teams at this event.")
-
-        event_cards.append(
-            dbc.Card(
-                dbc.CardBody([
-                    html.Div([
-                        html.A(f"{event_name} | {event_key}", href=f"/event/{event_key}", style={"fontWeight": "bold", "fontSize": "1.1rem", "textDecoration": "underline", "color": "#007bff"})
-                    ], style={"display": "flex", "justifyContent": "space-between"}),
-                    html.Div(location, style={"fontSize": "0.85rem", "color": "#666", "marginBottom": "0.5rem"}),
-                    html.Hr(),
-                    section
-                ]),
-                className="mb-4",
-                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "backgroundColor": "var(--card-bg)"}
-            )
-        )
 
     follow_button = html.Button(
         "Unfollow" if is_following else "Follow",
@@ -3586,7 +3571,7 @@ def other_user_layout(username):
                 html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
                 html.Span([
                     html.Span("Team: ", style={"color": text_color, "fontWeight": "500"}),
-                    html.A(team, href=f"/team/{team}/2025", style={
+                    html.A(team, href=f"/team/{team}/{current_year}", style={
                         "color": text_color,
                         "textDecoration": "none",
                         "fontWeight": "500"
@@ -3683,9 +3668,9 @@ def event_layout(event_key):
     parsed_year, _ = parse_event_key(event_key)
     
     # Load data for the specific year
-    if parsed_year == 2025:
+    if parsed_year == current_year:
         from peekorobo import EVENT_DATABASE, EVENT_TEAMS, TEAM_DATABASE, EVENT_RANKINGS, EVENT_MATCHES
-        # Use global data for 2025
+        # Use global data for current year
         event = EVENT_DATABASE.get(parsed_year, {}).get(event_key)
         event_teams = EVENT_TEAMS.get(parsed_year, {}).get(event_key, [])
         event_epa_data = {}
@@ -3796,14 +3781,23 @@ def event_layout(event_key):
     start_date = event.get("sd", "N/A")
     end_date = event.get("ed", "N/A")
     event_type = event.get("et", "N/A")
+
+    # Calculate week label
+    week_label = None
+    if start_date and start_date != "N/A":
+        try:
+            week_label = get_event_week_label(datetime.strptime(start_date, "%Y-%m-%d").date())
+        except Exception:
+            week_label = None
+
     # Header card
     header_card = dbc.Card(
         html.Div([
             dbc.CardBody([
                 html.H2(f"{event_name} ({parsed_year})", className="card-title mb-3", style={"fontWeight": "bold"}),
-                html.P(f"Location: {event_location}", className="card-text"),
-                html.P(f"Dates: {start_date} - {end_date}", className="card-text"),
-                html.P(f"Type: {event_type}", className="card-text"),
+                html.P(f"{event_location}", className="card-text"),
+                html.P(f"{start_date} - {end_date}", className="card-text"),
+                html.P(f"{week_label} {event_type}" if week_label else "", className="card-text"),
                 dbc.Row([
                     dbc.Col([
                         html.A(

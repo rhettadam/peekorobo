@@ -1,0 +1,126 @@
+{
+  "ISR": {
+    "names": [
+      "Israel"
+    ],
+    "abbreviations": [
+      "Israel"
+    ]
+  },
+  "CAL": {
+    "names": [
+      "California"
+    ],
+    "abbreviations": [
+      "CA"
+    ]
+  },
+  "FMA": {
+    "names": [
+      "Delaware",
+      "New Jersey",
+      "Pennsylvania"
+    ],
+    "abbreviations": [
+      "DE",
+      "NJ",
+      "PA"
+    ]
+  },
+  "CHS": {
+    "names": [
+      "Maryland",
+      "Virginia",
+      "District of Columbia"
+    ],
+    "abbreviations": [
+      "MD",
+      "VA",
+      "DC"
+    ]
+  },
+  "FIM": {
+    "names": [
+      "Michigan"
+    ],
+    "abbreviations": [
+      "MI"
+    ]
+  },
+  "FNC": {
+    "names": [
+      "North Carolina"
+    ],
+    "abbreviations": [
+      "NC"
+    ]
+  },
+  "FIT": {
+    "names": [
+      "Texas",
+      "New Mexico"
+    ],
+    "abbreviations": [
+      "TX",
+      "NM"
+    ]
+  },
+  "PNW": {
+    "names": [
+      "Washington",
+      "Oregon"
+    ],
+    "abbreviations": [
+      "WA",
+      "OR"
+    ]
+  },
+  "ONT": {
+    "names": [
+      "Ontario"
+    ],
+    "abbreviations": [
+      "Ontario"
+    ]
+  },
+  "FIN": {
+    "names": [
+      "Indiana"
+    ],
+    "abbreviations": [
+      "IN"
+    ]
+  },
+  "NE": {
+    "names": [
+      "Connecticut",
+      "Massachusetts",
+      "Maine",
+      "New Hampshire",
+      "Vermont"
+    ],
+    "abbreviations": [
+      "CT",
+      "MA",
+      "ME",
+      "NH",
+      "VT"
+    ]
+  },
+  "FSC": {
+    "names": [
+      "South Carolina"
+    ],
+    "abbreviations": [
+      "SC"
+    ]
+  },
+  "PCH": {
+    "names": [
+      "Georgia"
+    ],
+    "abbreviations": [
+      "GA"
+    ]
+  }
+}

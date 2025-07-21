@@ -1,0 +1,969 @@
+{
+  "USA": [
+    {
+      "label": "Alabama",
+      "value": "Alabama"
+    },
+    {
+      "label": "Alaska",
+      "value": "Alaska"
+    },
+    {
+      "label": "Arizona",
+      "value": "Arizona"
+    },
+    {
+      "label": "Arkansas",
+      "value": "Arkansas"
+    },
+    {
+      "label": "California",
+      "value": "California"
+    },
+    {
+      "label": "Colorado",
+      "value": "Colorado"
+    },
+    {
+      "label": "Connecticut",
+      "value": "Connecticut"
+    },
+    {
+      "label": "Delaware",
+      "value": "Delaware"
+    },
+    {
+      "label": "Florida",
+      "value": "Florida"
+    },
+    {
+      "label": "Georgia",
+      "value": "Georgia"
+    },
+    {
+      "label": "Hawaii",
+      "value": "Hawaii"
+    },
+    {
+      "label": "Idaho",
+      "value": "Idaho"
+    },
+    {
+      "label": "Illinois",
+      "value": "Illinois"
+    },
+    {
+      "label": "Indiana",
+      "value": "Indiana"
+    },
+    {
+      "label": "Iowa",
+      "value": "Iowa"
+    },
+    {
+      "label": "Kansas",
+      "value": "Kansas"
+    },
+    {
+      "label": "Kentucky",
+      "value": "Kentucky"
+    },
+    {
+      "label": "Louisiana",
+      "value": "Louisiana"
+    },
+    {
+      "label": "Maine",
+      "value": "Maine"
+    },
+    {
+      "label": "Maryland",
+      "value": "Maryland"
+    },
+    {
+      "label": "Massachusetts",
+      "value": "Massachusetts"
+    },
+    {
+      "label": "Michigan",
+      "value": "Michigan"
+    },
+    {
+      "label": "Minnesota",
+      "value": "Minnesota"
+    },
+    {
+      "label": "Mississippi",
+      "value": "Mississippi"
+    },
+    {
+      "label": "Missouri",
+      "value": "Missouri"
+    },
+    {
+      "label": "Montana",
+      "value": "Montana"
+    },
+    {
+      "label": "Nebraska",
+      "value": "Nebraska"
+    },
+    {
+      "label": "Nevada",
+      "value": "Nevada"
+    },
+    {
+      "label": "New Hampshire",
+      "value": "New Hampshire"
+    },
+    {
+      "label": "New Jersey",
+      "value": "New Jersey"
+    },
+    {
+      "label": "New Mexico",
+      "value": "New Mexico"
+    },
+    {
+      "label": "New York",
+      "value": "New York"
+    },
+    {
+      "label": "North Carolina",
+      "value": "North Carolina"
+    },
+    {
+      "label": "North Dakota",
+      "value": "North Dakota"
+    },
+    {
+      "label": "Ohio",
+      "value": "Ohio"
+    },
+    {
+      "label": "Oklahoma",
+      "value": "Oklahoma"
+    },
+    {
+      "label": "Oregon",
+      "value": "Oregon"
+    },
+    {
+      "label": "Pennsylvania",
+      "value": "Pennsylvania"
+    },
+    {
+      "label": "Rhode Island",
+      "value": "Rhode Island"
+    },
+    {
+      "label": "South Carolina",
+      "value": "South Carolina"
+    },
+    {
+      "label": "South Dakota",
+      "value": "South Dakota"
+    },
+    {
+      "label": "Tennessee",
+      "value": "Tennessee"
+    },
+    {
+      "label": "Texas",
+      "value": "Texas"
+    },
+    {
+      "label": "Utah",
+      "value": "Utah"
+    },
+    {
+      "label": "Vermont",
+      "value": "Vermont"
+    },
+    {
+      "label": "Virginia",
+      "value": "Virginia"
+    },
+    {
+      "label": "Washington",
+      "value": "Washington"
+    },
+    {
+      "label": "West Virginia",
+      "value": "West Virginia"
+    },
+    {
+      "label": "Wisconsin",
+      "value": "Wisconsin"
+    },
+    {
+      "label": "Wyoming",
+      "value": "Wyoming"
+    }
+  ],
+  "Canada": [
+    {
+      "label": "Alberta",
+      "value": "Alberta"
+    },
+    {
+      "label": "British Columbia",
+      "value": "British Columbia"
+    },
+    {
+      "label": "Manitoba",
+      "value": "Manitoba"
+    },
+    {
+      "label": "New Brunswick",
+      "value": "New Brunswick"
+    },
+    {
+      "label": "Newfoundland and Labrador",
+      "value": "Newfoundland and Labrador"
+    },
+    {
+      "label": "Nova Scotia",
+      "value": "Nova Scotia"
+    },
+    {
+      "label": "Ontario",
+      "value": "Ontario"
+    },
+    {
+      "label": "Prince Edward Island",
+      "value": "Prince Edward Island"
+    },
+    {
+      "label": "Quebec",
+      "value": "Quebec"
+    },
+    {
+      "label": "Saskatchewan",
+      "value": "Saskatchewan"
+    }
+  ],
+  "Mexico": [
+    {
+      "label": "Aguascalientes",
+      "value": "Aguascalientes"
+    },
+    {
+      "label": "Baja California",
+      "value": "Baja California"
+    },
+    {
+      "label": "Chihuahua",
+      "value": "Chihuahua"
+    },
+    {
+      "label": "Coahuila",
+      "value": "Coahuila"
+    },
+    {
+      "label": "Jalisco",
+      "value": "Jalisco"
+    },
+    {
+      "label": "Mexico City",
+      "value": "Mexico City"
+    },
+    {
+      "label": "Nuevo León",
+      "value": "Nuevo León"
+    },
+    {
+      "label": "Puebla",
+      "value": "Puebla"
+    },
+    {
+      "label": "Querétaro",
+      "value": "Querétaro"
+    },
+    {
+      "label": "Yucatán",
+      "value": "Yucatán"
+    }
+  ],
+  "Australia": [
+    {
+      "label": "New South Wales",
+      "value": "New South Wales"
+    },
+    {
+      "label": "Queensland",
+      "value": "Queensland"
+    },
+    {
+      "label": "South Australia",
+      "value": "South Australia"
+    },
+    {
+      "label": "Tasmania",
+      "value": "Tasmania"
+    },
+    {
+      "label": "Victoria",
+      "value": "Victoria"
+    },
+    {
+      "label": "Western Australia",
+      "value": "Western Australia"
+    }
+  ],
+  "India": [
+    {
+      "label": "Delhi",
+      "value": "Delhi"
+    },
+    {
+      "label": "Karnataka",
+      "value": "Karnataka"
+    },
+    {
+      "label": "Maharashtra",
+      "value": "Maharashtra"
+    },
+    {
+      "label": "Tamil Nadu",
+      "value": "Tamil Nadu"
+    },
+    {
+      "label": "Uttar Pradesh",
+      "value": "Uttar Pradesh"
+    }
+  ],
+  "Israel": [
+    {
+      "label": "Central District",
+      "value": "Central District"
+    },
+    {
+      "label": "Haifa District",
+      "value": "Haifa District"
+    },
+    {
+      "label": "Jerusalem District",
+      "value": "Jerusalem District"
+    },
+    {
+      "label": "Northern District",
+      "value": "Northern District"
+    },
+    {
+      "label": "Southern District",
+      "value": "Southern District"
+    },
+    {
+      "label": "Tel Aviv District",
+      "value": "Tel Aviv District"
+    }
+  ],
+  "Türkiye": [
+    {
+      "label": "Adana",
+      "value": "Adana"
+    },
+    {
+      "label": "Ankara",
+      "value": "Ankara"
+    },
+    {
+      "label": "Antalya",
+      "value": "Antalya"
+    },
+    {
+      "label": "Bursa",
+      "value": "Bursa"
+    },
+    {
+      "label": "Istanbul",
+      "value": "Istanbul"
+    },
+    {
+      "label": "Izmir",
+      "value": "Izmir"
+    },
+    {
+      "label": "Konya",
+      "value": "Konya"
+    },
+    {
+      "label": "Gaziantep",
+      "value": "Gaziantep"
+    },
+    {
+      "label": "Mersin",
+      "value": "Mersin"
+    },
+    {
+      "label": "Kayseri",
+      "value": "Kayseri"
+    },
+    {
+      "label": "Eskisehir",
+      "value": "Eskisehir"
+    }
+  ],
+  "Brazil": [
+    {
+      "label": "São Paulo",
+      "value": "São Paulo"
+    },
+    {
+      "label": "Rio de Janeiro",
+      "value": "Rio de Janeiro"
+    },
+    {
+      "label": "Minas Gerais",
+      "value": "Minas Gerais"
+    },
+    {
+      "label": "Bahia",
+      "value": "Bahia"
+    },
+    {
+      "label": "Paraná",
+      "value": "Paraná"
+    }
+  ],
+  "China": [
+    {
+      "label": "Anhui",
+      "value": "Anhui"
+    },
+    {
+      "label": "Beijing",
+      "value": "Beijing"
+    },
+    {
+      "label": "Chongqing",
+      "value": "Chongqing"
+    },
+    {
+      "label": "Fujian",
+      "value": "Fujian"
+    },
+    {
+      "label": "Gansu",
+      "value": "Gansu"
+    },
+    {
+      "label": "Guangdong",
+      "value": "Guangdong"
+    },
+    {
+      "label": "Guangxi",
+      "value": "Guangxi"
+    },
+    {
+      "label": "Guizhou",
+      "value": "Guizhou"
+    },
+    {
+      "label": "Hainan",
+      "value": "Hainan"
+    },
+    {
+      "label": "Hebei",
+      "value": "Hebei"
+    },
+    {
+      "label": "Heilongjiang",
+      "value": "Heilongjiang"
+    },
+    {
+      "label": "Henan",
+      "value": "Henan"
+    },
+    {
+      "label": "Hubei",
+      "value": "Hubei"
+    },
+    {
+      "label": "Hunan",
+      "value": "Hunan"
+    },
+    {
+      "label": "Inner Mongolia",
+      "value": "Inner Mongolia"
+    },
+    {
+      "label": "Jiangsu",
+      "value": "Jiangsu"
+    },
+    {
+      "label": "Jiangxi",
+      "value": "Jiangxi"
+    },
+    {
+      "label": "Jilin",
+      "value": "Jilin"
+    },
+    {
+      "label": "Liaoning",
+      "value": "Liaoning"
+    },
+    {
+      "label": "Ningxia",
+      "value": "Ningxia"
+    },
+    {
+      "label": "Qinghai",
+      "value": "Qinghai"
+    },
+    {
+      "label": "Shaanxi",
+      "value": "Shaanxi"
+    },
+    {
+      "label": "Shandong",
+      "value": "Shandong"
+    },
+    {
+      "label": "Shanghai",
+      "value": "Shanghai"
+    },
+    {
+      "label": "Shanxi",
+      "value": "Shanxi"
+    },
+    {
+      "label": "Sichuan",
+      "value": "Sichuan"
+    },
+    {
+      "label": "Tianjin",
+      "value": "Tianjin"
+    },
+    {
+      "label": "Tibet",
+      "value": "Tibet"
+    },
+    {
+      "label": "Xinjiang",
+      "value": "Xinjiang"
+    },
+    {
+      "label": "Yunnan",
+      "value": "Yunnan"
+    },
+    {
+      "label": "Zhejiang",
+      "value": "Zhejiang"
+    }
+  ],
+  "Chinese Taipei": [
+    {
+      "label": "Taipei",
+      "value": "Taipei"
+    },
+    {
+      "label": "New Taipei",
+      "value": "New Taipei"
+    },
+    {
+      "label": "Taichung",
+      "value": "Taichung"
+    },
+    {
+      "label": "Tainan",
+      "value": "Tainan"
+    },
+    {
+      "label": "Kaohsiung",
+      "value": "Kaohsiung"
+    },
+    {
+      "label": "Hsinchu",
+      "value": "Hsinchu"
+    },
+    {
+      "label": "Keelung",
+      "value": "Keelung"
+    },
+    {
+      "label": "Taoyuan",
+      "value": "Taoyuan"
+    },
+    {
+      "label": "Chiayi",
+      "value": "Chiayi"
+    }
+  ],
+  "Argentina": [
+    {
+      "label": "Buenos Aires",
+      "value": "Buenos Aires"
+    },
+    {
+      "label": "Córdoba",
+      "value": "Córdoba"
+    },
+    {
+      "label": "Santa Fe",
+      "value": "Santa Fe"
+    },
+    {
+      "label": "Mendoza",
+      "value": "Mendoza"
+    },
+    {
+      "label": "Tucumán",
+      "value": "Tucumán"
+    }
+  ],
+  "Azerbaijan": [
+    {
+      "label": "Baku",
+      "value": "Baku"
+    },
+    {
+      "label": "Ganja",
+      "value": "Ganja"
+    },
+    {
+      "label": "Sumqayit",
+      "value": "Sumqayit"
+    },
+    {
+      "label": "Mingachevir",
+      "value": "Mingachevir"
+    }
+  ],
+  "Belize": [
+    {
+      "label": "Belize District",
+      "value": "Belize District"
+    },
+    {
+      "label": "Cayo",
+      "value": "Cayo"
+    },
+    {
+      "label": "Orange Walk",
+      "value": "Orange Walk"
+    },
+    {
+      "label": "Stann Creek",
+      "value": "Stann Creek"
+    },
+    {
+      "label": "Toledo",
+      "value": "Toledo"
+    }
+  ],
+  "Bulgaria": [
+    {
+      "label": "Sofia",
+      "value": "Sofia"
+    },
+    {
+      "label": "Plovdiv",
+      "value": "Plovdiv"
+    },
+    {
+      "label": "Varna",
+      "value": "Varna"
+    },
+    {
+      "label": "Burgas",
+      "value": "Burgas"
+    },
+    {
+      "label": "Ruse",
+      "value": "Ruse"
+    }
+  ],
+  "Colombia": [
+    {
+      "label": "Bogotá",
+      "value": "Bogotá"
+    },
+    {
+      "label": "Antioquia",
+      "value": "Antioquia"
+    },
+    {
+      "label": "Valle del Cauca",
+      "value": "Valle del Cauca"
+    },
+    {
+      "label": "Atlántico",
+      "value": "Atlántico"
+    },
+    {
+      "label": "Santander",
+      "value": "Santander"
+    }
+  ],
+  "Croatia": [
+    {
+      "label": "Zagreb",
+      "value": "Zagreb"
+    },
+    {
+      "label": "Split-Dalmatia",
+      "value": "Split-Dalmatia"
+    },
+    {
+      "label": "Istria",
+      "value": "Istria"
+    },
+    {
+      "label": "Dubrovnik-Neretva",
+      "value": "Dubrovnik-Neretva"
+    }
+  ],
+  "Czech Republic": [
+    {
+      "label": "Prague",
+      "value": "Prague"
+    },
+    {
+      "label": "South Moravian",
+      "value": "South Moravian"
+    },
+    {
+      "label": "Central Bohemian",
+      "value": "Central Bohemian"
+    },
+    {
+      "label": "Moravian-Silesian",
+      "value": "Moravian-Silesian"
+    }
+  ],
+  "Dominican Republic": [
+    {
+      "label": "Santo Domingo",
+      "value": "Santo Domingo"
+    },
+    {
+      "label": "Santiago",
+      "value": "Santiago"
+    },
+    {
+      "label": "La Vega",
+      "value": "La Vega"
+    },
+    {
+      "label": "Puerto Plata",
+      "value": "Puerto Plata"
+    }
+  ],
+  "France": [
+    {
+      "label": "Île-de-France",
+      "value": "Île-de-France"
+    },
+    {
+      "label": "Provence-Alpes-Côte d'Azur",
+      "value": "Provence-Alpes-Côte d'Azur"
+    },
+    {
+      "label": "Auvergne-Rhône-Alpes",
+      "value": "Auvergne-Rhône-Alpes"
+    },
+    {
+      "label": "Occitanie",
+      "value": "Occitanie"
+    },
+    {
+      "label": "Nouvelle-Aquitaine",
+      "value": "Nouvelle-Aquitaine"
+    }
+  ],
+  "Greece": [
+    {
+      "label": "Attica",
+      "value": "Attica"
+    },
+    {
+      "label": "Central Macedonia",
+      "value": "Central Macedonia"
+    },
+    {
+      "label": "Crete",
+      "value": "Crete"
+    },
+    {
+      "label": "Western Greece",
+      "value": "Western Greece"
+    }
+  ],
+  "Hungary": [
+    {
+      "label": "Budapest",
+      "value": "Budapest"
+    },
+    {
+      "label": "Pest",
+      "value": "Pest"
+    },
+    {
+      "label": "Győr-Moson-Sopron",
+      "value": "Győr-Moson-Sopron"
+    },
+    {
+      "label": "Hajdú-Bihar",
+      "value": "Hajdú-Bihar"
+    }
+  ],
+  "Japan": [
+    {
+      "label": "Tokyo",
+      "value": "Tokyo"
+    },
+    {
+      "label": "Osaka",
+      "value": "Osaka"
+    },
+    {
+      "label": "Kyoto",
+      "value": "Kyoto"
+    },
+    {
+      "label": "Hokkaido",
+      "value": "Hokkaido"
+    },
+    {
+      "label": "Fukuoka",
+      "value": "Fukuoka"
+    }
+  ],
+  "Netherlands": [
+    {
+      "label": "North Holland",
+      "value": "North Holland"
+    },
+    {
+      "label": "South Holland",
+      "value": "South Holland"
+    },
+    {
+      "label": "Utrecht",
+      "value": "Utrecht"
+    },
+    {
+      "label": "Gelderland",
+      "value": "Gelderland"
+    }
+  ],
+  "Panama": [
+    {
+      "label": "Panamá",
+      "value": "Panamá"
+    },
+    {
+      "label": "Colón",
+      "value": "Colón"
+    },
+    {
+      "label": "Chiriquí",
+      "value": "Chiriquí"
+    },
+    {
+      "label": "Veraguas",
+      "value": "Veraguas"
+    }
+  ],
+  "Philippines": [
+    {
+      "label": "Metro Manila",
+      "value": "Metro Manila"
+    },
+    {
+      "label": "Central Luzon",
+      "value": "Central Luzon"
+    },
+    {
+      "label": "Calabarzon",
+      "value": "Calabarzon"
+    },
+    {
+      "label": "Davao Region",
+      "value": "Davao Region"
+    },
+    {
+      "label": "Western Visayas",
+      "value": "Western Visayas"
+    }
+  ],
+  "Poland": [
+    {
+      "label": "Mazovia",
+      "value": "Mazovia"
+    },
+    {
+      "label": "Silesia",
+      "value": "Silesia"
+    },
+    {
+      "label": "Lesser Poland",
+      "value": "Lesser Poland"
+    },
+    {
+      "label": "Greater Poland",
+      "value": "Greater Poland"
+    }
+  ],
+  "Singapore": [],
+  "South Africa": [
+    {
+      "label": "Gauteng",
+      "value": "Gauteng"
+    },
+    {
+      "label": "Western Cape",
+      "value": "Western Cape"
+    },
+    {
+      "label": "KwaZulu-Natal",
+      "value": "KwaZulu-Natal"
+    },
+    {
+      "label": "Eastern Cape",
+      "value": "Eastern Cape"
+    },
+    {
+      "label": "Free State",
+      "value": "Free State"
+    }
+  ],
+  "Switzerland": [
+    {
+      "label": "Zurich",
+      "value": "Zurich"
+    },
+    {
+      "label": "Bern",
+      "value": "Bern"
+    },
+    {
+      "label": "Vaud",
+      "value": "Vaud"
+    },
+    {
+      "label": "Geneva",
+      "value": "Geneva"
+    }
+  ],
+  "United Kingdom": [
+    {
+      "label": "England",
+      "value": "England"
+    },
+    {
+      "label": "Scotland",
+      "value": "Scotland"
+    },
+    {
+      "label": "Wales",
+      "value": "Wales"
+    },
+    {
+      "label": "Northern Ireland",
+      "value": "Northern Ireland"
+    }
+  ]
+}

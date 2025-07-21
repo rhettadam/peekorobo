@@ -1,0 +1,126 @@
+[
+  {
+    "label": "All Countries",
+    "value": "All"
+  },
+  {
+    "label": "USA",
+    "value": "USA"
+  },
+  {
+    "label": "Canada",
+    "value": "Canada"
+  },
+  {
+    "label": "Mexico",
+    "value": "Mexico"
+  },
+  {
+    "label": "Australia",
+    "value": "Australia"
+  },
+  {
+    "label": "China",
+    "value": "China"
+  },
+  {
+    "label": "India",
+    "value": "India"
+  },
+  {
+    "label": "Israel",
+    "value": "Israel"
+  },
+  {
+    "label": "Brazil",
+    "value": "Brazil"
+  },
+  {
+    "label": "Türkiye",
+    "value": "Türkiye"
+  },
+  {
+    "label": "Chinese Taipei",
+    "value": "Chinese Taipei"
+  },
+  {
+    "label": "Argentina",
+    "value": "Argentina"
+  },
+  {
+    "label": "Azerbaijan",
+    "value": "Azerbaijan"
+  },
+  {
+    "label": "Belize",
+    "value": "Belize"
+  },
+  {
+    "label": "Bulgaria",
+    "value": "Bulgaria"
+  },
+  {
+    "label": "Colombia",
+    "value": "Colombia"
+  },
+  {
+    "label": "Croatia",
+    "value": "Croatia"
+  },
+  {
+    "label": "Czech Republic",
+    "value": "Czech Republic"
+  },
+  {
+    "label": "Dominican Republic",
+    "value": "Dominican Republic"
+  },
+  {
+    "label": "France",
+    "value": "France"
+  },
+  {
+    "label": "Greece",
+    "value": "Greece"
+  },
+  {
+    "label": "Hungary",
+    "value": "Hungary"
+  },
+  {
+    "label": "Japan",
+    "value": "Japan"
+  },
+  {
+    "label": "Netherlands",
+    "value": "Netherlands"
+  },
+  {
+    "label": "Panama",
+    "value": "Panama"
+  },
+  {
+    "label": "Philippines",
+    "value": "Philippines"
+  },
+  {
+    "label": "Poland",
+    "value": "Poland"
+  },
+  {
+    "label": "Singapore",
+    "value": "Singapore"
+  },
+  {
+    "label": "South Africa",
+    "value": "South Africa"
+  },
+  {
+    "label": "Switzerland",
+    "value": "Switzerland"
+  },
+  {
+    "label": "United Kingdom",
+    "value": "United Kingdom"
+  }
+]

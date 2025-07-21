@@ -10,6 +10,28 @@ from dash import html
 from flask import session
 from datagather import DatabaseConnection
 from datetime import datetime, date
+import json
+
+current_year = 2025
+
+with open('data/week_ranges.json', 'r', encoding='utf-8') as f:
+    WEEK_RANGES_BY_YEAR = json.load(f)
+
+def get_event_week_label(event_start_date):
+    """Return a string like 'Week 1', 'Week 6', or 'Champs' for the event date."""
+    year = str(event_start_date.year)
+    week_ranges = WEEK_RANGES_BY_YEAR.get(year)
+    if not week_ranges:
+        return None
+    for i, (start, end) in enumerate(week_ranges):
+        start_dt = date.fromisoformat(start)
+        end_dt = date.fromisoformat(end)
+        if start_dt <= event_start_date <= end_dt:
+            if i == len(week_ranges) - 1:
+                return "Worlds"
+            else:
+                return f"Week {i+1}"
+    return None
 
 def apply_simple_filter(df, filter_query):
     # Only supports simple "{"col"} op value" and "and"/"or"
@@ -519,7 +541,7 @@ def team_link_with_avatar(team):
             # Remove inline color style from div
             # "color": "black"
         }),
-        href=f"/team/{team_number}/2025",
+        href=f"/team/{team_number}/{current_year}",
         style={
             "textDecoration": "none",
             # Remove inline color style from A
@@ -606,20 +628,15 @@ def universal_profile_icon_or_toast():
         },
     )
 
-
-
-WEEK_RANGES = [
-    (date(2025, 2, 26), date(2025, 3, 2)),  # Week 1
-    (date(2025, 3, 5),  date(2025, 3, 9)),   # Week 2
-    (date(2025, 3, 12), date(2025, 3, 17)),  # Week 3
-    (date(2025, 3, 19), date(2025, 3, 23)),  # Week 4
-    (date(2025, 3, 25), date(2025, 3, 30)),  # Week 5
-    (date(2025, 4, 2),  date(2025, 4, 6)),   # Week 6
-]
-
 def get_week_number(start_date):
-    for i, (start, end) in enumerate(WEEK_RANGES):
-        if start <= start_date <= end:
+    year = str(start_date.year)
+    week_ranges = WEEK_RANGES_BY_YEAR.get(year)
+    if not week_ranges:
+        return None
+    for i, (start, end) in enumerate(week_ranges):
+        start_dt = date.fromisoformat(start)
+        end_dt = date.fromisoformat(end)
+        if start_dt <= start_date <= end_dt:
             return i
     return None
 
@@ -631,14 +648,22 @@ def event_card(event, favorited=False):
     end = event.get("ed", "N/A")
     event_type = event.get("et", "N/A")
 
+    # Add week label
+    week_label = None
+    if start and start != "N/A":
+        try:
+            week_label = get_event_week_label(date.fromisoformat(start))
+        except Exception:
+            week_label = None
+
     return dbc.Card(
         [
             dbc.CardBody(
                 [
                     html.H5(event.get("n", "Unknown Event"), className="card-title mb-3"),
                     html.P(location, className="card-text"),
-                    html.P(f"Dates: {start} - {end}", className="card-text"),
-                    html.P(f"Type: {event_type}", className="card-text"),
+                    html.P(f"{start} - {end}", className="card-text"),
+                    html.P(f"{week_label} {event_type}" if week_label else f"{event_type}", className="card-text"),
                     dbc.Button(
                         "View Details",
                         href=event_url,
@@ -691,7 +716,7 @@ def get_prediction_difference(event_key, match_key):
 def find_similar_teams(team_number, year, TEAM_DATABASE):
     """Find teams with similar performance characteristics"""
     # Load year-specific data if needed
-    if year == 2025:
+    if year == current_year:
         year_data = TEAM_DATABASE.get(year, {})
     else:
         try:

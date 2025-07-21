@@ -21,7 +21,7 @@ import pandas as pd
 
 import plotly.graph_objects as go
 
-from datagather import COUNTRIES,STATES,load_data_2025,load_search_data,load_year_data,get_team_avatar,DISTRICT_STATES,DISTRICT_STATES_A,DatabaseConnection,get_team_years_participated
+from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
 from layouts import team_layout,match_layout,user_layout,other_user_layout,home_layout,footer,topbar,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,epa_legend_layout,events_layout,build_recent_events_section,compare_layout
 
@@ -30,12 +30,17 @@ from utils import find_similar_teams,calculate_single_rank,predict_win_probabili
 from dotenv import load_dotenv
 load_dotenv()
 
-# Load optimized data: 2025 data globally + search data with all events
+# Load optimized data: current year data globally + search data with all events
 TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data_2025()
 SEARCH_TEAM_DATA, SEARCH_EVENT_DATA = load_search_data()
 
+with open('data/district_states.json', 'r', encoding='utf-8') as f:
+    DISTRICT_STATES_COMBINED = json.load(f)
+
 # Store app startup time for "Last Updated" indicator
 APP_STARTUP_TIME = datetime.now()
+
+current_year = 2025
 
 app = dash.Dash(
     __name__,
@@ -235,11 +240,11 @@ def display_page(pathname):
         team_number = path_parts[1]
         year = path_parts[2] if len(path_parts) > 2 else None
         
-        # If year is specified and it's not 2025, load that year's data
-        if year and year != "2025":
+        # If year is specified and it's not current_year, load that year's data
+        if year and year != str(current_year):
             try:
                 year = int(year)
-                if year != 2025:
+                if year != current_year:
                     # Load data for the specific year
                     year_team_data, year_event_data, year_event_teams, year_event_rankings, year_event_awards, year_event_matches = load_year_data(year)
                     
@@ -254,10 +259,10 @@ def display_page(pathname):
                         year_event_rankings, year_event_teams
                     )
             except (ValueError, TypeError):
-                # If year parsing fails, fall back to 2025
+                # If year parsing fails, fall back to current year
                 pass
         
-        # Use global 2025 data for current year or fallback
+        # Use global data for current year or fallback
         return team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS)
     
     if pathname.startswith("/event/"):
@@ -383,8 +388,8 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
     desktop_value = (desktop_value or "").strip().lower()
     mobile_value = (mobile_value or "").strip().lower()
 
-    # Use search-specific data: 2025 teams and all events
-    teams_data = list(SEARCH_TEAM_DATA[2025].values())
+    # Use search-specific data: current year teams and all events
+    teams_data = list(SEARCH_TEAM_DATA[current_year].values())
     events_data = [ev for year_dict in SEARCH_EVENT_DATA.values() for ev in year_dict.values()]
 
     def get_children_and_style(val):
@@ -482,7 +487,7 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
                         "height": "20px", "width": "20px", "borderRadius": "50%", "marginRight": "8px"
                     }),
                     html.Span(f"{tn} | {nm}")
-                ], href=f"/team/{tn}/2025", style={
+                ], href=f"/team/{tn}/{current_year}", style={
                     "textDecoration": "none",
                     "color": "black" if is_highlighted else default_text_color
                 })
@@ -722,7 +727,7 @@ def handle_profile_edit(
             html.Span(f"Role: {new_role}", style={"color": text_color}),
             html.Span([
                 html.Span("Team: ", style={"color": text_color, "fontWeight": "500"}),
-                html.A(new_team, href=f"/team/{new_team}/2025", style={"color": text_color, "textDecoration": "underline"})
+                html.A(new_team, href=f"/team/{new_team}/{current_year}", style={"color": text_color, "textDecoration": "underline"})
             ]),
             html.Div(new_bio, style={"color": text_color}),
             {"color": text_color},  # profile-header
@@ -764,7 +769,7 @@ def handle_profile_edit(
             html.Span(f"Role: {role}", style={"color": text_color}),
             html.Span([
                 "Team: ",
-                html.A(team, href=f"/team/{team}/2025", style={"color": text_color, "textDecoration": "underline"})
+                html.A(team, href=f"/team/{team}/{current_year}", style={"color": text_color, "textDecoration": "underline"})
             ]),
             html.Div(bio, style={"color": text_color}),
             {"color": text_color},  # profile-header
@@ -1045,8 +1050,8 @@ def update_events_tab_content(
     user_favorites = set(store_data or [])
     
     # Load data for the selected year
-    if selected_year == 2025:
-        # Use global data for 2025
+    if selected_year == current_year:
+        # Use global data for the current year
         events_data = list(EVENT_DATABASE.get(selected_year, {}).values())
         year_event_teams = EVENT_TEAMS.get(selected_year, {})
         year_team_database = TEAM_DATABASE
@@ -1077,8 +1082,8 @@ def update_events_tab_content(
             return "ONT"
         
         # Check US states against DISTRICT_STATES
-        for district_acronym, states in DISTRICT_STATES_A.items():
-            if state in states:
+        for district_acronym, states in DISTRICT_STATES_COMBINED.items():
+            if state in states.get('abbreviations', []):
                 return district_acronym
         
         return None
@@ -1434,7 +1439,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                     "textAlign": "center",
                     "marginBottom": "0.5rem"
                 }),
-                html.P(f"Location: {location_str}", className="card-text", style={
+                html.P(f"{location_str}", className="card-text", style={
                     "fontSize": "0.9rem",
                     "textAlign": "center",
                     "marginBottom": "0.5rem"
@@ -1526,8 +1531,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         except: return 999999
 
     # Load team data for the specific year
-    if event_year == 2025:
-        year_team_data = TEAM_DATABASE # Use global data for 2025
+    if event_year == current_year:
+        year_team_data = TEAM_DATABASE # Use global data for current year
         team_epas = []
         for tnum, team_data in TEAM_DATABASE.get(event_year, {}).items():
             if team_data:
@@ -1569,8 +1574,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         data_rows = []
         for team_num, rank_info in (rankings or {}).items():
             tstr = str(team_num)
-            if event_year == 2025:
-                team_data = year_team_data.get(2025, {}).get(int(team_num), {})
+            if event_year == current_year:
+                team_data = year_team_data.get(current_year, {}).get(int(team_num), {})
             else:
                 team_data = year_team_data.get(int(team_num), {})
             nickname = team_data.get("nickname", "Unknown")
@@ -1617,7 +1622,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
     # === Teams Tab ===
     elif active_tab == "teams":
 
-        if event_year != 2025:
+        if event_year != current_year:
             year_team_data = {event_year: year_team_data}
         
         # Sort teams by overall EPA from year_team_database
@@ -1670,7 +1675,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
 
         # --- GLOBAL PERCENTILES FOR COLORING ---
         # Use all teams for the year, not just event teams
-        if event_year == 2025:
+        if event_year == current_year:
             global_teams = TEAM_DATABASE.get(event_year, {}).values()
         else:
             global_teams = year_team_data.get(event_year, {}).values()
@@ -1903,7 +1908,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
 def update_matches_table(selected_team, table_style, event_matches, epa_data, event_year):
     event_matches = event_matches or []
     epa_data = epa_data or {}
-    event_year = event_year or 2025  # Default fallback
+    event_year = event_year or current_year  # Default fallback
     
     # 1) Filter by team number
     if selected_team and selected_team != "ALL":
@@ -1943,7 +1948,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         # If event_epa_data is missing or EPA is 0 (even if confidence exists), fallback to team database
         if not info or info.get("epa", 0) == 0:
             # Fallback to team database for the specific year
-            if event_year == 2025:
+            if event_year == current_year:
                 team_data = TEAM_DATABASE.get(event_year, {}).get(int(t_key), {})
             else:
                 try:
@@ -2567,7 +2572,7 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
             "ACE": float(epa.get('epa', 0)),
         })
     # Compute global percentiles for coloring
-    if event_year == 2025:
+    if event_year == current_year:
         global_teams = TEAM_DATABASE.get(event_year, {}).values()
     else:
         year_team_data, _, _, _, _, _ = load_year_data(event_year)
@@ -2882,7 +2887,7 @@ def load_teams(
 ):
     # Default filter values
     default_values = {
-        "year": 2025,
+        "year": current_year,
         "country": "All",
         "state": "All",
         "search": "",
@@ -2930,8 +2935,8 @@ def load_teams(
     # Load and filter teams
     # Check if data for the selected year is available
     if not TEAM_DATABASE.get(selected_year):
-        # Load data for the specific year if it's not 2025
-        if selected_year != 2025:
+        # Load data for the specific year if it's not current year
+        if selected_year != current_year:
             try:
                 year_team_data, _, _, _, _, _ = load_year_data(selected_year)
                 year_team_database = {selected_year: year_team_data}
@@ -2957,7 +2962,7 @@ def load_teams(
                 if (t.get("country") or "").lower() == "israel"
             ]
         else:
-            allowed_states = [s.lower() for s in DISTRICT_STATES.get(selected_district, [])]
+            allowed_states = [s.lower() for s in DISTRICT_STATES_COMBINED.get(selected_district, [])]
             teams_data = [
                 t for t in teams_data
                 if (t.get("state_prov") or "").lower() in allowed_states
@@ -2980,7 +2985,7 @@ def load_teams(
     
     # Always compute global percentiles
     if not TEAM_DATABASE.get(selected_year):
-        if selected_year != 2025:
+        if selected_year != current_year:
             try:
                 year_team_data, _, _, _, _, _ = load_year_data(selected_year)
                 year_team_database = {selected_year: year_team_data}
@@ -3014,6 +3019,9 @@ def load_teams(
     }
 
     style_data_conditional = get_epa_styling(percentiles_dict)
+
+    with open('data/states.json', 'r', encoding='utf-8') as f:
+        STATES = json.load(f)
 
     state_options = [{"label": "All States", "value": "All"}]
     if selected_country and selected_country in STATES:
@@ -3402,19 +3410,19 @@ def toggle_search_bar(n_clicks, current_style):
     Input("compare-year", "value")
 )
 def update_compare_team_dropdowns(year):
-    year = year or 2025
+    year = year or current_year
     
     # Check if data for the selected year is available
     if not TEAM_DATABASE.get(year):
-        # Load data for the specific year if it's not 2025
-        if year != 2025:
+        # Load data for the specific year if it's not current year
+        if year != current_year:
             try:
                 year_team_data, _, _, _, _, _ = load_year_data(year)
                 teams = year_team_data
             except Exception as e:
                 return []  # Return empty options if loading fails
         else:
-            return []  # Return empty options for 2025 if not loaded
+            return []  # Return empty options for current year if not loaded
     else:
         teams = TEAM_DATABASE.get(year, {})
     
@@ -3436,12 +3444,12 @@ def compare_multiple_teams(team_ids, year): # Update function signature
         # Provide a message prompting the user to select teams
         return dbc.Alert("Select at least 2 teams to compare.", color="info", className="text-center my-4")
 
-    year = year or 2025
+    year = year or current_year
     
     # Check if data for the selected year is available
     if not TEAM_DATABASE.get(year):
-        # Load data for the specific year if it's not 2025
-        if year != 2025:
+        # Load data for the specific year if it's not current year
+        if year != current_year:
             try:
                 year_team_data, _, _, _, _, _ = load_year_data(year)
                 teams = year_team_data
@@ -3787,7 +3795,7 @@ def update_team_insights(active_tab, store_data):
         return "No team data available."
     
     # Load year-specific data if needed
-    if performance_year == 2025:
+    if performance_year == current_year:
         team_data = TEAM_DATABASE.get(performance_year, {}).get(team_number, {})
         event_database = EVENT_DATABASE
     else:
@@ -3880,8 +3888,8 @@ def update_team_insights(active_tab, store_data):
         years_data = []
         for year_key in sorted(years_participated):
             
-            if year_key == 2025:
-                # Use global database for 2025
+            if year_key == current_year:
+                # Use global database for current year
                 year_team_data = TEAM_DATABASE[year_key]
             else:
                 # Load data for other years
@@ -4004,13 +4012,13 @@ def update_team_events(active_tab, store_data):
     years_to_process = get_team_years_participated(team_number) if is_history else [int(year)]
     
     for year_key in years_to_process:
-        if year_key == 2025:
+        if year_key == current_year:
             year_event_database = EVENT_DATABASE
             year_event_teams = EVENT_TEAMS
             year_event_rankings = EVENT_RANKINGS
-            event_iter = year_event_database[2025].items()
+            event_iter = year_event_database[current_year].items()
             for event_key, event in event_iter:
-                team_list = year_event_teams[2025].get(event_key, [])
+                team_list = year_event_teams[current_year].get(event_key, [])
                 if any(t["tk"] == team_number for t in team_list):
                     participated_events.append((year_key, event_key, event))
         else:
@@ -4041,7 +4049,7 @@ def update_team_events(active_tab, store_data):
     
         # Rank
         rank = None
-        if year_key == 2025:
+        if year_key == current_year:
             rankings = year_event_rankings.get(year_key, {}).get(event_key, {})
         else:
             rankings = year_event_rankings.get(event_key, {}) if isinstance(year_event_rankings, dict) else {}
@@ -4116,14 +4124,14 @@ def update_team_awards(active_tab, store_data):
     years_to_process = get_team_years_participated(team_number) if is_history else [int(year)]
 
     for year_key in years_to_process:
-        if year_key == 2025:
+        if year_key == current_year:
             year_event_database = EVENT_DATABASE
             year_event_teams = EVENT_TEAMS
-            year_event_awards = EVENT_AWARDS  # Flat list for 2025!
-            event_iter = year_event_database[2025].items()
-            year_awards = [aw for aw in year_event_awards if isinstance(aw, dict) and aw.get("tk") == team_number and aw.get("y") == 2025]
+            year_event_awards = EVENT_AWARDS  # Flat list for current year
+            event_iter = year_event_database[current_year].items()
+            year_awards = [aw for aw in year_event_awards if isinstance(aw, dict) and aw.get("tk") == team_number and aw.get("y") == current_year]
             for event_key, event in event_iter:
-                team_list = year_event_teams[2025].get(event_key, [])
+                team_list = year_event_teams[current_year].get(event_key, [])
                 if any(t["tk"] == team_number for t in team_list):
                     participated_events.append((year_key, event_key, event))
             for aw in year_awards:
@@ -4306,7 +4314,7 @@ def create_team_event_playlist(event_key, team_number):
     """Create a YouTube playlist for a specific team at a specific event."""
     try:
         team_number = int(team_number)
-        year = 2025  # Default to 2025 for now
+        year = current_year  # Default to current year
         
         # Get matches for this team and event
         year_matches = EVENT_MATCHES.get(year, [])
@@ -4626,7 +4634,7 @@ def update_metrics_table(selected_metric, pathname):
     for team_key, value in metric_data.items():
         team_number = team_key.replace("frc", "")
         table_data.append({
-            "Team": f"[{team_number}](/team/{team_number}/2025)",
+            "Team": f"[{team_number}](/team/{team_number}/{current_year})",
             "Value": f"{value:.3f}" if isinstance(value, (int, float)) else str(value)
         })
     
