@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 import os
 import random
 import requests
-import numpy as np
 from urllib.parse import urlparse
 import psycopg2
 from psycopg2 import pool
