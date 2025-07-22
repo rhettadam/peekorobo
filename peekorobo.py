@@ -4718,24 +4718,6 @@ def update_insights_table(selected_insight, pathname, team_db, event_db):
     # Build table rows
     rows = []
     # Try to load team database for nickname lookup if key_type is team
-    team_db = None
-    event_db = None
-    if key_type == "team":
-        try:
-            if year == current_year:
-                team_db = TEAM_DATABASE.get(year, {})
-            else:
-                team_db, *_ = load_year_data(year)
-        except Exception:
-            team_db = None
-    elif key_type == "event":
-        try:
-            if year == current_year:
-                event_db = EVENT_DATABASE.get(year, {})
-            else:
-                _, event_db, *_ = load_year_data(year)
-        except Exception:
-            event_db = None
     for r in rankings:
         keys = r.get("keys", [])
         value = r.get("value", "")
