@@ -1168,11 +1168,10 @@ def insights_details_layout(year):
     # --- Stats Section ---
     # Count number of events, teams, and matches for the year
     num_events = num_teams = num_matches = 'N/A'
-    team_db = None
     event_db = None
     try:
         if year == current_year:
-            from peekorobo import EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, TEAM_DATABASE
+            from peekorobo import EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES
             year_events = EVENT_DATABASE.get(year, {})
             year_event_keys = list(year_events.keys())
             num_events = len(year_event_keys)
@@ -1185,19 +1184,22 @@ def insights_details_layout(year):
             num_teams = len(team_set)
             year_matches = EVENT_MATCHES.get(year, [])
             num_matches = len(year_matches)
-            team_db = TEAM_DATABASE.get(year, {})
-            event_db = EVENT_DATABASE.get(year, {})
+            # Only store event_teams (event_key: list of team dicts)
+            event_teams = EVENT_TEAMS.get(year, {})
+            event_db = {k: v.get("n", "") for k, v in EVENT_DATABASE.get(year, {}).items()}
         else:
-            _, event_data, event_teams, _, _, event_matches = load_year_data(year)
-            num_events = len(event_data)
+            _, ly_event_db, ly_event_teams, _, _, ly_event_matches = load_year_data(year)
+            num_events = len(ly_event_db)
             team_set = set()
-            for ek, teams in event_teams.items():
+            for ek, teams in ly_event_teams.items():
                 for t in teams:
                     if isinstance(t, dict) and 'tk' in t:
                         team_set.add(t['tk'])
             num_teams = len(team_set)
-            num_matches = len(event_matches)
-            team_db, event_db, *_ = load_year_data(year)
+            num_matches = len(ly_event_matches)
+            # Only store event_teams (event_key: list of team dicts)
+            event_teams = ly_event_teams
+            event_db = {k: v.get("n", "") for k, v in ly_event_db.items()}
     except Exception:
         pass
 
@@ -1431,7 +1433,7 @@ def insights_details_layout(year):
                     hero_row,
                     collage_row,
                     insights_section,
-                    dcc.Store(id='challenge-team-db', data=team_db),
+                    dcc.Store(id='challenge-event-teams-db', data=event_teams),
                     dcc.Store(id='challenge-event-db', data=event_db),
                 ],
                 style={

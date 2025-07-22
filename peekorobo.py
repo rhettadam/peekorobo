@@ -4689,10 +4689,17 @@ def update_metrics_table(selected_metric, pathname):
     Output("insights-table-container", "children"),
     Input("insights-dropdown", "value"),
     State("url", "pathname"),
-    State("challenge-team-db", "data"),
+    State("challenge-event-teams-db", "data"),
     State("challenge-event-db", "data"),
 )
-def update_insights_table(selected_insight, pathname, team_db, event_db):
+def update_insights_table(selected_insight, pathname, event_teams, event_db):
+    # Helper to get nickname from any event in event_teams
+    def find_nickname_across_events(event_teams, team_number):
+        for teams in event_teams.values():
+            for t in teams:
+                if str(t.get("tk")) == str(team_number):
+                    return t.get("nn", "")
+        return ""
     # Extract year from pathname (should be /challenge/<year>)
     try:
         year = int(pathname.strip("/").split("/")[-1])
@@ -4717,7 +4724,6 @@ def update_insights_table(selected_insight, pathname, team_db, event_db):
         return html.Div("No rankings data available for this insight.", style={"color": "#c00"})
     # Build table rows
     rows = []
-    # Try to load team database for nickname lookup if key_type is team
     for r in rankings:
         keys = r.get("keys", [])
         value = r.get("value", "")
@@ -4725,54 +4731,42 @@ def update_insights_table(selected_insight, pathname, team_db, event_db):
             for k in keys:
                 if key_type == "team" and k.startswith("frc"):
                     num = k[3:]
-                    nickname = ""
-                    if team_db:
-                        tdata = team_db.get(int(num), {})
-                        nickname = tdata.get("nickname", "")
+                    nickname = find_nickname_across_events(event_teams, num)
                     label = f"{num} | {nickname}" if nickname else num
                     link = f"/team/{num}/{year}"
                     rows.append({"Team": f"[{label}]({link})", "Value": value})
                 elif key_type == "event":
                     event_key = k
-                    event_name = ""
-                    if event_db:
-                        ev = event_db.get(event_key, {})
-                        event_name = ev.get("n", "")
+                    event_name = event_db.get(event_key, "") if event_db else ""
                     label = f"{event_key} | {event_name}" if event_name else event_key
                     link = f"/event/{event_key}"
                     rows.append({"Event": f"[{label}]({link})", "Value": value})
                 elif key_type == "match":
                     match_key = k
-                    # Parse event key and match label
                     event_key = match_key.split('_')[0] if '_' in match_key else match_key[:8]
                     match_part = match_key.split('_')[1] if '_' in match_key else match_key[8:]
-                    event_name = ""
-                    if event_db:
-                        ev = event_db.get(event_key, {})
-                        event_name = ev.get("n", "")
-                    # Parse match label using regex
+                    event_name = event_db.get(event_key, "") if event_db else ""
                     import re
                     m = re.match(r"([a-z]+)(\d+)?m?(\d+)?", match_part.lower())
                     match_label = match_part.upper()
+                    match_url_part = match_part.upper()
                     if m:
                         mtype, setnum, matchnum = m.groups()
                         mtype = mtype.upper()
                         if mtype == "QM":
-                            # Qualification matches: just show number
                             match_label = f"Qualification {setnum}" if setnum else "Qualification"
                         elif mtype == "SF":
-                            # Semifinals: just show set number
                             match_label = f"SF {setnum}" if setnum else "SF"
+                            if setnum:
+                                match_url_part = f"SF{setnum}"
                         elif mtype == "QF":
-                            # Quarterfinals: show set and match number
                             match_label = f"QF {setnum} Match {matchnum}" if setnum and matchnum else f"QF {setnum or ''}"
                         elif mtype == "F":
-                            # Finals: show set and match number
                             match_label = f"Finals {setnum} Match {matchnum}" if setnum and matchnum else f"Finals {setnum or ''}"
                         else:
                             match_label = match_part.upper()
                     display = f"{event_key} | {event_name} | {match_label}" if event_name else f"{event_key} | {match_label}"
-                    link = f"/match/{event_key}/{match_part.upper()}"
+                    link = f"/match/{event_key}/{match_url_part}"
                     rows.append({"Match": f"[{display}]({link})", "Value": value})
                 else:
                     rows.append({"Keys": k, "Value": value})
@@ -4780,19 +4774,13 @@ def update_insights_table(selected_insight, pathname, team_db, event_db):
             k = str(keys)
             if key_type == "team" and k.startswith("frc"):
                 num = k[3:]
-                nickname = ""
-                if team_db:
-                    tdata = team_db.get(int(num), {})
-                    nickname = tdata.get("nickname", "")
+                nickname = find_nickname_across_events(event_teams, num)
                 label = f"{num} | {nickname}" if nickname else num
                 link = f"/team/{num}/{year}"
                 rows.append({"Team": f"[{label}]({link})", "Value": value})
             elif key_type == "event":
                 event_key = k
-                event_name = ""
-                if event_db:
-                    ev = event_db.get(event_key, {})
-                    event_name = ev.get("n", "")
+                event_name = event_db.get(event_key, "") if event_db else ""
                 label = f"{event_key} | {event_name}" if event_name else event_key
                 link = f"/event/{event_key}"
                 rows.append({"Event": f"[{label}]({link})", "Value": value})
@@ -4800,14 +4788,14 @@ def update_insights_table(selected_insight, pathname, team_db, event_db):
                 match_key = k
                 event_key = match_key.split('_')[0] if '_' in match_key else match_key[:8]
                 match_part = match_key.split('_')[1] if '_' in match_key else match_key[8:]
-                event_name = ""
-                if event_db:
-                    ev = event_db.get(event_key, {})
-                    event_name = ev.get("n", "")
+                event_name = event_db.get(event_key, "") if event_db else ""
                 label = match_part.upper() if match_part else match_key[8:].upper()
+                match_url_part = label
                 if label.startswith('SF'):
                     match_num = ''.join(filter(str.isdigit, label[2:]))
                     match_label = f"Semi-Finals {match_num}" if match_num else "SF"
+                    if match_num:
+                        match_url_part = f"SF{match_num}"
                 elif label.startswith('QF'):
                     match_num = ''.join(filter(str.isdigit, label[2:]))
                     match_label = f"Quarter-Finals {match_num}" if match_num else "QF"
@@ -4820,7 +4808,7 @@ def update_insights_table(selected_insight, pathname, team_db, event_db):
                 else:
                     match_label = label
                 display = f"{event_key} | {event_name} | {match_label}" if event_name else f"{event_key} | {match_label}"
-                link = f"/match/{event_key}/{match_part.upper()}"
+                link = f"/match/{event_key}/{match_url_part}"
                 rows.append({"Match": f"[{display}]({link})", "Value": value})
             else:
                 rows.append({"Keys": k, "Value": value})
