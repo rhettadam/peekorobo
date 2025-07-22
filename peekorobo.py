@@ -2952,7 +2952,10 @@ def load_teams(
                 if (t.get("country") or "").lower() == "israel"
             ]
         else:
-            allowed_states = [s.lower() for s in DISTRICT_STATES_COMBINED.get(selected_district, [])]
+            district_info = DISTRICT_STATES_COMBINED.get(selected_district, {})
+            allowed_states = []
+            if district_info:
+                allowed_states = [s.lower() for s in district_info.get("abbreviations", []) + district_info.get("names", [])]
             teams_data = [
                 t for t in teams_data
                 if (t.get("state_prov") or "").lower() in allowed_states
