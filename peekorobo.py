@@ -23,7 +23,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import team_layout,match_layout,user_layout,other_user_layout,home_layout,footer,topbar,blog_layout,challenges_layout,challenge_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,epa_legend_layout,events_layout,build_recent_events_section,compare_layout
+from layouts import team_layout,match_layout,user_layout,other_user_layout,home_layout,footer,topbar,blog_layout,insights_layout,insights_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,epa_legend_layout,events_layout,build_recent_events_section,compare_layout
 
 from utils import find_similar_teams,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
@@ -213,7 +213,7 @@ def update_last_updated_text(n_clicks, n_intervals):
     [Output("nav-teams", "className"),
      Output("nav-map", "className"),
      Output("nav-events", "className"),
-     Output("nav-challenges", "className")],
+     Output("nav-insights", "className")],
     [Input("url", "pathname")]
 )
 def update_nav_active_state(pathname):
@@ -225,9 +225,9 @@ def update_nav_active_state(pathname):
     teams_active = active_class if pathname and pathname.startswith("/teams") else default_class
     map_active = active_class if pathname and pathname.startswith("/map") else default_class
     events_active = active_class if pathname and pathname.startswith("/events") else default_class
-    challenges_active = active_class if pathname and pathname.startswith("/challenges") else default_class
+    insights_active = active_class if pathname and pathname.startswith("/insights") else default_class
     
-    return teams_active, map_active, events_active, challenges_active
+    return teams_active, map_active, events_active, insights_active
 
 @app.callback(
     Output("page-content", "children"),
@@ -278,8 +278,8 @@ def display_page(pathname):
     if pathname == "/events":
         return events_layout()
     
-    if pathname == "/challenges":
-        return challenges_layout()
+    if pathname == "/insights":
+        return insights_layout()
 
     if pathname == "/blog":
         return blog_layout
@@ -302,13 +302,13 @@ def display_page(pathname):
         except ValueError:
             pass
     
-    if pathname.startswith("/challenge/"):
+    if pathname.startswith("/insights/"):
         year = pathname.split("/")[-1]
         try:
             year = int(year)
         except ValueError:
             year = None
-        return challenge_details_layout(year)
+        return insights_details_layout(year)
 
     if pathname == "/compare":
         return compare_layout()
@@ -346,10 +346,10 @@ def update_tab_title(pathname):
         return 'Compare - Peekorobo'
     elif pathname.startswith('/blog'):
         return 'Blog - Peekorobo'
-    elif pathname.startswith('/challenges'):
-        return 'Challenges - Peekorobo'
-    elif pathname.startswith('/challenge/'):
-        challenge = pathname.split('/challenge/')[1].split('/')[0]
+    elif pathname.startswith('/insights'):
+        return 'Insights - Peekorobo'
+    elif pathname.startswith('/insights/'):
+        challenge = pathname.split('/insights/')[1].split('/')[0]
         return f'{challenge} Season - Peekorobo'
     elif pathname.startswith('/user/'):
         username = pathname.split('/user/')[1].split('/')[0]
@@ -4684,6 +4684,207 @@ def update_metrics_table(selected_metric, pathname):
     )
     
     return table
+
+@app.callback(
+    Output("insights-table-container", "children"),
+    Input("insights-dropdown", "value"),
+    State("url", "pathname"),
+    State("challenge-team-db", "data"),
+    State("challenge-event-db", "data"),
+)
+def update_insights_table(selected_insight, pathname, team_db, event_db):
+    # Extract year from pathname (should be /challenge/<year>)
+    try:
+        year = int(pathname.strip("/").split("/")[-1])
+    except Exception:
+        return None
+    # Load insights
+    try:
+        with open(os.path.join("data", "insights.json"), "r", encoding="utf-8") as f:
+            all_insights = json.load(f)
+        year_insights = all_insights.get(str(year), [])
+    except Exception:
+        return html.Div("No insights data available.", style={"color": "#c00"})
+    # Find the selected insight
+    insight = next((i for i in year_insights if i.get("name") == selected_insight), None)
+    if not insight or not insight.get("data"):
+        return html.Div("No data for this insight.", style={"color": "#c00"})
+    data = insight["data"]
+    # Try to find a rankings list
+    rankings = data.get("rankings")
+    key_type = data.get("key_type", "")
+    if not rankings or not isinstance(rankings, list) or len(rankings) == 0:
+        return html.Div("No rankings data available for this insight.", style={"color": "#c00"})
+    # Build table rows
+    rows = []
+    # Try to load team database for nickname lookup if key_type is team
+    team_db = None
+    event_db = None
+    if key_type == "team":
+        try:
+            if year == current_year:
+                team_db = TEAM_DATABASE.get(year, {})
+            else:
+                team_db, *_ = load_year_data(year)
+        except Exception:
+            team_db = None
+    elif key_type == "event":
+        try:
+            if year == current_year:
+                event_db = EVENT_DATABASE.get(year, {})
+            else:
+                _, event_db, *_ = load_year_data(year)
+        except Exception:
+            event_db = None
+    for r in rankings:
+        keys = r.get("keys", [])
+        value = r.get("value", "")
+        if isinstance(keys, list):
+            for k in keys:
+                if key_type == "team" and k.startswith("frc"):
+                    num = k[3:]
+                    nickname = ""
+                    if team_db:
+                        tdata = team_db.get(int(num), {})
+                        nickname = tdata.get("nickname", "")
+                    label = f"{num} | {nickname}" if nickname else num
+                    link = f"/team/{num}/{year}"
+                    rows.append({"Team": f"[{label}]({link})", "Value": value})
+                elif key_type == "event":
+                    event_key = k
+                    event_name = ""
+                    if event_db:
+                        ev = event_db.get(event_key, {})
+                        event_name = ev.get("n", "")
+                    label = f"{event_key} | {event_name}" if event_name else event_key
+                    link = f"/event/{event_key}"
+                    rows.append({"Event": f"[{label}]({link})", "Value": value})
+                elif key_type == "match":
+                    match_key = k
+                    # Parse event key and match label
+                    event_key = match_key.split('_')[0] if '_' in match_key else match_key[:8]
+                    match_part = match_key.split('_')[1] if '_' in match_key else match_key[8:]
+                    event_name = ""
+                    if event_db:
+                        ev = event_db.get(event_key, {})
+                        event_name = ev.get("n", "")
+                    # Parse match label using regex
+                    import re
+                    m = re.match(r"([a-z]+)(\d+)?m?(\d+)?", match_part.lower())
+                    match_label = match_part.upper()
+                    if m:
+                        mtype, setnum, matchnum = m.groups()
+                        mtype = mtype.upper()
+                        if mtype == "QM":
+                            # Qualification matches: just show number
+                            match_label = f"Qualification {setnum}" if setnum else "Qualification"
+                        elif mtype == "SF":
+                            # Semifinals: just show set number
+                            match_label = f"SF {setnum}" if setnum else "SF"
+                        elif mtype == "QF":
+                            # Quarterfinals: show set and match number
+                            match_label = f"QF {setnum} Match {matchnum}" if setnum and matchnum else f"QF {setnum or ''}"
+                        elif mtype == "F":
+                            # Finals: show set and match number
+                            match_label = f"Finals {setnum} Match {matchnum}" if setnum and matchnum else f"Finals {setnum or ''}"
+                        else:
+                            match_label = match_part.upper()
+                    display = f"{event_key} | {event_name} | {match_label}" if event_name else f"{event_key} | {match_label}"
+                    link = f"/match/{event_key}/{match_part.upper()}"
+                    rows.append({"Match": f"[{display}]({link})", "Value": value})
+                else:
+                    rows.append({"Keys": k, "Value": value})
+        else:
+            k = str(keys)
+            if key_type == "team" and k.startswith("frc"):
+                num = k[3:]
+                nickname = ""
+                if team_db:
+                    tdata = team_db.get(int(num), {})
+                    nickname = tdata.get("nickname", "")
+                label = f"{num} | {nickname}" if nickname else num
+                link = f"/team/{num}/{year}"
+                rows.append({"Team": f"[{label}]({link})", "Value": value})
+            elif key_type == "event":
+                event_key = k
+                event_name = ""
+                if event_db:
+                    ev = event_db.get(event_key, {})
+                    event_name = ev.get("n", "")
+                label = f"{event_key} | {event_name}" if event_name else event_key
+                link = f"/event/{event_key}"
+                rows.append({"Event": f"[{label}]({link})", "Value": value})
+            elif key_type == "match":
+                match_key = k
+                event_key = match_key.split('_')[0] if '_' in match_key else match_key[:8]
+                match_part = match_key.split('_')[1] if '_' in match_key else match_key[8:]
+                event_name = ""
+                if event_db:
+                    ev = event_db.get(event_key, {})
+                    event_name = ev.get("n", "")
+                label = match_part.upper() if match_part else match_key[8:].upper()
+                if label.startswith('SF'):
+                    match_num = ''.join(filter(str.isdigit, label[2:]))
+                    match_label = f"Semi-Finals {match_num}" if match_num else "SF"
+                elif label.startswith('QF'):
+                    match_num = ''.join(filter(str.isdigit, label[2:]))
+                    match_label = f"Quarter-Finals {match_num}" if match_num else "QF"
+                elif label.startswith('F'):
+                    match_num = ''.join(filter(str.isdigit, label[1:]))
+                    match_label = f"Finals {match_num}" if match_num else "Finals"
+                elif label.startswith('QM'):
+                    match_num = ''.join(filter(str.isdigit, label[2:]))
+                    match_label = f"Qualification {match_num}" if match_num else "Qualification"
+                else:
+                    match_label = label
+                display = f"{event_key} | {event_name} | {match_label}" if event_name else f"{event_key} | {match_label}"
+                link = f"/match/{event_key}/{match_part.upper()}"
+                rows.append({"Match": f"[{display}]({link})", "Value": value})
+            else:
+                rows.append({"Keys": k, "Value": value})
+    # Set columns
+    if key_type == "team":
+        columns = [
+            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "Value", "id": "Value"},
+        ]
+    elif key_type == "event":
+        columns = [
+            {"name": "Event", "id": "Event", "presentation": "markdown"},
+            {"name": "Value", "id": "Value"},
+        ]
+    elif key_type == "match":
+        columns = [
+            {"name": "Match", "id": "Match", "presentation": "markdown"},
+            {"name": "Value", "id": "Value"},
+        ]
+    else:
+        columns = [
+            {"name": "Keys", "id": "Keys"},
+            {"name": "Value", "id": "Value"},
+        ]
+    return dash_table.DataTable(
+        columns=columns,
+        data=rows,
+        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
+        style_header={
+            "backgroundColor": "var(--card-bg)",
+            "fontWeight": "bold",
+            "textAlign": "center",
+            "borderBottom": "1px solid #ccc",
+            "padding": "6px",
+            "fontSize": "13px",
+        },
+        style_cell={
+            "backgroundColor": "var(--card-bg)",
+            "textAlign": "center",
+            "padding": "10px",
+            "border": "none",
+            "fontSize": "14px",
+        },
+        page_size=20,
+        style_as_list_view=True,
+    )
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  

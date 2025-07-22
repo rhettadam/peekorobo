@@ -3,7 +3,7 @@ from dash import html, dcc, dash_table
 from datagather import load_year_data,get_team_avatar,get_team_years_participated, load_data_2025, load_search_data
 from flask import session
 from datetime import datetime, date
-from utils import calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, get_event_learning_stats, get_prediction_difference, compute_percentiles, pill, get_event_week_label
+from utils import calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, get_event_learning_stats, get_prediction_difference, compute_percentiles, pill, get_event_week_label, format_human_date
 import json
 import os
 
@@ -621,7 +621,7 @@ def topbar():
                                     dbc.NavItem(dbc.NavLink("Teams", href="/teams", className="custom-navlink", id="nav-teams")),
                                     dbc.NavItem(dbc.NavLink("Map", href="/map", className="custom-navlink", id="nav-map")),
                                     dbc.NavItem(dbc.NavLink("Events", href="/events", className="custom-navlink", id="nav-events")),
-                                    dbc.NavItem(dbc.NavLink("Challenges", href="/challenges", className="custom-navlink", id="nav-challenges")),
+                                    dbc.NavItem(dbc.NavLink("Insights", href="/insights", className="custom-navlink", id="nav-insights")),
                                     dbc.DropdownMenu(
                                         label="Misc",
                                         nav=True,
@@ -1070,7 +1070,7 @@ confidence = min(1.0, sum(weight * component))
     footer
 ])
 
-def challenges_layout():
+def insights_layout():
 
     with open('data/frc_games.json', 'r', encoding='utf-8') as f:
         frc_games = json.load(f)
@@ -1097,7 +1097,7 @@ def challenges_layout():
                                     html.H5(
                                         html.A(
                                             f"{game['name']} ({year})",
-                                            href=f"/challenge/{year}",
+                                            href=f"/insights/{year}",
                                             style={"textDecoration": "none", "color": "var(--text-primary)"},
                                         ),
                                         className="mb-1",
@@ -1122,10 +1122,10 @@ def challenges_layout():
             topbar(),
             dbc.Container(
                 [
-                    html.H2("Challenges", className="text-center mb-4"),
+                    html.H2("Insights", className="text-center mb-4"),
                     html.P(
                         "The FIRST Robotics Competition is made up of seasons in which the challenge (game), along with the required set of tasks, changes annually. "
-                        "Please click on a season to view more information and results.",
+                        "Please click on a season to view more insights",
                         className="text-center mb-4",
                     ),
                     *challenges,
@@ -1140,7 +1140,7 @@ def challenges_layout():
         ]
     )
 
-def challenge_details_layout(year):
+def insights_details_layout(year):
 
     with open('data/frc_games.json', 'r', encoding='utf-8') as f:
         frc_games = json.load(f)
@@ -1168,9 +1168,11 @@ def challenge_details_layout(year):
     # --- Stats Section ---
     # Count number of events, teams, and matches for the year
     num_events = num_teams = num_matches = 'N/A'
+    team_db = None
+    event_db = None
     try:
         if year == current_year:
-            from peekorobo import EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES
+            from peekorobo import EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, TEAM_DATABASE
             year_events = EVENT_DATABASE.get(year, {})
             year_event_keys = list(year_events.keys())
             num_events = len(year_event_keys)
@@ -1183,6 +1185,8 @@ def challenge_details_layout(year):
             num_teams = len(team_set)
             year_matches = EVENT_MATCHES.get(year, [])
             num_matches = len(year_matches)
+            team_db = TEAM_DATABASE.get(year, {})
+            event_db = EVENT_DATABASE.get(year, {})
         else:
             _, event_data, event_teams, _, _, event_matches = load_year_data(year)
             num_events = len(event_data)
@@ -1193,6 +1197,7 @@ def challenge_details_layout(year):
                         team_set.add(t['tk'])
             num_teams = len(team_set)
             num_matches = len(event_matches)
+            team_db, event_db, *_ = load_year_data(year)
     except Exception:
         pass
 
@@ -1376,6 +1381,47 @@ def challenge_details_layout(year):
         ], md=6, xs=12, style={"marginBottom": "2rem"}),
     ], className="mb-4", style={"background": "var(--card-bg)", "borderRadius": "12px", "padding": "2rem 1rem"})
 
+    # --- Insights Section ---
+    # Load insights for the year
+    try:
+        with open('data/insights.json', 'r', encoding='utf-8') as f:
+            all_insights = json.load(f)
+        year_insights = all_insights.get(str(year), [])
+    except Exception:
+        year_insights = []
+
+    insight_options = [
+        {
+            "label": i.get("name", f"Option {ix+1}")
+                .replace("typed_leaderboard_", "")
+                .replace("_", " ")
+                .title() if i.get("name") else f"Option {ix+1}",
+            "value": i.get("name", f"Option {ix+1}")
+        }
+        for ix, i in enumerate(year_insights)
+    ]
+
+    # Default to first option if available
+    default_insight = insight_options[0]["value"] if insight_options else None
+
+    insights_section = html.Div([
+        html.Hr(),
+        html.H4("Yearly Insights", className="mb-3 mt-4 text-center"),
+        dbc.Row([
+            dbc.Col([
+                dbc.Label("Select Insight Type:"),
+                dcc.Dropdown(
+                    id="insights-dropdown",
+                    options=insight_options,
+                    value=default_insight,
+                    clearable=False,
+                    style={"marginBottom": "1.5rem"}
+                ),
+            ], md=6, xs=12, style={"margin": "0 auto"}),
+        ], className="justify-content-center"),
+        html.Div(id="insights-table-container", style={"marginTop": "1.5rem"}),
+    ]) if insight_options else None
+
     return html.Div(
         [
             topbar(),
@@ -1384,6 +1430,9 @@ def challenge_details_layout(year):
                     banner_img if banner_img else None,
                     hero_row,
                     collage_row,
+                    insights_section,
+                    dcc.Store(id='challenge-team-db', data=team_db),
+                    dcc.Store(id='challenge-event-db', data=event_db),
                 ],
                 style={
                     "maxWidth": "1000px",
@@ -3794,13 +3843,18 @@ def event_layout(event_key):
         except Exception:
             week_label = None
 
+    # Format dates for display
+    from utils import format_human_date
+    start_display = format_human_date(start_date) if start_date and start_date != "N/A" else start_date
+    end_display = format_human_date(end_date) if end_date and end_date != "N/A" else end_date
+
     # Header card
     header_card = dbc.Card(
         html.Div([
             dbc.CardBody([
                 html.H2(f"{event_name} ({parsed_year})", className="card-title mb-3", style={"fontWeight": "bold"}),
                 html.P(f"{event_location}", className="card-text"),
-                html.P(f"{start_date} - {end_date}", className="card-text"),
+                html.P(f"{start_display} - {end_display}", className="card-text"),
                 html.P(f"{week_label} {event_type}" if week_label else "", className="card-text"),
                 dbc.Row([
                     dbc.Col([
@@ -3877,6 +3931,47 @@ def event_layout(event_key):
         className="mb-4",
     )
 
+    # --- Insights Section ---
+    # Load insights for the year
+    try:
+        with open('data/insights.json', 'r', encoding='utf-8') as f:
+            all_insights = json.load(f)
+        year_insights = all_insights.get(str(year), [])
+    except Exception:
+        year_insights = []
+
+    insight_options = [
+        {
+            "label": i.get("name", f"Option {ix+1}")
+                .replace("typed_leaderboard_", "")
+                .replace("_", " ")
+                .title() if i.get("name") else f"Option {ix+1}",
+            "value": i.get("name", f"Option {ix+1}")
+        }
+        for ix, i in enumerate(year_insights)
+    ]
+
+    # Default to first option if available
+    default_insight = insight_options[0]["value"] if insight_options else None
+
+    insights_section = html.Div([
+        html.Hr(),
+        html.H4("Yearly Insights", className="mb-3 mt-4 text-center"),
+        dbc.Row([
+            dbc.Col([
+                dbc.Label("Select Insight Type:"),
+                dcc.Dropdown(
+                    id="insights-dropdown",
+                    options=insight_options,
+                    value=default_insight,
+                    clearable=False,
+                    style={"marginBottom": "1.5rem"}
+                ),
+            ], md=6, xs=12, style={"margin": "0 auto"}),
+        ], className="justify-content-center"),
+        html.Div(id="insights-table-container", style={"marginTop": "1.5rem"}),
+    ]) if insight_options else None
+
     return html.Div(
         [
             dcc.Location(id="event-url", refresh=False),
@@ -3895,6 +3990,7 @@ def event_layout(event_key):
                     html.Div(id="data-display-container"),
                     html.Div(id="event-alliances-content"),
                     html.Div(id="event-metrics-content"),
+                    insights_section,
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),

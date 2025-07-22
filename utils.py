@@ -657,13 +657,17 @@ def event_card(event, favorited=False):
         except Exception:
             week_label = None
 
+    # Format dates for display
+    start_display = format_human_date(start) if start and start != "N/A" else start
+    end_display = format_human_date(end) if end and end != "N/A" else end
+
     return dbc.Card(
         [
             dbc.CardBody(
                 [
                     html.H5(event.get("n", "Unknown Event"), className="card-title mb-3"),
                     html.P(location, className="card-text"),
-                    html.P(f"{start} - {end}", className="card-text"),
+                    html.P(f"{start_display} - {end_display}", className="card-text"),
                     html.P(f"{week_label} {event_type}" if week_label else f"{event_type}", className="card-text"),
                     dbc.Button(
                         "View Details",
@@ -763,3 +767,11 @@ def find_similar_teams(team_number, year, TEAM_DATABASE):
     similar_teams.sort(key=lambda x: x["similarity_score"], reverse=True)
     
     return similar_teams
+
+def format_human_date(date_str):
+    """Convert 'YYYY-MM-DD' to 'Month D, YYYY' (e.g., 'April 2, 2025'). Returns '' if invalid."""
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        return dt.strftime("%B %-d, %Y") if os.name != 'nt' else dt.strftime("%B %#d, %Y")
+    except Exception:
+        return ""
