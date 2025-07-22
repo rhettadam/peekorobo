@@ -1,6 +1,6 @@
 import dash
 import dash_bootstrap_components as dbc
-from dash import callback, html, dcc, dash_table, ctx, ALL, MATCH, no_update
+from dash import callback, html, dcc, dash_table, ctx, ALL, MATCH, no_update, callback_context
 from dash.dependencies import Input, Output, State
 
 import flask
@@ -2553,57 +2553,7 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
         return dbc.Alert("Select two or more teams to compare.", color="info")
     # Build lookup for event_teams
     team_lookup = {str(t["tk"]): t for t in event_teams}
-    # Build rows for each team
-    rows = []
-    for tnum in selected_teams:
-        t = team_lookup.get(str(tnum), {})
-        epa = epa_data.get(str(tnum), {})
-        rank_info = (rankings or {}).get(str(tnum), {})
-        rows.append({
-            "Team": f"[{tnum} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tnum}/{event_year})",
-            "Rank": rank_info.get("rk", "N/A"),
-            "W-L-T": f"{rank_info.get('w', 'N/A')}-{rank_info.get('l', 'N/A')}-{rank_info.get('t', 'N/A')}",
-            "DQ": rank_info.get("dq", "N/A"),
-            "EPA": float(epa.get('normal_epa', 0)),
-            "Auto EPA": float(epa.get('auto_epa', 0)),
-            "Teleop EPA": float(epa.get('teleop_epa', 0)),
-            "Endgame EPA": float(epa.get('endgame_epa', 0)),
-            "Confidence": float(epa.get('confidence', 0)),
-            "ACE": float(epa.get('epa', 0)),
-        })
-    # Compute global percentiles for coloring
-    if event_year == current_year:
-        global_teams = TEAM_DATABASE.get(event_year, {}).values()
-    else:
-        year_team_data, _, _, _, _, _ = load_year_data(event_year)
-        global_teams = year_team_data.values()
-    global_ace_values = [t.get("epa", 0) for t in global_teams]
-    global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
-    global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
-    global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
-    global_confidence_values = [t.get("confidence", 0) for t in global_teams]
-    percentiles_dict = {
-        "Auto EPA": compute_percentiles(global_auto_values),
-        "Teleop EPA": compute_percentiles(global_teleop_values),
-        "Endgame EPA": compute_percentiles(global_endgame_values),
-        "Confidence": compute_percentiles(global_confidence_values),
-        "ACE": compute_percentiles(global_ace_values),
-    }
-    style_data_conditional = get_epa_styling(percentiles_dict)
-    columns = [
-        {"name": "Team", "id": "Team", "presentation": "markdown"},
-        {"name": "Rank", "id": "Rank"},
-        {"name": "W-L-T", "id": "W-L-T"},
-        {"name": "DQ", "id": "DQ"},
-        {"name": "EPA", "id": "EPA"},
-        {"name": "Auto EPA", "id": "Auto EPA"},
-        {"name": "Teleop EPA", "id": "Teleop EPA"},
-        {"name": "Endgame EPA", "id": "Endgame EPA"},
-        {"name": "Confidence", "id": "Confidence"},
-        {"name": "ACE", "id": "ACE"},
-    ]
-    # Radar chart for visual comparison
-    
+
     # Compute avg score and SoS for each team
     avg_score_map = {}
     sos_map = {}
@@ -2638,6 +2588,58 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
             win_probs.append(win_prob)
         avg_score_map[tnum_str] = sum(scores) / len(scores) if scores else 0
         sos_map[tnum_str] = sum(win_probs) / len(win_probs) if win_probs else 0
+
+    # Build rows for each team
+    rows = []
+    for tnum in selected_teams:
+        t = team_lookup.get(str(tnum), {})
+        epa = epa_data.get(str(tnum), {})
+        rank_info = (rankings or {}).get(str(tnum), {})
+        rows.append({
+            "Team": f"[{tnum} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tnum}/{event_year})",
+            "Rank": rank_info.get("rk", "N/A"),
+            "W-L-T": f"{rank_info.get('w', 'N/A')}-{rank_info.get('l', 'N/A')}-{rank_info.get('t', 'N/A')}",
+            "SoS": sos_map.get(str(tnum), 0),
+            "EPA": float(epa.get('normal_epa', 0)),
+            "Auto EPA": float(epa.get('auto_epa', 0)),
+            "Teleop EPA": float(epa.get('teleop_epa', 0)),
+            "Endgame EPA": float(epa.get('endgame_epa', 0)),
+            "Confidence": float(epa.get('confidence', 0)),
+            "ACE": float(epa.get('epa', 0)),
+        })
+    # Compute global percentiles for coloring
+    if event_year == current_year:
+        global_teams = TEAM_DATABASE.get(event_year, {}).values()
+    else:
+        year_team_data, _, _, _, _, _ = load_year_data(event_year)
+        global_teams = year_team_data.values()
+    global_ace_values = [t.get("epa", 0) for t in global_teams]
+    global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
+    global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
+    global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
+    global_confidence_values = [t.get("confidence", 0) for t in global_teams]
+    percentiles_dict = {
+        "Auto EPA": compute_percentiles(global_auto_values),
+        "Teleop EPA": compute_percentiles(global_teleop_values),
+        "Endgame EPA": compute_percentiles(global_endgame_values),
+        "Confidence": compute_percentiles(global_confidence_values),
+        "ACE": compute_percentiles(global_ace_values),
+    }
+    style_data_conditional = get_epa_styling(percentiles_dict)
+    columns = [
+        {"name": "Team", "id": "Team", "presentation": "markdown"},
+        {"name": "Rank", "id": "Rank"},
+        {"name": "W-L-T", "id": "W-L-T"},
+        {"name": "SoS", "id": "SoS"},
+        {"name": "EPA", "id": "EPA"},
+        {"name": "Auto EPA", "id": "Auto EPA"},
+        {"name": "Teleop EPA", "id": "Teleop EPA"},
+        {"name": "Endgame EPA", "id": "Endgame EPA"},
+        {"name": "Confidence", "id": "Confidence"},
+        {"name": "ACE", "id": "ACE"},
+    ]
+    # Radar chart for visual comparison
+    
     radar_stats = ["Auto EPA", "Teleop EPA", "Endgame EPA", "Confidence", "EPA", "ACE", "Avg Score", "SoS"]
     # Gather all event teams' stats for normalization
     all_team_stats = {stat: [] for stat in radar_stats}
@@ -2871,7 +2873,7 @@ app.clientside_callback(
         Input("percentile-toggle", "value"),
     ],
     [State("teams-url", "href")],
-    prevent_initial_call="initial_duplicate",
+    prevent_initial_call=True,
 )
 def load_teams(
     selected_district,
@@ -2885,6 +2887,7 @@ def load_teams(
     percentile_mode,
     href
 ):
+    ctx = callback_context
     # Default filter values
     default_values = {
         "year": current_year,
@@ -2896,23 +2899,6 @@ def load_teams(
         "tab": "table-tab",
         "district": "All"
     }
-
-    # Parse from URL if present
-    if href and "?" in href:
-        query = href.split("?", 1)[1]
-        params = parse_qs(query)
-        def get_param(name, fallback):
-            val = params.get(name, [fallback])
-            return val[0] if isinstance(val, list) else val
-        selected_year = int(get_param("year", selected_year))
-        selected_country = get_param("country", selected_country)
-        selected_state = get_param("state", selected_state)
-        selected_district = get_param("district", selected_district)
-        search_query = get_param("search", search_query)
-        x_axis = get_param("x", x_axis)
-        y_axis = get_param("y", y_axis)
-        active_tab = get_param("tab", active_tab)
-        percentile_mode = ["filtered"] if get_param("percentile", "") == "filtered" else []
 
     # Build query string for updating URL
     params = {
@@ -2926,11 +2912,15 @@ def load_teams(
         "district": selected_district,
         "percentile": "filtered" if "filtered" in percentile_mode else None,
     }
-
     query_string = "?" + urlencode({
         k: v for k, v in params.items()
         if v not in (None, "", "All") and str(v) != str(default_values.get(k, ""))
     })
+    # Only update the URL if a dropdown was the trigger
+    if ctx.triggered and not any(t["prop_id"].startswith("teams-url.search") for t in ctx.triggered):
+        url_update = query_string
+    else:
+        url_update = no_update
 
     # Load and filter teams
     # Check if data for the selected year is available
@@ -2942,15 +2932,15 @@ def load_teams(
                 year_team_database = {selected_year: year_team_data}
                 teams_data, epa_ranks = calculate_all_ranks(selected_year, year_team_database)
             except Exception as e:
-                return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string, []
+                return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, url_update, []
         else:
-            return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string, []
+            return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, url_update, []
     else:
         teams_data, epa_ranks = calculate_all_ranks(selected_year, TEAM_DATABASE)
 
     empty_style = []
     if not teams_data:
-        return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string, empty_style
+        return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, url_update, empty_style
 
     if selected_country and selected_country != "All":
         teams_data = [t for t in teams_data if (t.get("country") or "").lower() == selected_country.lower()]
@@ -2967,8 +2957,6 @@ def load_teams(
                 t for t in teams_data
                 if (t.get("state_prov") or "").lower() in allowed_states
             ]
-    
-
     elif selected_state and selected_state != "All":
         teams_data = [t for t in teams_data if (t.get("state_prov") or "").lower() == selected_state.lower()]
 
@@ -3127,7 +3115,7 @@ def load_teams(
             }
         )
         
-        return table_rows, state_options, top_teams_layout, {"display": "none"}, [toggle_button, avatars_container], {"display": "flex", "flexDirection": "column"}, go.Figure(), {"display": "none"}, query_string, style_data_conditional
+        return table_rows, state_options, top_teams_layout, {"display": "none"}, [toggle_button, avatars_container], {"display": "flex", "flexDirection": "column"}, go.Figure(), {"display": "none"}, url_update, style_data_conditional
 
     # Bubble Chart Tab
     elif active_tab == "bubble-chart-tab":
@@ -3196,9 +3184,38 @@ def load_teams(
             ),
             font=dict(color="#777"),  # Title and general font color
         )
-        return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, query_string, style_data_conditional
+        return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, url_update, style_data_conditional
 
-    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, query_string, style_data_conditional
+    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, url_update, style_data_conditional
+
+@app.callback(
+    [
+        Output("country-dropdown", "value"),
+        Output("state-dropdown", "value"),
+        Output("district-dropdown", "value"),
+        Output("teams-year-dropdown", "value"),
+        Output("percentile-toggle", "value"),
+    ],
+    Input("teams-url", "search"),
+)
+def sync_teams_dropdowns_with_url(search):
+    country = "All"
+    state = "All"
+    district = "All"
+    year = current_year
+    percentile = []
+    if search and search.startswith("?"):
+        params = parse_qs(search[1:])
+        country = params.get("country", [country])[0]
+        state = params.get("state", [state])[0]
+        district = params.get("district", [district])[0]
+        try:
+            year = int(params.get("year", [year])[0])
+        except Exception:
+            year = current_year
+        if params.get("percentile", [""])[0] == "filtered":
+            percentile = ["filtered"]
+    return country, state, district, year, percentile
 
 @callback(
     Output("axis-dropdown-container", "style"),
