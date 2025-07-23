@@ -461,24 +461,24 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             ]
         ),
         dbc.Tab(
-            label="Insights",
-            tab_id="insights-tab",
-            children=[
-                html.Div(id="team-insights-content", children="Loading insights...")
-            ]
-        ),
-        dbc.Tab(
             label="Events",
             tab_id="events-tab",
             children=[
-                html.Div(id="team-events-content")
+                html.Div(id="team-events-content", children="Loading events...")
             ]
         ),
         dbc.Tab(
             label="Awards",
             tab_id="awards-tab",
             children=[
-                html.Div(id="team-awards-content")
+                html.Div(id="team-awards-content", children="Loading awards...")
+            ]
+        ),
+        dbc.Tab(
+            label="Insights",
+            tab_id="insights-tab",
+            children=[
+                html.Div(id="team-insights-content", children="Loading insights...")
             ]
         ),
     ], id="team-tabs", active_tab="overview-tab")
@@ -2016,17 +2016,19 @@ def events_layout(year=current_year):
     event_type_dropdown = dcc.Dropdown(
         id="event-type-dropdown",
         options=[
-            {"label": "All", "value": "all"},
-            {"label": "Season", "value": "season"},
-            {"label": "Off-season", "value": "offseason"},
-            {"label": "Regional", "value": "regional"},
-            {"label": "District", "value": "district"},
-            {"label": "Championship", "value": "championship"},
+            {"label": "Pre-Season", "value": "Preseason"},
+            {"label": "Regional", "value": "Regional"},
+            {"label": "District", "value": "District"},
+            {"label": "District Champs", "value": "District Championship"},
+            {"label": "District Champs Division", "value": "District Championship Division"},
+            {"label": "Champs Division", "value": "Championship Division"},
+            {"label": "Champs Finals", "value": "Championship Finals"},
+            {"label": "Off-Season", "value": "Offseason"},
         ],
-        value=["all"],
+        value=[],
         multi=True,
-        placeholder="Filter by Event Type",
-        clearable=False,
+        placeholder="Event Type",
+        clearable=True,
         className="custom-input-box"
     )
     # Dynamically generate week options based on year

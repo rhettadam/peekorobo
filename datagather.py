@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 import psycopg2
 from psycopg2 import pool
 import json
+from collections import defaultdict
 import threading
 import time
 
@@ -547,176 +548,165 @@ def load_year_data(year):
         """Remove any None or empty string values. Keep empty lists and dictionaries."""
         return {k: v for k, v in d.items() if v not in (None, "")}
 
+    def safe_json_load(value):
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return []
+        return value or []
+
     with DatabaseConnection() as conn:
         # === Load team EPA data for specific year ===
-        team_cursor = conn.cursor()
-        team_cursor.execute("""
-            SELECT team_number, year, nickname, city, state_prov, country, website,
-                   normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                   wins, losses, event_epas
-            FROM team_epas
-            WHERE year = %s
-            ORDER BY team_number
-        """, (year,))
-        
         team_data = {}
-        for row in team_cursor.fetchall():
-            team_number, year, nickname, city, state_prov, country, website, \
-            normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
-            wins, losses, event_epas = row
-            
-            raw_team_data = {
-                "team_number": team_number,
-                "year": year,
-                "nickname": nickname,
-                "city": city,
-                "state_prov": state_prov,
-                "country": country,
-                "website": website,
-                "normal_epa": normal_epa,
-                "epa": epa,
-                "confidence": confidence,
-                "auto_epa": auto_epa,
-                "teleop_epa": teleop_epa,
-                "endgame_epa": endgame_epa,
-                "wins": wins,
-                "losses": losses,
-                "event_epas": event_epas
-            }
-            
-            # Parse event_epas from JSON if it's a string
-            if raw_team_data["event_epas"] is None:
-                raw_team_data["event_epas"] = []
-            elif isinstance(raw_team_data["event_epas"], str):
-                try:
-                    raw_team_data["event_epas"] = json.loads(raw_team_data["event_epas"])
-                except json.JSONDecodeError:
-                    raw_team_data["event_epas"] = []
-            
-            # Compress the dictionary
-            team = compress_dict(raw_team_data)
-            team_data[team_number] = team
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT team_number, year, nickname, city, state_prov, country, website,
+                       normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+                       wins, losses, event_epas
+                FROM team_epas
+                WHERE year = %s
+                ORDER BY team_number
+            """, (year,))
+            for row in cursor.fetchall():
+                (
+                    team_number, year, nickname, city, state_prov, country, website,
+                    normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+                    wins, losses, event_epas
+                ) = row
+
+                raw_team_data = {
+                    "team_number": team_number,
+                    "year": year,
+                    "nickname": nickname,
+                    "city": city,
+                    "state_prov": state_prov,
+                    "country": country,
+                    "website": website,
+                    "normal_epa": normal_epa,
+                    "epa": epa,
+                    "confidence": confidence,
+                    "auto_epa": auto_epa,
+                    "teleop_epa": teleop_epa,
+                    "endgame_epa": endgame_epa,
+                    "wins": wins,
+                    "losses": losses,
+                    "event_epas": safe_json_load(event_epas)
+                }
+
+                team_data[team_number] = compress_dict(raw_team_data)
 
         # === Load event data for specific year ===
-        event_cursor = conn.cursor()
-        event_cursor.execute("""
-            SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website
-            FROM events
-            WHERE year = %s
-            ORDER BY event_key
-        """, (year,))
-        
         event_data = {}
-        for row in event_cursor.fetchall():
-            event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website = row
-            ev = compress_dict({
-                "k": event_key,
-                "n": name,
-                "y": year,
-                "sd": start_date,
-                "ed": end_date,
-                "et": event_type,
-                "c": city,
-                "s": state_prov,
-                "co": country,
-                "w": website
-            })
-            event_data[event_key] = ev
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website
+                FROM events
+                WHERE year = %s
+                ORDER BY event_key
+            """, (year,))
+            for row in cursor.fetchall():
+                event_key, name, y, start_date, end_date, event_type, city, state_prov, country, website = row
+                event_data[event_key] = compress_dict({
+                    "k": event_key,
+                    "n": name,
+                    "y": y,
+                    "sd": start_date,
+                    "ed": end_date,
+                    "et": event_type,
+                    "c": city,
+                    "s": state_prov,
+                    "co": country,
+                    "w": website
+                })
 
-        # Event Teams for specific year
-        event_cursor.execute("""
-            SELECT event_key, team_number, nickname, city, state_prov, country
-            FROM event_teams
-            WHERE event_key LIKE %s
-            ORDER BY event_key, team_number
-        """, (f"{year}%",))
-        
-        EVENT_TEAMS = {}
-        for row in event_cursor.fetchall():
-            event_key, team_number, nickname, city, state_prov, country = row
-            team = compress_dict({
-                "ek": event_key,
-                "tk": team_number,
-                "nn": nickname,
-                "c": city,
-                "s": state_prov,
-                "co": country
-            })
-            EVENT_TEAMS.setdefault(event_key, []).append(team)
+        # === Load event teams for specific year ===
+        EVENT_TEAMS = defaultdict(list)
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT event_key, team_number, nickname, city, state_prov, country
+                FROM event_teams
+                WHERE event_key LIKE %s
+                ORDER BY event_key, team_number
+            """, (f"{year}%",))
+            for event_key, team_number, nickname, city, state_prov, country in cursor.fetchall():
+                EVENT_TEAMS[event_key].append(compress_dict({
+                    "ek": event_key,
+                    "tk": team_number,
+                    "nn": nickname,
+                    "c": city,
+                    "s": state_prov,
+                    "co": country
+                }))
 
-        # Rankings for specific year
-        event_cursor.execute("""
-            SELECT event_key, team_number, rank, wins, losses, ties, dq
-            FROM event_rankings
-            WHERE event_key LIKE %s
-            ORDER BY event_key, team_number
-        """, (f"{year}%",))
-        
-        EVENT_RANKINGS = {}
-        for row in event_cursor.fetchall():
-            event_key, team_number, rank, wins, losses, ties, dq = row
-            ranking = compress_dict({
-                "ek": event_key,
-                "tk": team_number,
-                "rk": rank,
-                "w": wins,
-                "l": losses,
-                "t": ties,
-                "dq": dq
-            })
-            EVENT_RANKINGS.setdefault(event_key, {})[team_number] = ranking
+        # === Load event rankings for specific year ===
+        EVENT_RANKINGS = defaultdict(dict)
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT event_key, team_number, rank, wins, losses, ties, dq
+                FROM event_rankings
+                WHERE event_key LIKE %s
+                ORDER BY event_key, team_number
+            """, (f"{year}%",))
+            for event_key, team_number, rank, wins, losses, ties, dq in cursor.fetchall():
+                EVENT_RANKINGS[event_key][team_number] = compress_dict({
+                    "ek": event_key,
+                    "tk": team_number,
+                    "rk": rank,
+                    "w": wins,
+                    "l": losses,
+                    "t": ties,
+                    "dq": dq
+                })
 
-        # Awards for specific year
-        event_cursor.execute("""
-            SELECT event_key, team_number, award_name, year
-            FROM event_awards
-            WHERE year = %s
-            ORDER BY event_key, team_number
-        """, (year,))
-        
+        # === Load awards for specific year ===
         EVENTS_AWARDS = []
-        for row in event_cursor.fetchall():
-            event_key, team_number, award_name, year = row
-            award = compress_dict({
-                "ek": event_key,
-                "tk": team_number,
-                "an": award_name,
-                "y": year
-            })
-            EVENTS_AWARDS.append(award)
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT event_key, team_number, award_name, year
+                FROM event_awards
+                WHERE year = %s
+                ORDER BY event_key, team_number
+            """, (year,))
+            for event_key, team_number, award_name, y in cursor.fetchall():
+                EVENTS_AWARDS.append(compress_dict({
+                    "ek": event_key,
+                    "tk": team_number,
+                    "an": award_name,
+                    "y": y
+                }))
 
-        # Matches for specific year
-        event_cursor.execute("""
-            SELECT match_key, event_key, comp_level, match_number, set_number, 
-                   red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key
-            FROM event_matches
-            WHERE event_key LIKE %s
-            ORDER BY event_key, match_number
-        """, (f"{year}%",))
-        
+        # === Load matches for specific year ===
         EVENT_MATCHES = []
-        for row in event_cursor.fetchall():
-            match_key, event_key, comp_level, match_number, set_number, \
-            red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key = row
-            match_data = compress_dict({
-                "k": match_key,
-                "ek": event_key,
-                "cl": comp_level,
-                "mn": match_number,
-                "sn": set_number,
-                "rt": red_teams,
-                "bt": blue_teams,
-                "rs": red_score,
-                "bs": blue_score,
-                "wa": winning_alliance,
-                "yt": youtube_key
-            })
-            EVENT_MATCHES.append(match_data)
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT match_key, event_key, comp_level, match_number, set_number, 
+                       red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key
+                FROM event_matches
+                WHERE event_key LIKE %s
+                ORDER BY event_key, match_number
+            """, (f"{year}%",))
+            for row in cursor.fetchall():
+                (
+                    match_key, event_key, comp_level, match_number, set_number,
+                    red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key
+                ) = row
+                EVENT_MATCHES.append(compress_dict({
+                    "k": match_key,
+                    "ek": event_key,
+                    "cl": comp_level,
+                    "mn": match_number,
+                    "sn": set_number,
+                    "rt": red_teams,
+                    "bt": blue_teams,
+                    "rs": red_score,
+                    "bs": blue_score,
+                    "wa": winning_alliance,
+                    "yt": youtube_key
+                }))
 
-        event_cursor.close()
-        team_cursor.close()
+    return team_data, event_data, dict(EVENT_TEAMS), dict(EVENT_RANKINGS), EVENTS_AWARDS, EVENT_MATCHES
 
-    return team_data, event_data, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES
 
 def get_team_years_participated(team_number):
     """Return a sorted list of years this team has participated in."""

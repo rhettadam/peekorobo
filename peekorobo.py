@@ -25,7 +25,7 @@ from datagather import load_data_2025,load_search_data,load_year_data,get_team_a
 
 from layouts import team_layout,match_layout,user_layout,other_user_layout,home_layout,blog_layout,insights_layout,insights_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,epa_legend_layout,events_layout,compare_layout
 
-from utils import find_similar_teams,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
+from utils import format_human_date,find_similar_teams,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -1070,6 +1070,9 @@ def update_events_tab_content(
     if not isinstance(selected_event_types, list):
         selected_event_types = [selected_event_types]
 
+    # Debug: print all unique event type values in events_data
+    print("Unique event types in events_data:", set(ev.get("et") for ev in events_data))
+
     def get_event_district(event):
         """Get district for an event based on its location using DISTRICT_STATES mapping"""
         state = event.get("s", "")  # State/province
@@ -1104,20 +1107,9 @@ def update_events_tab_content(
             if get_event_district(ev) == selected_district
         ]
 
-    if "all" not in selected_event_types:
-        filtered = []
-        for et in selected_event_types:
-            if et == "season":
-                filtered.extend([ev for ev in events_data if ev.get("et") not in [99, 100]])
-            elif et == "offseason":
-                filtered.extend([ev for ev in events_data if ev.get("et") in [99, 100]])
-            elif et == "regional":
-                filtered.extend([ev for ev in events_data if "regional" in (ev.get("et") or "").lower()])
-            elif et == "district":
-                filtered.extend([ev for ev in events_data if "district" in (ev.get("et") or "").lower()])
-            elif et == "championship":
-                filtered.extend([ev for ev in events_data if "championship" in (ev.get("et") or "").lower()])
-        events_data = list({ev["k"]: ev for ev in filtered}.values())
+    # Only filter if user has selected one or more event types
+    if selected_event_types:
+        events_data = [ev for ev in events_data if ev.get("et") in selected_event_types]
 
     def parse_date(d):
         try:
@@ -3020,6 +3012,12 @@ def load_teams(
             {"label": s["label"], "value": s["value"]}
             for s in STATES[selected_country] if isinstance(s, dict)
         ]
+    elif not selected_country or selected_country == "All":
+        # Default to US states if global
+        state_options += [
+            {"label": s["label"], "value": s["value"]}
+            for s in STATES.get("USA", []) if isinstance(s, dict)
+        ]
 
     def get_axis_value(team, axis):
         auto = abs(team.get("auto_epa") or 0)
@@ -3220,7 +3218,7 @@ def sync_teams_dropdowns_with_url(search):
             percentile = ["filtered"]
     return country, state, district, year, percentile
 
-@callback(
+@app.callback(
     Output("axis-dropdown-container", "style"),
     Input("teams-tabs", "active_tab")
 )
@@ -4021,71 +4019,85 @@ def update_team_events(active_tab, store_data):
     
     team_number = store_data.get("team_number")
     year = store_data.get("year")
-    performance_year = store_data.get("performance_year")
     
     if not team_number:
         return "No team data available."
-    
-    participated_events = []
-    # Detect if we're on the history page
+
     is_history = not year or str(year).lower() == "history"
-    years_to_process = get_team_years_participated(team_number) if is_history else [int(year)]
-    
-    for year_key in years_to_process:
-        if year_key == current_year:
-            year_event_database = EVENT_DATABASE
-            year_event_teams = EVENT_TEAMS
-            year_event_rankings = EVENT_RANKINGS
-            event_iter = year_event_database[current_year].items()
-            for event_key, event in event_iter:
-                team_list = year_event_teams[current_year].get(event_key, [])
-                if any(t["tk"] == team_number for t in team_list):
-                    participated_events.append((year_key, event_key, event))
-        else:
-            try:
-                _, year_event_data, year_event_teams, year_event_rankings, _, _ = load_year_data(year_key)
-                year_event_database = year_event_data
-                year_event_teams = year_event_teams
-                year_event_rankings = year_event_rankings
-                event_iter = year_event_database.items()
+    team_key = f"frc{team_number}"
+    events = []
+
+    if is_history:
+        # Pull from TBA API
+        tba_keys = os.environ.get("TBA_API_KEYS", "").split(",")
+        tba_keys = [k.strip() for k in tba_keys if k.strip()]
+        if not tba_keys:
+            return "No TBA API key found."
+        api_key = random.choice(tba_keys)
+
+        try:
+            headers = {"X-TBA-Auth-Key": api_key}
+            url = f"https://www.thebluealliance.com/api/v3/team/{team_key}/events"
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            raw_events = response.json()
+            events = [
+                {
+                    "name": ev.get("name"),
+                    "event_key": ev.get("key"),
+                    "start_date": ev.get("start_date"),
+                    "end_date": ev.get("end_date"),
+                    "location": ", ".join(filter(None, [ev.get("city"), ev.get("state_prov")])),
+                }
+                for ev in raw_events
+            ]
+        except Exception as e:
+            return f"Error loading events from TBA: {e}"
+
+    else:
+        # Local logic for current or past specific year
+        year = int(year)
+        try:
+            if year == current_year:
+                event_iter = EVENT_DATABASE[year].items()
                 for event_key, event in event_iter:
-                    team_list = year_event_teams.get(event_key, []) if isinstance(year_event_teams, dict) else year_event_teams
+                    team_list = EVENT_TEAMS[year].get(event_key, [])
                     if any(t["tk"] == team_number for t in team_list):
-                        participated_events.append((year_key, event_key, event))
-            except Exception as e:
-                continue
-    
-    # Sort events by start date
-    participated_events.sort(key=lambda tup: tup[2].get("sd", ""), reverse=True)
-    
-    # Build event rows
-    events_data = []
-    for year_key, event_key, event in participated_events:
-        event_name = event.get("n", "")
-        location = f"{event.get('c', '')}, {event.get('s', '')}".strip(", ")
-        start_date = event.get("sd", "")
-        end_date = event.get("ed", "")
-        event_url = f"https://www.peekorobo.com/event/{event_key}"
-    
-        # Rank
-        rank = None
-        if year_key == current_year:
-            rankings = year_event_rankings.get(year_key, {}).get(event_key, {})
-        else:
-            rankings = year_event_rankings.get(event_key, {}) if isinstance(year_event_rankings, dict) else {}
-        
-        if team_number in rankings:
-            rank = rankings[team_number].get("rk")
-            if rank:
-                event_name += f" (Rank: {rank})"
-    
-        events_data.append({
-            "event_name": f"[{event_name}]({event_url})",
-            "event_location": location,
-            "start_date": start_date,
-            "end_date": end_date,
-        })
-    
+                        events.append({
+                            "name": event.get("n", ""),
+                            "event_key": event_key,
+                            "start_date": event.get("sd", ""),
+                            "end_date": event.get("ed", ""),
+                            "location": ", ".join(filter(None, [event.get("c", ""), event.get("s", "")]))
+                        })
+            else:
+                _, year_event_data, year_event_teams, year_event_rankings, _, _ = load_year_data(year)
+                for event_key, event in year_event_data.items():
+                    team_list = year_event_teams.get(event_key, [])
+                    if any(t["tk"] == team_number for t in team_list):
+                        events.append({
+                            "name": event.get("n", ""),
+                            "event_key": event_key,
+                            "start_date": event.get("sd", ""),
+                            "end_date": event.get("ed", ""),
+                            "location": ", ".join(filter(None, [event.get("c", ""), event.get("s", "")]))
+                        })
+        except Exception:
+            return "Error loading local event data."
+
+    # Sort by start date (most recent first)
+    events.sort(key=lambda ev: ev.get("start_date", ""), reverse=True)
+
+    # Format for Dash table
+    events_data = [
+        {
+            "event_name": f"[{ev['name']}](/event/{ev['event_key']})",
+            "event_location": ev["location"],
+            "start_date": format_human_date(ev["start_date"]),
+            "end_date": format_human_date(ev["end_date"]),
+        } for ev in events
+    ]
+
     events_table = dash_table.DataTable(
         columns=[
             {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
@@ -4097,7 +4109,13 @@ def update_team_events(active_tab, store_data):
         sort_mode="multi",
         data=events_data,
         page_size=10,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"},
+        style_table={
+            "overflowX": "auto",
+            "borderRadius": "10px",
+            "border": "none",
+            "backgroundColor": "var(--card-bg)",
+            "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
+        },
         style_header={
             "backgroundColor": "var(--card-bg)",
             "fontWeight": "bold",
@@ -4113,13 +4131,15 @@ def update_team_events(active_tab, store_data):
             "border": "none",
             "fontSize": "14px",
         },
-        style_cell_conditional=[{"if": {"column_id": "event_name"}, "textAlign": "center"}],
-        style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
+        style_cell_conditional=[
+            {"if": {"column_id": "event_name"}, "textAlign": "center"},
+        ],
+        style_data_conditional=[
+            {"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}
+        ],
     )
-    
-    return html.Div([
-        events_table
-    ])
+
+    return html.Div([events_table])
 
 @callback(
     Output("team-awards-content", "children"),
@@ -4130,170 +4150,155 @@ def update_team_events(active_tab, store_data):
 def update_team_awards(active_tab, store_data):
     if active_tab != "awards-tab" or not store_data:
         return ""
-    team_number = store_data.get("team_number")
+    
+    team = store_data.get("team_number")
     year = store_data.get("year")
-    performance_year = store_data.get("performance_year")
-    if not team_number:
+    if not team:
         return "No team data available."
+    
+    def build_output(awards):
+        if not awards:
+            return "No awards data available."
+        
+        # Sort awards newest-first
+        awards.sort(key=lambda a: a.get("year", 0), reverse=True)
+        
+        table_data = [
+            {
+                "award_name": aw.get("name", ""),
+                "event_name": f"[{aw.get('event_key')}](/event/{aw.get('event_key')})",
+                "award_year": aw.get("year", "")
+            }
+            for aw in awards
+        ]
+        
+        # Build DataTable
+        awards_table = dash_table.DataTable(
+            columns=[
+                {"name": "Award Name", "id": "award_name"},
+                {"name": "Event", "id": "event_name", "presentation": "markdown"},
+                {"name": "Year", "id": "award_year"},
+            ],
+            data=table_data,
+            sort_action="native", sort_mode="multi",
+            page_size=10,
+            style_table={ 
+                "overflowX": "auto", "borderRadius": "10px", "border": "none",
+                "backgroundColor": "var(--card-bg)",
+                "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)"
+            },
+            style_header={ "backgroundColor": "var(--card-bg)",
+                "fontWeight": "bold", "textAlign": "center",
+                "borderBottom": "1px solid #ccc", "padding": "6px", "fontSize": "13px"
+            },
+            style_cell={ "backgroundColor": "var(--card-bg)",
+                "textAlign": "center", "padding": "10px",
+                "border": "none", "fontSize": "14px"
+            },
+            style_cell_conditional=[{"if": {"column_id": "award_name"}, "textAlign": "left"}],
+            style_data_conditional=[
+                {"if": {"state": "selected"},
+                 "backgroundColor": "rgba(255,221,0,0.5)",
+                 "border": "1px solid #FFCC00"}
+            ],
+        )
+        
+        # Blue banners: filter via keywords
+        keywords = ["chairman's","impact","woodie flowers","winner"]
+        banners = [
+            {
+                "award_name": aw["name"],
+                "event_label": f"{aw['event_key']}",
+                "event_key": aw["event_key"]
+            }
+            for aw in awards if any(k in aw["name"].lower() for k in keywords)
+        ]
+        
+        banner_section = html.Div(
+            [
+                html.H4("Blue Banners", style={
+                    "marginTop":"30px","marginBottom":"15px","color":"var(--text-primary)"
+                }),
+                html.Div(
+                    [
+                        html.A(
+                            href=f"/event/{b['event_key']}",
+                            children=html.Div([
+                                html.Img(src="/assets/banner.png", style={"width":"120px","height":"auto"}),
+                                html.Div([
+                                    html.P(b['award_name'], style={
+                                        "fontSize":"0.8rem","color":"white",
+                                        "fontWeight":"bold","textAlign":"center",
+                                        "marginBottom":"3px"
+                                    }),
+                                    html.P(b['event_label'], style={
+                                        "fontSize":"0.6rem","color":"white","textAlign":"center"
+                                    })
+                                ], style={
+                                    "position":"absolute","top":"50%","left":"50%",
+                                    "transform":"translate(-50%,-50%)"
+                                })
+                            ], style={"position":"relative","marginBottom":"15px"}),
+                            style={"textDecoration":"none"},
+                        ) for b in banners
+                    ],
+                    style={"display":"flex","flexWrap":"wrap","justifyContent":"center","gap":"10px"}
+                )
+            ], style={
+                "marginBottom":"15px","borderRadius":"8px",
+                "backgroundColor":"var(--card-bg)","padding":"10px"
+            }
+        ) if banners else html.Div()
+        
+        return html.Div([awards_table, banner_section])
 
-    participated_events = []
-    all_event_awards = []
-
-    # Detect if we're on the history page
-    is_history = not year or str(year).lower() == "history"
-    years_to_process = get_team_years_participated(team_number) if is_history else [int(year)]
-
-    for year_key in years_to_process:
-        if year_key == current_year:
-            year_event_database = EVENT_DATABASE
-            year_event_teams = EVENT_TEAMS
-            year_event_awards = EVENT_AWARDS  # Flat list for current year
-            event_iter = year_event_database[current_year].items()
-            year_awards = [aw for aw in year_event_awards if isinstance(aw, dict) and aw.get("tk") == team_number and aw.get("y") == current_year]
-            for event_key, event in event_iter:
-                team_list = year_event_teams[current_year].get(event_key, [])
-                if any(t["tk"] == team_number for t in team_list):
-                    participated_events.append((year_key, event_key, event))
-            for aw in year_awards:
-                all_event_awards.append(aw)
+    # Only fetch history from TBA API
+    if not year or str(year).lower() == "history":
+        team_key = f"frc{team}"
+        tba_keys = os.environ.get("TBA_API_KEYS", "").split(",")
+        tba_keys = [k.strip() for k in tba_keys if k.strip()]
+        if not tba_keys:
+            return "No TBA API key found."
+        key = random.choice(tba_keys)
+        url = f"https://www.thebluealliance.com/api/v3/team/{team_key}/awards"
+        headers = {"X-TBA-Auth-Key": key}
+        try:
+            resp = requests.get(url, headers=headers, timeout=10)
+            resp.raise_for_status()
+            raw = resp.json()
+            awards = [
+                {
+                    "event_key": aw["event_key"],
+                    "name": aw["name"],
+                    "year": aw["year"]
+                }
+                for aw in raw if any(rec.get("team_key") == team_key for rec in aw.get("recipient_list", []))
+            ]
+            return build_output(awards)
+        except Exception as e:
+            return f"Error loading awards from TBA: {e}"
+    
+    # Otherwise, use local logic for single year
+    awards = []
+    try:
+        if int(year) == current_year:
+            awards = [
+                {"event_key": aw["ek"], "name": aw["an"], "year": aw["y"]}
+                for aw in EVENT_AWARDS
+                if aw.get("tk") == int(team) and aw.get("y") == current_year
+            ]
         else:
-            try:
-                _, year_event_data, year_event_teams, _, year_event_awards, _ = load_year_data(year_key)
-                year_event_database = year_event_data
-                year_event_teams = year_event_teams
-                year_event_awards = year_event_awards
-                event_iter = year_event_database.items()
-                for event_key, event in event_iter:
-                    team_list = year_event_teams.get(event_key, []) if isinstance(year_event_teams, dict) else year_event_teams
-                    if any(t["tk"] == team_number for t in team_list):
-                        participated_events.append((year_key, event_key, event))
-                if isinstance(year_event_awards, dict):
-                    year_awards = list(year_event_awards.values())
-                else:
-                    year_awards = year_event_awards
-                year_awards = [aw for aw in year_awards if isinstance(aw, dict)]
-                for aw in year_awards:
-                    if aw["tk"] == team_number:
-                        all_event_awards.append(aw)
-            except Exception as e:
-                continue
-    
-    # Map event keys to names
-    event_key_to_name = {ek: e.get("n", "Unknown") for _, ek, e in participated_events}
-    
-    # Sort awards by year (newest first)
-    all_event_awards.sort(key=lambda aw: aw["y"], reverse=True)
-    
-    awards_data = [
-        {
-            "award_name": aw["an"],
-            "event_name": f"[{event_key_to_name.get(aw['ek'], 'Unknown Event')}](/event/{aw['ek']})",
-            "award_year": aw["y"]
-        }
-        for aw in all_event_awards
-    ]
-    
-    awards_table = dash_table.DataTable(
-        columns=[
-            {"name": "Award Name", "id": "award_name"},
-            {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
-            {"name": "Year", "id": "award_year"},
-        ],
-        sort_action="native",
-        sort_mode="multi",
-        data=awards_data,
-        page_size=10,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)", "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"},
-        style_header={
-            "backgroundColor": "var(--card-bg)",
-            "fontWeight": "bold",
-            "textAlign": "center",
-            "borderBottom": "1px solid #ccc",
-            "padding": "6px",
-            "fontSize": "13px",
-        },
-        style_cell={
-            "backgroundColor": "var(--card-bg)",
-            "textAlign": "center",
-            "padding": "10px",
-            "border": "none",
-            "fontSize": "14px",
-        },
-        style_cell_conditional=[{"if": {"column_id": "award_name"}, "textAlign": "left"}],
-        style_data_conditional=[{"if": {"state": "selected"}, "backgroundColor": "rgba(255, 221, 0, 0.5)", "border": "1px solid #FFCC00"}],
-    )
-    
-    # Blue Banners Section
-    blue_banner_keywords = ["chairman's", "impact", "woodie flowers", "winner"]
-    blue_banners = []
-    
-    for award in all_event_awards:
-        name_lower = award["an"].lower()
-        if any(keyword in name_lower for keyword in blue_banner_keywords):
-            event_key = award["ek"]
-            year_str = str(award["y"])
-            
-            # Find the event in the participated events
-            event = None
-            for _, ek, e in participated_events:
-                if ek == event_key:
-                    event = e
-                    break
-            
-            event_name = event.get("n", "Unknown Event") if event else "Unknown Event"
-            full_event_name = f"{year_str} {event_name}"
-    
-            blue_banners.append({
-                "award_name": award["an"],
-                "event_name": full_event_name,
-                "event_key": event_key
-            })
-    
-    blue_banner_section = html.Div(
-        [
-            html.H4("Blue Banners", style={"marginTop": "30px", "marginBottom": "15px", "color": "var(--text-primary)"}),
-            html.Div(
-                [
-                    html.A(
-                        href=f"/event/{banner['event_key']}",
-                        children=[
-                            html.Div(
-                                [
-                                    html.Img(
-                                        src="/assets/banner.png",
-                                        style={"width": "120px", "height": "auto", "position": "relative"},
-                                    ),
-                                    html.Div(
-                                        [
-                                            html.P(
-                                                banner["award_name"],
-                                                style={"fontSize": "0.8rem", "color": "white", "fontWeight": "bold", "textAlign": "center", "marginBottom": "3px"},
-                                            ),
-                                            html.P(
-                                                banner["event_name"],
-                                                style={"fontSize": "0.6rem", "color": "white", "textAlign": "center"},
-                                            ),
-                                        ],
-                                        style={"position": "absolute", "top": "50%", "left": "50%", "transform": "translate(-50%, -50%)"},
-                                    ),
-                                ],
-                                style={"position": "relative", "marginBottom": "15px"},
-                            ),
-                        ],
-                        style={"textDecoration": "none"},
-                    )
-                    for banner in blue_banners
-                ],
-                style={"display": "flex", "flexWrap": "wrap", "justifyContent": "center", "gap": "10px"},
-            ),
-        ],
-        style={"marginBottom": "15px", "borderRadius": "8px", "backgroundColor": "var(--card-bg)", "padding": "10px"},
-    ) if blue_banners else html.Div()
-    
-    return html.Div([
-        awards_table,
-        blue_banner_section
-    ])
+            _, _, _, _, aya, _ = load_year_data(int(year))
+            source = aya.values() if isinstance(aya, dict) else aya
+            awards = [
+                {"event_key": aw["ek"], "name": aw["an"], "year": aw["y"]}
+                for aw in source if aw.get("tk") == int(team)
+            ]
+    except Exception:
+        return "Error processing awards locally."
+
+    return build_output(awards)
+
 
 app.clientside_callback(
     """
