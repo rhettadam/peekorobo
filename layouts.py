@@ -1531,7 +1531,7 @@ def login_layout():
         footer
     ])
 
-def epa_legend_layout():
+def ace_legend_layout():
     color_map = [
         ("≥ 99%", "#6a1b9a99"),   # Deep Purple
         ("≥ 97%", "#8e24aa99"),
@@ -1992,7 +1992,7 @@ def teams_layout(default_year=current_year):
                 dbc.Row(id="top-teams-container", className="gx-4 gy-4 justify-content-center mb-5 d-none d-md-flex", justify="center"),
                 filters_row,
                 axis_dropdowns,
-                epa_legend_layout(),
+                ace_legend_layout(),
                 tabs,
                 content,
             ], style={
@@ -2974,7 +2974,7 @@ def match_layout(event_key, match_key):
         dbc.Container([
             html.Div(header, style={"marginBottom": "2rem"}),
             html.Div(summary, style={"marginBottom": "2rem"}),
-            html.Div(epa_legend_layout(), style={"marginBottom": "1rem", "marginTop": "1rem"}),
+            html.Div(ace_legend_layout(), style={"marginBottom": "1rem", "marginTop": "1rem"}),
             html.Div(breakdown_tables),
             html.Div(video_embed, style={"textAlign": "center", "marginBottom": "2rem"}),
         ], style={"padding": "30px", "maxWidth": "1000px"}),

@@ -23,7 +23,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import team_layout,match_layout,user_layout,other_user_layout,home_layout,blog_layout,insights_layout,insights_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,epa_legend_layout,events_layout,compare_layout
+from layouts import team_layout,match_layout,user_layout,other_user_layout,home_layout,blog_layout,insights_layout,insights_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout
 
 from utils import format_human_date,find_similar_teams,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
@@ -1070,9 +1070,6 @@ def update_events_tab_content(
     if not isinstance(selected_event_types, list):
         selected_event_types = [selected_event_types]
 
-    # Debug: print all unique event type values in events_data
-    print("Unique event types in events_data:", set(ev.get("et") for ev in events_data))
-
     def get_event_district(event):
         """Get district for an event based on its location using DISTRICT_STATES mapping"""
         state = event.get("s", "")  # State/province
@@ -1221,35 +1218,15 @@ def update_events_tab_content(
         # Sort by "Top 8 ACE"
         df = df.sort_values(by="Top 8 ACE", ascending=False).reset_index(drop=True)
     
-        # Ensure no NaNs interfere with percentile calculations
-        percentiles_map = {}
-        for col in ["Max ACE", "Top 8 ACE", "Top 24 ACE"]:
-            values = df[col].dropna().values
-            percentiles_map[col] = np.percentile(values, [99, 95, 90, 75, 50, 25])
-    
-        # Define color scale by percentile
-        def get_color(value, thresholds):
-            if value >= thresholds[0]: return "#6a1b9a"  # Purple
-            if value >= thresholds[1]: return "#1565c0"  # Blue
-            if value >= thresholds[2]: return "#2e7d32"  # Green
-            if value >= thresholds[3]: return "#f9a825"  # Yellow
-            if value >= thresholds[4]: return "#ef6c00"  # Orange
-            if value >= thresholds[5]: return "#c62828"  # Red
-            return "#4e342e"                             # Brown
-    
-        # Create conditional styling for each EPA cell
-        style_data_conditional = []
-        for i, row in df.iterrows():
-            for col in ["Max ACE", "Top 8 ACE", "Top 24 ACE"]:
-                color = get_color(row[col], percentiles_map[col])
-                style_data_conditional.append({
-                    "if": {"row_index": i, "column_id": col},
-                    "backgroundColor": color,
-                    "color": "white",
-                    "fontWeight": "bold",
-                    "borderRadius": "6px",
-                })
-    
+        # Use standard EPA styling for the ACE columns
+        ace_values = df["Top 8 ACE"].dropna().values
+        percentiles_dict = {
+            "Top 8 ACE": compute_percentiles(ace_values),
+            "Max ACE": compute_percentiles(df["Max ACE"].dropna().values),
+            "Top 24 ACE": compute_percentiles(df["Top 24 ACE"].dropna().values),
+        }
+        style_data_conditional = get_epa_styling(percentiles_dict)
+
         # Create export dropdown buttons for event insights table
         event_export_dropdown = dbc.DropdownMenu(
             label="Export",
@@ -1282,6 +1259,7 @@ def update_events_tab_content(
         direction_text = "▲" if is_reverse else "▼"
         
         return html.Div([
+            ace_legend_layout(),
             export_container,
             dash_table.DataTable(
                 id="event-insights-table",
@@ -1597,7 +1575,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         ]
 
         return html.Div([
-            epa_legend_layout(),
+            ace_legend_layout(),
             dash_table.DataTable(
                 columns=columns,
                 sort_action="native",
@@ -1688,7 +1666,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
 
         return html.Div([
             spotlight_layout,
-            epa_legend_layout(),
+            ace_legend_layout(),
             dash_table.DataTable(
                 columns=columns,
                 sort_action="native",
