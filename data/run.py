@@ -1128,13 +1128,31 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         opponent_alliance = "blue" if alliance == "red" else "red"
 
         # Track wins/losses/ties
-        winning_alliance = match.get("winning_alliance", "")
-        if winning_alliance == alliance:
-            event_wins += 1
-        elif winning_alliance and winning_alliance != alliance:
-            event_losses += 1
-        elif not winning_alliance:  # Tie
-            event_ties += 1
+        if year == "2015":
+            red_score = match["alliances"]["red"]["score"]
+            blue_score = match["alliances"]["blue"]["score"]
+            if alliance == "red":
+                if red_score > blue_score:
+                    event_wins += 1
+                elif red_score < blue_score:
+                    event_losses += 1
+                else:
+                    event_ties += 1
+            else:
+                if blue_score > red_score:
+                    event_wins += 1
+                elif blue_score < red_score:
+                    event_losses += 1
+                else:
+                    event_ties += 1
+        else:
+            winning_alliance = match.get("winning_alliance", "")
+            if winning_alliance == alliance:
+                event_wins += 1
+            elif winning_alliance and winning_alliance != alliance:
+                event_losses += 1
+            elif not winning_alliance:  # Tie
+                event_ties += 1
 
         team_keys = match["alliances"][alliance].get("team_keys", [])
         team_count = len(team_keys)
@@ -1437,13 +1455,33 @@ def fetch_team_components(team, year):
                     if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
                         continue
                     alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
-                    winning_alliance = match.get("winning_alliance", "")
-                    if winning_alliance == alliance:
-                        total_wins += 1
-                    elif winning_alliance and winning_alliance != alliance:
-                        total_losses += 1
-                    elif not winning_alliance:
-                        total_ties += 1
+                    # 2015: Use scores, not winning_alliance
+                    event_year = str(match["event_key"])[:4] if "event_key" in match else str(year)
+                    if event_year == "2015":
+                        red_score = match["alliances"]["red"]["score"]
+                        blue_score = match["alliances"]["blue"]["score"]
+                        if alliance == "red":
+                            if red_score > blue_score:
+                                total_wins += 1
+                            elif red_score < blue_score:
+                                total_losses += 1
+                            else:
+                                total_ties += 1
+                        else:
+                            if blue_score > red_score:
+                                total_wins += 1
+                            elif blue_score < red_score:
+                                total_losses += 1
+                            else:
+                                total_ties += 1
+                    else:
+                        winning_alliance = match.get("winning_alliance", "")
+                        if winning_alliance == alliance:
+                            total_wins += 1
+                        elif winning_alliance and winning_alliance != alliance:
+                            total_losses += 1
+                        elif not winning_alliance:
+                            total_ties += 1
 
                 # Calculate EPA after processing all matches
                 event_epa = calculate_event_epa(matches, team_key, team_number)
@@ -1531,13 +1569,33 @@ def analyze_single_team(team_key: str, year: int):
                         continue
                     
                     alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
-                    winning_alliance = match.get("winning_alliance", "")
-                    if winning_alliance == alliance:
-                        total_wins += 1
-                    elif winning_alliance and winning_alliance != alliance:
-                        total_losses += 1
-                    elif not winning_alliance:
-                        total_ties += 1
+                    # 2015: Use scores, not winning_alliance
+                    event_year = str(match["event_key"])[:4] if "event_key" in match else str(year)
+                    if event_year == "2015":
+                        red_score = match["alliances"]["red"]["score"]
+                        blue_score = match["alliances"]["blue"]["score"]
+                        if alliance == "red":
+                            if red_score > blue_score:
+                                total_wins += 1
+                            elif red_score < blue_score:
+                                total_losses += 1
+                            else:
+                                total_ties += 1
+                        else:
+                            if blue_score > red_score:
+                                total_wins += 1
+                            elif blue_score < red_score:
+                                total_losses += 1
+                            else:
+                                total_ties += 1
+                    else:
+                        winning_alliance = match.get("winning_alliance", "")
+                        if winning_alliance == alliance:
+                            total_wins += 1
+                        elif winning_alliance and winning_alliance != alliance:
+                            total_losses += 1
+                        elif not winning_alliance:  # Tie
+                            total_ties += 1
 
                 event_epa = calculate_event_epa(matches, team_key, team_number)
                 event_epa["event_key"] = event_key  # Ensure event_key is included
