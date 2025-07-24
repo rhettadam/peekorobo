@@ -1039,7 +1039,7 @@ def endgame_2016(breakdowns, team_count):
 def auto_2015(breakdowns, team_count):
     # Use the API's auto_points if available, otherwise fall back to manual calculation
     def score_per_breakdown(b):
-        if "auto_points" in b:
+        if "auto_points" in b and b["auto_points"] is not None:
             return b["auto_points"]
         score = 0
         if b.get("robot_set"):
@@ -1051,20 +1051,19 @@ def auto_2015(breakdowns, team_count):
         if b.get("tote_stack"):
             score += 20
         return score
-    scores = [score_per_breakdown(b) for b in breakdowns]
+    scores = [score_per_breakdown(b) for b in breakdowns if isinstance(b, dict)]
     return round(sum(scores) / (len(scores) * team_count), 2) if scores else 0.0
 
 def teleop_2015(breakdowns, team_count):
     # Use the API's teleop_points if available, otherwise sum up the components
     def score_per_breakdown(b):
-        if "teleop_points" in b:
-            # Optionally, subtract foul_points and adjust_points if you want only pure teleop
+        if "teleop_points" in b and b["teleop_points"] is not None:
             return b["teleop_points"]
-        tote_points = b.get("tote_points", 0)
-        container_points = b.get("container_points", 0)
-        litter_points = b.get("litter_points", 0)
+        tote_points = b.get("tote_points") or 0
+        container_points = b.get("container_points") or 0
+        litter_points = b.get("litter_points") or 0
         return tote_points + container_points + litter_points
-    scores = [score_per_breakdown(b) for b in breakdowns]
+    scores = [score_per_breakdown(b) for b in breakdowns if isinstance(b, dict)]
     return round(sum(scores) / (len(scores) * team_count), 2) if scores else 0.0
 
 def endgame_2015(breakdown, index):

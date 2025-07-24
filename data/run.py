@@ -707,11 +707,16 @@ def optimized_create_event_db(year):
         try:
             ranks = tba_get(f"event/{key}/rankings")
             for r in ranks.get("rankings", []):
-                record = r.get("record", {})
                 t_num = int(r.get("team_key", "frc0")[3:])
-                new_data["rankings"].append((key, t_num, r.get("rank"),
-                                             record.get("wins"), record.get("losses"),
-                                             record.get("ties"), r.get("dq")))
+                if str(year) == "2015":
+                    qual_avg = r.get("qual_average")
+                    new_data["rankings"].append((key, t_num, r.get("rank"),
+                                                 qual_avg, None, None, r.get("dq")))
+                else:
+                    record = r.get("record", {})
+                    new_data["rankings"].append((key, t_num, r.get("rank"),
+                                                 record.get("wins"), record.get("losses"),
+                                                 record.get("ties"), r.get("dq")))
         except:
             pass
         
@@ -1704,10 +1709,9 @@ def main():
             team_key = input("Enter team key (e.g., frc254): ").strip().lower()
             if not team_key.startswith('frc'):
                 team_key = f"frc{team_key}"
-            
             analyze_single_team(team_key, year)
-            
         else:
+            clear_year_data(year)
             fetch_and_store_team_data(year)
             # Restart the app after successful data update
             restart_heroku_app()
