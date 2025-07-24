@@ -1037,8 +1037,10 @@ def endgame_2016(breakdowns, team_count):
     return round(statistics.mean(trimmed_scores), 2)
 
 def auto_2015(breakdowns, team_count):
-    # Each breakdown is an alliance dict
+    # Use the API's auto_points if available, otherwise fall back to manual calculation
     def score_per_breakdown(b):
+        if "auto_points" in b:
+            return b["auto_points"]
         score = 0
         if b.get("robot_set"):
             score += 4
@@ -1050,19 +1052,19 @@ def auto_2015(breakdowns, team_count):
             score += 20
         return score
     scores = [score_per_breakdown(b) for b in breakdowns]
-    # Divide by team count for per-team contribution
     return round(sum(scores) / (len(scores) * team_count), 2) if scores else 0.0
 
 def teleop_2015(breakdowns, team_count):
-    # Each breakdown is an alliance dict
+    # Use the API's teleop_points if available, otherwise sum up the components
     def score_per_breakdown(b):
-        # Use the API's summed values
+        if "teleop_points" in b:
+            # Optionally, subtract foul_points and adjust_points if you want only pure teleop
+            return b["teleop_points"]
         tote_points = b.get("tote_points", 0)
         container_points = b.get("container_points", 0)
         litter_points = b.get("litter_points", 0)
         return tote_points + container_points + litter_points
     scores = [score_per_breakdown(b) for b in breakdowns]
-    # Divide by team count for per-team contribution
     return round(sum(scores) / (len(scores) * team_count), 2) if scores else 0.0
 
 def endgame_2015(breakdown, index):
