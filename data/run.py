@@ -1711,7 +1711,7 @@ def main():
                 team_key = f"frc{team_key}"
             analyze_single_team(team_key, year)
         else:
-            clear_year_data(year)
+            #clear_year_data(year)
             fetch_and_store_team_data(year)
             # Restart the app after successful data update
             restart_heroku_app()
