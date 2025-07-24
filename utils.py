@@ -408,7 +408,7 @@ def get_epa_styling(percentiles_dict):
 
 def compute_percentiles(values):
     percentiles = ["99", "97", "95", "93", "91", "89", "85", "80", "75", "65", "55", "40", "25", "10", "0"]
-    return {p: np.percentile(values, int(p)) for p in percentiles} if values.size > 0 else {p: 0 for p in percentiles}
+    return {p: np.percentile(values, int(p)) for p in percentiles} if len(values) > 0 else {p: 0 for p in percentiles}
 
 ### USERS
 
