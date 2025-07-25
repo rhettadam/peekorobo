@@ -23,7 +23,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import team_layout,match_layout,user_layout,other_user_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout
+from layouts import insights_layout,insights_details_layout,team_layout,match_layout,user_layout,other_user_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout
 
 from utils import format_human_date,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
@@ -288,7 +288,17 @@ def display_page(pathname):
                     dcc.Store(id="user-session", data={"user_id": session.get("user_id")}),
                     html.Div(id="user-layout-wrapper", children=user_layout())
                 ])
-
+    
+    if pathname == "/insights":
+        return insights_layout()
+    
+    if pathname.startswith("/insights/"):
+        year = pathname.split("/")[-1]
+        try:
+            year = int(year)
+        except ValueError:
+            year = None
+        return insights_details_layout(year)
 
     if len(path_parts) == 2 and path_parts[0] == "user":
         try:
