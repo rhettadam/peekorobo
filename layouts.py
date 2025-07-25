@@ -457,9 +457,9 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                     rank_card,
                     performance_metrics_card,
                     html.Hr(),
+                    # --- Trends Chart (moved above recent events) ---
+                    build_trends_chart(team_number, year, performance_year, team_database, event_database, years_participated),
                     build_recent_events_section(team_key, team_number, epa_data, performance_year, event_database, event_teams, event_matches, event_awards, event_rankings),
-                    # --- Trends Chart (moved from insights tab) ---
-                    build_trends_chart(team_number, year, performance_year, team_database, years_participated),
                 ])
             ]
         ),
@@ -4000,7 +4000,7 @@ def event_layout(event_key):
     )
 
 # --- Add the trends chart builder function ---
-def build_trends_chart(team_number, year, performance_year, team_database, years_participated):
+def build_trends_chart(team_number, year, performance_year, team_database, event_database, years_participated):
     # Try to get the team data for the given year
     if not team_number:
         return None
@@ -4013,8 +4013,7 @@ def build_trends_chart(team_number, year, performance_year, team_database, years
         team_data = team_database.get(performance_year, {}).get(team_number, {})
     else:
         try:
-            year_team_data, _, _, _, _, _ = load_year_data(performance_year)
-            team_data = year_team_data.get(team_number, {})
+            team_data = team_database.get(performance_year, {}).get(team_number, {})
         except Exception:
             return None
     if not team_data:
@@ -4030,11 +4029,22 @@ def build_trends_chart(team_number, year, performance_year, team_database, years
         if not event_epas:
             return html.Div("No event data available for this team in this year.")
         def get_event_date(event_epa):
-            # Use event_key as a fallback for sorting if no date is available
-            return event_epa.get("event_key", "")
+            event_key = event_epa.get("event_key", "")
+            # Try to get start date from event_database
+            if event_database and performance_year in event_database and event_key in event_database[performance_year]:
+                event_info = event_database[performance_year][event_key]
+                start_date = event_info.get("sd")
+                if start_date:
+                    return start_date
+            return event_key  # fallback
         sorted_events = sorted(event_epas, key=get_event_date)
         event_codes = [event.get("event_key", "") for event in sorted_events]
-        ace_values = [event.get("overall", 0) for event in sorted_events]
+        ace_values = [event.get("actual_epa", event.get("epa", 0)) for event in sorted_events]
+        auto_values = [event.get("auto", 0) for event in sorted_events]
+        teleop_values = [event.get("teleop", 0) for event in sorted_events]
+        endgame_values = [event.get("endgame", 0) for event in sorted_events]
+        confidence_values = [event.get("confidence", 0) for event in sorted_events]
+        epa_values = [event.get("overall", event.get("normal_epa", 0)) for event in sorted_events]
         if not ace_values:
             return html.Div("No valid event data found.")
         fig = go.Figure()
@@ -4042,29 +4052,55 @@ def build_trends_chart(team_number, year, performance_year, team_database, years
             x=event_codes,
             y=ace_values,
             mode='lines+markers',
-            line=dict(color='#007BFF', width=3),
-            marker=dict(size=8, color='#007BFF'),
-            name='ACE'
+            line=dict(color='#FFDD00', width=3, shape='spline'),
+            marker=dict(size=8, color='#FFDD00'),
+            fill='tozeroy',
+            name='ACE',
+            customdata=list(zip(event_codes, auto_values, teleop_values, endgame_values, epa_values, confidence_values, ace_values)),
+            hovertemplate=(
+                '<b><a href="/event/%{customdata[0]}" target="_blank" style="color:white; text-decoration:underline;">Event: %{customdata[0]}</a></b><br>'
+                'Auto: %{customdata[1]:.2f}<br>'
+                'Teleop: %{customdata[2]:.2f}<br>'
+                'Endgame: %{customdata[3]:.2f}<br>'
+                'EPA: %{customdata[4]:.2f}<br>'
+                'Confidence: %{customdata[5]:.2f}<br>'
+                'ACE: %{customdata[6]:.2f}<extra></extra>'
+            ),
         ))
+        event_links = [f'<a href="/event/{code}" target="_blank">{code}</a>' for code in event_codes]
         fig.update_layout(
             title=f"Team {team_number} Event Performance in {performance_year}",
             height=400,
-            margin=dict(l=50, r=50, t=80, b=50),
-            font=dict(color="#777"),
+            margin=dict(l=50, r=50, t=80, b=60),
+            font=dict(color="#999"),
             xaxis_title="Event Code",
             yaxis_title="ACE",
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(
+                tickmode='array',
+                tickvals=event_codes,
+                ticktext=event_links,
+                ticklabelmode='instant',
+                tickformat='html',
+                ticklabelstandoff=10,
+            ),
+            hoverlabel=dict(
+                bgcolor="#1A1A1A",
+                font=dict(color="white"),
+                bordercolor="rgba(0,0,0,0)",
+            ),
         )
         fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
         fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)', zeroline=False)
         trends_chart = dcc.Graph(figure=fig, config={"displayModeBar": False})
     else:
-        # Show year-by-year rank trends
-        years_data = []
+        # Show event-by-event global rank for all years (excluding 2020 and 2021)
+        all_events = []
         for year_key in sorted(years_participated):
             if year_key in (2020, 2021):
                 continue  # Skip 2020 and 2021
+            # Get team data for the year
             if year_key == current_year:
                 year_team_data = team_database[year_key]
             else:
@@ -4074,33 +4110,104 @@ def build_trends_chart(team_number, year, performance_year, team_database, years
                     continue
             if team_number in year_team_data:
                 team_year_data = year_team_data[team_number]
-                global_rank, _, _ = calculate_single_rank(list(year_team_data.values()), team_year_data)
-                years_data.append({
-                    'year': year_key,
-                    'rank': global_rank,
-                    'ace': team_year_data.get('epa', 0)
-                })
-        if not years_data:
-            return html.Div("No historical data available for this team.")
-        years_data.sort(key=lambda x: x['year'])
+                event_epas = team_year_data.get("event_epas", [])
+                if isinstance(event_epas, str):
+                    try:
+                        event_epas = json.loads(event_epas)
+                    except Exception:
+                        event_epas = []
+                for event_epa in event_epas:
+                    event_key = event_epa.get("event_key", "")
+                    # Get event start date for sorting
+                    start_date = None
+                    if event_database and year_key in event_database and event_key in event_database[year_key]:
+                        event_info = event_database[year_key][event_key]
+                        start_date = event_info.get("sd")
+                    # Calculate global rank for this event
+                    # Use all teams at this event for ranking
+                    event_teams = []
+                    if event_database and year_key in event_database and event_key in event_database[year_key]:
+                        event_info = event_database[year_key][event_key]
+                        event_teams = event_info.get("teams", [])
+                    # Fallback: use all teams in year_team_data
+                    if not event_teams:
+                        event_teams = list(year_team_data.values())
+                    else:
+                        # Convert team numbers to team dicts
+                        event_teams = [year_team_data.get(tk) for tk in event_teams if tk in year_team_data]
+                    # Only rank if we have enough teams
+                    if team_year_data and event_teams and team_year_data in event_teams:
+                        global_rank, _, _ = calculate_single_rank(event_teams, team_year_data)
+                        all_events.append({
+                            "event_key": event_key,
+                            "rank": global_rank,
+                            "year": year_key,
+                            "start_date": start_date
+                        })
+        if not all_events:
+            return html.Div("No historical event data available for this team.")
+        # Sort all events by start date, fallback to event_key
+        def event_sort_key(ev):
+            return (ev["start_date"] or ev["event_key"])
+        all_events.sort(key=event_sort_key)
         fig = go.Figure()
         fig.add_trace(go.Scatter(
-            x=[d['year'] for d in years_data],
-            y=[d['rank'] for d in years_data],
+            x=[ev["event_key"] for ev in all_events],
+            y=[ev["rank"] for ev in all_events],
             mode='lines+markers',
-            line=dict(color='#007BFF', width=3),
-            marker=dict(size=8, color='#007BFF'),
-            name='Global Rank'
+            line=dict(color='#FFDD00', width=3, shape='spline'),
+            marker=dict(size=8, color='#FFDD00'),
+            fill='tozeroy',
+            name='Global Rank',
+            customdata=[
+                (
+                    ev["event_key"],
+                    ev["year"],
+                    ev["rank"],
+                    next((e.get("auto", 0) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
+                    next((e.get("teleop", 0) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
+                    next((e.get("endgame", 0) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
+                    next((e.get("overall", e.get("normal_epa", 0)) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
+                    next((e.get("confidence", 0) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
+                    next((e.get("ace", e.get("actual_epa", e.get("epa", 0))) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
+                ) for ev in all_events
+            ],
+            hovertemplate=(
+                '<b><a href="/event/%{customdata[0]}" target="_blank" style="color:white; text-decoration:underline;">Event: %{customdata[0]}</a></b><br>'
+                'Year: %{customdata[1]}<br>'
+                'Global Rank: %{customdata[2]}<br>'
+                'Auto: %{customdata[3]:.2f}<br>'
+                'Teleop: %{customdata[4]:.2f}<br>'
+                'Endgame: %{customdata[5]:.2f}<br>'
+                'EPA: %{customdata[6]:.2f}<br>'
+                'Confidence: %{customdata[7]:.2f}<br>'
+                'ACE: %{customdata[8]:.2f}<extra></extra>'
+            ),
         ))
+        all_event_codes = [ev["event_key"] for ev in all_events]
+        all_event_links = [f'<a href="/event/{code}" target="_blank">{code}</a>' for code in all_event_codes]
         fig.update_layout(
-            title=f"Team {team_number} Historical Performance",
+            title=f"Team {team_number} All-Time Event Global Rank",
             height=400,
-            margin=dict(l=50, r=50, t=80, b=50),
-            font=dict(color="#777"),
-            xaxis_title="Year",
-            yaxis_title="Rank",
+            margin=dict(l=50, r=50, t=80, b=60),
+            font=dict(color="#999"),
+            xaxis_title="Event Code",
+            yaxis_title="Global Rank",
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(
+                tickmode='array',
+                tickvals=all_event_codes,
+                ticktext=all_event_links,
+                ticklabelmode='instant',
+                tickformat='html',
+                ticklabelstandoff=10,
+            ),
+            hoverlabel=dict(
+                bgcolor="#2D2D2D",
+                font=dict(color="white"),
+                bordercolor="rgba(0,0,0,0)",
+            ),
         )
         fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
         fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)', autorange="reversed", zeroline=False)
