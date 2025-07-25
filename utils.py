@@ -517,9 +517,13 @@ def user_event_card(body_elements, delete_button=None):
 def team_link_with_avatar(team):
     team_number = team.get("team_number", "???")
     nickname = team.get("nickname", "")
+    last_year = team.get("last_year", None)
     # Construct avatar URL, ensuring default if not found
     avatar_path = f"assets/avatars/{team_number}.png"
     avatar_url = f"/assets/avatars/{team_number}.png?v=1" if os.path.exists(avatar_path) else "/assets/avatars/stock.png"
+
+    # Use last_year for the link, fallback to current_year if missing
+    year_for_link = last_year if last_year is not None else current_year
 
     return html.A(
         html.Div([
@@ -541,7 +545,7 @@ def team_link_with_avatar(team):
             # Remove inline color style from div
             # "color": "black"
         }),
-        href=f"/team/{team_number}/{current_year}",
+        href=f"/team/{team_number}/{year_for_link}",
         style={
             "textDecoration": "none",
             # Remove inline color style from A

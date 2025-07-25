@@ -464,6 +464,7 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
             for team in filtered_teams:
                 tn = team.get("team_number", "???")
                 nm = team.get("nickname", "")
+                last_year = team.get("last_year", None)
                 background_color = "var(--card-bg)"
                 is_highlighted = False
                 if (closest_team_number and tn == closest_team_number["team_number"]) or \
@@ -471,12 +472,15 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
                     background_color = "#FFDD0080"
                     is_highlighted = True
 
+                # Use last_year for the link, fallback to current_year if missing
+                year_for_link = last_year if last_year is not None else current_year
+
                 team_link_element = html.A([
                     html.Img(src=get_team_avatar(tn), style={
                         "height": "20px", "width": "20px", "borderRadius": "50%", "marginRight": "8px"
                     }),
                     html.Span(f"{tn} | {nm}")
-                ], href=f"/team/{tn}/{current_year}", style={
+                ], href=f"/team/{tn}/{year_for_link}", style={
                     "textDecoration": "none",
                     "color": "black" if is_highlighted else default_text_color
                 })

@@ -502,44 +502,37 @@ def load_data_2025():
 
 def load_search_data():
     """Load minimal data needed for search: event key, event name, team name, team key."""
-    with DatabaseConnection() as conn:
-        # === Load 2025 team names for search ===
-        team_cursor = conn.cursor()
-        team_cursor.execute("""
-            SELECT team_number, nickname
-            FROM team_epas
-            WHERE year = 2025
-            ORDER BY team_number
-        """)
-        
-        team_data = {2025: {}}
-        for row in team_cursor.fetchall():
-            team_number, nickname = row
-            team_data[2025][team_number] = {
+    # Load teams from JSON
+    with open("data/teams.json", "r", encoding="utf-8") as f:
+        team_nicknames = json.load(f)
+    # Build team_data dict: {year: {team_number: {...}}} for all years
+    team_data = {}
+    for team_number_str, info in team_nicknames.items():
+        try:
+            team_number = int(team_number_str)
+        except Exception:
+            continue
+        nickname = info.get("nickname", "")
+        last_year = info.get("last_year", None)
+        for year in range(1992, 2026):
+            team_data.setdefault(year, {})[team_number] = {
                 "team_number": team_number,
-                "nickname": nickname
+                "nickname": nickname,
+                "last_year": last_year
             }
-
-        # === Load ALL events for search (minimal data) ===
-        event_cursor = conn.cursor()
-        event_cursor.execute("""
-            SELECT event_key, name
-            FROM events
-            ORDER BY year DESC, event_key
-        """)
-        
-        event_data = {}
-        for row in event_cursor.fetchall():
-            event_key, name = row
+    # Load events from JSON
+    with open("data/events.json", "r", encoding="utf-8") as f:
+        event_names = json.load(f)
+    event_data = {}
+    for event_key, name in event_names.items():
+        try:
             year = int(event_key[:4])
-            event_data.setdefault(year, {})[event_key] = {
-                "k": event_key,
-                "n": name
-            }
-
-        event_cursor.close()
-        team_cursor.close()
-
+        except Exception:
+            continue
+        event_data.setdefault(year, {})[event_key] = {
+            "k": event_key,
+            "n": name
+        }
     return team_data, event_data
 
 def load_year_data(year):
