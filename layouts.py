@@ -16,6 +16,22 @@ current_year = 2025
 with open('data/district_states.json', 'r', encoding='utf-8') as f:
     DISTRICT_STATES_COMBINED = json.load(f)
 
+# Load team colors for dynamic backgrounds
+def get_team_card_colors(team_number):
+    """Get team colors for card background gradient."""
+    try:
+        with open("data/team_colors.json", "r", encoding="utf-8") as f:
+            team_colors = json.load(f)
+        
+        colors = team_colors.get(str(team_number), {})
+        primary = colors.get("primary", "#1e3a8a")
+        secondary = colors.get("secondary", "#3b82f6")
+        
+        return f"linear-gradient(135deg, {primary} 0%, {secondary} 100%)"
+    except Exception:
+        # Fallback gradient
+        return "linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)"
+
 def team_layout(team_number, year, team_database, event_database, event_matches, event_awards, event_rankings, event_teams):
 
     user_id = session.get("user_id")
@@ -50,10 +66,11 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             "border": "none",
             "boxShadow": "none",
             "background": "none",
-            "color": "#ffc107",  # golden star
+            "color": "#ffffff",  # golden star
             "zIndex": "10",
             "textDecoration": "none",
-            "cursor": "pointer"
+            "cursor": "pointer",
+            "textShadow": "2px 2px 2px rgba(0, 0, 0, 0.6)"
         }
     )
 
@@ -160,7 +177,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             href=f"/team/{team_number}/{yr}",
             style={
                 "marginRight": "0px",
-                "color": "#007BFF",
+                "color": "white",
                 "textDecoration": "none",
             },
         )
@@ -174,7 +191,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             href=f"/team/{team_number}/history",
             style={
                 "marginLeft": "0px",
-                "color": "#007BFF",
+                "color": "white",
                 "fontWeight": "bold",
                 "textDecoration": "none",
             },
@@ -213,7 +230,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             display_name = INCLUDED_CATEGORIES[category]
             year_list = ", ".join(str(y) for y in sorted(set(info["years"])))
             children = [
-                html.Img(src="/assets/trophy.png", style={"height": "1.2em", "verticalAlign": "middle", "marginRight": "5px"}),
+                html.Img(src="/assets/trophy.png", style={"height": "1.0em", "verticalAlign": "middle", "marginRight": "5px"}),
                 html.Span(
                     f" {display_name} ({year_list})",
                     style={
@@ -254,18 +271,18 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                         [
                             dbc.Col(
                                 [
-                                    html.H2(f"Team {team_number}: {nickname}", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
+                                    html.H2(f"Team {team_number}: {nickname}", style={"color": "white", "fontWeight": "bold"}),
                                     *badges,
-                                    html.P([html.Img(src="/assets/pin.png", style={"height": "1.5em", "verticalAlign": "middle", "marginRight": "5px"}), f" {city}, {state}, {country}"]),
+                                    html.P([html.Img(src="/assets/pin.png", style={"height": "1em", "verticalAlign": "middle", "marginRight": "5px"}), f" {city}, {state}, {country}"], style={"color": "white"}),
                                     html.P([html.I(className="bi bi-link-45deg"), "Website: ", 
-                                            html.A(website, href=website, target="_blank", style={"color": "#007BFF", "textDecoration": "underline"})]),
+                                            html.A(website, href=website, target="_blank", style={"color": "white", "textDecoration": "underline"})], style={"color": "white"}),
                                     html.Div(
                                         [
-                                            html.I(className="bi bi-calendar"),
-                                            " Years Participated: ",
+                                            html.I(className="bi bi-calendar", style={"color": "white"}),
+                                            html.Span(" Years Participated: ", style={"color": "white"}),
                                             html.Div(
                                                 years_links,
-                                                style={"display": "flex", "flexWrap": "wrap", "gap": "8px", "textDecoration": "underline","color": "#007BFF"},
+                                                style={"display": "flex", "flexWrap": "wrap", "gap": "8px", "textDecoration": "underline","color": "white"},
                                             ),
                                         ],
                                         style={"marginBottom": "10px"},
@@ -277,15 +294,16 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                                             "display": "inline-block" # Prevent div from taking full width
                                         },
                                         children=[
-                                            html.P(
-                                                [
-                                                    html.I(className="bi bi-star-fill", style={"color": "#ffc107"}),
-                                                    f" {favorites_count} Favorites ▼"
-                                                ],
-                                                style={
-                                                    "marginBottom": "0px", # Remove bottom margin on paragraph
-                                                    "cursor": "pointer" # Keep cursor on text
-                                                }),
+                                                                                            html.P(
+                                                    [
+                                                        html.I(className="bi bi-star-fill", style={"color": "#ffffff"}),
+                                                        f" {favorites_count} Favorites ▼"
+                                                    ],
+                                                    style={
+                                                        "marginBottom": "0px", # Remove bottom margin on paragraph
+                                                        "cursor": "pointer", # Keep cursor on text
+                                                        "color": "white"
+                                                    }),
                                         ]
                                     ),
                                 ],
@@ -301,13 +319,15 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                                             "width": "100%",
                                             "height": "auto",
                                             "objectFit": "contain",
-                                            "borderRadius": "0px",
+                                            "borderRadius": "10px",
                                             "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
                                             "marginLeft": "auto",
                                             "marginRight": "auto",
                                             "display": "block",
+                                            "backgroundColor": "#00000030",
+                                            "padding": "10px",
                                         },
-                                    ) if avatar_url else html.Div("No avatar available.", style={"color": "#777"}),
+                                    ) if avatar_url else html.Div("No avatar available.", style={"color": "white"}),
                                 ],
                                 width=3,
                                 style={"textAlign": "center"},
@@ -351,7 +371,8 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             "marginBottom": "20px",
             "borderRadius": "10px",
             "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
-            "backgroundColor": "var(--card-bg)"
+            "background": get_team_card_colors(team_number),
+            "color": "white"
         },
     )
     def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state):
