@@ -3,7 +3,7 @@ from dash import html, dcc, dash_table
 from datagather import load_year_data,get_team_avatar,get_team_years_participated
 from flask import session
 from datetime import datetime
-from utils import calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, get_event_learning_stats, get_prediction_difference, compute_percentiles, pill, get_event_week_label, format_human_date
+from utils import format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, compute_percentiles, pill, get_event_week_label
 import json
 import os
 import plotly.graph_objs as go
@@ -2409,7 +2409,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             matches.sort(key=parse_match_sort_key)
                     
             def format_team_list(team_str):
-                return "  ".join(f"[{t}](/team/{t})" for t in team_str.split(",") if t.strip().isdigit())
+                return "  ".join(f"[{t}](/team/{t}/{current_year})" for t in team_str.split(",") if t.strip().isdigit())
         
             for match in matches:
                 red_str = match.get("rt", "")
@@ -3845,7 +3845,6 @@ def event_layout(event_key):
             week_label = None
 
     # Format dates for display
-    from utils import format_human_date
     start_display = format_human_date(start_date) if start_date and start_date != "N/A" else start_date
     end_display = format_human_date(end_date) if end_date and end_date != "N/A" else end_date
 

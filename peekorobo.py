@@ -4696,7 +4696,6 @@ def update_insights_table(selected_insight, pathname, event_teams, event_db):
                     event_key = match_key.split('_')[0] if '_' in match_key else match_key[:8]
                     match_part = match_key.split('_')[1] if '_' in match_key else match_key[8:]
                     event_name = event_db.get(event_key, "") if event_db else ""
-                    import re
                     m = re.match(r"([a-z]+)(\d+)?m?(\d+)?", match_part.lower())
                     match_label = match_part.upper()
                     match_url_part = match_part.upper()
