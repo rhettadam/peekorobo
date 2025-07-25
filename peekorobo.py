@@ -23,9 +23,9 @@ import plotly.graph_objects as go
 
 from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import team_layout,match_layout,user_layout,other_user_layout,home_layout,blog_layout,insights_layout,insights_details_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout
+from layouts import team_layout,match_layout,user_layout,other_user_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout
 
-from utils import format_human_date,find_similar_teams,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
+from utils import format_human_date,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -212,8 +212,7 @@ def update_last_updated_text(n_clicks, n_intervals):
 @app.callback(
     [Output("nav-teams", "className"),
      Output("nav-map", "className"),
-     Output("nav-events", "className"),
-     Output("nav-insights", "className")],
+     Output("nav-events", "className")],
     [Input("url", "pathname")]
 )
 def update_nav_active_state(pathname):
@@ -225,9 +224,8 @@ def update_nav_active_state(pathname):
     teams_active = active_class if pathname and pathname.startswith("/teams") else default_class
     map_active = active_class if pathname and pathname.startswith("/map") else default_class
     events_active = active_class if pathname and pathname.startswith("/events") else default_class
-    insights_active = active_class if pathname and pathname.startswith("/insights") else default_class
     
-    return teams_active, map_active, events_active, insights_active
+    return teams_active, map_active, events_active
 
 @app.callback(
     Output("page-content", "children"),
@@ -278,9 +276,6 @@ def display_page(pathname):
     if pathname == "/events":
         return events_layout()
     
-    if pathname == "/insights":
-        return insights_layout()
-
     if pathname == "/blog":
         return blog_layout
 
@@ -302,15 +297,7 @@ def display_page(pathname):
         except ValueError:
             pass
     
-    if pathname.startswith("/insights/"):
-        year = pathname.split("/")[-1]
-        try:
-            year = int(year)
-        except ValueError:
-            year = None
-        return insights_details_layout(year)
-
-    if pathname == "/compare":
+    if pathname.startswith("/compare"):
         return compare_layout()
 
     if pathname.startswith("/match/"):
@@ -346,14 +333,6 @@ def update_tab_title(pathname):
         return 'Compare - Peekorobo'
     elif pathname.startswith('/blog'):
         return 'Blog - Peekorobo'
-    elif pathname.startswith('/insights'):
-        return 'Insights - Peekorobo'
-    elif pathname.startswith('/insights/'):
-        challenge = pathname.split('/insights/')[1].split('/')[0]
-        return f'{challenge} Season - Peekorobo'
-    elif pathname.startswith('/user/'):
-        username = pathname.split('/user/')[1].split('/')[0]
-        return f'{username} - Peekorobo'
     else:
         return 'Peekorobo'
 
@@ -598,7 +577,7 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
     return desktop_children, desktop_style, mobile_children, mobile_style
 
 # Callback to update account link based on login status
-@callback(
+@app.callback(
     Output("account-link", "href"),
     Input("user-session", "data")
 )
@@ -608,7 +587,7 @@ def update_account_link(session_data):
     else:
         return "/login"
 
-@callback(
+@app.callback(
     Output("followers-hidden", "style"),
     Input("followers-see-more", "n_clicks"),
     prevent_initial_call=True
@@ -620,7 +599,7 @@ def toggle_followers_list(n_clicks):
     # Toggle between hidden and visible
     return {"display": "block", "marginTop": "5px", "paddingLeft": "0", "listStyleType": "none", "marginBottom": "0"}
 
-@callback(
+@app.callback(
     Output("following-hidden", "style"),
     Input("following-see-more", "n_clicks"),
     prevent_initial_call=True
@@ -637,7 +616,7 @@ def logout():
     flask.session.clear()
     return flask.redirect("/login")
 
-@callback(
+@app.callback(
     Output("profile-display", "hidden"),
     Output("profile-card", "style"),
     Output("profile-edit-form", "hidden"),
@@ -782,7 +761,7 @@ def handle_profile_edit(
 
     return [dash.no_update] * 15
     
-@callback(
+@app.callback(
     Output({"type": "follow-user", "user_id": MATCH}, "children"),
     Input({"type": "follow-user", "user_id": MATCH}, "n_clicks"),
     State("user-session", "data"),
@@ -834,7 +813,7 @@ def toggle_follow_user(_, session_data, current_text):
     except Exception as e:
         return current_text
 
-@callback(
+@app.callback(
     Output("user-search-results", "children"),
     Input("user-search-input", "value"),
     State("user-session", "data")
@@ -893,7 +872,7 @@ def search_users(query, session_data):
     except Exception as e:
         return []
 
-@callback(
+@app.callback(
     Output("favorites-store", "data"),
     Output("user-layout-wrapper", "children"),
     Input({"type": "delete-favorite", "item_type": ALL, "key": ALL}, "n_clicks"),
@@ -1357,7 +1336,7 @@ def set_event_tab_from_url(search):
 def set_event_tabs_active_tab(tab):
     return tab
 
-@callback(
+@app.callback(
     Output("data-display-container", "children"),
     Output("event-url", "search"),  # NEW: update the event tab URL
     Input("event-data-tabs", "active_tab"),
@@ -2818,7 +2797,7 @@ app.clientside_callback(
     prevent_initial_call=True
 )
 
-@callback(
+@app.callback(
     [
         Output("teams-table", "data"),
         Output("state-dropdown", "options"),
@@ -3658,7 +3637,7 @@ def compare_multiple_teams(team_ids, year): # Update function signature
         ], className="justify-content-center"), # Center the main row
     ], style={"padding": "10px 0"})
 
-@callback(
+@app.callback(
     Output("favorite-alert", "children", allow_duplicate=True),
     Output("favorite-alert", "is_open", allow_duplicate=True),
     Output({"type": "favorite-team-btn", "key": ALL}, "children"),
@@ -3709,7 +3688,7 @@ def toggle_favorite_team(n_clicks_list, id_list, session_data):
     except Exception as e:
         return "Error updating favorites.", True, [dash.no_update]
 
-@callback(
+@app.callback(
     Output({"type": "team-favorites-popover-body", "team_number": MATCH}, "children"),
     Input({"type": "team-favorites-popover", "team_number": MATCH}, "is_open"),
     State("url", "pathname"), # Keep pathname state to double check team number if needed
@@ -3773,7 +3752,7 @@ def update_team_favorites_popover_content(is_open, pathname):
     except Exception as e:
         return "Error loading favoriting users."
 
-@callback(
+@app.callback(
     Output("team-insights-content", "children"),
     Input("team-tabs", "active_tab"),
     State("team-insights-store", "data"),
@@ -3938,54 +3917,12 @@ def update_team_insights(active_tab, store_data):
         
         trends_chart = dcc.Graph(figure=fig, config={"displayModeBar": False})
     
-    # Similar Teams Section
-    similar_teams = find_similar_teams(team_number, performance_year, TEAM_DATABASE)
-    
-    similar_teams_cards = []
-    for similar_team in similar_teams[:6]:  # Show top 6 similar teams
-        team_num = similar_team["team_number"]
-        nickname = similar_team.get("nickname", "Unknown")
-        ace = similar_team.get("epa", 0)
-        similarity_score = similar_team.get("similarity_score", 0)
-        avatar_url = get_team_avatar(team_num)
-        
-        card = dbc.Card([
-            dbc.CardBody([
-                dbc.Row([
-                    dbc.Col([
-                        html.Img(
-                            src=avatar_url,
-                            style={
-                                "width": "50px",
-                                "height": "50px",
-                                "borderRadius": "50%",
-                                "objectFit": "contain"
-                            }
-                        ) if avatar_url else html.Div("", style={"width": "50px", "height": "50px"}),
-                    ], width="auto"),
-                    dbc.Col([
-                        html.A(
-                            f"#{team_num} {nickname}",
-                            href=f"/team/{team_num}/{performance_year}",
-                            style={"fontWeight": "bold", "textDecoration": "none", "color": "var(--text-primary)"}
-                        ),
-                        html.Div(f"ACE: {ace:.1f}", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"}),
-                        html.Div(f"Similarity: {similarity_score:.1%}", style={"fontSize": "0.8rem", "color": "var(--text-muted)"}),
-                    ])
-                ])
-            ])
-        ], style={"marginBottom": "10px", "backgroundColor": "var(--card-bg)"})
-        
-        similar_teams_cards.append(card)
-    
     return html.Div([
         html.Div(trends_chart, className="trends-chart-container"),
         html.Hr(style={"margin": "30px 0"}),
-        html.H3("Similar Teams", style={"marginBottom": "20px", "color": "var(--text-primary)"}),
-        html.Div(similar_teams_cards, className="similar-teams-container")
     ])
 
-@callback(
+@app.callback(
     Output("team-events-content", "children"),
     Input("team-tabs", "active_tab"),
     State("team-insights-store", "data"),
@@ -4119,7 +4056,7 @@ def update_team_events(active_tab, store_data):
 
     return html.Div([events_table])
 
-@callback(
+@app.callback(
     Output("team-awards-content", "children"),
     Input("team-tabs", "active_tab"),
     State("team-insights-store", "data"),

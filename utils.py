@@ -718,56 +718,6 @@ def get_prediction_difference(event_key, match_key):
     """Get the difference between base and adaptive predictions for debugging."""
     return adaptive_predictor.get_prediction_difference(event_key, match_key)
 
-def find_similar_teams(team_number, year, TEAM_DATABASE):
-    """Find teams with similar performance characteristics"""
-    # Load year-specific data if needed
-    if year == current_year:
-        year_data = TEAM_DATABASE.get(year, {})
-    else:
-        try:
-            year_team_data, _, _, _, _, _ = load_year_data(year)
-            year_data = year_team_data
-        except Exception:
-            return []
-    
-    if team_number not in year_data:
-        return []
-    
-    target_team = year_data[team_number]
-    
-    # Get target team's characteristics
-    target_auto = target_team.get("auto_epa", 0)
-    target_teleop = target_team.get("teleop_epa", 0)
-    target_endgame = target_team.get("endgame_epa", 0)
-    target_ace = target_team.get("epa", 0)
-    
-    similar_teams = []
-    
-    for team_num, team_data in year_data.items():
-        if team_num == team_number:
-            continue
-        
-        # Calculate similarity based on EPA components
-        auto_diff = abs(team_data.get("auto_epa", 0) - target_auto)
-        teleop_diff = abs(team_data.get("teleop_epa", 0) - target_teleop)
-        endgame_diff = abs(team_data.get("endgame_epa", 0) - target_endgame)
-        ace_diff = abs(team_data.get("epa", 0) - target_ace)
-        
-        # Calculate similarity score (lower is more similar)
-        similarity_score = (auto_diff + teleop_diff + endgame_diff + ace_diff) / 4
-        
-        similar_teams.append({
-            "team_number": team_num,
-            "nickname": team_data.get("nickname", "Unknown"),
-            "epa": team_data.get("epa", 0),
-            "similarity_score": max(0, 1 - (similarity_score / 10))  # Normalize to 0-1
-        })
-    
-    # Sort by similarity (highest first)
-    similar_teams.sort(key=lambda x: x["similarity_score"], reverse=True)
-    
-    return similar_teams
-
 def format_human_date(date_str):
     """Convert 'YYYY-MM-DD' to 'Month D, YYYY' (e.g., 'April 2, 2025'). Returns '' if invalid."""
     try:
