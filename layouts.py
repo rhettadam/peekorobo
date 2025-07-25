@@ -375,16 +375,21 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             "color": "white"
         },
     )
-    def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state):
-        def rank_card(top, bottom, rank, href):
+    def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state, year_data):
+        # Calculate total counts for each category
+        total_teams = len(year_data)
+        country_teams = len([team for team in year_data.values() if team.get("country", "").lower() == country.lower()])
+        state_teams = len([team for team in year_data.values() if team.get("state_prov", "").lower() == state.lower()])
+        
+        def rank_card(top, rank, total, href):
             return html.Div(
                 dbc.Card(
                     dbc.CardBody([
-                        html.P([
-                            html.Span(top, style={"display": "block"}),
-                            html.Span(bottom, style={"display": "block"})
-                        ], className="rank-card-label"),
-                        html.A(str(rank), href=href, className="rank-card-value")
+                        html.P(top, className="rank-card-label", style={"fontWeight": "bold"}),
+                        html.A([
+                            html.Span(str(rank), style={"display": "block", "fontSize": "1.5rem", "fontWeight": "bold", "color": "#007bff"}),
+                            html.Span(f"out of {total}", style={"display": "block", "fontSize": "0.8rem", "opacity": "0.4", "fontweight": "normal"})
+                        ], href=href, className="rank-card-value", style={"textDecoration": "none"})
                     ]),
                     className="rank-card"
                 )
@@ -392,9 +397,9 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
 
         return html.Div([
             html.Div([
-                rank_card("Global", "Rank", global_rank, f"/teams?year={performance_year}&sort_by=epa"),
-                rank_card(country, "Rank", country_rank, f"/teams?year={performance_year}&country={country}&sort_by=epa"),
-                rank_card(state, "Rank", state_rank, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa"),
+                rank_card("Global", global_rank, total_teams, f"/teams?year={performance_year}&sort_by=epa"),
+                rank_card(country, country_rank, country_teams, f"/teams?year={performance_year}&country={country}&sort_by=epa"),
+                rank_card(state, state_rank, state_teams, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa"),
             ], className="rank-card-container")
         ], className="mb-4")
 
@@ -459,7 +464,8 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         country_rank,
         state_rank,
         country,
-        state
+        state,
+        year_data
     )
 
     performance_metrics_card = build_performance_metrics_card(
