@@ -7,6 +7,7 @@ from utils import format_human_date,calculate_single_rank,sort_key,get_user_avat
 import json
 import os
 import plotly.graph_objs as go
+import numpy as np
 
 from utils import WEEK_RANGES_BY_YEAR
 
@@ -85,10 +86,9 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
 
 
     # Separate handling for performance year (used for ACE/stats) vs. awards/events year
-    is_history = not year or str(year).lower() == "history"
+    is_history = year is None or (isinstance(year, str) and year.lower() == "history")
 
     if is_history:
-        year = None
         # fallback year to use for metrics (default to current year or latest available)
         performance_year = current_year
     else:
@@ -171,7 +171,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
     years_links.append(
         html.A(
             "History",
-            href=f"/team/{team_number}",
+            href=f"/team/{team_number}/history",
             style={
                 "marginLeft": "0px",
                 "color": "#007BFF",
@@ -4046,15 +4046,56 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
         epa_values = [event.get("overall", event.get("normal_epa", 0)) for event in sorted_events]
         if not ace_values:
             return html.Div("No valid event data found.")
+        # Linear extrapolation for 2 predicted points using all events
+        import numpy as np
+        n_events = len(ace_values)
+        # Determine number of predicted points based on number of events
+        if n_events <= 1:
+            n_pred = 0
+        elif n_events == 2:
+            n_pred = 1
+        else:
+            n_pred = 2
+        if n_events >= 2:
+            x = np.arange(n_events)
+            y_ace = np.array(ace_values)
+            y_auto = np.array(auto_values)
+            y_teleop = np.array(teleop_values)
+            y_endgame = np.array(endgame_values)
+            y_confidence = np.array(confidence_values)
+            y_epa = np.array(epa_values)
+            # Fit lines
+            ace_fit = np.polyfit(x, y_ace, 1)
+            auto_fit = np.polyfit(x, y_auto, 1)
+            teleop_fit = np.polyfit(x, y_teleop, 1)
+            endgame_fit = np.polyfit(x, y_endgame, 1)
+            confidence_fit = np.polyfit(x, y_confidence, 1)
+            epa_fit = np.polyfit(x, y_epa, 1)
+            pred_x = np.arange(n_events, n_events + n_pred)
+            predicted_ace = np.polyval(ace_fit, pred_x) if n_pred > 0 else []
+            predicted_auto = np.polyval(auto_fit, pred_x) if n_pred > 0 else []
+            predicted_teleop = np.polyval(teleop_fit, pred_x) if n_pred > 0 else []
+            predicted_endgame = np.polyval(endgame_fit, pred_x) if n_pred > 0 else []
+            predicted_confidence = np.polyval(confidence_fit, pred_x) if n_pred > 0 else []
+            predicted_epa = np.polyval(epa_fit, pred_x) if n_pred > 0 else []
+        else:
+            predicted_ace = []
+            predicted_auto = []
+            predicted_teleop = []
+            predicted_endgame = []
+            predicted_confidence = []
+            predicted_epa = []
+        predicted_event_codes = [f'{year}pred{i+1}' for i in range(n_pred)]
+        # Main trace (actual)
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=event_codes,
             y=ace_values,
             mode='lines+markers',
             line=dict(color='#FFDD00', width=3, shape='spline'),
-            marker=dict(size=8, color='#FFDD00'),
+            marker=dict(size=8, color='#FFDD00', symbol='circle'),
             fill='tozeroy',
-            name='ACE',
+            name='Actual',
             customdata=list(zip(event_codes, auto_values, teleop_values, endgame_values, epa_values, confidence_values, ace_values)),
             hovertemplate=(
                 '<b><a href="/event/%{customdata[0]}" target="_blank" style="color:white; text-decoration:underline;">Event: %{customdata[0]}</a></b><br>'
@@ -4066,7 +4107,34 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
                 'ACE: %{customdata[6]:.2f}<extra></extra>'
             ),
         ))
-        event_links = [f'<a href="/event/{code}" target="_blank">{code}</a>' for code in event_codes]
+        # Predicted trace (if any)
+        if n_pred > 0:
+            fig.add_trace(go.Scatter(
+                x=[event_codes[-1]] + predicted_event_codes,
+                y=[ace_values[-1]] + list(predicted_ace),
+                mode='lines+markers',
+                line=dict(color='#2196F3', width=3, dash='dash', shape='spline'),
+                marker=dict(size=8, color='#2196F3', symbol='circle-open'),
+                fill='tozeroy',
+                fillcolor='rgba(33,150,243,0.2)',
+                name='Pred',
+                customdata=[
+                    (event_codes[-1], auto_values[-1], teleop_values[-1], endgame_values[-1], epa_values[-1], confidence_values[-1], ace_values[-1], 'Actual'),
+                    *[(predicted_event_codes[i], predicted_auto[i], predicted_teleop[i], predicted_endgame[i], predicted_epa[i], predicted_confidence[i], predicted_ace[i], 'Predicted') for i in range(n_pred)]
+                ],
+                hovertemplate=(
+                    '<b>%{customdata[0]}</b><br>'
+                    'Auto: %{customdata[1]:.2f}<br>'
+                    'Teleop: %{customdata[2]:.2f}<br>'
+                    'Endgame: %{customdata[3]:.2f}<br>'
+                    'EPA: %{customdata[4]:.2f}<br>'
+                    'Confidence: %{customdata[5]:.2f}<br>'
+                    'ACE: %{customdata[6]:.2f}<br>'
+                    '<b>%{customdata[7]}</b><extra></extra>'
+                ),
+                showlegend=True
+            ))
+        event_links = [f'<a href="/event/{code}" target="_blank">{code}</a>' for code in event_codes] + predicted_event_codes
         fig.update_layout(
             title=f"Team {team_number} Event Performance in {performance_year}",
             height=400,
@@ -4078,7 +4146,7 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
             plot_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(
                 tickmode='array',
-                tickvals=event_codes,
+                tickvals=event_codes + predicted_event_codes,
                 ticktext=event_links,
                 ticklabelmode='instant',
                 tickformat='html',
@@ -4094,110 +4162,93 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
         fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)', zeroline=False)
         trends_chart = dcc.Graph(figure=fig, config={"displayModeBar": False})
     else:
-        # Show event-by-event global rank for all years (excluding 2020 and 2021)
-        all_events = []
+        # Show one point per year with normalized ACE (percentile) as Y axis
+        year_stats = []
         for year_key in sorted(years_participated):
             if year_key in (2020, 2021):
                 continue  # Skip 2020 and 2021
-            # Get team data for the year
+            # Only extract the team's summary for each year
             if year_key == current_year:
-                year_team_data = team_database[year_key]
+                team_year_data = team_database.get(year_key, {}).get(team_number, {})
+                ace_values = [data.get("epa", 0) for data in team_database.get(year_key, {}).values()]
             else:
                 try:
-                    year_team_data, _, _, _, _, _ = load_year_data(year_key)
+                    year_team_data, *_ = load_year_data(year_key)
+                    team_year_data = year_team_data.get(team_number, {})
+                    ace_values = [data.get("epa", 0) for data in year_team_data.values()]
                 except Exception:
-                    continue
-            if team_number in year_team_data:
-                team_year_data = year_team_data[team_number]
-                event_epas = team_year_data.get("event_epas", [])
-                if isinstance(event_epas, str):
-                    try:
-                        event_epas = json.loads(event_epas)
-                    except Exception:
-                        event_epas = []
-                for event_epa in event_epas:
-                    event_key = event_epa.get("event_key", "")
-                    # Get event start date for sorting
-                    start_date = None
-                    if event_database and year_key in event_database and event_key in event_database[year_key]:
-                        event_info = event_database[year_key][event_key]
-                        start_date = event_info.get("sd")
-                    # Calculate global rank for this event
-                    # Use all teams at this event for ranking
-                    event_teams = []
-                    if event_database and year_key in event_database and event_key in event_database[year_key]:
-                        event_info = event_database[year_key][event_key]
-                        event_teams = event_info.get("teams", [])
-                    # Fallback: use all teams in year_team_data
-                    if not event_teams:
-                        event_teams = list(year_team_data.values())
-                    else:
-                        # Convert team numbers to team dicts
-                        event_teams = [year_team_data.get(tk) for tk in event_teams if tk in year_team_data]
-                    # Only rank if we have enough teams
-                    if team_year_data and event_teams and team_year_data in event_teams:
-                        global_rank, _, _ = calculate_single_rank(event_teams, team_year_data)
-                        all_events.append({
-                            "event_key": event_key,
-                            "rank": global_rank,
-                            "year": year_key,
-                            "start_date": start_date
-                        })
-        if not all_events:
-            return html.Div("No historical event data available for this team.")
-        # Sort all events by start date, fallback to event_key
-        def event_sort_key(ev):
-            return (ev["start_date"] or ev["event_key"])
-        all_events.sort(key=event_sort_key)
+                    team_year_data = {}
+                    ace_values = []
+            if team_year_data:
+                ace = team_year_data.get("epa", 0)
+                auto = team_year_data.get("auto_epa", 0)
+                teleop = team_year_data.get("teleop_epa", 0)
+                endgame = team_year_data.get("endgame_epa", 0)
+                confidence = team_year_data.get("confidence", 0)
+                epa = team_year_data.get("normal_epa", 0)
+                # Compute percentile for ACE in this year
+                if ace_values:
+                    sorted_ace = sorted(ace_values)
+                    percentile = 100.0 * sum(val < ace for val in sorted_ace) / len(sorted_ace)
+                else:
+                    percentile = 0
+                year_stats.append({
+                    "year": year_key,
+                    "ace": ace,
+                    "auto": auto,
+                    "teleop": teleop,
+                    "endgame": endgame,
+                    "epa": epa,
+                    "confidence": confidence,
+                    "percentile": percentile
+                })
+        if not year_stats:
+            return html.Div("No historical year data available for this team.")
         fig = go.Figure()
         fig.add_trace(go.Scatter(
-            x=[ev["event_key"] for ev in all_events],
-            y=[ev["rank"] for ev in all_events],
+            x=[ys["year"] for ys in year_stats],
+            y=[ys["percentile"] for ys in year_stats],
             mode='lines+markers',
             line=dict(color='#FFDD00', width=3, shape='spline'),
             marker=dict(size=8, color='#FFDD00'),
             fill='tozeroy',
-            name='Global Rank',
+            name='Normalized ACE Percentile',
             customdata=[
                 (
-                    ev["event_key"],
-                    ev["year"],
-                    ev["rank"],
-                    next((e.get("auto", 0) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
-                    next((e.get("teleop", 0) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
-                    next((e.get("endgame", 0) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
-                    next((e.get("overall", e.get("normal_epa", 0)) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
-                    next((e.get("confidence", 0) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
-                    next((e.get("ace", e.get("actual_epa", e.get("epa", 0))) for e in all_events if e["event_key"] == ev["event_key"] and e["year"] == ev["year"]), 0),
-                ) for ev in all_events
+                    ys["year"],
+                    ys["auto"],
+                    ys["teleop"],
+                    ys["endgame"],
+                    ys["epa"],
+                    ys["confidence"],
+                    ys["ace"],
+                    ys["percentile"]
+                ) for ys in year_stats
             ],
             hovertemplate=(
-                '<b><a href="/event/%{customdata[0]}" target="_blank" style="color:white; text-decoration:underline;">Event: %{customdata[0]}</a></b><br>'
-                'Year: %{customdata[1]}<br>'
-                'Global Rank: %{customdata[2]}<br>'
-                'Auto: %{customdata[3]:.2f}<br>'
-                'Teleop: %{customdata[4]:.2f}<br>'
-                'Endgame: %{customdata[5]:.2f}<br>'
-                'EPA: %{customdata[6]:.2f}<br>'
-                'Confidence: %{customdata[7]:.2f}<br>'
-                'ACE: %{customdata[8]:.2f}<extra></extra>'
+                '<b>Year: %{customdata[0]}</b><br>'
+                'Auto: %{customdata[1]:.2f}<br>'
+                'Teleop: %{customdata[2]:.2f}<br>'
+                'Endgame: %{customdata[3]:.2f}<br>'
+                'EPA: %{customdata[4]:.2f}<br>'
+                'Confidence: %{customdata[5]:.2f}<br>'
+                'ACE: %{customdata[6]:.2f}<br>'
+                '<b>ACE Percentile: %{customdata[7]:.1f}</b><extra></extra>'
             ),
         ))
-        all_event_codes = [ev["event_key"] for ev in all_events]
-        all_event_links = [f'<a href="/event/{code}" target="_blank">{code}</a>' for code in all_event_codes]
         fig.update_layout(
-            title=f"Team {team_number} All-Time Event Global Rank",
+            title=f"Team {team_number} Yearly Normalized ACE (Percentile)",
             height=400,
             margin=dict(l=50, r=50, t=80, b=60),
             font=dict(color="#999"),
-            xaxis_title="Event Code",
-            yaxis_title="Global Rank",
+            xaxis_title="Year",
+            yaxis_title="ACE Percentile (0-100)",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(
                 tickmode='array',
-                tickvals=all_event_codes,
-                ticktext=all_event_links,
+                tickvals=[ys["year"] for ys in year_stats],
+                ticktext=[str(ys["year"]) for ys in year_stats],
                 ticklabelmode='instant',
                 tickformat='html',
                 ticklabelstandoff=10,
@@ -4209,7 +4260,7 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
             ),
         )
         fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
-        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)', autorange="reversed", zeroline=False)
+        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)', zeroline=False, range=[0, 100])
         trends_chart = dcc.Graph(figure=fig, config={"displayModeBar": False})
     return html.Div([
         html.Div(trends_chart, className="trends-chart-container"),

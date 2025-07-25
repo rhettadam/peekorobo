@@ -236,20 +236,21 @@ def display_page(pathname):
 
     if len(path_parts) >= 2 and path_parts[0] == "team":
         team_number = path_parts[1]
-        year = path_parts[2] if len(path_parts) > 2 else None
-        
-        # If year is specified and it's not current_year, load that year's data
+        # If the third part is 'history', show history (year=None)
+        if len(path_parts) > 2 and path_parts[2].lower() == "history":
+            # Use global data for history
+            return team_layout(team_number, None, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS)
+        # If a year is specified and it's not current_year, load that year's data
+        year = path_parts[2] if len(path_parts) > 2 else str(current_year)
         if year and year != str(current_year):
             try:
                 year = int(year)
                 if year != current_year:
                     # Load data for the specific year
                     year_team_data, year_event_data, year_event_teams, year_event_rankings, year_event_awards, year_event_matches = load_year_data(year)
-                    
                     # Create year-specific databases
                     year_team_database = {year: year_team_data}
                     year_event_database = {year: year_event_data}
-                    
                     return team_layout(
                         team_number, year, 
                         year_team_database, year_event_database, 
@@ -259,9 +260,8 @@ def display_page(pathname):
             except (ValueError, TypeError):
                 # If year parsing fails, fall back to current year
                 pass
-        
-        # Use global data for current year or fallback
-        return team_layout(team_number, year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS)
+        # Default: show current year
+        return team_layout(team_number, current_year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS)
     
     if pathname.startswith("/event/"):
         event_key = pathname.split("/")[-1]
