@@ -1338,7 +1338,7 @@ def set_event_tab_from_url(search):
     if search and search.startswith("?"):
         params = parse_qs(search[1:])
         tab = params.get("tab", [None])[0]
-        if tab in ["teams", "rankings", "matches", "sos", "compare", "alliances"]:
+        if tab in ["teams", "rankings", "matches", "sos", "compare", "alliances", "metrics"]:
             return tab
     return "teams"
 
@@ -2117,7 +2117,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             {"if": {"filter_query": '{Winner} = "Blue" && {Alliance} != "Blue"', "column_id": "Outcome"}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
         ]
 
-    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "color": "var(--text-primary)", "backgroundColor": "transparent" }
+    style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "color": "var(--text-primary)", "backgroundColor": "transparent"}
     style_header={
         "backgroundColor": "var(--card-bg)",        # Match the table background
         "color": "var(--text-primary)",
@@ -2129,7 +2129,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
     }
 
     style_cell={
-        "backgroundColor": "#181a1b", 
+        "backgroundColor": "transparent", 
         "color": "var(--text-primary)",
         "textAlign": "center",
         "padding": "10px",
@@ -3977,6 +3977,8 @@ def update_team_events(active_tab, store_data):
                     "start_date": ev.get("start_date"),
                     "end_date": ev.get("end_date"),
                     "location": ", ".join(filter(None, [ev.get("city"), ev.get("state_prov")])),
+                    "week": ev.get("week"),
+                    "year": ev.get("year"),
                 }
                 for ev in raw_events
             ]
@@ -3997,7 +3999,9 @@ def update_team_events(active_tab, store_data):
                             "event_key": event_key,
                             "start_date": event.get("sd", ""),
                             "end_date": event.get("ed", ""),
-                            "location": ", ".join(filter(None, [event.get("c", ""), event.get("s", "")]))
+                            "location": ", ".join(filter(None, [event.get("c", ""), event.get("s", "")])),
+                            "week": None,  # Local data doesn't have week info
+                            "year": year,
                         })
             else:
                 _, year_event_data, year_event_teams, year_event_rankings, _, _ = load_year_data(year)
@@ -4009,7 +4013,9 @@ def update_team_events(active_tab, store_data):
                             "event_key": event_key,
                             "start_date": event.get("sd", ""),
                             "end_date": event.get("ed", ""),
-                            "location": ", ".join(filter(None, [event.get("c", ""), event.get("s", "")]))
+                            "location": ", ".join(filter(None, [event.get("c", ""), event.get("s", "")])),
+                            "week": None,  # Local data doesn't have week info
+                            "year": year,
                         })
         except Exception:
             return "Error loading local event data."
@@ -4017,10 +4023,40 @@ def update_team_events(active_tab, store_data):
     # Sort by start date (most recent first)
     events.sort(key=lambda ev: ev.get("start_date", ""), reverse=True)
 
+    def get_week_display(ev):
+        """Get week display string for an event."""
+        # For TBA API data, use the week field directly
+        if ev.get("week") is not None:
+            return f"Week {ev['week']}"
+        elif ev.get("week") is None and is_history:
+            return "Off-season"
+        
+        # For local data, calculate week from start date
+        start_date = ev.get("start_date")
+        year = ev.get("year")
+        if not start_date or not year:
+            return "N/A"
+        
+        try:
+            # Convert start_date to date object for the existing get_week_number function
+            if isinstance(start_date, str):
+                event_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+            else:
+                event_date = start_date.date() if hasattr(start_date, 'date') else start_date
+            
+            week_num = get_week_number(event_date)
+            if week_num is not None:
+                return f"Week {week_num + 1}"  # Add 1 since get_week_number returns 0-based index
+            else:
+                return "Off-season"
+        except:
+            return "N/A"
+
     # Format for Dash table
     events_data = [
         {
             "event_name": f"[{ev['name']}](/event/{ev['event_key']})",
+            "week": get_week_display(ev),
             "event_location": ev["location"],
             "start_date": format_human_date(ev["start_date"]),
             "end_date": format_human_date(ev["end_date"]),
@@ -4031,6 +4067,7 @@ def update_team_events(active_tab, store_data):
         columns=[
             {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
             {"name": "Location", "id": "event_location"},
+            {"name": "Week", "id": "week"},
             {"name": "Start Date", "id": "start_date"},
             {"name": "End Date", "id": "end_date"},
         ],
