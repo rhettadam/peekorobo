@@ -249,7 +249,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                         "marginLeft": "8px",
                         "fontSize": "1.1rem",
                         "textDecoration": "underline",
-                        "color": "#007BFF",
+                        "color": "#fff",
                         "fontWeight": "normal"
                     })
                 )

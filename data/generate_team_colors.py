@@ -3,6 +3,24 @@ import os
 from colorthief import ColorThief
 from PIL import Image
 
+def is_color_lighter(color1, color2):
+    """
+    Determine which color is lighter by calculating relative luminance.
+    Returns True if color1 is lighter than color2.
+    """
+    def get_luminance(color):
+        # Convert hex to RGB
+        if color.startswith('#'):
+            color = color[1:]
+        r = int(color[0:2], 16)
+        g = int(color[2:4], 16)
+        b = int(color[4:6], 16)
+        
+        # Calculate relative luminance using sRGB coefficients
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    
+    return get_luminance(color1) > get_luminance(color2)
+
 def get_team_colors(team_number):
     """Extract dominant colors from team avatar."""
     avatar_path = f"assets/avatars/{team_number}.png"
@@ -15,7 +33,11 @@ def get_team_colors(team_number):
                 color_thief = ColorThief(stock_path)
                 dominant_colors = color_thief.get_palette(color_count=2, quality=1)
                 if len(dominant_colors) >= 2:
-                    return [f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}" for color in dominant_colors[:2]]
+                    colors = [f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}" for color in dominant_colors[:2]]
+                    # Ensure darker color comes first
+                    if is_color_lighter(colors[0], colors[1]):
+                        colors = colors[::-1]
+                    return colors
                 elif len(dominant_colors) == 1:
                     color = dominant_colors[0]
                     hex_color = f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}"
@@ -32,7 +54,11 @@ def get_team_colors(team_number):
         
         # Ensure we have exactly 2 colors
         if len(dominant_colors) >= 2:
-            return [f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}" for color in dominant_colors[:2]]
+            colors = [f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}" for color in dominant_colors[:2]]
+            # Ensure darker color comes first
+            if is_color_lighter(colors[0], colors[1]):
+                colors = colors[::-1]
+            return colors
         elif len(dominant_colors) == 1:
             # If only one color, duplicate it
             color = dominant_colors[0]
@@ -46,7 +72,11 @@ def get_team_colors(team_number):
                     color_thief = ColorThief(stock_path)
                     dominant_colors = color_thief.get_palette(color_count=2, quality=1)
                     if len(dominant_colors) >= 2:
-                        return [f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}" for color in dominant_colors[:2]]
+                        colors = [f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}" for color in dominant_colors[:2]]
+                        # Ensure darker color comes first
+                        if is_color_lighter(colors[0], colors[1]):
+                            colors = colors[::-1]
+                        return colors
                     elif len(dominant_colors) == 1:
                         color = dominant_colors[0]
                         hex_color = f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}"
