@@ -315,6 +315,10 @@ def get_team_avatar(team_number, year=2025):
     Returns the relative URL path to a team's avatar image if it exists,
     otherwise returns the path to a stock avatar.
     """
+    # Use bbot.png for team numbers 9970-9999
+    if 9970 <= team_number <= 9999:
+        return "/assets/avatars/bbot.png?v=1"
+    
     avatar_path = f"assets/avatars/{team_number}.png"
     if os.path.exists(avatar_path):
         return f"/assets/avatars/{team_number}.png?v=1"

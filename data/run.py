@@ -719,11 +719,63 @@ def optimized_create_event_db(year):
         except:
             pass
         
+        # Check if this is a California event with B bot mapping issues
+        b_bot_mapping = None
+        try:
+            event_data = tba_get(f"event/{key}")
+            if event_data and event_data.get("state_prov") == "CA":
+                # Check if there are B bots in the teams list
+                teams = tba_get(f"event/{key}/teams")
+                if teams:
+                    b_bots_in_event = [t for t in teams if 9970 <= t.get("team_number", 0) <= 9999]
+                    if b_bots_in_event:
+                        # This is a California event with B bots, need to create reverse mapping
+                        b_bot_mapping = {}
+                        # Get all matches to find B bot patterns
+                        all_matches = tba_get(f"event/{key}/matches")
+                        if all_matches:
+                            for match in all_matches:
+                                for alliance in ["red", "blue"]:
+                                    for team_key in match["alliances"][alliance]["team_keys"]:
+                                        if team_key.endswith("B"):
+                                            try:
+                                                base_num = int(team_key[3:-1])  # Remove "frc" and "B"
+                                                if base_num not in b_bot_mapping:
+                                                    b_bot_mapping[base_num] = team_key
+                                            except ValueError:
+                                                continue
+        except Exception as e:
+            print(f"Error checking B bot mapping for event {key}: {e}")
+        
         # Fetch rankings
         try:
             ranks = tba_get(f"event/{key}/rankings")
             for r in ranks.get("rankings", []):
-                t_num = int(r.get("team_key", "frc0")[3:])
+                team_key = r.get("team_key", "frc0")
+                
+                # Handle B bot mapping for rankings
+                if b_bot_mapping and team_key.endswith("B"):
+                    # This is a B bot in rankings, need to map to the corresponding 9970-9999 number
+                    try:
+                        base_num = int(team_key[3:-1])  # Remove "frc" and "B"
+                        if base_num in b_bot_mapping:
+                            # Find which B bot this maps to by position
+                            base_numbers = sorted(b_bot_mapping.keys())
+                            b_bot_position = base_numbers.index(base_num)
+                            b_bots_in_event = [t for t in teams if 9970 <= t.get("team_number", 0) <= 9999]
+                            b_bots_in_event.sort(key=lambda x: x.get("team_number", 0))
+                            if b_bot_position < len(b_bots_in_event):
+                                t_num = b_bots_in_event[b_bot_position].get("team_number")
+                            else:
+                                continue  # Skip if we can't map it
+                        else:
+                            continue  # Skip if we can't map it
+                    except (ValueError, IndexError):
+                        continue  # Skip if we can't parse or map it
+                else:
+                    # Normal team number extraction
+                    t_num = int(team_key[3:])
+                
                 if str(year) == "2015":
                     qual_avg = r.get("qual_average")
                     new_data["rankings"].append((key, t_num, r.get("rank"),
@@ -740,11 +792,61 @@ def optimized_create_event_db(year):
         try:
             matches = tba_get(f"event/{key}/matches")
             for m in matches:
+                # Handle B bot mapping for matches
+                red_teams = []
+                blue_teams = []
+                
+                for team_key in m["alliances"]["red"]["team_keys"]:
+                    if b_bot_mapping and team_key.endswith("B"):
+                        # This is a B bot in matches, need to map to the corresponding 9970-9999 number
+                        try:
+                            base_num = int(team_key[3:-1])  # Remove "frc" and "B"
+                            if base_num in b_bot_mapping:
+                                # Find which B bot this maps to by position
+                                base_numbers = sorted(b_bot_mapping.keys())
+                                b_bot_position = base_numbers.index(base_num)
+                                b_bots_in_event = [t for t in teams if 9970 <= t.get("team_number", 0) <= 9999]
+                                b_bots_in_event.sort(key=lambda x: x.get("team_number", 0))
+                                if b_bot_position < len(b_bots_in_event):
+                                    red_teams.append(str(b_bots_in_event[b_bot_position].get("team_number")))
+                                else:
+                                    red_teams.append("0")  # Fallback
+                            else:
+                                red_teams.append("0")  # Fallback
+                        except (ValueError, IndexError):
+                            red_teams.append("0")  # Fallback
+                    else:
+                        # Normal team number extraction
+                        red_teams.append(str(int(team_key[3:])))
+                
+                for team_key in m["alliances"]["blue"]["team_keys"]:
+                    if b_bot_mapping and team_key.endswith("B"):
+                        # This is a B bot in matches, need to map to the corresponding 9970-9999 number
+                        try:
+                            base_num = int(team_key[3:-1])  # Remove "frc" and "B"
+                            if base_num in b_bot_mapping:
+                                # Find which B bot this maps to by position
+                                base_numbers = sorted(b_bot_mapping.keys())
+                                b_bot_position = base_numbers.index(base_num)
+                                b_bots_in_event = [t for t in teams if 9970 <= t.get("team_number", 0) <= 9999]
+                                b_bots_in_event.sort(key=lambda x: x.get("team_number", 0))
+                                if b_bot_position < len(b_bots_in_event):
+                                    blue_teams.append(str(b_bots_in_event[b_bot_position].get("team_number")))
+                                else:
+                                    blue_teams.append("0")  # Fallback
+                            else:
+                                blue_teams.append("0")  # Fallback
+                        except (ValueError, IndexError):
+                            blue_teams.append("0")  # Fallback
+                    else:
+                        # Normal team number extraction
+                        blue_teams.append(str(int(team_key[3:])))
+                
                 new_data["matches"].append((
                     m["key"], key, m["comp_level"], m["match_number"],
                     m["set_number"],
-                    ",".join(str(int(t[3:])) for t in m["alliances"]["red"]["team_keys"]),
-                    ",".join(str(int(t[3:])) for t in m["alliances"]["blue"]["team_keys"]),
+                    ",".join(red_teams),
+                    ",".join(blue_teams),
                     m["alliances"]["red"]["score"], m["alliances"]["blue"]["score"],
                     m.get("winning_alliance"),
                     next((v["key"] for v in m.get("videos", []) if v["type"] == "youtube"), None)
@@ -758,7 +860,31 @@ def optimized_create_event_db(year):
             for aw in awards:
                 for r in aw.get("recipient_list", []):
                     if r.get("team_key"):
-                        t_num = int(r["team_key"][3:])
+                        team_key = r["team_key"]
+                        
+                        # Handle B bot mapping for awards
+                        if b_bot_mapping and team_key.endswith("B"):
+                            # This is a B bot in awards, need to map to the corresponding 9970-9999 number
+                            try:
+                                base_num = int(team_key[3:-1])  # Remove "frc" and "B"
+                                if base_num in b_bot_mapping:
+                                    # Find which B bot this maps to by position
+                                    base_numbers = sorted(b_bot_mapping.keys())
+                                    b_bot_position = base_numbers.index(base_num)
+                                    b_bots_in_event = [t for t in teams if 9970 <= t.get("team_number", 0) <= 9999]
+                                    b_bots_in_event.sort(key=lambda x: x.get("team_number", 0))
+                                    if b_bot_position < len(b_bots_in_event):
+                                        t_num = b_bots_in_event[b_bot_position].get("team_number")
+                                    else:
+                                        continue  # Skip if we can't map it
+                                else:
+                                    continue  # Skip if we can't map it
+                            except (ValueError, IndexError):
+                                continue  # Skip if we can't parse or map it
+                        else:
+                            # Normal team number extraction
+                            t_num = int(team_key[3:])
+                        
                         new_data["awards"].append((key, t_num, aw.get("name"), year))
         except:
             pass
@@ -1547,6 +1673,44 @@ def retry_team_fetch(max_attempts=3):
         return wrapper
     return decorator
 
+def detect_b_bot_mapping(event_key, team_number):
+    """
+    Detect if this is a California event with B bot mapping issues.
+    Returns a mapping dict if needed, None otherwise.
+    """
+    if not (9970 <= team_number <= 9999):
+        return None
+    
+    # Check if this is a California event by looking at the event data
+    try:
+        event_data = tba_get(f"event/{event_key}")
+        if event_data and event_data.get("state_prov") == "CA":
+            # This is a California event with potential B bot mapping issues
+            # We need to fetch all matches from the event and look for B bot patterns
+            all_matches = tba_get(f"event/{event_key}/matches")
+            if all_matches:
+                # Look for team keys ending with 'B' in the matches
+                b_bot_mapping = {}
+                for match in all_matches:
+                    for alliance in ["red", "blue"]:
+                        for team_key in match["alliances"][alliance]["team_keys"]:
+                            if team_key.endswith("B"):
+                                # Extract the base number (e.g., "604B" -> 604)
+                                try:
+                                    base_num = int(team_key[3:-1])  # Remove "frc" and "B"
+                                    # Map the base number to the B bot team key
+                                    if base_num not in b_bot_mapping:
+                                        b_bot_mapping[base_num] = team_key
+                                except ValueError:
+                                    continue
+                
+                if b_bot_mapping:
+                    return b_bot_mapping
+    except Exception as e:
+        print(f"Error detecting B bot mapping for event {event_key}: {e}")
+    
+    return None
+
 @retry_team_fetch(max_attempts=3)
 def fetch_team_components(team, year):
     team_key = team["key"]
@@ -1566,7 +1730,54 @@ def fetch_team_components(team, year):
 
     for event_key in event_keys:
         try:
-            matches = tba_get(f"team/{team_key}/event/{event_key}/matches")
+            # Check if this is a B bot that needs special handling
+            b_bot_mapping = detect_b_bot_mapping(event_key, team_number)
+            
+            if b_bot_mapping:
+                # This is a California event with B bot mapping issues
+                # Fetch all matches from the event and filter for this team
+                all_matches = tba_get(f"event/{event_key}/matches")
+                if all_matches:
+                    # Find which base number this B bot maps to
+                    # We'll need to determine this mapping - for now, let's use a simple approach
+                    # Get all B bot team keys from the event teams
+                    event_teams = tba_get(f"event/{event_key}/teams")
+                    b_bots_in_event = [t for t in event_teams if 9970 <= t.get("team_number", 0) <= 9999]
+                    
+                    # Sort B bots by team number to get consistent mapping
+                    b_bots_in_event.sort(key=lambda x: x.get("team_number", 0))
+                    
+                    # Find this team's position in the sorted list
+                    team_position = None
+                    for i, bot in enumerate(b_bots_in_event):
+                        if bot.get("team_number") == team_number:
+                            team_position = i
+                            break
+                    
+                    if team_position is not None and team_position < len(b_bot_mapping):
+                        # Get the corresponding base number and B bot key
+                        base_numbers = sorted(b_bot_mapping.keys())
+                        if team_position < len(base_numbers):
+                            base_num = base_numbers[team_position]
+                            b_bot_key = b_bot_mapping[base_num]
+                            
+                            # Filter matches to only include those where this B bot appears
+                            matches = []
+                            for match in all_matches:
+                                for alliance in ["red", "blue"]:
+                                    if b_bot_key in match["alliances"][alliance]["team_keys"]:
+                                        matches.append(match)
+                                        break
+                        else:
+                            matches = []
+                    else:
+                        matches = []
+                else:
+                    matches = []
+            else:
+                # Normal case - fetch matches directly for this team
+                matches = tba_get(f"team/{team_key}/event/{event_key}/matches")
+            
             if matches:
                 # Calculate overall wins/losses/ties from matches
                 for match in matches:
@@ -1679,7 +1890,53 @@ def analyze_single_team(team_key: str, year: int):
 
     for event_key in event_keys:
         try:
-            matches = tba_get(f"team/{team_key}/event/{event_key}/matches")
+            # Check if this is a B bot that needs special handling
+            b_bot_mapping = detect_b_bot_mapping(event_key, team_number)
+            
+            if b_bot_mapping:
+                # This is a California event with B bot mapping issues
+                # Fetch all matches from the event and filter for this team
+                all_matches = tba_get(f"event/{event_key}/matches")
+                if all_matches:
+                    # Find which base number this B bot maps to
+                    # Get all B bot team keys from the event teams
+                    event_teams = tba_get(f"event/{event_key}/teams")
+                    b_bots_in_event = [t for t in event_teams if 9970 <= t.get("team_number", 0) <= 9999]
+                    
+                    # Sort B bots by team number to get consistent mapping
+                    b_bots_in_event.sort(key=lambda x: x.get("team_number", 0))
+                    
+                    # Find this team's position in the sorted list
+                    team_position = None
+                    for i, bot in enumerate(b_bots_in_event):
+                        if bot.get("team_number") == team_number:
+                            team_position = i
+                            break
+                    
+                    if team_position is not None and team_position < len(b_bot_mapping):
+                        # Get the corresponding base number and B bot key
+                        base_numbers = sorted(b_bot_mapping.keys())
+                        if team_position < len(base_numbers):
+                            base_num = base_numbers[team_position]
+                            b_bot_key = b_bot_mapping[base_num]
+                            
+                            # Filter matches to only include those where this B bot appears
+                            matches = []
+                            for match in all_matches:
+                                for alliance in ["red", "blue"]:
+                                    if b_bot_key in match["alliances"][alliance]["team_keys"]:
+                                        matches.append(match)
+                                        break
+                        else:
+                            matches = []
+                    else:
+                        matches = []
+                else:
+                    matches = []
+            else:
+                # Normal case - fetch matches directly for this team
+                matches = tba_get(f"team/{team_key}/event/{event_key}/matches")
+            
             if matches:
                 # Calculate overall wins/losses/ties from matches
                 for match in matches:

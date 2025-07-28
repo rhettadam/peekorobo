@@ -23,7 +23,11 @@ def is_color_lighter(color1, color2):
 
 def get_team_colors(team_number):
     """Extract dominant colors from team avatar."""
-    avatar_path = f"assets/avatars/{team_number}.png"
+    # Use bbot.png for team numbers 9970-9999
+    if 9970 <= team_number <= 9999:
+        avatar_path = "assets/avatars/bbot.png"
+    else:
+        avatar_path = f"assets/avatars/{team_number}.png"
     
     if not os.path.exists(avatar_path):
         # Try stock.png as fallback
