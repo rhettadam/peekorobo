@@ -1781,9 +1781,36 @@ def fetch_team_components(team, year):
             if matches:
                 # Calculate overall wins/losses/ties from matches
                 for match in matches:
-                    if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
-                        continue
-                    alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
+                    # For B bots in California events, we need to check the B bot key, not the original team key
+                    if b_bot_mapping:
+                        # Find the B bot key for this team
+                        event_teams = tba_get(f"event/{event_key}/teams")
+                        b_bots_in_event = [t for t in event_teams if 9970 <= t.get("team_number", 0) <= 9999]
+                        b_bots_in_event.sort(key=lambda x: x.get("team_number", 0))
+                        
+                        team_position = None
+                        for i, bot in enumerate(b_bots_in_event):
+                            if bot.get("team_number") == team_number:
+                                team_position = i
+                                break
+                        
+                        if team_position is not None:
+                            base_numbers = sorted(b_bot_mapping.keys())
+                            if team_position < len(base_numbers):
+                                base_num = base_numbers[team_position]
+                                b_bot_key = b_bot_mapping[base_num]
+                                
+                                # Check if the B bot key is in the alliances
+                                if b_bot_key not in match["alliances"]["red"]["team_keys"] and b_bot_key not in match["alliances"]["blue"]["team_keys"]:
+                                    continue
+                                alliance = "red" if b_bot_key in match["alliances"]["red"]["team_keys"] else "blue"
+                            else:
+                                continue
+                    else:
+                        # Normal case - check the original team key
+                        if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
+                            continue
+                        alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
                     # 2015: Use scores, not winning_alliance
                     event_year = str(match["event_key"])[:4] if "event_key" in match else str(year)
                     if event_year == "2015":
@@ -1940,10 +1967,36 @@ def analyze_single_team(team_key: str, year: int):
             if matches:
                 # Calculate overall wins/losses/ties from matches
                 for match in matches:
-                    if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
-                        continue
-                    
-                    alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
+                    # For B bots in California events, we need to check the B bot key, not the original team key
+                    if b_bot_mapping:
+                        # Find the B bot key for this team
+                        event_teams = tba_get(f"event/{event_key}/teams")
+                        b_bots_in_event = [t for t in event_teams if 9970 <= t.get("team_number", 0) <= 9999]
+                        b_bots_in_event.sort(key=lambda x: x.get("team_number", 0))
+                        
+                        team_position = None
+                        for i, bot in enumerate(b_bots_in_event):
+                            if bot.get("team_number") == team_number:
+                                team_position = i
+                                break
+                        
+                        if team_position is not None:
+                            base_numbers = sorted(b_bot_mapping.keys())
+                            if team_position < len(base_numbers):
+                                base_num = base_numbers[team_position]
+                                b_bot_key = b_bot_mapping[base_num]
+                                
+                                # Check if the B bot key is in the alliances
+                                if b_bot_key not in match["alliances"]["red"]["team_keys"] and b_bot_key not in match["alliances"]["blue"]["team_keys"]:
+                                    continue
+                                alliance = "red" if b_bot_key in match["alliances"]["red"]["team_keys"] else "blue"
+                            else:
+                                continue
+                    else:
+                        # Normal case - check the original team key
+                        if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
+                            continue
+                        alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
                     # 2015: Use scores, not winning_alliance
                     event_year = str(match["event_key"])[:4] if "event_key" in match else str(year)
                     if event_year == "2015":
