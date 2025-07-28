@@ -21,19 +21,22 @@ def auto_2025(breakdowns, team_count):
     if n < 6:
         return round(statistics.mean(scores), 2)
 
-    # Trim low outliers like in teleop
-    if n < 12:
+    # Optimized trimming based on 2025 match count distribution
+    # Most teams have 20-40 matches, with mean ~32 and median ~27
+    if n < 10:
         trim_pct = 0.0
-    elif n < 25:
-        trim_pct = 0.03
-    elif n < 40:
+    elif n < 20:
         trim_pct = 0.05
-    elif n < 60:
+    elif n < 30:
         trim_pct = 0.08
-    elif n < 100:
-        trim_pct = 0.1
-    else:
+    elif n < 40:
+        trim_pct = 0.10
+    elif n < 60:
         trim_pct = 0.12
+    elif n < 100:
+        trim_pct = 0.15
+    else:
+        trim_pct = 0.18
 
     k = int(n * trim_pct)
     trimmed_scores = sorted(scores)[k:]
@@ -60,19 +63,22 @@ def teleop_2025(breakdowns, team_count):
     if n < 6:
         return round(statistics.mean(scores), 2)
 
-    # Smoothed trimming based on match count
-    if n < 12:
+    # Optimized trimming based on 2025 match count distribution
+    # Most teams have 20-40 matches, with mean ~32 and median ~27
+    if n < 10:
         trim_pct = 0.0
-    elif n < 25:
-        trim_pct = 0.03
-    elif n < 40:
+    elif n < 20:
         trim_pct = 0.05
-    elif n < 60:
+    elif n < 30:
         trim_pct = 0.08
-    elif n < 100:
-        trim_pct = 0.1
-    else:
+    elif n < 40:
+        trim_pct = 0.10
+    elif n < 60:
         trim_pct = 0.12
+    elif n < 100:
+        trim_pct = 0.15
+    else:
+        trim_pct = 0.18
 
     k = int(n * trim_pct)
     trimmed_scores = sorted(scores)[k:]  # trim from low-end only
