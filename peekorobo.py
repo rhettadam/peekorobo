@@ -2792,11 +2792,30 @@ app.clientside_callback(
         
         if (video_ids.length === 0) return window.dash_clientside.no_update;
         
-        // Create YouTube playlist URL with title
-        const playlist_url = `https://www.youtube.com/watch_videos?video_ids=${video_ids.join(',')}&title=${encodeURIComponent(playlist_title)}`;
+        // Split into multiple playlists if more than 50 videos (YouTube limit)
+        const maxVideosPerPlaylist = 50;
+        const numPlaylists = Math.ceil(video_ids.length / maxVideosPerPlaylist);
         
-        // Open in new tab
-        window.open(playlist_url, '_blank');
+        // Open playlists with a delay to avoid browser blocking
+        for (let i = 0; i < numPlaylists; i++) {
+            setTimeout(() => {
+                const startIndex = i * maxVideosPerPlaylist;
+                const endIndex = Math.min(startIndex + maxVideosPerPlaylist, video_ids.length);
+                const playlistVideoIds = video_ids.slice(startIndex, endIndex);
+                
+                // Create playlist title with part number if multiple playlists
+                let playlistTitle = playlist_title;
+                if (numPlaylists > 1) {
+                    playlistTitle = `${playlist_title} - ${i + 1}`;
+                }
+                
+                // Create YouTube playlist URL with title
+                const playlist_url = `https://www.youtube.com/watch_videos?video_ids=${playlistVideoIds.join(',')}&title=${encodeURIComponent(playlistTitle)}`;
+                
+                // Open in new tab
+                window.open(playlist_url, '_blank');
+            }, i * 100); // 100ms delay between each tab
+        }
         
         return window.dash_clientside.no_update;
     }
@@ -4265,99 +4284,6 @@ def update_team_awards(active_tab, store_data):
 
     return build_output(awards)
 
-
-app.clientside_callback(
-    """
-    function(n_clicks, button_ids, pathname) {
-        if (!n_clicks || !n_clicks.some(n => n)) return window.dash_clientside.no_update;
-        
-        // Find which button was clicked
-        const clicked_index = n_clicks.findIndex(n => n);
-        if (clicked_index === -1) return window.dash_clientside.no_update;
-        
-        const clicked_button = button_ids[clicked_index];
-        const event_key = clicked_button.event_key;
-        const team_number = clicked_button.team_number;
-        
-        if (!event_key || !team_number) return window.dash_clientside.no_update;
-        
-        // Create a simple playlist URL that will be handled by the server
-        // We'll use a special URL format that the server can intercept
-        const playlist_url = `/api/playlist/${event_key}/${team_number}`;
-        
-        // Open in new tab
-        window.open(playlist_url, '_blank');
-        
-        return window.dash_clientside.no_update;
-    }
-    """,
-    Output("url", "pathname", allow_duplicate=True),
-    Input({"type": "recent-event-playlist", "event_key": ALL, "team_number": ALL}, "n_clicks"),
-    [
-        State({"type": "recent-event-playlist", "event_key": ALL, "team_number": ALL}, "id"),
-        State("url", "pathname"),
-    ],
-    prevent_initial_call=True
-)
-
-@app.server.route('/api/playlist/<event_key>/<team_number>')
-def create_team_event_playlist(event_key, team_number):
-    """Create a YouTube playlist for a specific team at a specific event."""
-    try:
-        team_number = int(team_number)
-        year = current_year  # Default to current year
-        
-        # Get matches for this team and event
-        year_matches = EVENT_MATCHES.get(year, [])
-        team_matches = [
-            m for m in year_matches 
-            if m.get("ek") == event_key and (
-                str(team_number) in m.get("rt", "").split(",") or 
-                str(team_number) in m.get("bt", "").split(",")
-            )
-        ]
-        
-        if not team_matches:
-            return "No matches found for this team at this event.", 404
-        
-        # Sort matches in correct order
-        def parse_match_sort_key(match):
-            comp_level_order = {"qm": 0, "sf": 1, "qf": 2, "f": 3}
-            key = match.get("k", "").split("_")[-1].lower()
-            
-            # Extract comp level and match number
-            for level in comp_level_order:
-                if key.startswith(level):
-                    remainder = key[len(level):].replace("m", "")
-                    match_number = int(remainder) if remainder.isdigit() else 0
-                    return (comp_level_order[level], match_number)
-            
-            return (99, 9999)
-        
-        team_matches.sort(key=parse_match_sort_key)
-        
-        # Extract YouTube video IDs
-        video_ids = [m.get("yt") for m in team_matches if m.get("yt")]
-        
-        if not video_ids:
-            return "No YouTube videos found for this team at this event.", 404
-        
-        # Get event name
-        event_data = EVENT_DATABASE.get(year, {}).get(event_key, {})
-        event_name = event_data.get("n", event_key)
-        
-        # Create playlist title
-        playlist_title = f"{event_name} - Team {team_number}"
-        
-        # Create YouTube playlist URL
-        playlist_url = f"https://www.youtube.com/watch_videos?video_ids={','.join(video_ids)}&title={quote(playlist_title)}"
-        
-        # Redirect to the playlist
-        return flask.redirect(playlist_url)
-        
-    except Exception as e:
-        return f"Error creating playlist: {str(e)}", 500
-
 @app.callback(
     Output("event-alliances-content", "children"),
     Input("event-data-tabs", "active_tab"),
@@ -4848,4 +4774,4 @@ def update_insights_table(selected_insight, pathname, event_teams, event_db):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)

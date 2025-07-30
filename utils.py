@@ -18,11 +18,19 @@ with open('data/week_ranges.json', 'r', encoding='utf-8') as f:
     WEEK_RANGES_BY_YEAR = json.load(f)
 
 def get_event_week_label(event_start_date):
-    """Return a string like 'Week 1', 'Week 6', or 'Champs' for the event date."""
+    """Return a string like 'Week 1', 'Week 6', 'Worlds', 'Pre-Season', or 'Off-Season' for the event date."""
     year = str(event_start_date.year)
     week_ranges = WEEK_RANGES_BY_YEAR.get(year)
     if not week_ranges:
         return None
+    
+    # Check if date is before the first week range (pre-season)
+    if week_ranges:
+        first_start = date.fromisoformat(week_ranges[0][0])
+        if event_start_date < first_start:
+            return "Pre-Season"
+    
+    # Check if date is within any week range
     for i, (start, end) in enumerate(week_ranges):
         start_dt = date.fromisoformat(start)
         end_dt = date.fromisoformat(end)
@@ -31,7 +39,9 @@ def get_event_week_label(event_start_date):
                 return "Worlds"
             else:
                 return f"Week {i+1}"
-    return None
+    
+    # If we get here, the date is after all week ranges (off-season)
+    return "Off-Season"
 
 def apply_simple_filter(df, filter_query):
     # Only supports simple "{"col"} op value" and "and"/"or"

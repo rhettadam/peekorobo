@@ -6,8 +6,8 @@ from datetime import datetime
 from utils import format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, compute_percentiles, pill, get_event_week_label
 import json
 import os
+import re
 import plotly.graph_objs as go
-import numpy as np
 
 from utils import WEEK_RANGES_BY_YEAR
 
@@ -2373,34 +2373,14 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         else:
             event_epa_pills = html.Div() # Ensure it's an empty div if no data, not None
 
-        header = html.Div([
-            html.Div([
-                html.A(str(year) + " " + event_name, href=event_url, style={"fontWeight": "bold", "fontSize": "1.1rem"}),
-                dbc.Button(
-                    "Playlist",
-                    id={"type": "recent-event-playlist", "event_key": event_key, "team_number": team_number},
-                    color="warning",
-                    outline=True,
-                    size="sm",
-                    className="custom-view-btn",
-                    style={
-                        "fontSize": "1.2rem",
-                        "fontWeight": "bold",
-                        "padding": "1rem 2rem",
-                        "width": "100px",
-                        "marginLeft": "10px"
-                    }
-                )
-            ], style={"display": "flex", "alignItems": "center"}),
-            html.Div(loc),
-            html.Div(rank_str),
-            html.Div([
-                html.Span("Record: ", style={"marginRight": "5px"}),
-                record,
-                html.Div(awards_line),
-                event_epa_pills if event_epa_pills else None,
-            ]),
-        ], style={"marginBottom": "10px"})
+        # Get week label for the event
+        week_label = None
+        if start_date:
+            try:
+                event_start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+                week_label = get_event_week_label(event_start_date)
+            except ValueError:
+                pass
 
         # Handle both data structures for matches
         if has_year_keys:
@@ -2409,11 +2389,164 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         else:
             # 2024 structure: EVENT_MATCHES is a list
             year_matches = EVENT_MATCHES
-        matches = [m for m in year_matches if m.get("ek") == event_key]
+        
+        # Get ALL matches for this event for learning purposes
+        all_event_matches = [m for m in year_matches if m.get("ek") == event_key]
+        
+        def get_team_epa_info(t_key):
+            # First try to get event-specific EPA data for this team
+            t_data = epa_data.get(t_key.strip(), {})
+            event_epa = next((e for e in t_data.get("event_epas", []) if e.get("event_key") == event_key), None)
+            if event_epa and event_epa.get("overall", 0) != 0:
+                return {
+                    "team_number": int(t_key.strip()),
+                    "epa": event_epa.get("overall", 0),
+                    "confidence": event_epa.get("confidence", 0.7),
+                    "consistency": event_epa.get("consistency", 0)
+                }
+            
+            # If no event-specific EPA, try to get team's overall EPA
+            if t_data.get("epa") not in (None, ""):
+                epa_val = t_data.get("epa", 0)
+                conf_val = t_data.get("confidence", 0.7)
+                return {
+                    "team_number": int(t_key.strip()),
+                    "epa": epa_val,
+                    "confidence": conf_val,
+                    "consistency": t_data.get("consistency", 0)
+                }
+            
+            # If still no data, try to get from team database for the year
+            try:
+                if year == current_year:
+                    from peekorobo import TEAM_DATABASE
+                    team_data = TEAM_DATABASE.get(year, {}).get(int(t_key.strip()), {})
+                else:
+                    from datagather import load_year_data
+                    year_team_data, _, _, _, _, _ = load_year_data(year)
+                    team_data = year_team_data.get(int(t_key.strip()), {})
+                
+                return {
+                    "team_number": int(t_key.strip()),
+                    "epa": team_data.get("epa", 0),
+                    "confidence": team_data.get("confidence", 0.7),
+                    "consistency": team_data.get("consistency", 0)
+                }
+            except Exception:
+                # Final fallback
+                return {"team_number": int(t_key.strip()), "epa": 0, "confidence": 0.7, "consistency": 0}
+
+        # Process ALL matches for learning (this ensures the adaptive predictor learns from all matches)
+        for match in all_event_matches:
+            red_str = match.get("rt", "")
+            blue_str = match.get("bt", "")
+            red_score = match.get("rs", 0)
+            blue_score = match.get("bs", 0)
+            
+            # Only learn from completed matches
+            if red_score > 0 and blue_score > 0:
+                red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
+                blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
+                
+                if red_team_info and blue_team_info:
+                    # Learn from completed matches
+                    winner = match.get("wa", "Tie").lower()
+                    if winner in ["red", "blue"]:
+                        learn_from_match_outcome(event_key, match.get("k", ""), winner, red_score, blue_score)
+        
+        # Filter to only show matches the team played in
         matches = [
-            m for m in matches
+            m for m in all_event_matches
             if str(team_number) in m.get("rt", "").split(",") or str(team_number) in m.get("bt", "").split(",")
         ]
+
+        # Calculate prediction accuracy for this team in this event
+        def compute_team_event_accuracy(team_matches):
+            total = 0
+            correct = 0
+            excluded_ties = 0
+            
+            for match in team_matches:
+                red_score = match.get("rs", 0)
+                blue_score = match.get("bs", 0)
+                winner = match.get("wa", "Tie").lower()
+                
+                # Only count completed matches
+                if red_score <= 0 or blue_score <= 0:
+                    continue
+                
+                # Determine team's alliance
+                team_alliance = None
+                if str(team_number) in match.get("rt", "").split(","):
+                    team_alliance = "red"
+                elif str(team_number) in match.get("bt", "").split(","):
+                    team_alliance = "blue"
+                else:
+                    continue  # Team not in this match
+                
+                # Get prediction for this match
+                red_str = match.get("rt", "")
+                blue_str = match.get("bt", "")
+                red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
+                blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
+                
+                if red_team_info and blue_team_info:
+                    p_red, p_blue = predict_win_probability_adaptive(red_team_info, blue_team_info, event_key, match.get("k", ""))
+                    
+                    if winner == "tie":
+                        # Only count as correct if prediction is 50%
+                        team_prediction = p_red if team_alliance == "red" else p_blue
+                        if abs(team_prediction - 0.5) < 0.01:  # Within 1% of 50%
+                            total += 1
+                            correct += 1
+                        else:
+                            excluded_ties += 1
+                    elif winner in ["red", "blue"]:
+                        total += 1
+                        team_prediction = p_red if team_alliance == "red" else p_blue
+                        
+                        # Check if prediction was correct
+                        if (team_alliance == winner and team_prediction > 0.5) or (team_alliance != winner and team_prediction < 0.5):
+                            correct += 1
+            
+            acc = (correct / total * 100) if total > 0 else 0
+            return correct, total, acc, excluded_ties
+
+        # Calculate accuracy for this event
+        correct, total, accuracy, excluded_ties = compute_team_event_accuracy(matches)
+        
+        # Create accuracy badge
+        def accuracy_badge(correct, total, acc, excluded_ties):
+            if excluded_ties:
+                note = f" (excluding {excluded_ties} ties)" if excluded_ties > 1 else f" (excluding {excluded_ties} tie)"
+            else:
+                note = ""
+            return html.Span(
+                f"Prediction Accuracy: {correct}/{total} ({acc:.0f}%)" + note,
+                style={
+                    "color": "var(--text-secondary)",
+                    "fontSize": "0.9rem",
+                    "fontWeight": "normal"
+                }
+            )
+
+        header = html.Div([
+            html.Div([
+                html.Div([
+                    html.A(str(year) + " " + event_name, href=event_url, style={"fontWeight": "bold", "fontSize": "1.1rem"}),
+                    html.Span(f" ({week_label})", style={"color": "var(--text-muted)", "fontSize": "0.9rem", "marginLeft": "8px"}) if week_label else None,
+                ], style={"flex": "1"}),
+                accuracy_badge(correct, total, accuracy, excluded_ties) if total > 0 else None,
+            ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between"}),
+            html.Div(loc),
+            html.Div(rank_str),
+            html.Div([
+                html.Span("Record: ", style={"marginRight": "5px"}),
+                record,
+                html.Div(awards_line),
+                event_epa_pills if event_epa_pills else None,
+            ]),
+        ], style={"marginBottom": "20px"})
 
         def build_match_rows(matches):
             rows = []
@@ -2456,27 +2589,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 # Add match link
                 match_url = f"/match/{event_key}/{label}"
                 match_label_md = f"[{label}]({match_url})"
-                
-                def get_team_epa_info(t_key):
-                    t_data = epa_data.get(t_key.strip(), {})
-                    event_epa = next((e for e in t_data.get("event_epas", []) if e.get("event_key") == event_key), None)
-                    if event_epa and event_epa.get("overall", 0) != 0:
-                        return {
-                            "team_number": int(t_key.strip()),
-                            "epa": event_epa.get("overall", 0),
-                            "confidence": event_epa.get("confidence", 0.7),
-                            "consistency": event_epa.get("consistency", 0)
-                        }
-                    if t_data.get("epa") not in (None, ""):
-                        epa_val = t_data.get("epa", 0)
-                        conf_val = t_data.get("confidence", 0.7)
-                        return {
-                            "team_number": int(t_key.strip()),
-                            "epa": epa_val,
-                            "confidence": conf_val,
-                            "consistency": t_data.get("consistency", 0)
-                        }
-                    return {"team_number": int(t_key.strip()), "epa": 0, "confidence": 0, "consistency": 0}
                 red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
                 if red_team_info and blue_team_info:
@@ -2601,8 +2713,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         recent_rows.append(
             html.Div([
                 header,
-                table
-            ])
+                table,
+            ], style={"marginBottom": "30px"})
         )
     
     return html.Div([
@@ -3914,8 +4026,29 @@ def event_layout(event_key):
     # Determine last match and thumbnail
     last_match = None
     if event_matches:
-        final_matches = [m for m in event_matches if m.get("cl") == "f"]
-        last_match = final_matches[-1] if final_matches else event_matches[-1]
+        # Sort matches chronologically by match key to get the actual last match
+        def chronological_sort_key(match):
+            # Use the match key format like the existing code but reverse priority
+            key = match.get("k", "").split("_", 1)[-1].lower()
+            
+            # Use regex to extract comp level, set number, and match number
+   
+            match_re = re.match(r"(qm|qf|sf|f)?(\d*)m?(\d+)", key)
+            if match_re:
+                level_str, set_num_str, match_num_str = match_re.groups()
+                # Reverse the level priority so finals come last (highest number)
+                level = {"qm": 0, "qf": 1, "sf": 2, "f": 3}.get(level_str, 99)
+                set_num = int(set_num_str) if set_num_str.isdigit() else 0
+                match_num = int(match_num_str) if match_num_str.isdigit() else 0
+                return (level, set_num, match_num)
+            else:
+                # Fallback if format is weird
+                return (99, 99, 9999)
+        
+        # Sort chronologically and find the last match with a video
+        sorted_matches = sorted(event_matches, key=chronological_sort_key)
+        matches_with_videos = [m for m in sorted_matches if m.get("yt")]
+        last_match = matches_with_videos[-1] if matches_with_videos else sorted_matches[-1]
 
     last_match_thumbnail = None
     if last_match and last_match.get("yt"):
