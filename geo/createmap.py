@@ -458,21 +458,20 @@ def generate_team_event_map(output_file="teams_map.html"):
 
     # --- Teams Layer ---
     teams_layer = folium.FeatureGroup(name="Teams", show=True)
-    cluster = MarkerCluster(
+    team_cluster = MarkerCluster(
         name="Team Clusters",
         options={
-            'maxClusterRadius': 80,  # Increased to create larger clusters
+            'maxClusterRadius': 100,  # Much larger radius - cluster teams over a wider area
             'spiderfyOnMaxZoom': True,
             'showCoverageOnHover': True,
             'zoomToBoundsOnClick': True,
-            'disableClusteringAtZoom': 8,  # Stop clustering much earlier (zoom level 8)
+            'disableClusteringAtZoom': 8,  # Stop clustering at zoom level 8 (later)
             'chunkedLoading': True,
-            'minClusterSize': 3,  # Only cluster when 3 or more markers are close
+            'minClusterSize': 5,  # Cluster when 2 or more markers are close
             'spiderfyDistanceMultiplier': 1.5,  # Spread out overlapping markers more
             'spiderfyShapePositions': 'circle'  # Arrange overlapping markers in a circle
         }
     ).add_to(teams_layer)
-    search_layer = folium.FeatureGroup(name="Search Layer", show=False)
 
     epa_values = [t["epa"] for t in map_teams if t.get("epa") is not None]
     percentiles = {
@@ -527,37 +526,27 @@ def generate_team_event_map(output_file="teams_map.html"):
 """.strip()
         iframe = IFrame(popup_html, width=350, height=150)
         popup = folium.Popup(iframe, max_width=500)
-        folium.Marker(
+        team_marker = folium.Marker(
             location=[lat, lng],
             popup=popup,
             tooltip=label,
             icon=icon
-        ).add_to(cluster)
-        # Invisible searchable marker for teams
-        search_label = f"Team {team['team_number']}: {team.get('nickname', '')} - {team.get('city', '')}, {team.get('state_prov', '')}"
-        marker = folium.CircleMarker(
-            location=[lat, lng],
-            radius=0.0001,
-            fill=True,
-            fill_opacity=0,
-            opacity=0,
-            popup=popup_html
         )
-        marker.add_to(search_layer)
-        marker.options.update({"name": search_label})
+        team_marker.options.update({"name": f"Team {team['team_number']}: {team.get('nickname', '')} - {team.get('city', '')}, {team.get('state_prov', '')}"})
+        team_marker.add_to(team_cluster)
 
     # --- Events Layer ---
     events_layer = folium.FeatureGroup(name="Events", show=True)
     event_cluster = MarkerCluster(
         name="Event Clusters",
         options={
-            'maxClusterRadius': 60,  # Increased for larger event clusters
+            'maxClusterRadius': 80,  # Much larger radius for events
             'spiderfyOnMaxZoom': True,
             'showCoverageOnHover': True,
             'zoomToBoundsOnClick': True,
-            'disableClusteringAtZoom': 7,  # Stop clustering even earlier for events (zoom level 7)
+            'disableClusteringAtZoom': 7,  # Stop clustering at zoom level 7 for events
             'chunkedLoading': True,
-            'minClusterSize': 3,  # Only cluster when 3 or more markers are close
+            'minClusterSize': 2,  # Cluster when 2 or more events are close
             'spiderfyDistanceMultiplier': 1.5,  # Spread out overlapping markers more
             'spiderfyShapePositions': 'circle'  # Arrange overlapping markers in a circle
         }
@@ -606,20 +595,8 @@ def generate_team_event_map(output_file="teams_map.html"):
             icon=folium.Icon(color=color, icon="star")
         )
         
+        marker.options.update({"name": f"Event {event.get('event_code', '')}: {event['name']} - {event.get('city', '')}, {event.get('state_prov', '')}"})
         marker.add_to(event_cluster)
-
-        # Add invisible searchable marker for events
-        search_label = f"Event {event.get('event_code', '')}: {event['name']} - {event.get('city', '')}, {event.get('state_prov', '')}"
-        search_marker = folium.CircleMarker(
-            location=[lat, lng],
-            radius=0.0001,
-            fill=True,
-            fill_opacity=0,
-            opacity=0,
-            popup=popup_html # Using raw html string for search marker consistency
-        )
-        search_marker.add_to(search_layer)
-        search_marker.options.update({"name": search_label})
 
     # --- Heatmap Layer ---
     heatmap_layer = folium.FeatureGroup(name="Team Density Heatmap", show=False)
@@ -638,7 +615,6 @@ def generate_team_event_map(output_file="teams_map.html"):
 
     # Add all layers to map
     teams_layer.add_to(m)
-    search_layer.add_to(m)
     events_layer.add_to(m)
     heatmap_layer.add_to(m)
     event_heatmap_layer.add_to(m)
@@ -1064,6 +1040,9 @@ def generate_team_event_map(output_file="teams_map.html"):
         background: #2A2A2A !important;
         width: 100% !important;
         padding: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
     }
     
     #locate-control-container .leaflet-control-locate a {
@@ -1073,17 +1052,28 @@ def generate_team_event_map(output_file="teams_map.html"):
         color: #fff !important;
         font-size: 12px !important;
         padding: 6px 10px !important;
-        margin: 2px 0 !important;
+        margin: 0 !important;
         text-align: center !important;
-        display: block !important;
+        display: flex !important;
+        align-items: center !important;
         text-decoration: none !important;
         box-sizing: border-box !important;
+        flex-shrink: 0 !important;
     }
     
     #locate-control-container .leaflet-control-locate a:hover {
         background: #444 !important;
         color: #fff !important;
         text-decoration: none !important;
+    }
+    
+    /* Style the locate control label */
+    #locate-control-container .locate-label {
+        color: #fff !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        margin: 0 !important;
+        flex-grow: 1 !important;
     }
     
 
@@ -1283,6 +1273,15 @@ def generate_team_event_map(output_file="teams_map.html"):
             const locateControl = document.querySelector('.leaflet-control-locate');
             if (locateControl && !document.getElementById('locate-control-container').contains(locateControl)) {
                 document.getElementById('locate-control-container').appendChild(locateControl);
+                
+                // Add label if it doesn't exist
+                if (!locateControl.querySelector('.locate-label')) {
+                    const label = document.createElement('span');
+                    label.className = 'locate-label';
+                    label.textContent = 'Show Your Location';
+                    locateControl.appendChild(label);
+                }
+                
                 // Show the control smoothly
                 setTimeout(() => {
                     locateControl.style.opacity = '1';
@@ -1393,6 +1392,39 @@ def generate_team_event_map(output_file="teams_map.html"):
     
     m.get_root().html.add_child(folium.Element(sidebar_js))
 
+    # Create a combined search layer for teams and events
+    search_layer = folium.FeatureGroup(name="Search Layer", show=False)
+    
+    # Add team markers to search layer
+    for team in map_teams:
+        lat, lng = team["lat"], team["lng"]
+        search_marker = folium.CircleMarker(
+            location=[lat, lng],
+            radius=0.0001,
+            fill=True,
+            fill_opacity=0,
+            opacity=0,
+            popup=f"Team {team['team_number']}: {team.get('nickname', '')}"
+        )
+        search_marker.options.update({"name": f"Team {team['team_number']}: {team.get('nickname', '')} - {team.get('city', '')}, {team.get('state_prov', '')}"})
+        search_marker.add_to(search_layer)
+    
+    # Add event markers to search layer
+    for event in map_events:
+        lat, lng = event["lat"], event["lng"]
+        search_marker = folium.CircleMarker(
+            location=[lat, lng],
+            radius=0.0001,
+            fill=True,
+            fill_opacity=0,
+            opacity=0,
+            popup=f"Event: {event['name']}"
+        )
+        search_marker.options.update({"name": f"Event {event.get('event_code', '')}: {event['name']} - {event.get('city', '')}, {event.get('state_prov', '')}"})
+        search_marker.add_to(search_layer)
+    
+    search_layer.add_to(m)
+    
     # Add the controls to the map (they will be moved to sidebar by JavaScript)
     Search(
         layer=search_layer,
