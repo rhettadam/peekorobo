@@ -1,8 +1,7 @@
 import folium
 from folium.plugins import (
-    MarkerCluster, Search, HeatMap, AntPath, MiniMap, MousePosition, 
-    LocateControl, FloatImage,
-    BeautifyIcon, MeasureControl
+    MarkerCluster, Search, HeatMap, MiniMap, MousePosition, 
+    LocateControl, MeasureControl
 )
 import json
 import os
@@ -295,7 +294,7 @@ def get_state_geojson():
 def get_israel_boundary():
     """Get Israel boundary GeoJSON data"""
     # Try to load from cache first
-    cache_file = "israel_boundary.json"
+    cache_file = os.path.join(SCRIPT_DIR, "israel_boundary.json")
     if os.path.exists(cache_file):
         with open(cache_file, "r") as f:
             return json.load(f)
@@ -306,10 +305,11 @@ def get_israel_boundary():
     if response.status_code == 200:
         data = response.json()
         
-        # Find Israel in the countries data
+        # Find Israel proper (where ADMIN is 'Israel')
         for feature in data['features']:
-            country_name = feature['properties'].get('name', '').lower()
-            if 'israel' in country_name:
+            properties = feature['properties']
+            if (properties.get('SOVEREIGNT') == 'Israel' and 
+                properties.get('ADMIN') == 'Israel'):
                 # Modify the feature to match our district format
                 feature['properties']['name'] = 'Israel'
                 feature['properties']['district'] = 'ISR'
