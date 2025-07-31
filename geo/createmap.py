@@ -1350,6 +1350,41 @@ def generate_team_event_map(output_file="teams_map.html"):
         // Run overlapping marker handler after map loads
         setTimeout(handleOverlappingMarkers, 2000);
         setTimeout(handleOverlappingMarkers, 5000);
+        
+        // Hide loading spinner when map is ready
+        function hideLoadingSpinner() {
+            const spinner = document.querySelector('.loading-spinner');
+            if (spinner) {
+                spinner.style.opacity = '0';
+                spinner.style.transform = 'translate(-50%, -50%) scale(0.8)';
+                spinner.style.transition = 'all 0.5s ease';
+                setTimeout(() => {
+                    spinner.style.display = 'none';
+                }, 500);
+            }
+        }
+        
+        // Hide spinner when map tiles are loaded
+        function hideSpinnerWhenReady() {
+            // Try multiple methods to detect when map is ready
+            if (window.map && window.map.whenReady) {
+                window.map.whenReady(() => {
+                    hideLoadingSpinner();
+                });
+            } else if (document.querySelector('.leaflet-container')) {
+                // If leaflet container exists, map is probably ready
+                setTimeout(hideLoadingSpinner, 500);
+            } else {
+                // Fallback: hide spinner quickly
+                setTimeout(hideLoadingSpinner, 800);
+            }
+        }
+        
+        // Try to hide spinner as soon as possible
+        hideSpinnerWhenReady();
+        
+        // Also hide after a short delay as backup
+        setTimeout(hideLoadingSpinner, 800);
     });
     </script>
     '''
@@ -1413,7 +1448,57 @@ def generate_team_event_map(output_file="teams_map.html"):
     # Add dark background to prevent white flash
     html_content = html_content.replace(
         '<head>',
-        '<head>\n<style>html, body { background: #1A1A1A !important; margin: 0; padding: 0; }</style>'
+        '''<head>
+<style>
+html, body { 
+    background: #1A1A1A !important; 
+    margin: 0; 
+    padding: 0; 
+}
+
+/* Loading spinner */
+.loading-spinner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    text-align: center;
+    color: #fff;
+    font-family: Arial, sans-serif;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #444;
+    border-top: 3px solid #FFDD00;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+}
+</style>'''
+    )
+    
+    # Add loading spinner to body
+    html_content = html_content.replace(
+        '<body>',
+        '''<body>
+<div class="loading-spinner">
+    <div class="spinner"></div>
+    <p class="loading-text">Loading map...</p>
+</div>'''
     )
     
     # Compress the HTML content
