@@ -609,13 +609,13 @@ label {
     flex-shrink: 0;
     flex-basis: 0;
     max-width: 100%;         /* allows full use of container space */
-    min-width: 371px;        /* wide enough for 'Louisiana' */
+    min-width: 300px;        /* wide enough for 'Louisiana' */
   }
 
   /* Override on small screens */
 @media (max-width: 600px) {
     .rank-card {
-      min-width: 115px;  /* Smaller for mobile */
+      min-width: 100px;  /* Smaller for mobile */
     }
   }
   
