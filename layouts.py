@@ -375,11 +375,59 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             "color": "white"
         },
     )
-    def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state, year_data):
+    def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state, year_data, selected_team):
         # Calculate total counts for each category
         total_teams = len(year_data)
         country_teams = len([team for team in year_data.values() if team.get("country", "").lower() == country.lower()])
         state_teams = len([team for team in year_data.values() if team.get("state_prov", "").lower() == state.lower()])
+        
+        # Load district definitions and determine team's district
+        district_rank = None
+        district_name = None
+        district_teams = 0
+        
+        try:
+            with open("data/district_states.json", "r") as f:
+                district_definitions = json.load(f)
+            
+            # Find which district the team belongs to
+            for district_code, district_info in district_definitions.items():
+                district_states = district_info.get("abbreviations", [])
+                district_names = district_info.get("names", [])
+                
+                # Check if team's state matches this district
+                if (state.upper() in district_states or 
+                    state in district_names or
+                    country in district_names):  # For international districts like Israel
+                    
+                    # Calculate district rank
+                    district_teams = len([
+                        team for team in year_data.values() 
+                        if (team.get("state_prov", "").upper() in district_states or 
+                            team.get("state_prov", "") in district_names or
+                            team.get("country", "") in district_names)
+                    ])
+                    
+                    if district_teams > 0:
+                        # Sort teams in this district by EPA and find team's rank
+                        district_team_list = [
+                            team for team in year_data.values() 
+                            if (team.get("state_prov", "").upper() in district_states or 
+                                team.get("state_prov", "") in district_names or
+                                team.get("country", "") in district_names)
+                        ]
+                        district_team_list.sort(key=lambda x: x.get("epa", 0), reverse=True)
+                        
+                        # Find the team's rank in the district
+                        for i, team in enumerate(district_team_list):
+                            if team.get("team_number") == selected_team.get("team_number"):
+                                district_rank = i + 1
+                                break
+                        
+                        district_name = district_code
+                        break
+        except Exception as e:
+            print(f"Error loading district data: {e}")
         
         def rank_card(top, rank, total, href):
             return html.Div(
@@ -395,12 +443,21 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                 )
             )
 
+        # Build rank cards list
+        rank_cards = [
+            rank_card("Global", global_rank, total_teams, f"/teams?year={performance_year}&sort_by=epa"),
+            rank_card(country, country_rank, country_teams, f"/teams?year={performance_year}&country={country}&sort_by=epa"),
+            rank_card(state, state_rank, state_teams, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa"),
+        ]
+        
+        # Add district rank card if team is in a district
+        if district_rank and district_name and district_teams > 0:
+            rank_cards.append(
+                rank_card(district_name, district_rank, district_teams, f"/teams?year={performance_year}&sort_by=epa")
+            )
+
         return html.Div([
-            html.Div([
-                rank_card("Global", global_rank, total_teams, f"/teams?year={performance_year}&sort_by=epa"),
-                rank_card(country, country_rank, country_teams, f"/teams?year={performance_year}&country={country}&sort_by=epa"),
-                rank_card(state, state_rank, state_teams, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa"),
-            ], className="rank-card-container")
+            html.Div(rank_cards, className="rank-card-container")
         ], className="mb-4")
 
 
@@ -465,7 +522,8 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         state_rank,
         country,
         state,
-        year_data
+        year_data,
+        selected_team
     )
 
     performance_metrics_card = build_performance_metrics_card(
@@ -4234,6 +4292,38 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
             endgame_fit = np.polyfit(x, y_endgame, 1)
             confidence_fit = np.polyfit(x, y_confidence, 1)
             epa_fit = np.polyfit(x, y_epa, 1)
+            
+            # Calculate trend strength and apply conservative adjustments
+            ace_slope = ace_fit[0]
+            auto_slope = auto_fit[0]
+            teleop_slope = teleop_fit[0]
+            endgame_slope = endgame_fit[0]
+            epa_slope = epa_fit[0]
+            
+            # Apply conservative adjustments based on trend strength
+            # Strong positive trends get reduced, but teams maintain some improvement
+            def apply_conservative_adjustment(slope, current_value):
+                if slope > 0:
+                    # Reduce positive slopes by 30-60% depending on strength
+                    # This allows teams to maintain some improvement but not continue at full pace
+                    if slope > current_value * 0.15:  # Very strong trend
+                        reduction_factor = 0.4  # Keep 40% of the improvement
+                    elif slope > current_value * 0.08:  # Strong trend
+                        reduction_factor = 0.6  # Keep 60% of the improvement
+                    else:  # Moderate trend
+                        reduction_factor = 0.8  # Keep 80% of the improvement
+                    adjusted_slope = slope * reduction_factor
+                else:
+                    # Keep negative slopes as they are (teams can decline)
+                    adjusted_slope = slope
+                return adjusted_slope
+            
+            # Apply adjustments to slopes
+            ace_fit[0] = apply_conservative_adjustment(ace_slope, np.mean(y_ace))
+            auto_fit[0] = apply_conservative_adjustment(auto_slope, np.mean(y_auto))
+            teleop_fit[0] = apply_conservative_adjustment(teleop_slope, np.mean(y_teleop))
+            endgame_fit[0] = apply_conservative_adjustment(endgame_slope, np.mean(y_endgame))
+            epa_fit[0] = apply_conservative_adjustment(epa_slope, np.mean(y_epa))
             pred_x = np.arange(n_events, n_events + n_pred)
             predicted_ace = np.polyval(ace_fit, pred_x) if n_pred > 0 else []
             predicted_auto = np.polyval(auto_fit, pred_x) if n_pred > 0 else []
@@ -4241,6 +4331,30 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
             predicted_endgame = np.polyval(endgame_fit, pred_x) if n_pred > 0 else []
             predicted_confidence = np.polyval(confidence_fit, pred_x) if n_pred > 0 else []
             predicted_epa = np.polyval(epa_fit, pred_x) if n_pred > 0 else []
+            
+            # Apply bounds to predictions
+            if n_pred > 0:
+                # Apply conservative confidence adjustments
+                # Teams typically don't maintain high confidence indefinitely
+                for i in range(len(predicted_confidence)):
+                    if predicted_confidence[i] > 0.8:
+                        # Reduce very high confidence predictions more gently
+                        predicted_confidence[i] = 0.8 + (predicted_confidence[i] - 0.8) * 0.7
+                    elif predicted_confidence[i] > 0.6:
+                        # Slightly reduce moderate-high confidence
+                        predicted_confidence[i] = 0.6 + (predicted_confidence[i] - 0.6) * 0.8
+                
+                # Ensure confidence never exceeds 1.0 or goes below 0.0
+                predicted_confidence = np.clip(predicted_confidence, 0.0, 1.0)
+                
+                # Ensure all other predictions never go below 0.0
+                predicted_auto = np.maximum(predicted_auto, 0.0)
+                predicted_teleop = np.maximum(predicted_teleop, 0.0)
+                predicted_endgame = np.maximum(predicted_endgame, 0.0)
+                predicted_epa = np.maximum(predicted_epa, 0.0)
+                
+                # Calculate ACE correctly: ACE = EPA * confidence
+                predicted_ace = predicted_epa * predicted_confidence
         else:
             predicted_ace = []
             predicted_auto = []
@@ -4251,17 +4365,43 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
         predicted_event_codes = [f'{year}pred{i+1}' for i in range(n_pred)]
         # Main trace (actual)
         fig = go.Figure()
+        
+        # Add gradient background effect
+        fig.add_trace(go.Scatter(
+            x=event_codes,
+            y=ace_values,
+            mode='lines',
+            line=dict(color='rgba(255, 221, 0, 0.3)', width=8, shape='spline'),
+            fill='tozeroy',
+            fillcolor='rgba(255, 221, 0, 0.1)',
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+        
+        # Main actual data trace with enhanced styling
         fig.add_trace(go.Scatter(
             x=event_codes,
             y=ace_values,
             mode='lines+markers',
-            line=dict(color='#FFDD00', width=3, shape='spline'),
-            marker=dict(size=8, color='#FFDD00', symbol='circle'),
+            line=dict(
+                color='#FFDD00', 
+                width=4, 
+                shape='spline',
+                smoothing=1.3
+            ),
+            marker=dict(
+                size=12, 
+                color='#FFDD00', 
+                symbol='circle',
+                line=dict(color='white', width=2),
+                opacity=0.9
+            ),
             fill='tozeroy',
+            fillcolor='rgba(255, 221, 0, 0.15)',
             name='Actual',
             customdata=list(zip(event_codes, auto_values, teleop_values, endgame_values, epa_values, confidence_values, ace_values)),
             hovertemplate=(
-                '<b><a href="/event/%{customdata[0]}" target="_blank" style="color:white; text-decoration:underline;">Event: %{customdata[0]}</a></b><br>'
+                '<b><a href="/event/%{customdata[0]}" target="_blank">%{customdata[0]}</a></b><br><br>'
                 'Auto: %{customdata[1]:.2f}<br>'
                 'Teleop: %{customdata[2]:.2f}<br>'
                 'Endgame: %{customdata[3]:.2f}<br>'
@@ -4272,14 +4412,38 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
         ))
         # Predicted trace (if any)
         if n_pred > 0:
+            # Add gradient background for predictions
+            fig.add_trace(go.Scatter(
+                x=[event_codes[-1]] + predicted_event_codes,
+                y=[ace_values[-1]] + list(predicted_ace),
+                mode='lines',
+                line=dict(color='rgba(33, 150, 243, 0.3)', width=8, shape='spline'),
+                fill='tozeroy',
+                fillcolor='rgba(33, 150, 243, 0.1)',
+                showlegend=False,
+                hoverinfo='skip'
+            ))
+            
             fig.add_trace(go.Scatter(
                 x=[event_codes[-1]] + predicted_event_codes,
                 y=[ace_values[-1]] + list(predicted_ace),
                 mode='lines+markers',
-                line=dict(color='#2196F3', width=3, dash='dash', shape='spline'),
-                marker=dict(size=8, color='#2196F3', symbol='circle-open'),
+                line=dict(
+                    color='#2196F3', 
+                    width=4, 
+                    dash='dash', 
+                    shape='spline',
+                    smoothing=1.3
+                ),
+                marker=dict(
+                    size=12, 
+                    color='#2196F3', 
+                    symbol='diamond',
+                    line=dict(color='white', width=2),
+                    opacity=0.9
+                ),
                 fill='tozeroy',
-                fillcolor='rgba(33,150,243,0.2)',
+                fillcolor='rgba(33,150,243,0.15)',
                 name='Pred',
                 customdata=[
                     (event_codes[-1], auto_values[-1], teleop_values[-1], endgame_values[-1], epa_values[-1], confidence_values[-1], ace_values[-1], 'Actual'),
@@ -4293,11 +4457,46 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
                     'EPA: %{customdata[4]:.2f}<br>'
                     'Confidence: %{customdata[5]:.2f}<br>'
                     'ACE: %{customdata[6]:.2f}<br>'
-                    '<b>%{customdata[7]}</b><extra></extra>'
+                    '<i>%{customdata[7]}</i><extra></extra>'
                 ),
                 showlegend=True
             ))
         event_links = [f'<a href="/event/{code}" target="_blank">{code}</a>' for code in event_codes] + predicted_event_codes
+        
+        # Enhanced layout with cool styling
+        fig.update_layout(
+            title=dict(
+                text=f"Team {team_number} Performance Trends",
+                font=dict(size=24, color='#FFDD00', family='Arial Black'),
+                x=0.5,
+                y=0.95
+            ),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white', family='Arial'),
+            xaxis=dict(
+                title=dict(text="Events", font=dict(size=16, color='#FFDD00')),
+                gridcolor='rgba(255,255,255,0.1)',
+                zerolinecolor='rgba(255,255,255,0.2)',
+                tickfont=dict(color='white'),
+                showgrid=True
+            ),
+            yaxis=dict(
+                title=dict(text="ACE Score", font=dict(size=16, color='#FFDD00')),
+                gridcolor='rgba(255,255,255,0.1)',
+                zerolinecolor='rgba(255,255,255,0.2)',
+                tickfont=dict(color='white'),
+                showgrid=True
+            ),
+            legend=dict(
+                font=dict(color='white', size=14),
+                x=0.02,
+                y=0.98
+            ),
+            hovermode='closest',
+            margin=dict(l=80, r=80, t=100, b=80),
+            showlegend=True
+        )
         fig.update_layout(
             title=f"Team {team_number} Event Performance in {performance_year}",
             height=400,
