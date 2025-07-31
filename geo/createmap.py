@@ -456,7 +456,20 @@ def generate_team_event_map(output_file="teams_map.html"):
 
     # --- Teams Layer ---
     teams_layer = folium.FeatureGroup(name="Teams", show=True)
-    cluster = MarkerCluster(name="Team Clusters").add_to(teams_layer)
+    cluster = MarkerCluster(
+        name="Team Clusters",
+        options={
+            'maxClusterRadius': 80,  # Increased to create larger clusters
+            'spiderfyOnMaxZoom': True,
+            'showCoverageOnHover': True,
+            'zoomToBoundsOnClick': True,
+            'disableClusteringAtZoom': 8,  # Stop clustering much earlier (zoom level 8)
+            'chunkedLoading': True,
+            'minClusterSize': 3,  # Only cluster when 3 or more markers are close
+            'spiderfyDistanceMultiplier': 1.5,  # Spread out overlapping markers more
+            'spiderfyShapePositions': 'circle'  # Arrange overlapping markers in a circle
+        }
+    ).add_to(teams_layer)
     search_layer = folium.FeatureGroup(name="Search Layer", show=False)
 
     epa_values = [t["epa"] for t in map_teams if t.get("epa") is not None]
@@ -469,8 +482,25 @@ def generate_team_event_map(output_file="teams_map.html"):
         "25": np.percentile(epa_values, 25) if epa_values else 0,
     }
 
+    # Track coordinates to prevent exact overlap
+    used_coordinates = {}
+    
     for team in map_teams:
         lat, lng = team["lat"], team["lng"]
+        
+        # Check if this exact coordinate is already used
+        coord_key = f"{lat:.6f},{lng:.6f}"
+        if coord_key in used_coordinates:
+            # Add a larger offset to prevent exact overlap
+            offset_count = used_coordinates[coord_key]
+            lat_offset = (offset_count * 0.001)  # About 110 meters
+            lng_offset = (offset_count * 0.001)
+            lat += lat_offset
+            lng += lng_offset
+            used_coordinates[coord_key] += 1
+        else:
+            used_coordinates[coord_key] = 1
+        
         label = f"{team['team_number']} {team.get('nickname', '')} ({team.get('city', '')}, {team.get('state_prov', '')}, {team.get('country', '')})".strip()
 
         avatar_path = f"../assets/avatars/{team['team_number']}.png"
@@ -516,10 +546,40 @@ def generate_team_event_map(output_file="teams_map.html"):
 
     # --- Events Layer ---
     events_layer = folium.FeatureGroup(name="Events", show=True)
-    event_cluster = MarkerCluster(name="Event Clusters").add_to(events_layer)
+    event_cluster = MarkerCluster(
+        name="Event Clusters",
+        options={
+            'maxClusterRadius': 60,  # Increased for larger event clusters
+            'spiderfyOnMaxZoom': True,
+            'showCoverageOnHover': True,
+            'zoomToBoundsOnClick': True,
+            'disableClusteringAtZoom': 7,  # Stop clustering even earlier for events (zoom level 7)
+            'chunkedLoading': True,
+            'minClusterSize': 3,  # Only cluster when 3 or more markers are close
+            'spiderfyDistanceMultiplier': 1.5,  # Spread out overlapping markers more
+            'spiderfyShapePositions': 'circle'  # Arrange overlapping markers in a circle
+        }
+    ).add_to(events_layer)
+    
+    # Track coordinates for events to prevent exact overlap
+    used_event_coordinates = {}
     
     for event in map_events:
         lat, lng = event["lat"], event["lng"]
+        
+        # Check if this exact coordinate is already used
+        coord_key = f"{lat:.6f},{lng:.6f}"
+        if coord_key in used_event_coordinates:
+            # Add a larger offset to prevent exact overlap
+            offset_count = used_event_coordinates[coord_key]
+            lat_offset = (offset_count * 0.001)  # About 110 meters
+            lng_offset = (offset_count * 0.001)
+            lat += lat_offset
+            lng += lng_offset
+            used_event_coordinates[coord_key] += 1
+        else:
+            used_event_coordinates[coord_key] = 1
+            
         etype = event.get("event_type_string", "Unknown")
         color = get_event_marker_color(event)
         
@@ -1250,6 +1310,39 @@ def generate_team_event_map(output_file="teams_map.html"):
                 zoomControls.style.left = '20px';
             }
         }, 100);
+        
+        // Handle overlapping markers by adding click handlers
+        function handleOverlappingMarkers() {
+            // Find all marker icons
+            const markers = document.querySelectorAll('.leaflet-marker-icon');
+            
+            markers.forEach((marker, index) => {
+                // Add a small random offset to prevent exact overlap
+                const randomOffset = (index % 4) * 2; // 0, 2, 4, 6 pixels
+                if (randomOffset > 0) {
+                    marker.style.transform += ` translate(${randomOffset}px, ${randomOffset}px)`;
+                }
+                
+                // Add click handler to bring marker to front
+                marker.addEventListener('click', function(e) {
+                    // Bring this marker to the front
+                    this.style.zIndex = '1000';
+                    
+                    // Reset other markers z-index after a short delay
+                    setTimeout(() => {
+                        markers.forEach(m => {
+                            if (m !== this) {
+                                m.style.zIndex = '';
+                            }
+                        });
+                    }, 1000);
+                });
+            });
+        }
+        
+        // Run overlapping marker handler after map loads
+        setTimeout(handleOverlappingMarkers, 2000);
+        setTimeout(handleOverlappingMarkers, 5000);
     });
     </script>
     '''
