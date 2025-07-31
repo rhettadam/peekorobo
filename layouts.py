@@ -3,7 +3,7 @@ from dash import html, dcc, dash_table
 from datagather import load_year_data,get_team_avatar,get_team_years_participated
 from flask import session
 from datetime import datetime
-from utils import format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, compute_percentiles, pill, get_event_week_label
+from utils import format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, compute_percentiles, pill, get_event_week_label, reset_event_learning
 import json
 import os
 import re
@@ -1473,14 +1473,14 @@ def insights_details_layout(year):
 
 def teams_map_layout():
     # Generate and get the map file path
-    map_path = "assets/teams_map.html"
+    map_path = "assets/teams_map_compressed.html.gz"
 
     return html.Div([
         topbar(),
         dbc.Container(
             [
                 html.Iframe(
-                    src=f"/{map_path}",  # Reference the generated HTML file
+                    src=f"/{map_path}",  # Reference the compressed HTML file
                     style={
                         "width": "100%",
                         "height": "100%",
@@ -2392,6 +2392,9 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         
         # Get ALL matches for this event for learning purposes
         all_event_matches = [m for m in year_matches if m.get("ek") == event_key]
+        
+        # Reset learning state for this event to prevent accumulation across page refreshes
+        reset_event_learning(event_key)
         
         def get_team_epa_info(t_key):
             # First try to get event-specific EPA data for this team
@@ -4198,12 +4201,12 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
             return event_key  # fallback
         sorted_events = sorted(event_epas, key=get_event_date)
         event_codes = [event.get("event_key", "") for event in sorted_events]
-        ace_values = [event.get("actual_epa", event.get("epa", 0)) for event in sorted_events]
-        auto_values = [event.get("auto", 0) for event in sorted_events]
-        teleop_values = [event.get("teleop", 0) for event in sorted_events]
-        endgame_values = [event.get("endgame", 0) for event in sorted_events]
-        confidence_values = [event.get("confidence", 0) for event in sorted_events]
-        epa_values = [event.get("overall", event.get("normal_epa", 0)) for event in sorted_events]
+        ace_values = [max(0.0, event.get("actual_epa", event.get("epa", 0))) for event in sorted_events]
+        auto_values = [max(0.0, event.get("auto", 0)) for event in sorted_events]
+        teleop_values = [max(0.0, event.get("teleop", 0)) for event in sorted_events]
+        endgame_values = [max(0.0, event.get("endgame", 0)) for event in sorted_events]
+        confidence_values = [min(1.0, max(0.0, event.get("confidence", 0))) for event in sorted_events]
+        epa_values = [max(0.0, event.get("overall", event.get("normal_epa", 0))) for event in sorted_events]
         if not ace_values:
             return html.Div("No valid event data found.")
         # Linear extrapolation for 2 predicted points using all events
@@ -4330,22 +4333,22 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
             # Only extract the team's summary for each year
             if year_key == current_year:
                 team_year_data = team_database.get(year_key, {}).get(team_number, {})
-                ace_values = [data.get("epa", 0) for data in team_database.get(year_key, {}).values()]
+                ace_values = [max(0.0, data.get("epa", 0)) for data in team_database.get(year_key, {}).values()]
             else:
                 try:
                     year_team_data, *_ = load_year_data(year_key)
                     team_year_data = year_team_data.get(team_number, {})
-                    ace_values = [data.get("epa", 0) for data in year_team_data.values()]
+                    ace_values = [max(0.0, data.get("epa", 0)) for data in year_team_data.values()]
                 except Exception:
                     team_year_data = {}
                     ace_values = []
             if team_year_data:
-                ace = team_year_data.get("epa", 0)
-                auto = team_year_data.get("auto_epa", 0)
-                teleop = team_year_data.get("teleop_epa", 0)
-                endgame = team_year_data.get("endgame_epa", 0)
-                confidence = team_year_data.get("confidence", 0)
-                epa = team_year_data.get("normal_epa", 0)
+                ace = max(0.0, team_year_data.get("epa", 0))
+                auto = max(0.0, team_year_data.get("auto_epa", 0))
+                teleop = max(0.0, team_year_data.get("teleop_epa", 0))
+                endgame = max(0.0, team_year_data.get("endgame_epa", 0))
+                confidence = min(1.0, max(0.0, team_year_data.get("confidence", 0)))
+                epa = max(0.0, team_year_data.get("normal_epa", 0))
                 # Compute percentile for ACE in this year
                 if ace_values:
                     sorted_ace = sorted(ace_values)

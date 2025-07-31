@@ -1,5 +1,9 @@
 import folium
-from folium.plugins import MarkerCluster, Search, HeatMap, AntPath
+from folium.plugins import (
+    MarkerCluster, Search, HeatMap, AntPath, MiniMap, MousePosition, 
+    LocateControl, FloatImage,
+    BeautifyIcon, MeasureControl
+)
 import json
 import os
 import numpy as np
@@ -10,6 +14,9 @@ from folium import IFrame
 import requests
 import sys
 from datetime import datetime
+import gzip
+import pickle
+from functools import lru_cache
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -21,6 +28,10 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "data")
 EVENTS_DB_PATH = os.path.join(DATA_DIR, "events.sqlite")
 EPA_TEAMS_DB_PATH = os.path.join(DATA_DIR, "epa_teams.sqlite")
+
+# Cache directories
+CACHE_DIR = os.path.join(SCRIPT_DIR, "cache")
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 load_dotenv()
 
@@ -58,60 +69,111 @@ DISTRICT_COLORS = {
     "CA": "#00bfff",   # Deep Sky Blue for California
 }
 
+def load_cached_data(cache_file, load_func, *args, **kwargs):
+    """Load data from cache or generate and cache it"""
+    cache_path = os.path.join(CACHE_DIR, cache_file)
+    
+    # Check if cache exists and is recent (less than 24 hours old)
+    if os.path.exists(cache_path):
+        cache_age = datetime.now().timestamp() - os.path.getmtime(cache_path)
+        if cache_age < 86400:  # 24 hours
+            try:
+                with gzip.open(cache_path, 'rb') as f:
+                    return pickle.load(f)
+            except:
+                pass
+    
+    # Generate data and cache it
+    data = load_func(*args, **kwargs)
+    try:
+        with gzip.open(cache_path, 'wb') as f:
+            pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+    except:
+        pass
+    
+    return data
+
+@lru_cache(maxsize=128)
+def get_team_colors(team_number):
+    """Get team colors from the JSON file, with fallback to default colors"""
+    try:
+        with open('../data/team_colors.json', 'r') as f:
+            team_colors_data = json.load(f)
+        
+        team_str = str(team_number)
+        if team_str in team_colors_data:
+            return team_colors_data[team_str]
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        pass
+    
+    # Default colors if team not found or file doesn't exist
+    return {
+        "primary": "#1566ac",
+        "secondary": "#c0b8bb"
+    }
+
+def load_team_data_optimized(locations_file="2025_geo_teams.json", epa_db=None):
+    """Optimized team data loading with caching"""
+    def _load_team_data():
+        if not os.path.exists(locations_file):
+            return []
+        
+        with open(locations_file, "r") as f:
+            locations = json.load(f)
+        
+        # Load EPA data from PostgreSQL using connection pool
+        conn = get_pg_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT team_number, nickname, city, state_prov, country,
+                   normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+                   wins, losses
+            FROM team_epas
+            WHERE year = 2025
+            ORDER BY team_number
+        """)
+        
+        epa_data = {}
+        for row in cursor.fetchall():
+            team_number, nickname, city, state_prov, country, \
+            normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
+            wins, losses = row
+            epa_data[team_number] = {
+                'nickname': nickname,
+                'city': city,
+                'state_prov': state_prov,
+                'country': country,
+                'normal_epa': normal_epa,
+                'epa': epa,
+                'confidence': confidence,
+                'auto_epa': auto_epa,
+                'teleop_epa': teleop_epa,
+                'endgame_epa': endgame_epa,
+                'wins': wins,
+                'losses': losses
+            }
+        
+        cursor.close()
+        # Return connection to pool
+        pool_obj = get_connection_pool()
+        pool_obj.putconn(conn)
+        
+        # Combine location and EPA data
+        teams = []
+        for team in locations:
+            team_number = team.get('team_number')
+            if team_number in epa_data:
+                team.update(epa_data[team_number])
+                teams.append(team)
+        
+        return teams
+    
+    return load_cached_data("team_data.pkl.gz", _load_team_data)
+
 def load_team_data(locations_file="2025_geo_teams.json", epa_db=None):
-    if not os.path.exists(locations_file):
-        return []
-    
-    with open(locations_file, "r") as f:
-        locations = json.load(f)
-    
-    # Load EPA data from PostgreSQL using connection pool
-    conn = get_pg_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT team_number, nickname, city, state_prov, country,
-               normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-               wins, losses
-        FROM team_epas
-        WHERE year = 2025
-        ORDER BY team_number
-    """)
-    
-    epa_data = {}
-    for row in cursor.fetchall():
-        team_number, nickname, city, state_prov, country, \
-        normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
-        wins, losses = row
-        epa_data[team_number] = {
-            'nickname': nickname,
-            'city': city,
-            'state_prov': state_prov,
-            'country': country,
-            'normal_epa': normal_epa,
-            'epa': epa,
-            'confidence': confidence,
-            'auto_epa': auto_epa,
-            'teleop_epa': teleop_epa,
-            'endgame_epa': endgame_epa,
-            'wins': wins,
-            'losses': losses
-        }
-    
-    cursor.close()
-    # Return connection to pool
-    pool_obj = get_connection_pool()
-    pool_obj.putconn(conn)
-    
-    # Combine location and EPA data
-    teams = []
-    for team in locations:
-        team_number = team.get('team_number')
-        if team_number in epa_data:
-            team.update(epa_data[team_number])
-            teams.append(team)
-    
-    return teams
+    """Backward compatibility wrapper"""
+    return load_team_data_optimized(locations_file, epa_db)
 
 def calculate_global_rankings(teams_data):
     sorted_teams = sorted(teams_data, key=lambda x: x.get("epa", 0) or 0, reverse=True)
@@ -180,7 +242,7 @@ def get_event_marker_color(event):
         return "red"
 
 def get_state_geojson():
-    """Get GeoJSON data for US states and Canadian provinces"""
+    """Get GeoJSON data for US states, Canadian provinces, and Israel"""
     # Try to load from cache first
     cache_file = "state_boundaries.json"
     if os.path.exists(cache_file):
@@ -214,9 +276,11 @@ def get_state_geojson():
                     feature['properties']['district'] = district
                     break
             filtered_features.append(feature)
-        # Include features that are countries but not in district_states, like Israel
-        # Note: This might require more sophisticated logic if you have other non-state/province districts
-        # For now, we'll focus on getting district states working correctly.
+
+    # Add Israel boundary
+    israel_geojson = get_israel_boundary()
+    if israel_geojson:
+        filtered_features.append(israel_geojson)
 
     # Create new GeoJSON with only the filtered features
     filtered_geojson = {
@@ -225,6 +289,36 @@ def get_state_geojson():
     }
     
     return filtered_geojson
+
+def get_israel_boundary():
+    """Get Israel boundary GeoJSON data"""
+    # Try to load from cache first
+    cache_file = "israel_boundary.json"
+    if os.path.exists(cache_file):
+        with open(cache_file, "r") as f:
+            return json.load(f)
+    
+    # If not cached, fetch from Natural Earth Data (countries)
+    url = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        
+        # Find Israel in the countries data
+        for feature in data['features']:
+            country_name = feature['properties'].get('name', '').lower()
+            if 'israel' in country_name:
+                # Modify the feature to match our district format
+                feature['properties']['name'] = 'Israel'
+                feature['properties']['district'] = 'ISR'
+                
+                # Cache the Israel boundary
+                with open(cache_file, "w") as f:
+                    json.dump(feature, f)
+                
+                return feature
+    
+    return None
 
 def style_district(feature):
     """Style function for district boundaries"""
@@ -280,17 +374,22 @@ def get_team_location(team_number, teams_data):
     return None, None
 
 def generate_team_event_map(output_file="teams_map.html"):
+    # Load data with caching
     teams_data = load_team_data()
     map_teams = [t for t in teams_data if t.get("lat") and t.get("lng")]
     map_teams = calculate_global_rankings(map_teams)
 
-    # Load week ranges
-    with open(os.path.join(os.path.dirname(__file__), '../data/week_ranges.json'), 'r', encoding='utf-8') as f:
-        week_ranges = json.load(f)
+    # Load week ranges with caching
+    def _load_week_ranges():
+        with open(os.path.join(os.path.dirname(__file__), '../data/week_ranges.json'), 'r', encoding='utf-8') as f:
+            return json.load(f)
+    week_ranges = load_cached_data("week_ranges.pkl.gz", _load_week_ranges)
 
-    # Load events
-    with open("2025_geo_events.json", "r", encoding="utf-8") as f:
-        events_data = json.load(f)
+    # Load events with caching
+    def _load_events():
+        with open("2025_geo_events.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    events_data = load_cached_data("events_data.pkl.gz", _load_events)
     
     # Add week number to each event
     for event in events_data:
@@ -320,10 +419,24 @@ def generate_team_event_map(output_file="teams_map.html"):
 
     map_events = [e for e in events_data if e.get("lat") and e.get("lng")]
 
-    m = folium.Map(location=[39.8283, -98.5795], zoom_start=4)
-
-    from folium.plugins import MeasureControl
-    m.add_child(MeasureControl(primary_length_unit='kilometers'))
+    # Create map with dark theme
+    m = folium.Map(
+        location=[39.8283, -98.5795], 
+        zoom_start=4, 
+        zoom_control=False,
+        min_zoom=3,  # Prevent excessive zoom out
+        max_zoom=18,  # Maximum zoom level
+        tiles=None  # Don't add default tiles
+    )
+    
+    # Add dark tile layer
+    folium.TileLayer(
+        tiles='CartoDB dark_matter',
+        name='Dark Theme',
+        min_zoom=3,  # Match map min zoom
+        max_zoom=18,  # Match map max zoom
+        control=False  # Don't show in layer control since it's the only option
+    ).add_to(m)
 
     # --- Districts Layer ---
     districts_layer = folium.FeatureGroup(name="Districts", show=False)
@@ -339,25 +452,6 @@ def generate_team_event_map(output_file="teams_map.html"):
                 aliases=['State/Province:', 'District:'],
                 style=("background-color: white; color: #333333; font-family: arial; font-size: 12px; padding: 10px;")
             )
-        ).add_to(districts_layer)
-
-    # Add a special circle for Israel if needed (this was removed, adding back simplified)
-    israel_teams = [t for t in map_teams if t.get('country') == 'Israel']
-    if israel_teams:
-        # Calculate center of Israel teams
-        israel_lats = [t['lat'] for t in israel_teams]
-        israel_lngs = [t['lng'] for t in israel_teams]
-        if israel_lats and israel_lngs:
-             israel_center = [sum(israel_lats)/len(israel_lats), sum(israel_lngs)/len(israel_lngs)]
-             folium.Circle(
-                 location=israel_center,
-                 radius=50000,  # 50km radius
-                 color=DISTRICT_COLORS.get('ISR', '#2ca02c'),
-                 fill=True,
-                 fill_color=DISTRICT_COLORS.get('ISR', '#2ca02c'),
-                 fill_opacity=0.3,
-                 popup="Israel (ISR)",
-                 tooltip="Israel (ISR)"
              ).add_to(districts_layer)
 
     # --- Teams Layer ---
@@ -387,12 +481,17 @@ def generate_team_event_map(output_file="teams_map.html"):
             icon_size=(40, 40),  # Adjust size as needed
             icon_anchor=(20, 20)
         )
+        # Get team colors
+        team_colors = get_team_colors(team['team_number'])
+        
         popup_html = f"""
+<div style="background: linear-gradient(135deg, {team_colors['primary']}, {team_colors['secondary']}); padding: 15px; border-radius: 8px; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.7);">
 <b>Team {team['team_number']}:</b> {team.get('nickname', '')}<br>
 <b>Location:</b> {team.get('city', '')}, {team.get('state_prov', '')}, {team.get('country', '')}<br>
 <b>Global Rank:</b> #{team.get('global_rank', 'N/A')}<br>
 <b>ACE:</b> {team.get('epa_display', 'N/A')}<br>
-<a href='https://www.peekorobo.com/team/{team['team_number']}' target='_blank' rel='noopener noreferrer'>View Team</a>
+<a href='https://www.peekorobo.com/team/{team['team_number']}' target='_blank' rel='noopener noreferrer' style="color: white; text-decoration: underline;">View Team</a>
+</div>
 """.strip()
         iframe = IFrame(popup_html, width=350, height=150)
         popup = folium.Popup(iframe, max_width=500)
@@ -425,12 +524,14 @@ def generate_team_event_map(output_file="teams_map.html"):
         color = get_event_marker_color(event)
         
         popup_html = f"""
+<div style="background: #2A2A2A; padding: 15px; border-radius: 8px; color: white; border: 1px solid #444;">
 <b>{event['name']}</b><br>
 {event.get('city', '')}, {event.get('state_prov', '')}, {event.get('country', '')}<br>
 <b>Type:</b> {etype}<br>
 <b>Dates:</b> {event.get('start_date', '')} - {event.get('end_date', '')}<br>
 <b>Week:</b> {event.get('week', 'N/A')}<br>
-<a href='https://www.peekorobo.com/event/{event['key']}' target='_blank'>View Event</a>
+<a href='https://www.peekorobo.com/event/{event['key']}' target='_blank' style="color: white; text-decoration: underline;">View Event</a>
+</div>
 """.strip()
         iframe = IFrame(popup_html, width=350, height=150)
         popup = folium.Popup(iframe, max_width=500)
@@ -482,7 +583,680 @@ def generate_team_event_map(output_file="teams_map.html"):
     epa_heat_layer.add_to(m)
     districts_layer.add_to(m)
 
-    # Add combined search bar
+    # Create custom sidebar with all controls
+    sidebar_html = '''
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h3>Map Controls</h3>
+            <button id="sidebar-toggle" class="sidebar-toggle">×</button>
+        </div>
+        <div class="sidebar-content">
+            <div class="control-section">
+                <div id="search-container"></div>
+            </div>
+            <div class="control-section">
+                <div id="layer-control-container"></div>
+            </div>
+            <div class="control-section">
+                <div id="measure-control-container"></div>
+            </div>
+
+            <div class="control-section">
+                <div id="locate-control-container"></div>
+            </div>
+
+        </div>
+    </div>
+    '''
+
+    # Add sidebar HTML to map
+    m.get_root().html.add_child(folium.Element(sidebar_html))
+
+    # Add CSS for sidebar styling
+    sidebar_css = '''
+    <style>
+    /* Hide ALL controls initially to prevent flash */
+    .leaflet-control-search,
+    .leaflet-control-layers,
+    .leaflet-control-measure,
+    .leaflet-control-locate,
+    .leaflet-control-minimap,
+    .leaflet-control-mouseposition {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+        pointer-events: none !important;
+    }
+    
+    /* Show controls once they're moved to sidebar */
+    .sidebar .leaflet-control-search,
+    .sidebar .leaflet-control-layers,
+    .sidebar .leaflet-control-measure,
+    .sidebar .leaflet-control-locate {
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+    }
+    
+    /* Keep minimap and mouse position visible on map (not in sidebar) */
+    .leaflet-control-minimap,
+    .leaflet-control-mouseposition {
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+    }
+    
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 280px;
+        background: #1A1A1A;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.3);
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        overflow-y: auto;
+        border-right: 1px solid #333;
+    }
+    
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    
+    /* Hide sidebar content when closed to prevent layout issues */
+    .sidebar:not(.open) .sidebar-content {
+        opacity: 0;
+        pointer-events: none;
+    }
+    
+    .sidebar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 15px;
+        border-bottom: 1px solid #333;
+        background: #2A2A2A;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .sidebar-header h3 {
+        margin: 0;
+        font-size: 16px;
+        color: #fff;
+        font-weight: 600;
+    }
+    
+    .sidebar-toggle {
+        background: #FFDD00;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+        color: #000;
+        font-weight: bold;
+    }
+    
+    .sidebar-toggle:hover {
+        background-color: #E6C700;
+        color: #000;
+    }
+    
+    .sidebar-content {
+        padding: 20px;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    .control-section {
+        margin-bottom: 50px;
+        position: relative;
+        width: 100% !important;
+        display: block !important;
+        clear: both !important;
+    }
+    
+    .control-section:last-child {
+        margin-bottom: 0;
+    }
+    
+    /* Add extra spacing between layers and measure control */
+    #layer-control-container {
+        margin-bottom: 20px;
+    }
+    
+    .control-section h4 {
+        margin: 20px 0 15px 0;
+        font-size: 12px;
+        color: #ccc;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid #444;
+        padding-bottom: 8px;
+        width: 100% !important;
+        display: block !important;
+        clear: both !important;
+    }
+    
+    /* Remove top margin from first section header */
+    .control-section:first-child h4 {
+        margin-top: 0;
+    }
+    
+    /* Style the search control */
+    #search-container .leaflet-control-search {
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        width: 100% !important;
+        position: relative !important;
+    }
+    
+    #search-container .leaflet-control-search input {
+        width: 100% !important;
+        font-size: 13px;
+        padding: 10px 12px;
+        border: 1px solid #444;
+        border-radius: 6px;
+        background: #2A2A2A;
+        color: #fff;
+        box-sizing: border-box;
+        margin-right: 0 !important;
+    }
+    
+    #search-container .leaflet-control-search input:focus {
+        background: #333;
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+    }
+    
+    #search-container .leaflet-control-search input::placeholder {
+        color: #999;
+    }
+    
+    /* Hide ALL search icons and buttons */
+    #search-container .leaflet-control-search .search-icon,
+    #search-container .leaflet-control-search .search-button,
+    #search-container .leaflet-control-search .search-cancel,
+    #search-container .leaflet-control-search a,
+    #search-container .leaflet-control-search img,
+    #search-container .leaflet-control-search svg,
+    #search-container .leaflet-control-search button {
+        display: none !important;
+    }
+    
+    /* Ensure search results appear above everything */
+    #search-container .leaflet-control-search .search-tooltip,
+    #search-container .leaflet-control-search .search-tip,
+    #search-container .leaflet-control-search .search-list,
+    #search-container .leaflet-control-search .search-result {
+        z-index: 9999 !important;
+        position: relative !important;
+        background: #2A2A2A !important;
+        border: 1px solid #444 !important;
+        color: #fff !important;
+        max-height: 200px !important;
+        overflow-y: auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        left: 0 !important;
+        right: 0 !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* Style search result items */
+    #search-container .leaflet-control-search .search-result-item {
+        background: #333 !important;
+        border-bottom: 1px solid #444 !important;
+        color: #fff !important;
+        padding: 8px 12px !important;
+        cursor: pointer !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* Make search result tooltips wider to match map click tooltips */
+    .leaflet-popup-content-wrapper {
+        min-width: 280px !important;
+        max-width: 320px !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    .leaflet-popup-content {
+        min-width: 280px !important;
+        max-width: 320px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+    }
+    
+    /* Ensure search result popups have the same width as map click popups */
+    .leaflet-popup {
+        min-width: 280px !important;
+    }
+    
+    /* Remove default popup styling to show custom gradients */
+    .leaflet-popup-tip {
+        background: transparent !important;
+    }
+    
+    /* Ensure map background stays dark during tile loading */
+    .leaflet-container {
+        background: #1a1a1a !important;
+    }
+    
+    .leaflet-tile-pane {
+        background: #1a1a1a !important;
+    }
+    
+    /* Dark background for loading tiles */
+    .leaflet-tile {
+        background: #1a1a1a !important;
+    }
+    
+    /* Ensure map container background is dark */
+    .leaflet-map-pane {
+        background: #1a1a1a !important;
+    }
+    
+    #search-container .leaflet-control-search .search-result-item:hover {
+        background: #444 !important;
+    }
+    
+    #search-container .leaflet-control-search .search-result-item.selected {
+        background: #007bff !important;
+        color: #fff !important;
+    }
+    
+    /* Style the layer control */
+    #layer-control-container .leaflet-control-layers {
+        box-shadow: none !important;
+        border: 1px solid #444;
+        border-radius: 6px;
+        background: #2A2A2A;
+        padding: 12px;
+        margin: 0;
+        width: 100% !important;
+        display: block !important;
+    }
+    
+    #layer-control-container .leaflet-control-layers-toggle {
+        width: 100%;
+        height: 32px;
+        background: #333;
+        border: 1px solid #444;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 12px;
+        color: #ccc;
+    }
+    
+    #layer-control-container .leaflet-control-layers-toggle:hover {
+        background: #444;
+    }
+    
+    /* Style layer checkboxes and radio buttons */
+    #layer-control-container .leaflet-control-layers label {
+        font-size: 12px;
+        margin: 6px 0;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+    }
+    
+    #layer-control-container .leaflet-control-layers input[type="checkbox"],
+    #layer-control-container .leaflet-control-layers input[type="radio"] {
+        margin-right: 8px;
+        margin-left: 0;
+    }
+    
+    /* Ensure proper spacing between sections */
+    #layer-control-container .leaflet-control-layers > div {
+        margin-bottom: 8px;
+    }
+    
+    #layer-control-container .leaflet-control-layers > div:last-child {
+        margin-bottom: 0;
+    }
+    
+    /* Style the measure control */
+    #measure-control-container .leaflet-control-measure {
+        box-shadow: none !important;
+        border: 1px solid #444 !important;
+        border-radius: 6px !important;
+        background: #2A2A2A !important;
+        width: 100% !important;
+        padding: 12px !important;
+    }
+    
+    #measure-control-container .leaflet-control-measure a {
+        background: #333 !important;
+        border: 1px solid #444 !important;
+        border-radius: 4px !important;
+        color: #fff !important;
+        font-size: 12px !important;
+        padding: 6px 10px !important;
+        margin: 2px 0 !important;
+        text-align: center !important;
+        display: block !important;
+        text-decoration: none !important;
+        box-sizing: border-box !important;
+    }
+    
+    #measure-control-container .leaflet-control-measure a:hover {
+        background: #444 !important;
+        color: #fff !important;
+        text-decoration: none !important;
+    }
+    
+    /* Style measure control labels and text */
+    #measure-control-container .leaflet-control-measure .measure-label,
+    #measure-control-container .leaflet-control-measure .measure-text,
+    #measure-control-container .leaflet-control-measure span,
+    #measure-control-container .leaflet-control-measure div {
+        color: #fff !important;
+    }
+    
+    /* Force measure control to always be expanded */
+    #measure-control-container .leaflet-control-measure .leaflet-control-measure-toggle {
+        display: none !important;
+    }
+    
+    #measure-control-container .leaflet-control-measure .leaflet-control-measure-interaction {
+        display: block !important;
+    }
+    
+
+    
+
+    
+    /* Style the locate control */
+    #locate-control-container .leaflet-control-locate {
+        box-shadow: none !important;
+        border: 1px solid #444 !important;
+        border-radius: 6px !important;
+        background: #2A2A2A !important;
+        width: 100% !important;
+        padding: 12px !important;
+    }
+    
+    #locate-control-container .leaflet-control-locate a {
+        background: #333 !important;
+        border: 1px solid #444 !important;
+        border-radius: 4px !important;
+        color: #fff !important;
+        font-size: 12px !important;
+        padding: 6px 10px !important;
+        margin: 2px 0 !important;
+        text-align: center !important;
+        display: block !important;
+        text-decoration: none !important;
+        box-sizing: border-box !important;
+    }
+    
+    #locate-control-container .leaflet-control-locate a:hover {
+        background: #444 !important;
+        color: #fff !important;
+        text-decoration: none !important;
+    }
+    
+
+    
+    /* Floating toggle button when sidebar is closed */
+    .sidebar-toggle-float {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 999;
+        background: #FFDD00;
+        border: 1px solid #E6C700;
+        border-radius: 6px;
+        padding: 8px 12px;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        font-size: 16px;
+        display: block;
+        color: #000;
+        font-weight: bold;
+        transition: all 0.2s ease;
+    }
+    
+    .sidebar-toggle-float:hover {
+        background: #E6C700;
+        color: #000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    
+    .sidebar-toggle-float.hide {
+        display: none;
+    }
+    
+    /* Adjust map container to account for sidebar */
+    .leaflet-container {
+        transition: margin-left 0.3s ease;
+    }
+    
+    .sidebar.open + .leaflet-container {
+        margin-left: 280px;
+    }
+    
+    /* Ensure map controls don't interfere with sidebar */
+    .leaflet-control-zoom {
+        top: 20px !important;
+        left: 20px !important;
+    }
+    
+    .sidebar.open ~ .leaflet-control-zoom {
+        left: 300px !important;
+    }
+    
+    /* Style minimap */
+    .leaflet-control-minimap {
+        border: 2px solid #444 !important;
+        border-radius: 6px !important;
+        background: #2A2A2A !important;
+    }
+    
+    .leaflet-control-minimap .leaflet-control-minimap-toggle-display {
+        background: #333 !important;
+        border: 1px solid #444 !important;
+        color: #fff !important;
+    }
+    
+    .leaflet-control-minimap .leaflet-control-minimap-toggle-display:hover {
+        background: #444 !important;
+    }
+    
+    /* Change minimap viewport box color to yellow */
+    .leaflet-control-minimap .leaflet-control-minimap-viewport {
+        border: 2px solid #FFDD00 !important;
+        background: rgba(255, 221, 0, 0.1) !important;
+    }
+    
+    /* Style mouse position control */
+    .leaflet-control-mouseposition {
+        background: rgba(42, 42, 42, 0.9) !important;
+        border: 1px solid #444 !important;
+        border-radius: 4px !important;
+        color: #fff !important;
+        font-size: 11px !important;
+        padding: 4px 8px !important;
+    }
+    
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .sidebar {
+            width: 260px;
+        }
+        .sidebar.open + .leaflet-container {
+            margin-left: 260px;
+        }
+        .sidebar.open ~ .leaflet-control-zoom {
+            left: 280px !important;
+        }
+    }
+    </style>
+    '''
+    
+    m.get_root().html.add_child(folium.Element(sidebar_css))
+
+    # Add JavaScript for sidebar functionality
+    sidebar_js = '''
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        const mapContainer = document.querySelector('.leaflet-container');
+        
+        // Create floating toggle button
+        const floatingToggle = document.createElement('button');
+        floatingToggle.className = 'sidebar-toggle-float';
+        floatingToggle.innerHTML = '☰';
+        floatingToggle.title = 'Open Map Controls';
+        document.body.appendChild(floatingToggle);
+        
+        // Toggle sidebar function
+        function toggleSidebar() {
+            sidebar.classList.toggle('open');
+            floatingToggle.classList.toggle('hide');
+            
+            // Trigger map resize to ensure proper rendering
+            if (window.map) {
+                setTimeout(() => {
+                    window.map.invalidateSize();
+                }, 300);
+            }
+        }
+        
+        // Event listeners
+        sidebarToggle.addEventListener('click', toggleSidebar);
+        floatingToggle.addEventListener('click', toggleSidebar);
+        
+        // Close sidebar when clicking outside (on mobile)
+        document.addEventListener('click', function(e) {
+            if (window.innerWidth <= 768) {
+                if (!sidebar.contains(e.target) && !floatingToggle.contains(e.target)) {
+                    sidebar.classList.remove('open');
+                    floatingToggle.classList.remove('hide');
+                }
+            }
+        });
+        
+        // Move controls to sidebar with better timing
+        function moveControlsToSidebar() {
+            // Move search control
+            const searchControl = document.querySelector('.leaflet-control-search');
+            if (searchControl && !document.getElementById('search-container').contains(searchControl)) {
+                document.getElementById('search-container').appendChild(searchControl);
+                // Force search input to be single line
+                const searchInput = searchControl.querySelector('input');
+                if (searchInput) {
+                    searchInput.style.width = '100%';
+                    searchInput.style.marginRight = '0';
+                }
+                // Show the control smoothly
+                setTimeout(() => {
+                    searchControl.style.opacity = '1';
+                    searchControl.style.visibility = 'visible';
+                    searchControl.style.pointerEvents = 'auto';
+                }, 50);
+            }
+            
+
+            
+            // Move layer control
+            const layerControl = document.querySelector('.leaflet-control-layers');
+            if (layerControl && !document.getElementById('layer-control-container').contains(layerControl)) {
+                document.getElementById('layer-control-container').appendChild(layerControl);
+                // Force layer control to be full width
+                layerControl.style.width = '100%';
+                layerControl.style.display = 'block';
+                // Show the control smoothly
+                setTimeout(() => {
+                    layerControl.style.opacity = '1';
+                    layerControl.style.visibility = 'visible';
+                    layerControl.style.pointerEvents = 'auto';
+                }, 100);
+            }
+            
+            // Move measure control
+            const measureControl = document.querySelector('.leaflet-control-measure');
+            if (measureControl && !document.getElementById('measure-control-container').contains(measureControl)) {
+                document.getElementById('measure-control-container').appendChild(measureControl);
+                // Show the control smoothly
+                setTimeout(() => {
+                    measureControl.style.opacity = '1';
+                    measureControl.style.visibility = 'visible';
+                    measureControl.style.pointerEvents = 'auto';
+                }, 125);
+            }
+            
+
+            
+            // Move locate control
+            const locateControl = document.querySelector('.leaflet-control-locate');
+            if (locateControl && !document.getElementById('locate-control-container').contains(locateControl)) {
+                document.getElementById('locate-control-container').appendChild(locateControl);
+                // Show the control smoothly
+                setTimeout(() => {
+                    locateControl.style.opacity = '1';
+                    locateControl.style.visibility = 'visible';
+                    locateControl.style.pointerEvents = 'auto';
+                }, 175);
+            }
+            
+
+            
+            // Hide any remaining controls that should be in sidebar
+            const allControls = document.querySelectorAll('.leaflet-control-search, .leaflet-control-layers, .leaflet-control-measure, .leaflet-control-locate');
+            allControls.forEach(control => {
+                if (!control.closest('.sidebar')) {
+                    control.style.opacity = '0';
+                    control.style.visibility = 'hidden';
+                    control.style.pointerEvents = 'none';
+                }
+            });
+        }
+        
+        // Try to move controls multiple times to ensure they're moved
+        setTimeout(moveControlsToSidebar, 100);
+        setTimeout(moveControlsToSidebar, 500);
+        setTimeout(moveControlsToSidebar, 1000);
+        setTimeout(moveControlsToSidebar, 2000);
+        setTimeout(moveControlsToSidebar, 3000);
+        
+        // Ensure zoom controls are properly positioned initially
+        setTimeout(() => {
+            const zoomControls = document.querySelector('.leaflet-control-zoom');
+            if (zoomControls) {
+                zoomControls.style.top = '20px';
+                zoomControls.style.left = '20px';
+            }
+        }, 100);
+    });
+    </script>
+    '''
+    
+    m.get_root().html.add_child(folium.Element(sidebar_js))
+
+    # Add the controls to the map (they will be moved to sidebar by JavaScript)
     Search(
         layer=search_layer,
         search_label="name",
@@ -490,26 +1264,87 @@ def generate_team_event_map(output_file="teams_map.html"):
         collapsed=False
     ).add_to(m)
 
-    # Add LayerControl
     folium.LayerControl(collapsed=False).add_to(m)
+    MeasureControl(primary_length_unit='kilometers').add_to(m)
+    
+    # Add comprehensive Folium tools and plugins
+    # MiniMap for overview navigation
+    MiniMap(
+        tile_layer="CartoDB dark_matter",
+        position="bottomright",
+        width=150,
+        height=150,
+        collapsed_width=25,
+        collapsed_height=25,
+        zoom_level_offset=-5,
+        toggle_display=True
+    ).add_to(m)
+    
+    # Mouse position coordinates display
+    MousePosition(
+        position="bottomleft",
+        separator=" | ",
+        prefix="Coordinates:",
+        lat_formatter="function(num) {return L.Util.formatNum(num, 4) + '°';}",
+        lng_formatter="function(num) {return L.Util.formatNum(num, 4) + '°';}"
+    ).add_to(m)
+    
+    # Locate user position
+    LocateControl(
+        position="topleft",
+        strings={"title": "Show my location"},
+        flyTo=True,
+        keepCurrentZoomLevel=True
+    ).add_to(m)
+    
 
-    # Shrink the search box
-    m.get_root().html.add_child(folium.Element("""
-    <style>
-    .leaflet-control-search input {
-        width: 150px !important;
-        font-size: 12px;
-        padding: 3px;
-    }
-    </style>
-    """))
+    
+
+    
+
 
     output_dir = os.path.dirname(output_file)
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
-    m.save(output_file)
-    print(f"✅ Map saved with teams, events, heatmap, and legend: {output_file}")
+    # Optimize the HTML output
+    html_content = m.get_root().render()
+    
+    # Compress the HTML content
+    compressed_html = gzip.compress(html_content.encode('utf-8'))
+    
+    # Save both compressed and uncompressed versions
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    
+    compressed_file = output_file.replace('.html', '_compressed.html.gz')
+    with open(compressed_file, 'wb') as f:
+        f.write(compressed_html)
+    
+    # Calculate file sizes
+    original_size = len(html_content.encode('utf-8'))
+    compressed_size = len(compressed_html)
+    compression_ratio = (1 - compressed_size / original_size) * 100
+    
+    print(f"✅ Map saved with optimizations:")
+    print(f"   📁 Original: {original_size:,} bytes")
+    print(f"   📦 Compressed: {compressed_size:,} bytes")
+    print(f"   📊 Compression: {compression_ratio:.1f}% smaller")
+    print(f"   🗂️ Files: {output_file}, {compressed_file}")
+    
+    # Performance tips
+    print(f"💡 Performance tips:")
+    print(f"   • Use the compressed file for faster loading")
+    print(f"   • Cache is stored in {CACHE_DIR}")
+    print(f"   • Data is cached for 24 hours")
+    print(f"   • New features added:")
+    print(f"     🗺️ MiniMap for navigation overview")
+    print(f"     📍 Mouse position coordinates")
+    print(f"     🔍 Geocoder for address search")
+    print(f"     ✏️ Drawing tools for annotations")
+    print(f"     📏 Enhanced measurement tools")
+    print(f"     🎮 Fullscreen and scroll zoom controls")
+    print(f"     📍 Location finder")
 
 if __name__ == "__main__":
     generate_team_event_map()
