@@ -15,7 +15,7 @@ from datetime import datetime, date
 import re
 import random
 import requests
-from urllib.parse import parse_qs, urlencode, quote
+from urllib.parse import parse_qs, urlencode, quote, unquote
 import json
 import pandas as pd
 
@@ -303,6 +303,8 @@ def display_page(pathname):
     if len(path_parts) == 2 and path_parts[0] == "user":
         try:
             username = pathname.split("/user/")[1]
+            # URL decode the username to handle spaces and special characters
+            username = unquote(username)
             return other_user_layout(username)
         except ValueError:
             pass
@@ -849,18 +851,33 @@ def search_users(query, session_data):
                 LIMIT 10
             """, (f"%{query}%", current_user_id))
             rows = cur.fetchall()
+            
+            # Debug: print search results
+            print(f"User search for '{query}' returned {len(rows)} results")
+            for row in rows:
+                print(f"  Found user: {row[1]} (ID: {row[0]})")
 
         user_blocks = []
         for uid, username, avatar_key, followers in rows:
-            followers = json.loads(followers) if isinstance(followers, str) else (followers or [])
-            is_following = current_user_id in followers
+            # Handle followers field - it might be JSON string, list, or None
+            try:
+                if isinstance(followers, str):
+                    followers_list = json.loads(followers)
+                elif isinstance(followers, list):
+                    followers_list = followers
+                else:
+                    followers_list = []
+            except (json.JSONDecodeError, TypeError):
+                followers_list = []
+            
+            is_following = current_user_id in followers_list
             avatar_src = get_user_avatar(avatar_key or "stock")
 
             user_blocks.append(html.Div([
                 html.Img(src=avatar_src, style={
                     "height": "32px", "width": "32px", "borderRadius": "50%", "marginRight": "8px"
                 }),
-                html.A(username, href=f"/user/{username}", style={
+                html.A(username, href=f"/user/{quote(username)}", style={
                     "fontWeight": "bold", "textDecoration": "none", "color": "#ffffff", "flexGrow": "1"
                 }),
                 html.Button(
@@ -883,7 +900,24 @@ def search_users(query, session_data):
                 "display": "flex", "alignItems": "center", "gap": "10px", "marginBottom": "8px"
             }))
 
+        # Wrap the user blocks in a container with overlay styling
+        return html.Div(user_blocks, style={
+            "position": "absolute",
+            "top": "100%",
+            "left": "0",
+            "right": "0",
+            "backgroundColor": "var(--card-bg)",
+            "border": "1px solid #ddd",
+            "borderRadius": "8px",
+            "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
+            "maxHeight": "300px",
+            "overflowY": "auto",
+            "zIndex": "1000",
+            "marginTop": "5px"
+        })
+
     except Exception as e:
+        print(f"Error in user search: {e}")
         return []
 
 @app.callback(
@@ -2992,6 +3026,40 @@ def load_teams(
     }
 
     style_data_conditional = get_epa_styling(percentiles_dict)
+    
+    # Add favorites styling
+    favorites_styling = [
+        {
+            "if": {
+                "filter_query": "{favorites} >= 10",
+                "column_id": "favorites"
+            },
+            "backgroundColor": "#ff33cc99",
+            "fontWeight": "bold",
+            "borderRadius": "6px",
+            "padding": "4px 6px",
+        },
+        {
+            "if": {
+                "filter_query": "{favorites} >= 5 && {favorites} < 10",
+                "column_id": "favorites"
+            },
+            "backgroundColor": "#0099ff99",
+            "borderRadius": "6px",
+            "padding": "4px 6px",
+        },
+        {
+            "if": {
+                "filter_query": "{favorites} >= 1 && {favorites} < 5",
+                "column_id": "favorites"
+            },
+            "backgroundColor": "#33cc3399",
+            "borderRadius": "6px",
+            "padding": "4px 6px",
+        }
+    ]
+    
+    style_data_conditional.extend(favorites_styling)
 
     with open('data/states.json', 'r', encoding='utf-8') as f:
         STATES = json.load(f)
@@ -3024,6 +3092,10 @@ def load_teams(
             "epa": total,
         }.get(axis, 0)
 
+    # Get favorites counts for all teams
+    from datagather import get_all_team_favorites_counts
+    favorites_counts = get_all_team_favorites_counts()
+    
     table_rows = []
     for t in teams_data:
         team_num = t.get("team_number")
@@ -3033,6 +3105,7 @@ def load_teams(
         nickname_safe = nickname.replace('"', "'")
         truncated = truncate_name(nickname)
         team_display = f'[{team_num} | {truncated}](/team/{team_num}/{selected_year} "{nickname_safe}")'
+        favorites_count = favorites_counts.get(team_num, 0)
         table_rows.append({
             "epa_rank": rank,
             "team_display": team_display,
@@ -3042,6 +3115,7 @@ def load_teams(
             "auto_epa": round(abs(t.get("auto_epa") or 0), 2),
             "teleop_epa": round(abs(t.get("teleop_epa") or 0), 2),
             "endgame_epa": round(abs(t.get("endgame_epa") or 0), 2),
+            "favorites": favorites_count,
             "record": record,
         })
 
@@ -3773,7 +3847,7 @@ def update_team_favorites_popover_content(is_open, pathname):
                 avatar_src = get_user_avatar(avatar_key or "stock")
                 user_list_items.append(html.Li([
                     html.Img(src=avatar_src, height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
-                    html.A(username, href=f"/user/{username}", style={"textDecoration": "none", "color": "#007bff"})
+                    html.A(username, href=f"/user/{quote(username)}", style={"textDecoration": "none", "color": "#007bff"})
                 ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"}))
 
             return html.Ul(user_list_items, style={

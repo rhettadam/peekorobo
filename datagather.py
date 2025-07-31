@@ -713,3 +713,28 @@ def get_team_years_participated(team_number):
         years = [row[0] for row in cur.fetchall()]
         cur.close()
     return years
+
+
+def get_all_team_favorites_counts():
+    """Get favorites count for all teams efficiently."""
+    favorites_counts = {}
+    try:
+        with DatabaseConnection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT item_key, COUNT(*) as favorites_count
+                FROM saved_items 
+                WHERE item_type = 'team'
+                GROUP BY item_key
+            """)
+            for team_key, count in cursor.fetchall():
+                try:
+                    team_number = int(team_key)
+                    favorites_counts[team_number] = count
+                except ValueError:
+                    # Skip invalid team keys
+                    continue
+    except Exception as e:
+        print(f"Error getting favorites counts: {e}")
+    
+    return favorites_counts

@@ -701,8 +701,8 @@ def topbar():
                             dbc.Nav(
                                 [
                                     dbc.NavItem(dbc.NavLink("Teams", href="/teams", className="custom-navlink", id="nav-teams")),
-                                    dbc.NavItem(dbc.NavLink("Map", href="/map", className="custom-navlink", id="nav-map")),
                                     dbc.NavItem(dbc.NavLink("Events", href="/events", className="custom-navlink", id="nav-events")),
+                                    dbc.NavItem(dbc.NavLink("Map", href="/map", className="custom-navlink", id="nav-map")),
                                     dbc.NavItem(dbc.NavLink("Insights", href="/insights", className="custom-navlink", id="nav-insights")),
                                     dbc.DropdownMenu(
                                         label="Misc",
@@ -1876,6 +1876,7 @@ def teams_layout(default_year=current_year):
             {"name": "Auto ACE", "id": "auto_epa", "type": "numeric"},
             {"name": "Teleop ACE", "id": "teleop_epa", "type": "numeric"},
             {"name": "Endgame ACE", "id": "endgame_epa", "type": "numeric"},
+            {"name": "Favorites", "id": "favorites", "type": "numeric"},
             {"name": "Record", "id": "record"},
         ],
         data=[],
@@ -2400,16 +2401,17 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         if year >= 2015:
             # Access event_epas from the specific team's data within the epa_data dictionary
             team_specific_event_epas = epa_data.get(str(team_number), {}).get("event_epas", [])
-            event_epa = next((e for e in team_specific_event_epas if str(e.get("event_key")) == str(event_key)), None)
+            # Handle both event key formats (with and without "frc" prefix)
+            event_key_clean = event_key.replace("frc", "") if event_key.startswith("frc") else event_key
+            event_epa = next((e for e in team_specific_event_epas if str(e.get("event_key")) == str(event_key_clean)), None)
             if event_epa:
                 # Fixed colors to match screenshot styling for consistency
                 auto_color = "#1976d2"     # Blue
                 teleop_color = "#fb8c00"   # Orange
                 endgame_color = "#388e3c"  # Green
                 norm_color = "#d32f2f"    # Red (for overall EPA)
-                conf_color = "#555"   
-                total_color = "#673ab7"  
-                     # Gray for confidence
+                conf_color = "#555"   # Gray for confidence
+                total_color = "#673ab7"
                 event_epa_pills = html.Div([
                     html.Div([
                         pill("Auto", f"{event_epa['auto']:.1f}", auto_color),
@@ -2457,7 +2459,9 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         def get_team_epa_info(t_key):
             # First try to get event-specific EPA data for this team
             t_data = epa_data.get(t_key.strip(), {})
-            event_epa = next((e for e in t_data.get("event_epas", []) if e.get("event_key") == event_key), None)
+            # Handle both event key formats (with and without "frc" prefix)
+            event_key_clean = event_key.replace("frc", "") if event_key.startswith("frc") else event_key
+            event_epa = next((e for e in t_data.get("event_epas", []) if e.get("event_key") == event_key_clean), None)
             if event_epa and event_epa.get("overall", 0) != 0:
                 return {
                     "team_number": int(t_key.strip()),
@@ -3445,6 +3449,7 @@ def user_layout(_user_id=None, deleted_items=None):
             "teleop_epa": data.get("teleop_epa", 0),
             "endgame_epa": data.get("endgame_epa", 0),
             "confidence": data.get("confidence", 0),
+            "event_epas": data.get("event_epas", []),
         }
         for team_num, data in TEAM_DATABASE.get(current_year, {}).items()
     }
@@ -3522,13 +3527,14 @@ def user_layout(_user_id=None, deleted_items=None):
             ),
 
             [
-                html.Img(src=get_team_avatar(team_key), style={"height": "80px", "borderRadius": "50%"}),
+                html.Img(src=get_team_avatar(team_number), style={"height": "80px", "borderRadius": "50%"}),
                 metrics,
                 html.Br(),
                 html.Hr(),
                 build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, current_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
             ],
-            delete_button=delete_team_btn
+            delete_button=delete_team_btn,
+            team_number=team_number
         ))
 
     return html.Div([
@@ -3646,9 +3652,9 @@ def user_layout(_user_id=None, deleted_items=None):
                                     id="profile-search-header",
                                     style={"marginTop": "10px", "fontSize": "0.95rem", "color": text_color}
                                 ),
-                                dbc.Input(id="user-search-input", placeholder="Search Users", type="text", size="sm", className="custom-input-box mb-2"),
+                                dbc.Input(id="user-search-input", placeholder="Search Users", type="text", size="sm", className="custom-input-box mb-2", style={"width": "250px"}),
                                 html.Div(id="user-search-results")
-                            ], style={"marginTop": "10px", "width": "100%"}),
+                            ], style={"marginTop": "10px", "width": "100%", "position": "relative"}),
                             html.Button(
                                 "Edit Profile",
                                 id="edit-profile-btn",
@@ -3725,6 +3731,7 @@ def other_user_layout(username):
             "teleop_epa": data.get("teleop_epa", 0),
             "endgame_epa": data.get("endgame_epa", 0),
             "confidence": data.get("confidence", 0),
+            "event_epas": data.get("event_epas", []),
         }
         for team_num, data in TEAM_DATABASE.get(current_year, {}).items()
     }
@@ -3799,12 +3806,13 @@ def other_user_layout(username):
                 style={"textDecoration": "none", "color": "inherit"}
             ),
             [
-                html.Img(src=get_team_avatar(team_key), style={"height": "80px", "borderRadius": "50%"}),
+                html.Img(src=get_team_avatar(team_number), style={"height": "80px", "borderRadius": "50%"}),
                 metrics,
                 html.Br(),
                 html.Hr(),
                 build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, current_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
-            ]
+            ],
+            team_number=team_number
         ))
 
     follow_button = html.Button(

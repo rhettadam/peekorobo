@@ -480,7 +480,36 @@ def pill(label, value, color):
             "display": "inline-block"
         })
             
-def user_team_card(title, body_elements, delete_button=None):
+def user_team_card(title, body_elements, delete_button=None, team_number=None):
+        # Load team colors if team_number is provided
+        gradient_style = {}
+        if team_number:
+            try:
+                import json
+                with open('data/team_colors.json', 'r') as f:
+                    team_colors = json.load(f)
+                
+                team_colors_data = team_colors.get(str(team_number), {})
+                primary_color = team_colors_data.get('primary', '#1566ac')
+                secondary_color = team_colors_data.get('secondary', '#c0b8bb')
+                
+                gradient_style = {
+                    "background": f"linear-gradient(135deg, {primary_color} 0%, {secondary_color} 100%)",
+                    "color": "white",
+                    "padding": "10px 15px",
+                    "borderRadius": "8px 8px 0 0",
+                    "margin": "-15px -15px 15px -15px"  # Extend to card edges
+                }
+            except Exception as e:
+                print(f"Error loading team colors for team {team_number}: {e}")
+                gradient_style = {
+                    "background": "linear-gradient(135deg, #1566ac 0%, #c0b8bb 100%)",
+                    "color": "white",
+                    "padding": "10px 15px",
+                    "borderRadius": "8px 8px 0 0",
+                    "margin": "-15px -15px 15px -15px"
+                }
+        
         return dbc.Card(
             dbc.CardBody([
                 html.Div([
@@ -488,33 +517,21 @@ def user_team_card(title, body_elements, delete_button=None):
                         "fontWeight": "bold",
                         "fontSize": "1.1rem",
                         "textDecoration": "underline",
-                        "color": "#007bff",
+                        "color": gradient_style.get("color", "#007bff") if gradient_style else "#007bff",
                         "cursor": "pointer"
                     }),
                     delete_button if delete_button else None
-                ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"}),
+                ], style={
+                    "display": "flex", 
+                    "justifyContent": "space-between", 
+                    "alignItems": "center",
+                    **gradient_style
+                }),
                 html.Hr(),
                 *body_elements,
             ]),
             className="mb-4",
             style={  # ✅ Custom styling applied here
-                "borderRadius": "10px",
-                "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
-                "backgroundColor": "var(--card-bg)",
-                "marginBottom": "20px"
-            }
-        )
-
-def user_event_card(body_elements, delete_button=None):
-        return dbc.Card(
-            dbc.CardBody([
-                html.Div([
-                    delete_button if delete_button else None
-                ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"}),
-                *body_elements
-            ]),
-            className="mb-4",
-            style={  # ← You can replace this block:
                 "borderRadius": "10px",
                 "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
                 "backgroundColor": "var(--card-bg)",
