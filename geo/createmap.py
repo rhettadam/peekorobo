@@ -675,6 +675,13 @@ def generate_team_event_map(output_file="teams_map.html"):
     # Add CSS for sidebar styling
     sidebar_css = '''
     <style>
+    /* Prevent white flash during loading */
+    html, body {
+        background: #1A1A1A !important;
+        margin: 0;
+        padding: 0;
+    }
+    
     /* Hide ALL controls initially to prevent flash */
     .leaflet-control-search,
     .leaflet-control-layers,
@@ -1402,6 +1409,12 @@ def generate_team_event_map(output_file="teams_map.html"):
 
     # Optimize the HTML output
     html_content = m.get_root().render()
+    
+    # Add dark background to prevent white flash
+    html_content = html_content.replace(
+        '<head>',
+        '<head>\n<style>html, body { background: #1A1A1A !important; margin: 0; padding: 0; }</style>'
+    )
     
     # Compress the HTML content
     compressed_html = gzip.compress(html_content.encode('utf-8'))
