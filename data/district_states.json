@@ -122,5 +122,13 @@
     "abbreviations": [
       "GA"
     ]
+  },
+  "WSC": {
+    "names": [
+      "Wisconsin"
+    ],
+    "abbreviations": [
+      "WI"
+    ]
   }
 }
