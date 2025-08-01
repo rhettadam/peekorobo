@@ -25,7 +25,7 @@ from datagather import load_data_2025,load_search_data,load_year_data,get_team_a
 
 from layouts import insights_layout,insights_details_layout,team_layout,match_layout,user_layout,other_user_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout
 
-from utils import format_human_date,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
+from utils import is_western_pennsylvania_city,format_human_date,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -1101,6 +1101,7 @@ def update_events_tab_content(
         """Get district for an event based on its location using DISTRICT_STATES mapping"""
         state = event.get("s", "")  # State/province
         country = event.get("co", "")  # Country
+        city = event.get("c", "")  # City
         
         # Special cases for non-US districts
         if country == "Israel":
@@ -1111,6 +1112,9 @@ def update_events_tab_content(
         # Check US states against DISTRICT_STATES
         for district_acronym, states in DISTRICT_STATES_COMBINED.items():
             if state in states.get('abbreviations', []):
+                # Special handling for FMA district - exclude western Pennsylvania cities
+                if district_acronym == "FMA" and is_western_pennsylvania_city(city):
+                    return None  # Not in FMA district
                 return district_acronym
         
         return None
@@ -2966,6 +2970,13 @@ def load_teams(
             teams_data = [
                 t for t in teams_data
                 if (t.get("country") or "").lower() == "israel"
+            ]
+        elif selected_district == "FMA":
+            # For FMA district, exclude teams from western Pennsylvania cities
+            teams_data = [
+                t for t in teams_data
+                if (t.get("state_prov") or "").lower() in ["delaware", "new jersey", "pa", "pennsylvania"] and
+                not is_western_pennsylvania_city(t.get("city", ""))
             ]
         else:
             district_info = DISTRICT_STATES_COMBINED.get(selected_district, {})

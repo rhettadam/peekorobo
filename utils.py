@@ -756,3 +756,54 @@ def format_human_date(date_str):
         return dt.strftime("%B %-d, %Y") if os.name != 'nt' else dt.strftime("%B %#d, %Y")
     except Exception:
         return ""
+    
+def is_western_pennsylvania_city(city_name):
+    """
+    Check if a city is in western Pennsylvania (west of Harrisburg).
+    Returns True if the city is in western Pennsylvania, False otherwise.
+    """
+    if not city_name:
+        return False
+    
+    city_lower = city_name.lower().strip()
+    
+    # Major western Pennsylvania cities (west of Harrisburg)
+    western_pa_cities = {
+        # Pittsburgh area
+        "pittsburgh", "allegheny", "bethel park", "monroeville", "mckeesport", "new kensington",
+        "greensburg", "latrobe", "jeannette", "connellsville", "uniontown", "washington",
+        "canonsburg", "mcmurray", "peters township", "upper st. clair", "mt. lebanon",
+        "brentwood", "baldwin", "whitehall", "dormont", "carnegie", "robinson township", "cranberry township", "baden",
+        "brownsville", "vanderbilt", "monessen", "murrysville", "bridgeville",
+        
+        # Erie area
+        "erie", "meadville", "oil city", "franklin", "venango", "crawford",
+        
+        # Johnstown area
+        "johnstown", "ebensburg", "cambria", "somerset", "bedford", "blair",
+        
+        # Altoona area
+        "altoona", "huntingdon", "clearfield", "centre", "state college", "bellefonte",
+        
+        # Other western cities
+        "butler", "indiana", "armstrong", "westmoreland", "fayette", "greene",
+        "lawrence", "mercer", "crawford", "warren", "mckean", "elk", "forest",
+        "jefferson", "clarion", "venango", "butler county", "indiana county",
+        
+        # Additional cities that are clearly west of Harrisburg
+        "duquesne", "braddock", "swissvale", "edgewood", "forest hills", "wilkinsburg",
+        "east pittsburgh", "turtle creek", "rankin", "homestead", "west homestead",
+        "munhall", "white oak", "north versailles", "plum", "oakmont", "verona",
+        "aspinwall", "fox chapel", "shaler", "ross", "mccandless", "franklin park",
+        "marshall", "pine", "richland", "hampton", "bradford woods", "gibsonia",
+        "wexford", "cranberry", "mars", "valencia", "butler", "hermitage", "sharon",
+        "farrell", "new castle", "ellwood city", "beaver", "beaver falls", "aliquippa",
+        "monaca", "rochester", "new brighton", "beaver county", "lawrence county",
+        "mercer county", "crawford county", "erie county", "warren county",
+        "mckean county", "elk county", "forest county", "jefferson county",
+        "clarion county", "venango county", "butler county", "indiana county",
+        "armstrong county", "westmoreland county", "fayette county", "greene county", "chambersburg",
+        "marion center", "emlenton"
+    }
+    
+    return city_lower in western_pa_cities
