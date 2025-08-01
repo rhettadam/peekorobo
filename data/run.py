@@ -849,7 +849,7 @@ def optimized_create_event_db(year):
                     ",".join(blue_teams),
                     m["alliances"]["red"]["score"], m["alliances"]["blue"]["score"],
                     m.get("winning_alliance"),
-                    next((v["key"] for v in m.get("videos", []) if v["type"] == "youtube"), None)
+                    select_best_youtube_video(m.get("videos", []))
                 ))
         except:
             pass
@@ -1506,7 +1506,136 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             "wins": 0, "losses": 0, "ties": 0
         }
 
-def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
+def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, str]:
+    """
+    Calculate chronological weight for an event based on its timing in the season.
+    
+    Returns:
+        tuple: (weight, event_type) where weight is 0.0-1.0 and event_type is:
+               'preseason', 'regular', 'postseason', 'offseason', or 'unknown'
+    """
+    try:
+        # Load week ranges for the year
+        with open('week_ranges.json', 'r') as f:
+            week_ranges = json.load(f)
+        
+        year_str = str(year)
+        if year_str not in week_ranges:
+            return 1.0, 'unknown'
+        
+        # Get event start date from TBA API
+        event_data = tba_get(f"event/{event_key}")
+        if not event_data or 'start_date' not in event_data:
+            return 1.0, 'unknown'
+        
+        event_start = datetime.strptime(event_data['start_date'], '%Y-%m-%d')
+        
+        # Determine event type and timing
+        event_type = event_data.get('event_type', 0)
+        
+        # Pre-season events (before first regular week)
+        first_regular_week = datetime.strptime(week_ranges[year_str][0][0], '%Y-%m-%d')
+        if event_start < first_regular_week:
+            return 0.3, 'preseason'  # Very low weight for pre-season
+        
+        # Off-season events (after last regular week)
+        last_regular_week = datetime.strptime(week_ranges[year_str][-1][1], '%Y-%m-%d')
+        if event_start > last_regular_week:
+            return 0.5, 'offseason'  # Lower weight for off-season
+        
+        # Regular season events - calculate position within season
+        season_start = first_regular_week
+        season_end = last_regular_week
+        season_duration = (season_end - season_start).days
+        
+        if season_duration <= 0:
+            return 1.0, 'regular'
+        
+        # Calculate how far into the season this event is (0.0 to 1.0)
+        days_into_season = (event_start - season_start).days
+        season_progress = max(0.0, min(1.0, days_into_season / season_duration))
+        
+        # Apply enhanced chronological weighting curve
+        # Early events (first 20% of season): 0.2-0.4 weight (more aggressive penalty)
+        # Mid events (20-80% of season): 0.4-0.8 weight (gradual improvement)
+        # Late events (last 20% of season): 0.8-1.0 weight (full recognition)
+        if season_progress <= 0.2:
+            # Early season: linear from 0.2 to 0.4 (more aggressive penalty)
+            weight = 0.2 + (season_progress / 0.2) * 0.2
+        elif season_progress <= 0.8:
+            # Mid season: linear from 0.4 to 0.8 (gradual improvement)
+            weight = 0.4 + ((season_progress - 0.2) / 0.6) * 0.4
+        else:
+            # Late season: linear from 0.8 to 1.0 (full recognition)
+            weight = 0.8 + ((season_progress - 0.8) / 0.2) * 0.2
+        
+        return round(weight, 3), 'regular'
+        
+    except Exception as e:
+        print(f"Error calculating chronological weight for {event_key}: {e}")
+        return 1.0, 'unknown'
+
+def sort_events_chronologically(event_epas: List[Dict], year: int) -> List[Dict]:
+    """
+    Sort events chronologically and add timing information.
+    """
+    for event_epa in event_epas:
+        event_key = event_epa.get('event_key', '')
+        if event_key:
+            weight, event_type = get_event_chronological_weight(event_key, year)
+            event_epa['chronological_weight'] = weight
+            event_epa['event_type'] = event_type
+            event_epa['event_start_date'] = None
+            
+            # Get event start date for sorting
+            try:
+                event_data = tba_get(f"event/{event_key}")
+                if event_data and 'start_date' in event_data:
+                    event_epa['event_start_date'] = event_data['start_date']
+            except:
+                pass
+    
+    # Sort by start date, with events without dates at the end
+    def sort_key(event_epa):
+        start_date = event_epa.get('event_start_date')
+        if start_date:
+            return datetime.strptime(start_date, '%Y-%m-%d')
+        return datetime.max  # Put events without dates at the end
+    
+    return sorted(event_epas, key=sort_key)
+
+def log_chronological_weighting(event_epas: List[Dict], team_number: int, year: int):
+    """
+    Log chronological weighting information for debugging and monitoring.
+    """
+    if not event_epas:
+        return
+    
+    print(f"\n📊 Chronological Weighting for Team {team_number} ({year}):")
+    print(f"{'Event':<20} {'Type':<12} {'Weight':<8} {'EPA':<8} {'Matches':<8}")
+    print("-" * 60)
+    
+    total_weighted_epa = 0.0
+    total_weight = 0.0
+    
+    for event_epa in event_epas:
+        event_key = event_epa.get('event_key', 'Unknown')
+        event_type = event_epa.get('event_type', 'unknown')
+        weight = event_epa.get('chronological_weight', 1.0)
+        epa = event_epa.get('overall', 0.0)
+        matches = event_epa.get('match_count', 0)
+        
+        print(f"{event_key:<20} {event_type:<12} {weight:<8.3f} {epa:<8.1f} {matches:<8}")
+        
+        total_weighted_epa += epa * weight
+        total_weight += weight
+    
+    if total_weight > 0:
+        avg_weighted_epa = total_weighted_epa / total_weight
+        print(f"\n📈 Average Weighted EPA: {avg_weighted_epa:.2f}")
+        print(f"📊 Total Weight: {total_weight:.3f}")
+
+def aggregate_overall_epa(event_epas: List[Dict], year: int = None) -> Dict:
     import traceback
     try:
         if not event_epas:
@@ -1526,15 +1655,31 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
             return {
                 "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
                 "confidence": 0.0, "actual_epa": 0.0,
-                "wins": 0, "losses": 0, "ties": 0
+                "wins": 0, "losses": 0, "ties": 0,
+                "confidence_components": {
+                    "consistency": 0.0,
+                    "record": 0.0,
+                    "veteran": 0.0,
+                    "dominance": 0.0,
+                    "event": 0.0,
+                    "raw": 0.0
+                }
             }
+
+        # Sort events chronologically and add timing weights if year is provided
+        if year is not None:
+            valid_events = sort_events_chronologically(valid_events, year)
+            # Log weighting information for debugging (only for teams with multiple events)
+            if len(valid_events) > 1:
+                # We'll get team number from the calling function instead
+                pass
 
         total_overall = 0.0
         total_auto = 0.0
         total_teleop = 0.0
         total_endgame = 0.0
         total_actual_epa = 0.0
-        total_match_count = 0
+        total_weighted_match_count = 0.0
         total_confidence = 0.0
         total_consistency = 0.0
         total_dominance = 0.0
@@ -1546,11 +1691,19 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
         total_losses = 0
         total_ties = 0
 
-        # Use a weighted average based on match count per event
+        # Use chronological weighting if available, otherwise fall back to match count weighting
         for epa_data in valid_events:
             match_count = epa_data.get("match_count", 0)
             if match_count == 0:
                 continue
+                
+            # Get chronological weight if available
+            chronological_weight = epa_data.get("chronological_weight", 1.0)
+            event_type = epa_data.get("event_type", "unknown")
+            
+            # Calculate effective weight: chronological_weight * match_count
+            effective_weight = chronological_weight * match_count
+            
             # Fallback for NoneType values
             overall = epa_data.get("overall", 0.0) or 0.0
             auto = epa_data.get("auto", 0.0) or 0.0
@@ -1566,36 +1719,45 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
             wins = epa_data.get("wins", 0) or 0
             losses = epa_data.get("losses", 0) or 0
             ties = epa_data.get("ties", 0) or 0
-            total_overall += overall * match_count
-            total_auto += auto * match_count
-            total_teleop += teleop * match_count
-            total_endgame += endgame * match_count
-            total_actual_epa += actual_epa * match_count
-            total_match_count += match_count
-            total_confidence += confidence * match_count
-            total_consistency += consistency * match_count
-            total_dominance += dominance * match_count
-            total_veteran_boost += veteran_boost * match_count
-            total_event_boost += event_boost * match_count
-            total_record_alignment += record_alignment * match_count
+            
+            total_overall += overall * effective_weight
+            total_auto += auto * effective_weight
+            total_teleop += teleop * effective_weight
+            total_endgame += endgame * effective_weight
+            total_actual_epa += actual_epa * effective_weight
+            total_weighted_match_count += effective_weight
+            total_confidence += confidence * effective_weight
+            total_consistency += consistency * effective_weight
+            total_dominance += dominance * effective_weight
+            total_veteran_boost += veteran_boost * effective_weight
+            total_event_boost += event_boost * effective_weight
+            total_record_alignment += record_alignment * effective_weight
             total_wins += wins
             total_losses += losses
             total_ties += ties
             total_events += 1
 
-        if total_match_count == 0:
+        if total_weighted_match_count == 0:
             return {
                 "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
                 "confidence": 0.0, "actual_epa": 0.0,
-                "wins": 0, "losses": 0, "ties": 0
+                "wins": 0, "losses": 0, "ties": 0,
+                "confidence_components": {
+                    "consistency": 0.0,
+                    "record": 0.0,
+                    "veteran": 0.0,
+                    "dominance": 0.0,
+                    "event": 0.0,
+                    "raw": 0.0
+                }
             }
 
-        avg_confidence = total_confidence / total_match_count
-        avg_consistency = total_consistency / total_match_count
-        avg_dominance = total_dominance / total_match_count
-        avg_veteran_boost = total_veteran_boost / total_match_count
-        avg_event_boost = total_event_boost / total_match_count
-        avg_record_alignment = total_record_alignment / total_match_count
+        avg_confidence = total_confidence / total_weighted_match_count
+        avg_consistency = total_consistency / total_weighted_match_count
+        avg_dominance = total_dominance / total_weighted_match_count
+        avg_veteran_boost = total_veteran_boost / total_weighted_match_count
+        avg_event_boost = total_event_boost / total_weighted_match_count
+        avg_record_alignment = total_record_alignment / total_weighted_match_count
 
         # Calculate the weighted components for display
         weights = valid_events[0].get("weights", {})
@@ -1623,12 +1785,12 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
         final_confidence = max(0.0, min(1.0, raw_confidence))
 
         return {
-            "overall": round(total_overall / total_match_count, 2),
-            "auto": round(total_auto / total_match_count, 2),
-            "teleop": round(total_teleop / total_match_count, 2),
-            "endgame": round(total_endgame / total_match_count, 2),
+            "overall": round(total_overall / total_weighted_match_count, 2),
+            "auto": round(total_auto / total_weighted_match_count, 2),
+            "teleop": round(total_teleop / total_weighted_match_count, 2),
+            "endgame": round(total_endgame / total_weighted_match_count, 2),
             "confidence": round(final_confidence, 2),
-            "actual_epa": round((total_overall / total_match_count) * final_confidence, 2),
+            "actual_epa": round((total_overall / total_weighted_match_count) * final_confidence, 2),
             "wins": total_wins,
             "losses": total_losses,
             "ties": total_ties,
@@ -1654,7 +1816,15 @@ def aggregate_overall_epa(event_epas: List[Dict]) -> Dict:
         return {
             "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
             "confidence": 0.0, "actual_epa": 0.0,
-            "wins": 0, "losses": 0, "ties": 0
+            "wins": 0, "losses": 0, "ties": 0,
+            "confidence_components": {
+                "consistency": 0.0,
+                "record": 0.0,
+                "veteran": 0.0,
+                "dominance": 0.0,
+                "event": 0.0,
+                "raw": 0.0
+            }
         }
 
 # Retry wrapper for fetch_team_components
@@ -1672,6 +1842,23 @@ def retry_team_fetch(max_attempts=3):
                         return None
         return wrapper
     return decorator
+
+def select_best_youtube_video(videos):
+    """
+    Select the best YouTube video from a list of videos.
+    Since TBA API doesn't provide channel information, we return the first YouTube video.
+    """
+    if not videos:
+        return None
+    
+    youtube_videos = [v for v in videos if v.get("type") == "youtube"]
+    if not youtube_videos:
+        return None
+    
+    # TBA API only provides video key and type, not channel information
+    # So we can't determine if it's an official video without additional API calls
+    # For now, return the first YouTube video
+    return youtube_videos[0]["key"]
 
 def detect_b_bot_mapping(event_key, team_number):
     """
@@ -1860,7 +2047,11 @@ def fetch_team_components(team, year):
             continue
 
     # Aggregate overall EPA from full event-specific EPAs
-    overall_epa_data = aggregate_overall_epa(event_epa_full)
+    overall_epa_data = aggregate_overall_epa(event_epa_full, year)
+    
+    # Log chronological weighting for teams with multiple events
+    if len(event_epa_full) > 1:
+        log_chronological_weighting(event_epa_full, team_number, year)
     overall_epa_data["wins"] = total_wins
     overall_epa_data["losses"] = total_losses
     overall_epa_data["ties"] = total_ties
@@ -2031,7 +2222,7 @@ def analyze_single_team(team_key: str, year: int):
         except Exception as e:
             print(f"Failed to fetch matches for team {team_key} at event {event_key}: {e}")
 
-    overall_epa_data = aggregate_overall_epa(event_epa_results)
+    overall_epa_data = aggregate_overall_epa(event_epa_results, year)
     overall_epa_data["wins"] = total_wins
     overall_epa_data["losses"] = total_losses
     overall_epa_data["ties"] = total_ties
@@ -2205,3 +2396,4 @@ if __name__ == "__main__":
         print("✅ Cleanup complete.")
         elapsed = time.time() - start_time
         print(f"\n⏱️ Script runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
+
