@@ -1515,9 +1515,28 @@ def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, st
                'preseason', 'regular', 'postseason', 'offseason', or 'unknown'
     """
     try:
-        # Load week ranges for the year
-        with open('data/week_ranges.json', 'r') as f:
-            week_ranges = json.load(f)
+        # Load week ranges for the year - try multiple possible paths
+        week_ranges = None
+        possible_paths = [
+            'week_ranges.json',
+            'data/week_ranges.json',
+            '../data/week_ranges.json',
+            os.path.join(os.path.dirname(__file__), 'week_ranges.json'),
+            os.path.join(os.path.dirname(__file__), '..', 'data', 'week_ranges.json')
+        ]
+        
+        for path in possible_paths:
+            try:
+                with open(path, 'r') as f:
+                    week_ranges = json.load(f)
+                print(f"Successfully loaded week_ranges.json from: {path}")
+                break
+            except (FileNotFoundError, IOError):
+                continue
+        
+        if week_ranges is None:
+            print(f"Warning: Could not load week_ranges.json from any of the attempted paths")
+            return 1.0, 'unknown'
         
         year_str = str(year)
         if year_str not in week_ranges:
