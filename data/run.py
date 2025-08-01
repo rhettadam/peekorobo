@@ -1516,7 +1516,7 @@ def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, st
     """
     try:
         # Load week ranges for the year
-        with open('week_ranges.json', 'r') as f:
+        with open('data/week_ranges.json', 'r') as f:
             week_ranges = json.load(f)
         
         year_str = str(year)
