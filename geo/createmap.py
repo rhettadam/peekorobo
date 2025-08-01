@@ -61,7 +61,7 @@ DISTRICT_COLORS = {
     "FIT": "#9467bd",  # purple
     "PCH": "#8c564b",  # brown
     "PNW": "#e377c2",  # pink
-    "FIM": "#7f7f7f",  # gray
+    "FIM": "#17becf",  # gray
     "FSC": "#bcbd22",  # yellow-green
     "FNC": "#17becf",  # cyan
     "FIN": "#ff9896",  # light red
@@ -267,16 +267,22 @@ def get_state_geojson():
         district_states.extend(states)
     
     # Filter features to only include states/provinces in FRC districts
+    # Exclude Pennsylvania since we'll use custom boundaries
     filtered_features = []
     for feature in data['features']:
         state_name = feature['properties']['name']
-        if state_name in district_states:
+        if state_name in district_states and state_name != 'Pennsylvania':
             # Add district information to properties
             for district, states in DISTRICT_STATES.items():
                 if state_name in states:
                     feature['properties']['district'] = district
                     break
             filtered_features.append(feature)
+
+    # Add custom Pennsylvania boundaries
+    eastern_pa_boundary = get_eastern_pennsylvania_boundary()
+    if eastern_pa_boundary:
+        filtered_features.append(eastern_pa_boundary)
 
     # Add Israel boundary
     israel_geojson = get_israel_boundary()
@@ -322,30 +328,65 @@ def get_israel_boundary():
     
     return None
 
+def get_eastern_pennsylvania_boundary():
+    """Get Eastern Pennsylvania boundary GeoJSON data"""
+    # Try to load from cache first
+    cache_file = os.path.join(SCRIPT_DIR, "eastern_pennsylvania_boundary.json")
+    if os.path.exists(cache_file):
+        with open(cache_file, "r") as f:
+            return json.load(f)
+    return None
+
+def get_western_pennsylvania_boundary():
+    """Get Western Pennsylvania boundary GeoJSON data"""
+    # Try to load from cache first
+    cache_file = os.path.join(SCRIPT_DIR, "western_pennsylvania_boundary.json")
+    if os.path.exists(cache_file):
+        with open(cache_file, "r") as f:
+            return json.load(f)
+    return None
+
 def style_district(feature):
     """Style function for district boundaries"""
-    state_name = feature['properties']['name']
-    district = None
+    properties = feature['properties']
+    state_name = properties.get('name', '')
+    district = properties.get('district')
     
-    # Find which district this state belongs to
-    for d, states in DISTRICT_STATES.items():
-        if state_name in states:
-            district = d
-            break
+    # Handle custom Pennsylvania boundaries
+    if state_name == 'Eastern Pennsylvania':
+        district = 'FMA'
+    elif state_name == 'Western Pennsylvania':
+        district = 'REGIONAL'  # Regional area, not in FMA district
     
-    if district:
+    # If no district found in properties, try to find it in DISTRICT_STATES
+    if not district:
+        for d, states in DISTRICT_STATES.items():
+            if state_name in states:
+                district = d
+                break
+    
+    if district and district != 'REGIONAL':
         return {
             'fillColor': DISTRICT_COLORS.get(district, '#808080'),
             'color': '#000000',
             'weight': 2,
             'fillOpacity': 0.3
         }
-    return {
-        'fillColor': '#808080',
-        'color': '#000000',
-        'weight': 1,
-        'fillOpacity': 0.1
-    }
+    elif district == 'REGIONAL':
+        # Style for regional areas (not in any district)
+        return {
+            'fillColor': '#cccccc',  # Light gray for regional areas
+            'color': '#666666',
+            'weight': 1,
+            'fillOpacity': 0.2
+        }
+    else:
+        return {
+            'fillColor': '#808080',
+            'color': '#000000',
+            'weight': 1,
+            'fillOpacity': 0.1
+        }
 
 def highlight_district(feature):
     """Highlight function for district boundaries"""
