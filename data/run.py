@@ -38,7 +38,7 @@ shutdown_event = threading.Event()
 
 def signal_handler(signum, frame):
     """Handle Ctrl+C and other termination signals gracefully."""
-    print(f"\n🛑 Received signal {signum}. Shutting down gracefully...")
+    print(f"\nReceived signal {signum}. Shutting down gracefully...")
     shutdown_event.set()
     
     # Cancel all running futures
@@ -54,7 +54,7 @@ def signal_handler(signum, frame):
         except Exception as e:
             print(f"Warning: Error closing connection: {e}")
     
-    print("✅ Cleanup complete. Exiting.")
+    print("Cleanup complete. Exiting.")
     sys.exit(0)
 
 # Register signal handlers
@@ -640,7 +640,7 @@ def data_has_changed(existing, new_data, data_type):
 
 def optimized_create_event_db(year):
     """Create and populate the events database for the specified year, only updating what's changed."""
-    print(f"\n🧹 Optimized events database update for {year}...")
+    print(f"\nOptimized events database update for {year}...")
     
     # Create PostgreSQL tables if they don't exist
     create_epa_tables()
@@ -648,17 +648,17 @@ def optimized_create_event_db(year):
     try:
         events = tba_get(f"events/{year}")
     except Exception as e:
-        print(f"❌ Failed to load events for {year}: {e}")
+        print(f"Failed to load events for {year}: {e}")
         return
     
     events_to_process = []
     events_skipped = 0
     
-    print(f"🔍 Checking {len(events)} events for updates...")
+    print(f"Checking {len(events)} events for updates...")
     
     for event in events:
         if shutdown_event.is_set():
-            print("🛑 Shutdown requested, stopping event processing...")
+            print("Shutdown requested, stopping event processing...")
             return
             
         event_key = event["key"]
@@ -688,7 +688,7 @@ def optimized_create_event_db(year):
         # For ongoing or recent events, check if data has changed
         events_to_process.append(event)
 
-    print(f"📊 Processing {len(events_to_process)} events, skipping {events_skipped} completed events")
+    print(f"Processing {len(events_to_process)} events, skipping {events_skipped} completed events")
 
     def fetch_and_compare(event):
         if shutdown_event.is_set():
@@ -914,7 +914,7 @@ def optimized_create_event_db(year):
         futures = [executor.submit(fetch_and_compare, ev) for ev in events_to_process]
         for f in tqdm(as_completed(futures), total=len(events_to_process), desc=f"Analyzing {year} events"):
             if shutdown_event.is_set():
-                print("🛑 Shutdown requested, stopping analysis...")
+                print("Shutdown requested, stopping analysis...")
                 break
                 
             try:
@@ -922,7 +922,7 @@ def optimized_create_event_db(year):
                 if result:
                     all_results.append(result)
             except Exception as e:
-                print(f"❌ Error processing event: {e}")
+                print(f"Error processing event: {e}")
     finally:
         if executor:
             cleanup_executor(executor)
@@ -930,7 +930,7 @@ def optimized_create_event_db(year):
                 active_executors.remove(executor)
 
     if shutdown_event.is_set():
-        print("🛑 Shutdown requested, stopping event database update...")
+        print("Shutdown requested, stopping event database update...")
         return
 
     # Count what needs updating
@@ -942,7 +942,7 @@ def optimized_create_event_db(year):
     match_updates = sum(1 for r in all_results if r["updates_needed"]["matches"])
     award_updates = sum(1 for r in all_results if r["updates_needed"]["awards"])
     
-    print(f"\n📈 Update Summary for {year}:")
+    print(f"\n Update Summary for {year}:")
     print(f"  Total events processed: {total_events}")
     print(f"  Events with changes: {events_with_changes}")
     print(f"  Event data updates: {event_updates}")
@@ -954,9 +954,9 @@ def optimized_create_event_db(year):
     # Only update what's changed
     if events_with_changes > 0:
         optimized_insert_event_data(all_results, year)
-        print(f"\n✅ {year} events optimized update complete")
+        print(f"\n{year} events optimized update complete")
     else:
-        print(f"\n✅ No updates needed for {year} events")
+        print(f"\nNo updates needed for {year} events")
 
 def optimized_insert_event_data(results, year):
     """Insert only the changed data into PostgreSQL."""
@@ -1041,7 +1041,7 @@ def optimized_fetch_and_store_team_data(year):
     optimized_create_event_db(year)
     
     if shutdown_event.is_set():
-        print("🛑 Shutdown requested, stopping team data processing...")
+        print("Shutdown requested, stopping team data processing...")
         return
         
     print(f"\nProcessing year {year} teams...")
@@ -1063,7 +1063,6 @@ def optimized_fetch_and_store_team_data(year):
         try:
             new_epa_data = fetch_team_components(team, year)
         except Exception as e:
-            import traceback
             print(f"FATAL ERROR in fetch_team_components for team {team_number}: {e}")
             traceback.print_exc()
             print(f"Locals: {locals()}")
@@ -1091,7 +1090,7 @@ def optimized_fetch_and_store_team_data(year):
         
         for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Analyzing team changes"):
             if shutdown_event.is_set():
-                print("🛑 Shutdown requested, stopping team analysis...")
+                print("Shutdown requested, stopping team analysis...")
                 break
                 
             try:
@@ -1125,17 +1124,17 @@ def optimized_fetch_and_store_team_data(year):
                 active_executors.remove(executor)
     
     if shutdown_event.is_set():
-        print("🛑 Shutdown requested, stopping team data update...")
+        print("Shutdown requested, stopping team data update...")
         return
     
-    print(f"\n📊 Team Update Summary for {year}:")
+    print(f"\nTeam Update Summary for {year}:")
     print(f"  Total teams processed: {len(all_teams)}")
     print(f"  Teams updated: {updated_count}")
     print(f"  Teams skipped (no changes): {skipped_count}")
     print(f"  Teams failed: {len(failed_teams)}")
     
     if failed_teams:
-        print(f"❌ Failed to process {len(failed_teams)} teams:")
+        print(f"Failed to process {len(failed_teams)} teams:")
         for failed in failed_teams[:10]:
             print(f"  - {failed}")
         if len(failed_teams) > 10:
@@ -1256,7 +1255,6 @@ def calculate_confidence(consistency: float, dominance: float, event_boost: floa
     return raw_confidence, capped_confidence, record_alignment
 
 def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) -> Dict:
-    import traceback
     try:
         # --- BEGIN FUNCTION BODY ---
         importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
@@ -1492,7 +1490,6 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             "ties": event_ties
         }
     except Exception as e:
-        import traceback
         print(f"EPA FATAL ERROR for team {team_key}: {e}")
         traceback.print_exc()
         print(f"Locals: {locals()}")
@@ -1529,7 +1526,7 @@ def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, st
             try:
                 with open(path, 'r') as f:
                     week_ranges = json.load(f)
-                print(f"Successfully loaded week_ranges.json from: {path}")
+                #print(f"Successfully loaded week_ranges.json from: {path}")
                 break
             except (FileNotFoundError, IOError):
                 continue
@@ -1630,9 +1627,9 @@ def log_chronological_weighting(event_epas: List[Dict], team_number: int, year: 
     if not event_epas:
         return
     
-    print(f"\n📊 Chronological Weighting for Team {team_number} ({year}):")
-    print(f"{'Event':<20} {'Type':<12} {'Weight':<8} {'EPA':<8} {'Matches':<8}")
-    print("-" * 60)
+    #print(f"\n📊 Chronological Weighting for Team {team_number} ({year}):")
+    #print(f"{'Event':<20} {'Type':<12} {'Weight':<8} {'EPA':<8} {'Matches':<8}")
+    #print("-" * 60)
     
     total_weighted_epa = 0.0
     total_weight = 0.0
@@ -1644,18 +1641,17 @@ def log_chronological_weighting(event_epas: List[Dict], team_number: int, year: 
         epa = event_epa.get('overall', 0.0)
         matches = event_epa.get('match_count', 0)
         
-        print(f"{event_key:<20} {event_type:<12} {weight:<8.3f} {epa:<8.1f} {matches:<8}")
+        #print(f"{event_key:<20} {event_type:<12} {weight:<8.3f} {epa:<8.1f} {matches:<8}")
         
         total_weighted_epa += epa * weight
         total_weight += weight
     
     if total_weight > 0:
         avg_weighted_epa = total_weighted_epa / total_weight
-        print(f"\n📈 Average Weighted EPA: {avg_weighted_epa:.2f}")
-        print(f"📊 Total Weight: {total_weight:.3f}")
+        #print(f"\n📈 Average Weighted EPA: {avg_weighted_epa:.2f}")
+        #print(f"📊 Total Weight: {total_weight:.3f}")
 
 def aggregate_overall_epa(event_epas: List[Dict], year: int = None) -> Dict:
-    import traceback
     try:
         if not event_epas:
             return {
@@ -2300,7 +2296,7 @@ def restart_heroku_app():
     api_key = os.environ.get("HEROKU_API_KEY")
     
     if not app_name or not api_key:
-        print("⚠️  HEROKU_APP_NAME or HEROKU_API_KEY not set, skipping app restart")
+        print("HEROKU_APP_NAME or HEROKU_API_KEY not set, skipping app restart")
         return
     
     try:
@@ -2314,11 +2310,11 @@ def restart_heroku_app():
         # Restart all dynos
         response = requests.delete(url, headers=headers)
         if response.status_code == 202:
-            print(f"✅ Successfully restarted Heroku app: {app_name}")
+            print(f"Successfully restarted Heroku app: {app_name}")
         else:
-            print(f"❌ Failed to restart app: {response.status_code} - {response.text}")
+            print(f"Failed to restart app: {response.status_code} - {response.text}")
     except Exception as e:
-        print(f"❌ Error restarting app: {e}")
+        print(f"Error restarting app: {e}")
 
 def main():
     print("\nEPA Calculator")
@@ -2350,19 +2346,19 @@ def main():
             restart_heroku_app()
             
     except KeyboardInterrupt:
-        print("\n🛑 Interrupted by user (Ctrl+C)")
+        print("\nInterrupted by user (Ctrl+C)")
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"\nUnexpected error: {e}")
     finally:
         # Final cleanup
-        print("\n🧹 Performing final cleanup...")
+        print("\nPerforming final cleanup...")
         for executor in active_executors:
             cleanup_executor(executor)
         for conn in active_connections:
             cleanup_connection(conn)
-        print("✅ Cleanup complete.")
+        print("Cleanup complete.")
         elapsed = time.time() - start_time
-        print(f"\n⏱️ Script runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
+        print(f"\nScript runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
 
 if __name__ == "__main__":
     try:
@@ -2402,17 +2398,17 @@ if __name__ == "__main__":
         else:
             main()
     except KeyboardInterrupt:
-        print("\n🛑 Interrupted by user (Ctrl+C)")
+        print("\nInterrupted by user (Ctrl+C)")
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"\nUnexpected error: {e}")
     finally:
         # Final cleanup
-        print("\n🧹 Performing final cleanup...")
+        print("\nPerforming final cleanup...")
         for executor in active_executors:
             cleanup_executor(executor)
         for conn in active_connections:
             cleanup_connection(conn)
-        print("✅ Cleanup complete.")
+        print("Cleanup complete.")
         elapsed = time.time() - start_time
-        print(f"\n⏱️ Script runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
+        print(f"\nScript runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
 

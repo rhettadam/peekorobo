@@ -510,25 +510,54 @@ def user_team_card(title, body_elements, delete_button=None, team_number=None):
                     "margin": "-15px -15px 15px -15px"
                 }
         
+        # Create unique index for pattern matching
+        card_index = team_number if team_number else hash(str(title)) % 1000000
+        
         return dbc.Card(
             dbc.CardBody([
+                # Clickable header with collapse arrow
                 html.Div([
-                    html.Div(title, style={
-                        "fontWeight": "bold",
-                        "fontSize": "1.1rem",
-                        "textDecoration": "underline",
-                        "color": gradient_style.get("color", "#007bff") if gradient_style else "#007bff",
-                        "cursor": "pointer"
+                    html.Div([
+                        html.Span("▼", id={"type": "team-card-arrow", "index": card_index}, style={
+                            "marginRight": "8px",
+                            "fontSize": "0.8rem",
+                            "transition": "transform 0.2s ease"
+                        }),
+                        html.Div(title, style={
+                            "fontWeight": "bold",
+                            "fontSize": "1.1rem",
+                            "textDecoration": "underline",
+                            "color": gradient_style.get("color", "#007bff") if gradient_style else "#007bff",
+                            "cursor": "pointer",
+                            "flex": "1"
+                        })
+                    ], style={
+                        "display": "flex",
+                        "alignItems": "center",
+                        "flex": "1"
                     }),
                     delete_button if delete_button else None
-                ], style={
+                ], 
+                id={"type": "team-card-header", "index": card_index},
+                style={
                     "display": "flex", 
                     "justifyContent": "space-between", 
                     "alignItems": "center",
+                    "cursor": "pointer",
                     **gradient_style
                 }),
-                html.Hr(),
-                *body_elements,
+                # Collapsible body content
+                html.Div([
+                    html.Hr(),
+                    *body_elements,
+                ], 
+                id={"type": "team-card-body", "index": card_index},
+                style={
+                    "overflow": "hidden",
+                    "transition": "max-height 0.3s ease, opacity 0.3s ease",
+                    "maxHeight": "2000px",  # Large enough to show content
+                    "opacity": "1"
+                }),
             ]),
             className="mb-4",
             style={  # ✅ Custom styling applied here

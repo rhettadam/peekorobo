@@ -392,13 +392,9 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             
             # Check if this is a western Pennsylvania team first
             team_city = selected_team.get("city", "")
-            print(f"DEBUG: Testing is_western_pennsylvania_city('{team_city}') = {is_western_pennsylvania_city(team_city)}")
             is_western_pa = ((state.upper() == "PA" or state.upper() == "PENNSYLVANIA") and is_western_pennsylvania_city(team_city))
             
-            print(f"DEBUG: Team {selected_team.get('team_number')} from {team_city}, state={state}, is_western_pa={is_western_pa}")
-            
             if is_western_pa:
-                print(f"DEBUG: Team {selected_team.get('team_number')} from {team_city} is in western PA, no district assignment")
                 district_name = None
                 district_rank = None
                 district_teams = 0
@@ -446,12 +442,9 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                                     break
                             
                             district_name = district_code
-                            print(f"DEBUG: Assigned team {selected_team.get('team_number')} to district {district_code}")
                             break
         except Exception as e:
             print(f"Error loading district data: {e}")
-        
-        print(f"DEBUG: Final district assignment for team {selected_team.get('team_number')}: {district_name}")
         
         def rank_card(top, rank, total, href):
             return html.Div(
@@ -3254,21 +3247,48 @@ def match_layout(event_key, match_key):
         footer
     ])
 
-def user_layout(_user_id=None, deleted_items=None):
-
+def user_profile_layout(username=None, _user_id=None, deleted_items=None):
+    """
+    Combined layout for both current user profile and other user profiles.
+    
+    Args:
+        username: If provided, shows profile for this specific user (other user view)
+        _user_id: If provided, shows profile for this user ID (current user view)
+        deleted_items: Items to exclude from display (for current user view)
+    """
     from peekorobo import EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, TEAM_DATABASE, EVENT_RANKINGS
 
-    user_id = _user_id or session.get("user_id")
-
-    if not user_id:
+    session_user_id = session.get("user_id")
+    if not session_user_id:
         return html.Div([
             dcc.Store(id="user-session", data={}),
             dcc.Location(href="/login", id="force-login-redirect")
         ])
 
-    dcc.Store(id="user-session", data={"user_id": user_id}),
+    # Determine if this is current user or other user view
+    is_current_user = username is None
+    
+    if is_current_user:
+        # Current user view - use session user_id or provided _user_id
+        user_id = _user_id or session_user_id
+        target_user_id = user_id
+    else:
+        # Other user view - look up user by username
+        target_user_id = None
+        try:
+            with DatabaseConnection() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+                row = cur.fetchone()
+                if not row:
+                    return html.Div("User not found.", style={"padding": "2rem", "fontSize": "1.2rem"})
+                target_user_id = row[0]
+        except Exception as e:
+            print(f"Error loading user data: {e}")
+            return html.Div("Error loading user data.", style={"padding": "2rem", "fontSize": "1.2rem"})
 
-    username = f"USER {user_id}"
+    # Fetch user data
+    username_display = f"USER {target_user_id}"
     avatar_key = "stock"
     role = "No role"
     team_affil = "####"
@@ -3278,523 +3298,305 @@ def user_layout(_user_id=None, deleted_items=None):
     color = "#f9f9f9"
     team_keys = []
     event_keys = []
+    followers_user_objs = []
+    following_user_objs = []
+    is_following = False
 
     try:
         with DatabaseConnection() as conn:
             cursor = conn.cursor()
             
-            cursor.execute("""
-                SELECT username, avatar_key, role, team, bio, followers, following, color
-                FROM users WHERE id = %s
-            """, (user_id,))
-            user_row = cursor.fetchone()
-            if user_row:
-                username = user_row[0] or username
-                avatar_key = user_row[1] or "stock"
-                role = user_row[2] or "No role"
-                team_affil = user_row[3] or "####"
-                bio = user_row[4] or "No bio"
-                followers_ids = user_row[5] or []
-                following_ids = user_row[6] or []
-                # Get usernames and avatars for followers
-                followers_user_objs = []
-                if followers_ids:
-                    cursor.execute("SELECT id, username, avatar_key FROM users WHERE id = ANY(%s)", (followers_ids,))
-                    followers_user_objs = cursor.fetchall()
-            
-                # Get usernames and avatars for following
-                following_user_objs = []
-                if following_ids:
-                    cursor.execute("SELECT id, username, avatar_key FROM users WHERE id = ANY(%s)", (following_ids,))
-                    following_user_objs = cursor.fetchall()
-                
-                # Count values
-                followers_count = len(followers_ids)
-                following_count = len(following_ids)
-                
-                # Fetch usernames for follower IDs
-                followers_usernames = []
-                if followers_ids:
-                    cursor.execute("SELECT username FROM users WHERE id = ANY(%s)", (followers_ids,))
-                    followers_usernames = [row[0] for row in cursor.fetchall()]
-                
-                # Fetch usernames for following IDs
-                following_usernames = []
-                if following_ids:
-                    cursor.execute("SELECT username FROM users WHERE id = ANY(%s)", (following_ids,))
-                    following_usernames = [row[0] for row in cursor.fetchall()]
+            if is_current_user:
+                # Current user - get full profile data
+                cursor.execute("""
+                    SELECT username, avatar_key, role, team, bio, followers, following, color
+                    FROM users WHERE id = %s
+                """, (target_user_id,))
+                user_row = cursor.fetchone()
+                if user_row:
+                    username_display = user_row[0] or username_display
+                    avatar_key = user_row[1] or "stock"
+                    role = user_row[2] or "No role"
+                    team_affil = user_row[3] or "####"
+                    bio = user_row[4] or "No bio"
+                    followers_ids = user_row[5] or []
+                    following_ids = user_row[6] or []
+                    
+                    # Get usernames and avatars for followers
+                    if followers_ids:
+                        cursor.execute("SELECT id, username, avatar_key FROM users WHERE id = ANY(%s)", (followers_ids,))
+                        followers_user_objs = cursor.fetchall()
+                    
+                    # Get usernames and avatars for following
+                    if following_ids:
+                        cursor.execute("SELECT id, username, avatar_key FROM users WHERE id = ANY(%s)", (following_ids,))
+                        following_user_objs = cursor.fetchall()
+                    
+                    # Count values
+                    followers_count = len(followers_ids)
+                    following_count = len(following_ids)
+                    color = user_row[7] or "#f9f9f9"
+            else:
+                # Other user - get profile data and check if current user is following
+                cursor.execute("""
+                    SELECT username, avatar_key, role, team, bio, followers, following, color
+                    FROM users WHERE id = %s
+                """, (target_user_id,))
+                user_row = cursor.fetchone()
+                if user_row:
+                    username_display = user_row[0] or username_display
+                    avatar_key = user_row[1] or "stock"
+                    role = user_row[2] or "No role"
+                    team_affil = user_row[3] or "####"
+                    bio = user_row[4] or "No bio"
+                    followers_ids = user_row[5] or []
+                    following_ids = user_row[6] or []
+                    followers_count = len(followers_ids)
+                    following_count = len(following_ids)
+                    color = user_row[7] or "#ffffff"
+                    
+                    # Check if current user is following this user
+                    is_following = session_user_id in followers_ids
 
-                color = user_row[7] or "#f9f9f9"
-
-            cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (user_id,))
+            # Get favorite teams and events
+            cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (target_user_id,))
             team_keys = [r[0] for r in cursor.fetchall()]
 
-            cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'event'", (user_id,))
+            cursor.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'event'", (target_user_id,))
             event_keys = [r[0] for r in cursor.fetchall()]
             
     except Exception as e:
         print(f"Error retrieving user info: {e}")
 
     available_avatars = get_available_avatars()
-
     text_color = get_contrast_text_color(color)
 
-    profile_display = html.Div(
-        id="profile-display",
-        hidden=False,
-        children=[
-            html.Div([
-                html.Span(f"Role: {role}", id="profile-role", style={
-                    "fontWeight": "500",
-                    "color": text_color
-                }),
-                html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
-                html.Span([
-                    html.Span("Team: ", style={"color": text_color, "fontWeight": "500"}),
-                    html.A(team_affil, href=f"/team/{team_affil}/{current_year}", style={
-                        "color": text_color,
-                        "textDecoration": "underline",
-                        "fontWeight": "500"
-                    })
-                ], id="profile-team"),
-            ], style={
-                "fontSize": "0.85rem",
-                "color": text_color,
-                "marginTop": "6px",
-                "display": "flex",
-                "flexWrap": "wrap"
-            }),
-            
-            html.Div([
-                html.Span([
-                    f"Followers: {followers_count} ",
-                    html.Span("▼", id="followers-arrow", style={"cursor": "pointer", "fontSize": "0.75rem"})
-                ], id="profile-followers", style={"color": text_color, "fontWeight": "500", "position": "relative"}),
-    
-                html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
-    
-                html.Span([
-                    f"Following: {following_count} ",
-                    html.Span("▼", id="following-arrow", style={"cursor": "pointer", "fontSize": "0.75rem"})
-                ], id="profile-following", style={"color": text_color, "fontWeight": "500", "position": "relative"}),
-            ], style={
-                "fontSize": "0.85rem",
-                "color": text_color,
-                "marginTop": "4px",
-                "display": "flex",
-                "flexWrap": "wrap"
-            }),
-    
-            html.Div(bio, id="profile-bio", style={
-                "fontSize": "0.9rem",
-                "color": text_color,
-                "marginTop": "8px",
-                "whiteSpace": "pre-wrap",
-                "lineHeight": "1.4"
-            })
-        ]
-    )
+    # Handle deleted items for current user view
+    if is_current_user and deleted_items:
+        store_data = {"deleted": []}
+        deleted_items_set = set(tuple(i) for i in store_data.get("deleted", []))
+        team_keys = [k for k in team_keys if ("team", k) not in deleted_items_set]
+        event_keys = [k for k in event_keys if ("event", k) not in deleted_items_set]
 
-    profile_edit_form = html.Div(
-        id="profile-edit-form",
-        hidden=True,
-        children=[
-            dbc.Input(id="edit-username", value=username, placeholder="Username", className="mb-2", size="sm"),
-            dbc.Input(id="edit-role", value=role, placeholder="Role", className="mb-2", size="sm"),
-            dbc.Input(id="edit-team", value=team_affil, placeholder="Team", className="mb-2", size="sm"),
-            dbc.Textarea(id="edit-bio", value=bio, placeholder="Bio", className="mb-2", style={"height": "60px", "fontSize": "0.85rem"}),
-            html.Label("Select Avatar", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#444"}),
-            dcc.Dropdown(
-                id="edit-avatar-key",
-                options=[
-                    {"label": html.Div([
-                        html.Img(src=f"/assets/avatars/{f}", height="20px", style={"marginRight": "8px"}), f
-                    ], style={"display": "flex", "alignItems": "center"}), "value": f}
-                    for f in sorted(available_avatars, key=sort_key)
-                ],
-                value=avatar_key,
-                clearable=False,
-                style={"width": "200px", "fontSize": "0.75rem"}
-            ),
-            html.Label("Change Card Background Color", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#444"}),
-            dcc.Dropdown(
-                id="edit-bg-color",
-                options=[
-                    {
-                        "label": html.Span([
-                            html.Div(style={
-                                "display": "inline-block",
-                                "width": "12px",
-                                "height": "12px",
-                                "backgroundColor": color,
-                                "color": "333",
-                                "marginRight": "8px",
-                                "border": "1px solid #ccc",
-                                "verticalAlign": "middle"
-                            }),
-                            name
-                        ]),
-                        "value": color
-                    }
-                    for name, color in [
-                        # Very light pastels and whites
-                        ("White", "#ffffff"),
-                        ("Floral White", "#fffaf0"),
-                        ("Ivory", "#fffff0"),
-                        ("Old Lace", "#fdf5e6"),
-                        ("Seashell", "#fff5ee"),
-                        ("Lemon Chiffon", "#fffacd"),
-                        ("Cornsilk", "#fff8dc"),
-                        ("Papaya Whip", "#ffefd5"),
-                        ("Peach Puff", "#ffdab9"),
-                        ("Misty Rose", "#ffe4e1"),
-                        ("Beige", "#f5f5dc"),
-                        ("Antique White", "#faebd7"),
-                        ("Light Goldenrod", "#fafad2"),
-                        ("Wheat", "#f5deb3"),
-                    
-                        # Light cool tones
-                        ("Honeydew", "#f0fff0"),
-                        ("Mint Cream", "#f5fffa"),
-                        ("Azure", "#f0ffff"),
-                        ("Alice Blue", "#f0f8ff"),
-                        ("Ghost White", "#f8f8ff"),
-                        ("Lavender", "#e6e6fa"),
-                        ("Light Cyan", "#e0ffff"),
-                        ("Powder Blue", "#b0e0e6"),
-                        ("Light Steel Blue", "#b0c4de"),
-                        ("Thistle", "#d8bfd8"),
-                        ("Plum", "#dda0dd"),
-                        ("Gainsboro", "#dcdcdc"),
-                        ("Light Gray", "#f5f5f5"),
-                    
-                        # Saturated / mid tones
-                        ("Sky Blue", "#87ceeb"),
-                        ("Light Pink", "#ffb6c1"),
-                        ("Orchid", "#da70d6"),
-                        ("Medium Slate Blue", "#7b68ee"),
-                        ("Slate Blue", "#6a5acd"),
-                        ("Steel Blue", "#4682b4"),
-                        ("Medium Violet Red", "#c71585"),
-                        ("Tomato", "#ff6347"),
-                        ("Goldenrod", "#daa520"),
-                        ("Dark Orange", "#ff8c00"),
-                        ("Crimson", "#dc143c"),
-                    
-                        # Cool / bold
-                        ("Royal Blue", "#4169e1"),
-                        ("Dodger Blue", "#1e90ff"),
-                        ("Deep Sky Blue", "#00bfff"),
-                        ("Teal", "#008080"),
-                        ("Dark Cyan", "#008b8b"),
-                        ("Sea Green", "#2e8b57"),
-                        ("Forest Green", "#228b22"),
-                    
-                        # Deep earth tones
-                        ("Olive", "#808000"),
-                        ("Saddle Brown", "#8b4513"),
-                        ("Dark Slate Gray", "#2f4f4f"),
-                        ("Navy", "#001f3f"),
-                        ("Midnight Blue", "#191970"),
-                        ("Black", "#000000"),
-                    ]
-                ],
-                value=color,
-                clearable=False,
-                style={"width": "200px", "fontSize": "0.75rem"}
-            ),
-        ])
-            
-
-    store_data = {"deleted": []}  # default state, actual deletion handled via callback
-    deleted_items = set(tuple(i) for i in store_data.get("deleted", []))
-
-
-    team_keys = [k for k in team_keys if ("team", k) not in deleted_items]
-    event_keys = [k for k in event_keys if ("event", k) not in deleted_items]
-
-    epa_data = {
-        str(team_num): {
-            "epa": data.get("epa", 0),
-            "normal_epa": data.get("normal_epa", 0),
-            "auto_epa": data.get("auto_epa", 0),
-            "teleop_epa": data.get("teleop_epa", 0),
-            "endgame_epa": data.get("endgame_epa", 0),
-            "confidence": data.get("confidence", 0),
-            "event_epas": data.get("event_epas", []),
-        }
-        for team_num, data in TEAM_DATABASE.get(current_year, {}).items()
-    }
-    
-    team_cards = []
-    for team_key in team_keys:
-        try:
-            team_number = int(team_key)
-        except:
-            continue
-
-        team_data = TEAM_DATABASE.get(current_year, {}).get(team_number)
-        year_data = TEAM_DATABASE.get(current_year, {})
-
-        delete_team_btn = html.Button(
-            html.Img(
-                src="/assets/trash.png",
-                style={
-                    "width": "20px",
-                    "height": "20px",
-                    "verticalAlign": "middle"
-                }
-            ),
-            id={"type": "delete-favorite", "item_type": "team", "key": team_key},
-            style={
-                "backgroundColor": "transparent",
-                "border": "none",
-                "cursor": "pointer",
-                "padding": "4px"
-            }
-        )
-        if team_data:
-            epa = team_data.get("epa", 0)
-            teleop = team_data.get("teleop_epa", 0)
-            auto = team_data.get("auto_epa", 0)
-            endgame = team_data.get("endgame_epa", 0)
-            confidence = team_data.get("confidence", 0)
-            normal_epa = team_data.get("normal_epa", 0)
-            wins = team_data.get("wins", 0)
-            losses = team_data.get("losses", 0)
-            ties = team_data.get("ties", 0)
-            
-            auto_color = "#1976d2"     # Blue
-            teleop_color = "#fb8c00"   # Orange
-            endgame_color = "#388e3c"  # Green
-            norm_color = "#d32f2f"    # Red (for overall EPA)
-            conf_color = "#555"   
-            total_color = "#673ab7" 
-
-            metrics = html.Div([
-                html.P([
-                    html.Span(f"Team {team_number} ({team_data.get('nickname', '')}) had a record of ", style={"fontWeight": "bold"}),
-                    html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
-                    html.Span("-", style={"color": "var(--text-primary)"}),
-                    html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
-                    html.Span("-", style={"color": "var(--text-primary)"}),
-                    html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
-                    html.Span(f" in {current_year}.")
-                ], style={"marginBottom": "6px", "fontWeight": "bold"}),
+    # Profile display section
+    if is_current_user:
+        profile_display = html.Div(
+            id="profile-display",
+            hidden=False,
+            children=[
                 html.Div([
-                    pill("Auto", f"{auto:.1f}", auto_color),
-                    pill("Teleop", f"{teleop:.1f}", teleop_color),
-                    pill("Endgame", f"{endgame:.1f}", endgame_color),
-                    pill("EPA", f"{normal_epa:.1f}", norm_color),
-                    pill("Confidence", f"{confidence:.2f}", conf_color),
-                    pill("ACE", f"{epa:.1f}", total_color),
-                ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
-            ])
-
-        team_cards.append(user_team_card(
-            html.A(
-                f"{team_number} | {team_data.get('nickname', '')}",
-                href=f"/team/{team_key}/{current_year}",
-                style={"textDecoration": "none", "color": "inherit"}
-            ),
-
-            [
-                html.Img(src=get_team_avatar(team_number), style={"height": "80px", "borderRadius": "50%"}),
-                metrics,
-                html.Br(),
-                html.Hr(),
-                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, current_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
-            ],
-            delete_button=delete_team_btn,
-            team_number=team_number
-        ))
-
-    return html.Div([
-        dcc.Store(id="favorites-store", data={"deleted": []}),
-        dcc.Store(id="user-session", data={"user_id": user_id}),
-        topbar(),
-        dcc.Location(id="login-redirect", refresh=True),
-        dbc.Container([
-            dbc.Card(
-                dbc.CardBody([
-                    html.Div([
-                        html.Div([
-                            html.Img(
-                                id="user-avatar-img",
-                                src=get_user_avatar(avatar_key),
-                                style={"height": "60px", "borderRadius": "50%", "marginRight": "15px"}
-                            ),
-                            html.Div([
-                                html.H2(
-                                    f"Welcome, {username.title()}!",
-                                    id="profile-header",
-                                    style={"margin": 0, "fontSize": "1.5rem", "color": text_color}
-                                ),
-                                html.Div(
-                                    f"{len(team_keys)} favorite teams",
-                                    id="profile-subheader",
-                                    style={"fontSize": "0.85rem", "color": text_color}
-                                ),
-                                profile_display,
-                                dbc.Popover(
-                                    [
-                                        dbc.PopoverHeader("Followers"),
-                                        dbc.PopoverBody([
-                                            html.Ul([
-                                                html.Li([
-                                                    html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
-                                                    html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
-                                                ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
-                                                for user in followers_user_objs[:5]
-                                            ], style={
-                                                "listStyleType": "none",
-                                                "paddingLeft": "0",
-                                                "marginBottom": "0"
-                                            }),
-                                            html.Div("See all", id="followers-see-more", style={
-                                                "color": "#007bff", "cursor": "pointer", "fontSize": "0.75rem", "marginTop": "5px"
-                                            }) if len(followers_user_objs) > 5 else None,
-                                            html.Ul([
-                                                html.Li([
-                                                    html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
-                                                    html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
-                                                ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
-                                                for user in followers_user_objs[5:]
-                                            ], id="followers-hidden", style={
-                                                "display": "none",
-                                                "marginTop": "5px",
-                                                "paddingLeft": "0",
-                                                "listStyleType": "none",
-                                                "marginBottom": "0"
-                                            })
-                                        ])
-                                    ],
-                                    id="popover-followers",
-                                    target="followers-arrow",
-                                    trigger="hover",
-                                    placement="bottom"
-                                ),
-                                
-                                dbc.Popover(
-                                    [
-                                        dbc.PopoverHeader("Following"),
-                                        dbc.PopoverBody([
-                                            html.Ul([
-                                                html.Li([
-                                                    html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
-                                                    html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
-                                                ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
-                                                for user in following_user_objs[:5]
-                                            ], style={
-                                                "listStyleType": "none",
-                                                "paddingLeft": "0",
-                                                "marginBottom": "0"
-                                            }),
-                                            html.Div("See all", id="following-see-more", style={
-                                                "color": "#007bff", "cursor": "pointer", "fontSize": "0.75rem", "marginTop": "5px"
-                                            }) if len(following_user_objs) > 5 else None,
-                                            html.Ul([
-                                                html.Li([
-                                                    html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
-                                                    html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
-                                                ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
-                                                for user in following_user_objs[5:]
-                                            ], id="following-hidden", style={
-                                                "display": "none",
-                                                "marginTop": "5px",
-                                                "paddingLeft": "0",
-                                                "listStyleType": "none",
-                                                "marginBottom": "0"
-                                            })
-                                        ])
-                                    ],
-                                    id="popover-following",
-                                    target="following-arrow",
-                                    trigger="hover",
-                                    placement="bottom"
-                                ),
-
-                                profile_edit_form
-                            ]),
-                        ], style={"display": "flex", "alignItems": "center"}),
-                        html.Div([
-                            html.A("Log Out", href="/logout", style={"marginTop": "8px", "fontSize": "0.75rem", "color": text_color, "textDecoration": "none", "fontWeight": "600"}),
-                            html.Div([
-                                html.H5(
-                                    id="profile-search-header",
-                                    style={"marginTop": "10px", "fontSize": "0.95rem", "color": text_color}
-                                ),
-                                dbc.Input(id="user-search-input", placeholder="Search Users", type="text", size="sm", className="custom-input-box mb-2", style={"width": "250px"}),
-                                html.Div(id="user-search-results")
-                            ], style={"marginTop": "10px", "width": "100%", "position": "relative"}),
-                            html.Button(
-                                "Edit Profile",
-                                id="edit-profile-btn",
-                                style={
-                                    "background": "none",
-                                    "border": "none",
-                                    "padding": "0",
-                                    "marginTop": "8px",
-                                    "color": text_color,
-                                    "fontWeight": "bold",
-                                    "fontSize": "0.85rem",
-                                    "textDecoration": "none"
-                                }
-                            ),
-                            html.Button("Save", id="save-profile-btn", className="btn btn-warning btn-sm mt-2", style={"display": "none"})
-                        ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-end", "justifyContent": "center"})
-                    ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "15px"})
-                ]),
-                id="profile-card",
-                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "marginBottom": "20px", "backgroundColor": color or "var(--card-bg)"}
-
-            ),
-            html.H3("Favorite Teams", className="mb-3"),
-            *team_cards,
-            html.Hr(),
-
-        ], style={"padding": "20px", "maxWidth": "1000px"}),
-        footer
-    ])
-
-def other_user_layout(username):
-    from peekorobo import TEAM_DATABASE, EVENT_TEAMS, EVENT_DATABASE, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES
-    session_user_id = session.get("user_id")
-    if not session_user_id:
-        return dcc.Location(href="/login", id="force-login-redirect")
-
-    try:
-        with DatabaseConnection() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT id, avatar_key, role, team, bio, followers, following, color
-                FROM users WHERE username = %s
-            """, (username,))
-            row = cur.fetchone()
-
-            if not row:
-                return html.Div("User not found.", style={"padding": "2rem", "fontSize": "1.2rem"})
-
-            uid, avatar_key, role, team, bio, followers_json, following_json, color = row
-            is_following = session_user_id in (followers_json or [])
-
-            cur.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'team'", (uid,))
-            team_keys = [r[0] for r in cur.fetchall()]
-
-            cur.execute("SELECT item_key FROM saved_items WHERE user_id = %s AND item_type = 'event'", (uid,))
-            event_keys = [r[0] for r in cur.fetchall()]
-
-    except Exception as e:
-        print(f"Error loading user data: {e}")
-        return html.Div("Error loading user data.", style={"padding": "2rem", "fontSize": "1.2rem"})
-
-    if color:
-        color = color
-    else:
-        color = "#ffffff"
+                    html.Span(f"Role: {role}", id="profile-role", style={
+                        "fontWeight": "500",
+                        "color": text_color
+                    }),
+                    html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
+                    html.Span([
+                        html.Span("Team: ", style={"color": text_color, "fontWeight": "500"}),
+                        html.A(team_affil, href=f"/team/{team_affil}/{current_year}", style={
+                            "color": text_color,
+                            "textDecoration": "underline",
+                            "fontWeight": "500"
+                        })
+                    ], id="profile-team"),
+                ], style={
+                    "fontSize": "0.85rem",
+                    "color": text_color,
+                    "marginTop": "6px",
+                    "display": "flex",
+                    "flexWrap": "wrap"
+                }),
+                
+                html.Div([
+                    html.Span([
+                        f"Followers: {followers_count} ",
+                        html.Span("▼", id="followers-arrow", style={"cursor": "pointer", "fontSize": "0.75rem"})
+                    ], id="profile-followers", style={"color": text_color, "fontWeight": "500", "position": "relative"}),
         
-    text_color = get_contrast_text_color(color)
+                    html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
+        
+                    html.Span([
+                        f"Following: {following_count} ",
+                        html.Span("▼", id="following-arrow", style={"cursor": "pointer", "fontSize": "0.75rem"})
+                    ], id="profile-following", style={"color": text_color, "fontWeight": "500", "position": "relative"}),
+                ], style={
+                    "fontSize": "0.85rem",
+                    "color": text_color,
+                    "marginTop": "4px",
+                    "display": "flex",
+                    "flexWrap": "wrap"
+                }),
+        
+                html.Div(bio, id="profile-bio", style={
+                    "fontSize": "0.9rem",
+                    "color": text_color,
+                    "marginTop": "8px",
+                    "whiteSpace": "pre-wrap",
+                    "lineHeight": "1.4"
+                })
+            ]
+        )
+    else:
+        # Other user view - simpler profile display
+        profile_display = html.Div(
+            id="profile-display",
+            hidden=False,
+            children=[
+                html.Div([
+                    html.Span(f"Role: {role}", id="profile-role", style={
+                        "fontWeight": "500",
+                        "color": text_color,
+                    }),
+                    html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
+                    html.Span([
+                        html.Span("Team: ", style={"color": text_color, "fontWeight": "500"}),
+                        html.A(team_affil, href=f"/team/{team_affil}/{current_year}", style={
+                            "color": text_color,
+                            "textDecoration": "none",
+                            "fontWeight": "500"
+                        })
+                    ], id="profile-team"),
+                    html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
+                    html.Span(f"Followers: {followers_count}", style={
+                        "color": text_color,
+                        "fontWeight": "500",
+                    }),
+                    html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
+                    html.Span(f"Following: {following_count}", style={
+                        "color": text_color,
+                        "fontWeight": "500",
+                    })
+                ], style={
+                    "fontSize": "0.85rem",
+                    "color": text_color,
+                    "marginTop": "6px",
+                    "display": "flex",
+                    "flexWrap": "wrap"
+                }),
+                html.Div(bio, id="profile-bio", style={
+                    "fontSize": "0.9rem",
+                    "color": text_color,
+                    "marginTop": "8px",
+                    "whiteSpace": "pre-wrap",
+                    "lineHeight": "1.4"
+                })
+            ]
+        )
 
+    # Profile edit form (only for current user)
+    profile_edit_form = None
+    if is_current_user:
+        profile_edit_form = html.Div(
+            id="profile-edit-form",
+            hidden=True,
+            children=[
+                dbc.Input(id="edit-username", value=username_display, placeholder="Username", className="mb-2", size="sm"),
+                dbc.Input(id="edit-role", value=role, placeholder="Role", className="mb-2", size="sm"),
+                dbc.Input(id="edit-team", value=team_affil, placeholder="Team", className="mb-2", size="sm"),
+                dbc.Textarea(id="edit-bio", value=bio, placeholder="Bio", className="mb-2", style={"height": "60px", "fontSize": "0.85rem"}),
+                html.Label("Select Avatar", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#444"}),
+                dcc.Dropdown(
+                    id="edit-avatar-key",
+                    options=[
+                        {"label": html.Div([
+                            html.Img(src=f"/assets/avatars/{f}", height="20px", style={"marginRight": "8px"}), f
+                        ], style={"display": "flex", "alignItems": "center"}), "value": f}
+                        for f in sorted(available_avatars, key=sort_key)
+                    ],
+                    value=avatar_key,
+                    clearable=False,
+                    style={"width": "200px", "fontSize": "0.75rem"}
+                ),
+                html.Label("Change Card Background Color", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#444"}),
+                dcc.Dropdown(
+                    id="edit-bg-color",
+                    options=[
+                        {
+                            "label": html.Span([
+                                html.Div(style={
+                                    "display": "inline-block",
+                                    "width": "12px",
+                                    "height": "12px",
+                                    "backgroundColor": color,
+                                    "color": "333",
+                                    "marginRight": "8px",
+                                    "border": "1px solid #ccc",
+                                    "verticalAlign": "middle"
+                                }),
+                                name
+                            ]),
+                            "value": color
+                        }
+                        for name, color in [
+                            # Very light pastels and whites
+                            ("White", "#ffffff"),
+                            ("Floral White", "#fffaf0"),
+                            ("Ivory", "#fffff0"),
+                            ("Old Lace", "#fdf5e6"),
+                            ("Seashell", "#fff5ee"),
+                            ("Lemon Chiffon", "#fffacd"),
+                            ("Cornsilk", "#fff8dc"),
+                            ("Papaya Whip", "#ffefd5"),
+                            ("Peach Puff", "#ffdab9"),
+                            ("Misty Rose", "#ffe4e1"),
+                            ("Beige", "#f5f5dc"),
+                            ("Antique White", "#faebd7"),
+                            ("Light Goldenrod", "#fafad2"),
+                            ("Wheat", "#f5deb3"),
+                        
+                            # Light cool tones
+                            ("Honeydew", "#f0fff0"),
+                            ("Mint Cream", "#f5fffa"),
+                            ("Azure", "#f0ffff"),
+                            ("Alice Blue", "#f0f8ff"),
+                            ("Ghost White", "#f8f8ff"),
+                            ("Lavender", "#e6e6fa"),
+                            ("Light Cyan", "#e0ffff"),
+                            ("Powder Blue", "#b0e0e6"),
+                            ("Light Steel Blue", "#b0c4de"),
+                            ("Thistle", "#d8bfd8"),
+                            ("Plum", "#dda0dd"),
+                            ("Gainsboro", "#dcdcdc"),
+                            ("Light Gray", "#f5f5f5"),
+                        
+                            # Saturated / mid tones
+                            ("Sky Blue", "#87ceeb"),
+                            ("Light Pink", "#ffb6c1"),
+                            ("Orchid", "#da70d6"),
+                            ("Medium Slate Blue", "#7b68ee"),
+                            ("Slate Blue", "#6a5acd"),
+                            ("Steel Blue", "#4682b4"),
+                            ("Medium Violet Red", "#c71585"),
+                            ("Tomato", "#ff6347"),
+                            ("Goldenrod", "#daa520"),
+                            ("Dark Orange", "#ff8c00"),
+                            ("Crimson", "#dc143c"),
+                        
+                            # Cool / bold
+                            ("Royal Blue", "#4169e1"),
+                            ("Dodger Blue", "#1e90ff"),
+                            ("Deep Sky Blue", "#00bfff"),
+                            ("Teal", "#008080"),
+                            ("Dark Cyan", "#008b8b"),
+                            ("Sea Green", "#2e8b57"),
+                            ("Forest Green", "#228b22"),
+                        
+                            # Deep earth tones
+                            ("Olive", "#808000"),
+                            ("Saddle Brown", "#8b4513"),
+                            ("Dark Slate Gray", "#2f4f4f"),
+                            ("Navy", "#001f3f"),
+                            ("Midnight Blue", "#191970"),
+                            ("Black", "#000000"),
+                        ]
+                    ],
+                    value=color,
+                    clearable=False,
+                    style={"width": "200px", "fontSize": "0.75rem"}
+                ),
+            ]
+        )
+
+    # Build team cards
     epa_data = {
         str(team_num): {
             "epa": data.get("epa", 0),
@@ -3807,7 +3609,7 @@ def other_user_layout(username):
         }
         for team_num, data in TEAM_DATABASE.get(current_year, {}).items()
     }
-
+    
     team_cards = []
     for team_key in team_keys:
         try:
@@ -3819,35 +3621,41 @@ def other_user_layout(username):
         if not team_data:
             continue
 
+        # Add delete button only for current user
+        delete_team_btn = None
+        if is_current_user:
+            delete_team_btn = html.Button(
+                html.Img(
+                    src="/assets/trash.png",
+                    style={
+                        "width": "20px",
+                        "height": "20px",
+                        "verticalAlign": "middle"
+                    }
+                ),
+                id={"type": "delete-favorite", "item_type": "team", "key": team_key},
+                style={
+                    "backgroundColor": "transparent",
+                    "border": "none",
+                    "cursor": "pointer",
+                    "padding": "4px"
+                }
+            )
+
         epa = team_data.get("epa", 0)
-        normal_epa = team_data.get("normal_epa", 0)
-        confidence = team_data.get("confidence", 0)
         teleop = team_data.get("teleop_epa", 0)
         auto = team_data.get("auto_epa", 0)
         endgame = team_data.get("endgame_epa", 0)
+        confidence = team_data.get("confidence", 0)
+        normal_epa = team_data.get("normal_epa", 0)
         wins = team_data.get("wins", 0)
         losses = team_data.get("losses", 0)
         ties = team_data.get("ties", 0)
-        country = (team_data.get("country") or "").lower()
-        state = (team_data.get("state_prov") or "").lower()
-
-        global_rank = 1
-        country_rank = 1
-        state_rank = 1
-        for other in TEAM_DATABASE.get(current_year, {}).values():
-            if (other.get("epa", 0) or 0) > epa:
-                global_rank += 1
-                if (other.get("country") or "").lower() == country:
-                    country_rank += 1
-                if (other.get("state_prov") or "").lower() == state:
-                    state_rank += 1
-
-        year_data = list(TEAM_DATABASE.get(current_year, {}).values())
-
+        
         auto_color = "#1976d2"     # Blue
         teleop_color = "#fb8c00"   # Orange
         endgame_color = "#388e3c"  # Green
-        norm_color = "#d32f2f"    # Red (for overall EPA)
+        norm_color = "#d32f2f"    # Red
         conf_color = "#555"   
         total_color = "#673ab7" 
 
@@ -3859,13 +3667,13 @@ def other_user_layout(username):
                 html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
                 html.Span("-", style={"color": "var(--text-primary)"}),
                 html.Span(str(ties), style={"color": "#777", "fontWeight": "bold"}),
-                html.Span(f" in {year_data[0].get('year', current_year) if year_data else current_year}.")
+                html.Span(f" in {current_year}.")
             ], style={"marginBottom": "6px", "fontWeight": "bold"}),
             html.Div([
                 pill("Auto", f"{auto:.1f}", auto_color),
                 pill("Teleop", f"{teleop:.1f}", teleop_color),
                 pill("Endgame", f"{endgame:.1f}", endgame_color),
-                pill("EPA", f"{normal_epa:.2f}", norm_color),
+                pill("EPA", f"{normal_epa:.1f}", norm_color),
                 pill("Confidence", f"{confidence:.2f}", conf_color),
                 pill("ACE", f"{epa:.1f}", total_color),
             ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
@@ -3884,113 +3692,305 @@ def other_user_layout(username):
                 html.Hr(),
                 build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, current_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
             ],
+            delete_button=delete_team_btn,
             team_number=team_number
         ))
 
-    follow_button = html.Button(
-        "Unfollow" if is_following else "Follow",
-        id={"type": "follow-user", "user_id": uid},
-        className="btn btn-outline-primary btn-sm"
-    ) if uid != session_user_id else None
+    # Note: All content is now integrated directly into the main layout for better mobile organization
 
-    profile_display = html.Div(
-        id="profile-display",
-        hidden=False,
-        children=[
-            html.Div([
-                html.Span(f"Role: {role}", id="profile-role", style={
-                    "fontWeight": "500",
-                    "color": text_color,
-                }),
-                html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
-                html.Span([
-                    html.Span("Team: ", style={"color": text_color, "fontWeight": "500"}),
-                    html.A(team, href=f"/team/{team}/{current_year}", style={
-                        "color": text_color,
-                        "textDecoration": "none",
-                        "fontWeight": "500"
+    # Build popovers for followers/following (only for current user)
+    followers_popover = None
+    following_popover = None
+    
+    if is_current_user and followers_user_objs:
+        followers_popover = dbc.Popover(
+            [
+                dbc.PopoverHeader("Followers"),
+                dbc.PopoverBody([
+                    html.Ul([
+                        html.Li([
+                            html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
+                            html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
+                        ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
+                        for user in followers_user_objs[:5]
+                    ], style={
+                        "listStyleType": "none",
+                        "paddingLeft": "0",
+                        "marginBottom": "0"
+                    }),
+                    html.Div("See all", id="followers-see-more", style={
+                        "color": "#007bff", "cursor": "pointer", "fontSize": "0.75rem", "marginTop": "5px"
+                    }) if len(followers_user_objs) > 5 else None,
+                    html.Ul([
+                        html.Li([
+                            html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
+                            html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
+                        ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
+                        for user in followers_user_objs[5:]
+                    ], id="followers-hidden", style={
+                        "display": "none",
+                        "marginTop": "5px",
+                        "paddingLeft": "0",
+                        "listStyleType": "none",
+                        "marginBottom": "0"
                     })
-                ], id="profile-team"),
-                html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
-                html.Span(f"Followers: {len(followers_json)}", style={
-                    "color": text_color,
-                    "fontWeight": "500",
-                }),
-                html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
-                html.Span(f"Following: {len(following_json)}", style={
-                    "color": text_color,
-                    "fontWeight": "500",
-                })
-            ], style={
-                "fontSize": "0.85rem",
-                "color": text_color,
-                "marginTop": "6px",
-                "display": "flex",
-                "flexWrap": "wrap"
-            }),
-            html.Div(bio, id="profile-bio", style={
-                "fontSize": "0.9rem",
-                "color": text_color,
-                "marginTop": "8px",
-                "whiteSpace": "pre-wrap",
-                "lineHeight": "1.4"
-            })
-        ]
-    )
+                ])
+            ],
+            id="popover-followers",
+            target="followers-arrow",
+            trigger="hover",
+            placement="bottom"
+        )
+    
+    if is_current_user and following_user_objs:
+        following_popover = dbc.Popover(
+            [
+                dbc.PopoverHeader("Following"),
+                dbc.PopoverBody([
+                    html.Ul([
+                        html.Li([
+                            html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
+                            html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
+                        ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
+                        for user in following_user_objs[:5]
+                    ], style={
+                        "listStyleType": "none",
+                        "paddingLeft": "0",
+                        "marginBottom": "0"
+                    }),
+                    html.Div("See all", id="following-see-more", style={
+                        "color": "#007bff", "cursor": "pointer", "fontSize": "0.75rem", "marginTop": "5px"
+                    }) if len(following_user_objs) > 5 else None,
+                    html.Ul([
+                        html.Li([
+                            html.Img(src=get_user_avatar(user[2]), height="20px", style={"borderRadius": "50%", "marginRight": "8px"}),
+                            html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
+                        ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
+                        for user in following_user_objs[5:]
+                    ], id="following-hidden", style={
+                        "display": "none",
+                        "marginTop": "5px",
+                        "paddingLeft": "0",
+                        "listStyleType": "none",
+                        "marginBottom": "0"
+                    })
+                ])
+            ],
+            id="popover-following",
+            target="following-arrow",
+            trigger="hover",
+            placement="bottom"
+        )
 
-    return html.Div([
+    # Build the main layout
+    layout_components = [
         dcc.Store(id="user-session", data={"user_id": session_user_id}),
         topbar(),
         dcc.Location(id="login-redirect", refresh=True),
+    ]
+    
+    # Add favorites store only for current user
+    if is_current_user:
+        layout_components.append(dcc.Store(id="favorites-store", data={"deleted": []}))
+    
+    layout_components.extend([
         dbc.Container([
             dbc.Card(
                 dbc.CardBody([
                     html.Div([
+                        # Desktop layout (original)
                         html.Div([
-                            html.Img(
-                                src=get_user_avatar(avatar_key),
-                                style={"height": "60px", "borderRadius": "50%", "marginRight": "15px"}
-                            ),
                             html.Div([
-                                html.H2(f"{username.title()}", style={"margin": 0, "fontSize": "1.5rem", "color": text_color}),
-                                html.Div(f"{len(team_keys)} favorite teams", style={"fontSize": "0.85rem", "color": text_color}),
-                                profile_display,
-                            ]),
-                        ], style={"display": "flex", "alignItems": "center"}),
+                                html.Img(
+                                    **({"id": "user-avatar-img"} if is_current_user else {}),
+                                    src=get_user_avatar(avatar_key),
+                                    style={"height": "60px", "borderRadius": "50%", "marginRight": "15px"}
+                                ),
+                                html.Div([
+                                    html.H2(
+                                        f"Welcome, {username_display.title()}!" if is_current_user else f"{username_display.title()}",
+                                        **({"id": "profile-header"} if is_current_user else {}),
+                                        style={"margin": 0, "fontSize": "1.5rem", "color": text_color}
+                                    ),
+                                    html.Div(
+                                        f"{len(team_keys)} favorite teams",
+                                        **({"id": "profile-subheader"} if is_current_user else {}),
+                                        style={"fontSize": "0.85rem", "color": text_color}
+                                    ),
+                                    profile_display,
+                                    followers_popover,
+                                    following_popover,
+                                    profile_edit_form,
+                                ]),
+                            ], style={"display": "flex", "alignItems": "center"}),
+                            html.Div([
+                                html.A("Log Out", href="/logout", style={"marginTop": "8px", "fontSize": "0.75rem", "color": text_color, "textDecoration": "none", "fontWeight": "600"}),
+                                html.Div([
+                                    html.H5(
+                                        id="profile-search-header",
+                                        style={"marginTop": "10px", "fontSize": "0.95rem", "color": text_color}
+                                    ),
+                                    dbc.Input(id="user-search-input-desktop", placeholder="Search Users", type="text", size="sm", className="custom-input-box mb-2", style={"width": "250px"}),
+                                    html.Div(id="user-search-results-desktop")
+                                ], style={"marginTop": "10px", "width": "100%", "position": "relative"}) if is_current_user else None,
+                                html.Button(
+                                    "Edit Profile",
+                                    id="edit-profile-btn",
+                                    style={
+                                        "background": "none",
+                                        "border": "none",
+                                        "padding": "0",
+                                        "marginTop": "8px",
+                                        "color": text_color,
+                                        "fontWeight": "bold",
+                                        "fontSize": "0.85rem",
+                                        "textDecoration": "none"
+                                    }
+                                ) if is_current_user else None,
+                                html.Button("Save", id="save-profile-btn", className="btn btn-warning btn-sm mt-2", style={"display": "none"}) if is_current_user else None,
+                                # Follow button for other users
+                                html.Button(
+                                    "Unfollow" if is_following else "Follow",
+                                    id={"type": "follow-user", "user_id": target_user_id},
+                                    style={
+                                        "backgroundColor": "white" if is_following else "#ffdd00",
+                                        "border": "1px solid #ccc",
+                                        "borderRadius": "12px",
+                                        "padding": "4px 10px",
+                                        "fontSize": "0.85rem",
+                                        "fontWeight": "500",
+                                        "color": "#000",
+                                        "cursor": "pointer",
+                                        "boxShadow": "0 1px 3px rgba(0, 0, 0, 0.1)",
+                                        "marginTop": "8px"
+                                    }
+                                ) if not is_current_user and target_user_id != session_user_id else None,
+                            ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-end", "justifyContent": "center"})
+                        ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "15px"}, className="d-none d-md-flex"),
+                        
+                        # Mobile layout (new responsive design)
                         html.Div([
-                            html.Button(
-                                "Unfollow" if is_following else "Follow",
-                                id={"type": "follow-user", "user_id": uid},
-                                style={
-                                    "backgroundColor": "white" if is_following else "#ffdd00",
-                                    "border": "1px solid #ccc",
-                                    "borderRadius": "12px",
-                                    "padding": "4px 10px",
-                                    "fontSize": "0.85rem",
-                                    "fontWeight": "500",
-                                    "color": "#000",
-                                    "cursor": "pointer",
-                                    "boxShadow": "0 1px 3px rgba(0, 0, 0, 0.1)",
-                                    "marginTop": "8px"
-                                }
-                            ) if uid != session_user_id else None
-                        ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-end", "justifyContent": "center"})
-                    ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "15px"})
+                            # Avatar and name section
+                            html.Div([
+                                html.Img(
+                                    **({"id": "user-avatar-img"} if is_current_user else {}),
+                                    src=get_user_avatar(avatar_key),
+                                    style={
+                                        "height": "50px", 
+                                        "width": "50px",
+                                        "borderRadius": "50%", 
+                                        "marginRight": "12px",
+                                        "flexShrink": "0"
+                                    }
+                                ),
+                                html.Div([
+                                    html.H2(
+                                        f"Welcome, {username_display.title()}!" if is_current_user else f"{username_display.title()}",
+                                        **({"id": "profile-header"} if is_current_user else {}),
+                                        style={"margin": 0, "fontSize": "1.3rem", "color": text_color, "lineHeight": "1.2"}
+                                    ),
+                                    html.Div(
+                                        f"{len(team_keys)} favorite teams",
+                                        **({"id": "profile-subheader"} if is_current_user else {}),
+                                        style={"fontSize": "0.8rem", "color": text_color, "marginTop": "2px"}
+                                    ),
+                                ], style={"flex": "1", "minWidth": "0"}),
+                            ], style={"display": "flex", "alignItems": "center", "marginBottom": "15px"}),
+                            
+                            # Profile info section
+                            html.Div([
+                                profile_display,
+                                followers_popover,
+                                following_popover,
+                                profile_edit_form,
+                            ], style={"width": "100%"}),
+                            
+                            # Action buttons section
+                            html.Div([
+                                html.Button("Save", id="save-profile-btn", className="btn btn-warning btn-sm", style={"display": "none"}) if is_current_user else None,
+                                # Follow button for other users
+                                html.Button(
+                                    "Unfollow" if is_following else "Follow",
+                                    id={"type": "follow-user", "user_id": target_user_id},
+                                    style={
+                                        "backgroundColor": "white" if is_following else "#ffdd00",
+                                        "border": "1px solid #ccc",
+                                        "borderRadius": "12px",
+                                        "padding": "6px 12px",
+                                        "fontSize": "0.8rem",
+                                        "fontWeight": "500",
+                                        "color": "#000",
+                                        "cursor": "pointer",
+                                        "boxShadow": "0 1px 3px rgba(0, 0, 0, 0.1)",
+                                        "display": "block"
+                                    }
+                                ) if not is_current_user and target_user_id != session_user_id else None,
+                            ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-start", "width": "100%"}),
+                            
+                            # Combined search and action row (mobile)
+                            html.Div([
+                                # Search bar
+                                html.Div([
+                                    html.H5(
+                                        id="profile-search-header",
+                                        style={"marginBottom": "8px", "fontSize": "0.9rem", "color": text_color}
+                                    ),
+                                    dbc.Input(
+                                        id="user-search-input-mobile", 
+                                        placeholder="Search Users", 
+                                        type="text", 
+                                        size="sm", 
+                                        className="custom-input-box mb-2", 
+                                        style={"width": "100%"}
+                                    ),
+                                    html.Div(id="user-search-results-mobile")
+                                ], style={"flex": "1", "marginRight": "10px", "position": "relative"}) if is_current_user else None,
+                                
+                                # Action buttons
+                                html.Div([
+                                    html.A(
+                                        "Log Out", 
+                                        href="/logout", 
+                                        style={
+                                            "fontSize": "0.8rem", 
+                                            "color": text_color, 
+                                            "textDecoration": "none", 
+                                            "fontWeight": "600",
+                                            "marginBottom": "8px",
+                                            "display": "block"
+                                        }
+                                    ) if is_current_user else None,
+                                    html.Button(
+                                        "Edit Profile",
+                                        id="edit-profile-btn",
+                                        style={
+                                            "background": "none",
+                                            "border": "none",
+                                            "padding": "0",
+                                            "color": text_color,
+                                            "fontWeight": "bold",
+                                            "fontSize": "0.8rem",
+                                            "textDecoration": "none",
+                                            "marginBottom": "8px",
+                                            "display": "block"
+                                        }
+                                    ) if is_current_user else None,
+                                ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-start", "minWidth": "fit-content"})
+                            ], style={"display": "flex", "alignItems": "flex-start", "width": "100%", "marginTop": "15px"}) if is_current_user else None,
+                        ], style={"display": "flex", "flexDirection": "column", "width": "100%", "gap": "10px"}, className="d-md-none")
+                    ], style={"display": "flex", "flexDirection": "column", "width": "100%", "gap": "15px"})
                 ]),
                 id="profile-card",
-                style={
-                    "borderRadius": "10px",
-                    "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)",
-                    "marginBottom": "20px",
-                    "backgroundColor": color or "var(--card-bg)"
-                }
+                style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "marginBottom": "20px", "backgroundColor": color or "var(--card-bg)"}
             ),
             html.H3("Favorite Teams", className="mb-3"),
             *team_cards,
             html.Hr(),
         ], style={"padding": "20px", "maxWidth": "1000px"}),
-        footer,
+        footer
     ])
+
+    return html.Div(layout_components)
 
 def event_layout(event_key):
 

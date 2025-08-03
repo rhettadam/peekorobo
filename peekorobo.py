@@ -23,9 +23,9 @@ import plotly.graph_objects as go
 
 from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import insights_layout,insights_details_layout,team_layout,match_layout,user_layout,other_user_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout
+from layouts import insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout
 
-from utils import is_western_pennsylvania_city,format_human_date,calculate_single_rank,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
+from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -286,7 +286,7 @@ def display_page(pathname):
         return html.Div([
                     dcc.Store(id="favorites-store", data={"deleted": []}),
                     dcc.Store(id="user-session", data={"user_id": session.get("user_id")}),
-                    html.Div(id="user-layout-wrapper", children=user_layout())
+                    html.Div(id="user-layout-wrapper", children=user_profile_layout())
                 ])
     
     if pathname == "/insights":
@@ -305,7 +305,7 @@ def display_page(pathname):
             username = pathname.split("/user/")[1]
             # URL decode the username to handle spaces and special characters
             username = unquote(username)
-            return other_user_layout(username)
+            return user_profile_layout(username=username)
         except ValueError:
             pass
     
@@ -830,13 +830,30 @@ def toggle_follow_user(_, session_data, current_text):
         return current_text
 
 @app.callback(
-    Output("user-search-results", "children"),
-    Input("user-search-input", "value"),
+    Output("user-search-results-desktop", "children"),
+    Input("user-search-input-desktop", "value"),
     State("user-session", "data")
 )
-def search_users(query, session_data):
+def search_users_desktop(query, session_data):
     if not query or not session_data:
+        print("No desktop query or session data, returning empty")
         return []
+    
+    return search_users_common(query, session_data)
+
+@app.callback(
+    Output("user-search-results-mobile", "children"),
+    Input("user-search-input-mobile", "value"),
+    State("user-session", "data")
+)
+def search_users_mobile(query, session_data):
+    if not query or not session_data:
+        print("No mobile query or session data, returning empty")
+        return []
+    
+    return search_users_common(query, session_data)
+
+def search_users_common(query, session_data):
 
     current_user_id = session_data.get("user_id")
     
@@ -852,11 +869,6 @@ def search_users(query, session_data):
             """, (f"%{query}%", current_user_id))
             rows = cur.fetchall()
             
-            # Debug: print search results
-            print(f"User search for '{query}' returned {len(rows)} results")
-            for row in rows:
-                print(f"  Found user: {row[1]} (ID: {row[0]})")
-
         user_blocks = []
         for uid, username, avatar_key, followers in rows:
             # Handle followers field - it might be JSON string, list, or None
@@ -901,7 +913,7 @@ def search_users(query, session_data):
             }))
 
         # Wrap the user blocks in a container with overlay styling
-        return html.Div(user_blocks, style={
+        result_div = html.Div(user_blocks, style={
             "position": "absolute",
             "top": "100%",
             "left": "0",
@@ -912,9 +924,10 @@ def search_users(query, session_data):
             "boxShadow": "0px 4px 8px rgba(0, 0, 0, 0.1)",
             "maxHeight": "300px",
             "overflowY": "auto",
-            "zIndex": "1000",
+            "zIndex": "9999",
             "marginTop": "5px"
         })
+        return result_div
 
     except Exception as e:
         print(f"Error in user search: {e}")
@@ -953,7 +966,7 @@ def remove_favorite(n_clicks, store_data, session_data):
         new_store = {"deleted": list(deleted)}
 
         # Rerender layout
-        return new_store, user_layout(user_id, deleted)
+        return new_store, user_profile_layout(_user_id=user_id, deleted_items=deleted)
     except Exception as e:
         return dash.no_update, dash.no_update
 
@@ -3994,6 +4007,7 @@ def update_team_insights(active_tab, store_data):
             
             if team_number in year_team_data:
                 team_year_data = year_team_data[team_number]
+                from utils import calculate_single_rank
                 global_rank, _, _ = calculate_single_rank(list(year_team_data.values()), team_year_data)
                 years_data.append({
                     'year': year_key,
@@ -4856,6 +4870,43 @@ def update_insights_table(selected_insight, pathname, event_teams, event_db):
         page_size=20,
         style_as_list_view=True,
     )
+
+# Callback for collapsible team cards
+@app.callback(
+    [Output({"type": "team-card-arrow", "index": MATCH}, "children"),
+     Output({"type": "team-card-body", "index": MATCH}, "style")],
+    [Input({"type": "team-card-header", "index": MATCH}, "n_clicks")],
+    [State({"type": "team-card-body", "index": MATCH}, "style")],
+    prevent_initial_call=True
+)
+def toggle_team_card_collapse(n_clicks, current_style):
+    if not n_clicks:
+        return dash.no_update, dash.no_update
+    
+    # Get current state from style
+    current_max_height = current_style.get("maxHeight", "2000px")
+    is_collapsed = current_max_height == "0px"
+    
+    if is_collapsed:
+        # Expand
+        new_style = {
+            "overflow": "hidden",
+            "transition": "max-height 0.3s ease, opacity 0.3s ease",
+            "maxHeight": "2000px",
+            "opacity": "1"
+        }
+        arrow = "▼"
+    else:
+        # Collapse
+        new_style = {
+            "overflow": "hidden",
+            "transition": "max-height 0.3s ease, opacity 0.3s ease",
+            "maxHeight": "0px",
+            "opacity": "0"
+        }
+        arrow = "▲"
+    
+    return arrow, new_style
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
