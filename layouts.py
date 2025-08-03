@@ -8,7 +8,7 @@ import json
 import os
 import re
 import plotly.graph_objs as go
-
+import dash_mantine_components as dmc
 from utils import WEEK_RANGES_BY_YEAR
 
 current_year = 2025
@@ -3493,7 +3493,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                 dbc.Input(id="edit-role", value=role, placeholder="Role", className="mb-2", size="sm"),
                 dbc.Input(id="edit-team", value=team_affil, placeholder="Team", className="mb-2", size="sm"),
                 dbc.Textarea(id="edit-bio", value=bio, placeholder="Bio", className="mb-2", style={"height": "60px", "fontSize": "0.85rem"}),
-                html.Label("Select Avatar", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#444"}),
+                html.Label("Select Avatar", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
                 dcc.Dropdown(
                     id="edit-avatar-key",
                     options=[
@@ -3506,93 +3506,32 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     clearable=False,
                     style={"width": "200px", "fontSize": "0.75rem"}
                 ),
-                html.Label("Change Card Background Color", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#444"}),
-                dcc.Dropdown(
-                    id="edit-bg-color",
-                    options=[
-                        {
-                            "label": html.Span([
-                                html.Div(style={
-                                    "display": "inline-block",
-                                    "width": "12px",
-                                    "height": "12px",
-                                    "backgroundColor": color,
-                                    "color": "333",
-                                    "marginRight": "8px",
-                                    "border": "1px solid #ccc",
-                                    "verticalAlign": "middle"
-                                }),
-                                name
-                            ]),
-                            "value": color
-                        }
-                        for name, color in [
-                            # Very light pastels and whites
-                            ("White", "#ffffff"),
-                            ("Floral White", "#fffaf0"),
-                            ("Ivory", "#fffff0"),
-                            ("Old Lace", "#fdf5e6"),
-                            ("Seashell", "#fff5ee"),
-                            ("Lemon Chiffon", "#fffacd"),
-                            ("Cornsilk", "#fff8dc"),
-                            ("Papaya Whip", "#ffefd5"),
-                            ("Peach Puff", "#ffdab9"),
-                            ("Misty Rose", "#ffe4e1"),
-                            ("Beige", "#f5f5dc"),
-                            ("Antique White", "#faebd7"),
-                            ("Light Goldenrod", "#fafad2"),
-                            ("Wheat", "#f5deb3"),
-                        
-                            # Light cool tones
-                            ("Honeydew", "#f0fff0"),
-                            ("Mint Cream", "#f5fffa"),
-                            ("Azure", "#f0ffff"),
-                            ("Alice Blue", "#f0f8ff"),
-                            ("Ghost White", "#f8f8ff"),
-                            ("Lavender", "#e6e6fa"),
-                            ("Light Cyan", "#e0ffff"),
-                            ("Powder Blue", "#b0e0e6"),
-                            ("Light Steel Blue", "#b0c4de"),
-                            ("Thistle", "#d8bfd8"),
-                            ("Plum", "#dda0dd"),
-                            ("Gainsboro", "#dcdcdc"),
-                            ("Light Gray", "#f5f5f5"),
-                        
-                            # Saturated / mid tones
-                            ("Sky Blue", "#87ceeb"),
-                            ("Light Pink", "#ffb6c1"),
-                            ("Orchid", "#da70d6"),
-                            ("Medium Slate Blue", "#7b68ee"),
-                            ("Slate Blue", "#6a5acd"),
-                            ("Steel Blue", "#4682b4"),
-                            ("Medium Violet Red", "#c71585"),
-                            ("Tomato", "#ff6347"),
-                            ("Goldenrod", "#daa520"),
-                            ("Dark Orange", "#ff8c00"),
-                            ("Crimson", "#dc143c"),
-                        
-                            # Cool / bold
-                            ("Royal Blue", "#4169e1"),
-                            ("Dodger Blue", "#1e90ff"),
-                            ("Deep Sky Blue", "#00bfff"),
-                            ("Teal", "#008080"),
-                            ("Dark Cyan", "#008b8b"),
-                            ("Sea Green", "#2e8b57"),
-                            ("Forest Green", "#228b22"),
-                        
-                            # Deep earth tones
-                            ("Olive", "#808000"),
-                            ("Saddle Brown", "#8b4513"),
-                            ("Dark Slate Gray", "#2f4f4f"),
-                            ("Navy", "#001f3f"),
-                            ("Midnight Blue", "#191970"),
-                            ("Black", "#000000"),
-                        ]
-                    ],
-                    value=color,
-                    clearable=False,
-                    style={"width": "200px", "fontSize": "0.75rem"}
-                ),
+                html.Label("Change Card Background Color", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
+                html.Div([
+                    dmc.ColorPicker(
+                        id="edit-bg-color",
+                        format="hex",
+                        value=color,
+                        style={"marginBottom": "8px"}
+                    ),
+                    dmc.Space(h=10),
+                    html.Div([
+                        html.Span("Current: ", style={"fontSize": "0.7rem", "color": "#ccc"}),
+                        html.Span(
+                            color,
+                            id="current-color-display",
+                            style={
+                                "fontSize": "0.7rem",
+                                "color": "#fff",
+                                "fontFamily": "monospace",
+                                "backgroundColor": color,
+                                "padding": "2px 6px",
+                                "borderRadius": "3px",
+                                "border": "1px solid #666"
+                            }
+                        )
+                    ], style={"marginTop": "4px"})
+                ], style={"width": "200px"}),
             ]
         )
 
@@ -3797,187 +3736,127 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
         dbc.Container([
             dbc.Card(
                 dbc.CardBody([
+                    # Unified responsive layout
                     html.Div([
-                        # Desktop layout (original)
+                        # Simple, clean layout
                         html.Div([
+                            # Layout with Log Out top right, Edit Profile bottom right, search flexible
                             html.Div([
-                                html.Img(
-                                    **({"id": "user-avatar-img"} if is_current_user else {}),
-                                    src=get_user_avatar(avatar_key),
-                                    style={"height": "60px", "borderRadius": "50%", "marginRight": "15px"}
-                                ),
+                                # Top section with Log Out button
                                 html.Div([
-                                    html.H2(
-                                        f"Welcome, {username_display.title()}!" if is_current_user else f"{username_display.title()}",
-                                        **({"id": "profile-header"} if is_current_user else {}),
-                                        style={"margin": 0, "fontSize": "1.5rem", "color": text_color}
-                                    ),
-                                    html.Div(
-                                        f"{len(team_keys)} favorite teams",
-                                        **({"id": "profile-subheader"} if is_current_user else {}),
-                                        style={"fontSize": "0.85rem", "color": text_color}
-                                    ),
+                                    # Avatar and name section
+                                    html.Div([
+                                        html.Img(
+                                            **({"id": "user-avatar-img"} if is_current_user else {}),
+                                            src=get_user_avatar(avatar_key),
+                                            style={
+                                                "height": "60px", 
+                                                "width": "60px",
+                                                "borderRadius": "50%", 
+                                                "marginRight": "15px",
+                                                "flexShrink": "0"
+                                            }
+                                        ),
+                                        html.Div([
+                                            html.H2(
+                                                f"Welcome, {username_display.title()}!" if is_current_user else f"{username_display.title()}",
+                                                **({"id": "profile-header"} if is_current_user else {}),
+                                                style={"margin": 0, "fontSize": "1.5rem", "color": text_color, "lineHeight": "1.2"}
+                                            ),
+                                            html.Div(
+                                                f"{len(team_keys)} favorite teams",
+                                                **({"id": "profile-subheader"} if is_current_user else {}),
+                                                style={"fontSize": "0.85rem", "color": text_color, "marginTop": "2px"}
+                                            ),
+                                        ], style={"flex": "1", "minWidth": "0"}),
+                                    ], style={"display": "flex", "alignItems": "center"}),
+                                    
+                                    # Log Out button in top right
+                                    html.A(
+                                        "Log Out", 
+                                        id="logout-btn",
+                                        href="/logout", 
+                                        style={
+                                            "fontSize": "0.8rem", 
+                                            "color": "#ffffff", 
+                                            "textDecoration": "none", 
+                                            "fontWeight": "600",
+                                            "alignSelf": "flex-start",
+                                            "marginTop": "5px",
+                                            "backgroundColor": "#2D2D2D",
+                                            "border": "0px solid #ffffff",
+                                            "borderRadius": "4px",
+                                            "padding": "6px 12px",
+                                            "display": "inline-block"
+                                        }
+                                    ) if is_current_user else None,
+                                ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "flex-start", "marginBottom": "15px"}),
+                                
+                                # Profile info section
+                                html.Div([
                                     profile_display,
                                     followers_popover,
                                     following_popover,
                                     profile_edit_form,
-                                ]),
-                            ], style={"display": "flex", "alignItems": "center"}),
-                            html.Div([
-                                html.A("Log Out", href="/logout", style={"marginTop": "8px", "fontSize": "0.75rem", "color": text_color, "textDecoration": "none", "fontWeight": "600"}),
-                                html.Div([
-                                    html.H5(
-                                        id="profile-search-header",
-                                        style={"marginTop": "10px", "fontSize": "0.95rem", "color": text_color}
-                                    ),
-                                    dbc.Input(id="user-search-input-desktop", placeholder="Search Users", type="text", size="sm", className="custom-input-box mb-2", style={"width": "250px"}),
-                                    html.Div(id="user-search-results-desktop")
-                                ], style={"marginTop": "10px", "width": "100%", "position": "relative"}) if is_current_user else None,
-                                html.Button(
-                                    "Edit Profile",
-                                    id="edit-profile-btn",
-                                    style={
-                                        "background": "none",
-                                        "border": "none",
-                                        "padding": "0",
-                                        "marginTop": "8px",
-                                        "color": text_color,
-                                        "fontWeight": "bold",
-                                        "fontSize": "0.85rem",
-                                        "textDecoration": "none"
-                                    }
-                                ) if is_current_user else None,
-                                html.Button("Save", id="save-profile-btn", className="btn btn-warning btn-sm mt-2", style={"display": "none"}) if is_current_user else None,
-                                # Follow button for other users
-                                html.Button(
-                                    "Unfollow" if is_following else "Follow",
-                                    id={"type": "follow-user", "user_id": target_user_id},
-                                    style={
-                                        "backgroundColor": "white" if is_following else "#ffdd00",
-                                        "border": "1px solid #ccc",
-                                        "borderRadius": "12px",
-                                        "padding": "4px 10px",
-                                        "fontSize": "0.85rem",
-                                        "fontWeight": "500",
-                                        "color": "#000",
-                                        "cursor": "pointer",
-                                        "boxShadow": "0 1px 3px rgba(0, 0, 0, 0.1)",
-                                        "marginTop": "8px"
-                                    }
-                                ) if not is_current_user and target_user_id != session_user_id else None,
-                            ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-end", "justifyContent": "center"})
-                        ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "15px"}, className="d-none d-md-flex"),
-                        
-                        # Mobile layout (new responsive design)
-                        html.Div([
-                            # Avatar and name section
-                            html.Div([
-                                html.Img(
-                                    **({"id": "user-avatar-img"} if is_current_user else {}),
-                                    src=get_user_avatar(avatar_key),
-                                    style={
-                                        "height": "50px", 
-                                        "width": "50px",
-                                        "borderRadius": "50%", 
-                                        "marginRight": "12px",
-                                        "flexShrink": "0"
-                                    }
-                                ),
-                                html.Div([
-                                    html.H2(
-                                        f"Welcome, {username_display.title()}!" if is_current_user else f"{username_display.title()}",
-                                        **({"id": "profile-header"} if is_current_user else {}),
-                                        style={"margin": 0, "fontSize": "1.3rem", "color": text_color, "lineHeight": "1.2"}
-                                    ),
-                                    html.Div(
-                                        f"{len(team_keys)} favorite teams",
-                                        **({"id": "profile-subheader"} if is_current_user else {}),
-                                        style={"fontSize": "0.8rem", "color": text_color, "marginTop": "2px"}
-                                    ),
-                                ], style={"flex": "1", "minWidth": "0"}),
-                            ], style={"display": "flex", "alignItems": "center", "marginBottom": "15px"}),
-                            
-                            # Profile info section
-                            html.Div([
-                                profile_display,
-                                followers_popover,
-                                following_popover,
-                                profile_edit_form,
-                            ], style={"width": "100%"}),
-                            
-                            # Action buttons section
-                            html.Div([
-                                html.Button("Save", id="save-profile-btn", className="btn btn-warning btn-sm", style={"display": "none"}) if is_current_user else None,
-                                # Follow button for other users
-                                html.Button(
-                                    "Unfollow" if is_following else "Follow",
-                                    id={"type": "follow-user", "user_id": target_user_id},
-                                    style={
-                                        "backgroundColor": "white" if is_following else "#ffdd00",
-                                        "border": "1px solid #ccc",
-                                        "borderRadius": "12px",
-                                        "padding": "6px 12px",
-                                        "fontSize": "0.8rem",
-                                        "fontWeight": "500",
-                                        "color": "#000",
-                                        "cursor": "pointer",
-                                        "boxShadow": "0 1px 3px rgba(0, 0, 0, 0.1)",
-                                        "display": "block"
-                                    }
-                                ) if not is_current_user and target_user_id != session_user_id else None,
-                            ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-start", "width": "100%"}),
-                            
-                            # Combined search and action row (mobile)
-                            html.Div([
-                                # Search bar
-                                html.Div([
-                                    html.H5(
-                                        id="profile-search-header",
-                                        style={"marginBottom": "8px", "fontSize": "0.9rem", "color": text_color}
-                                    ),
-                                    dbc.Input(
-                                        id="user-search-input-mobile", 
-                                        placeholder="Search Users", 
-                                        type="text", 
-                                        size="sm", 
-                                        className="custom-input-box mb-2", 
-                                        style={"width": "100%"}
-                                    ),
-                                    html.Div(id="user-search-results-mobile")
-                                ], style={"flex": "1", "marginRight": "10px", "position": "relative"}) if is_current_user else None,
+                                ], style={"width": "100%", "marginBottom": "15px"}),
                                 
-                                # Action buttons
+                                # Bottom section with search and Edit Profile
                                 html.Div([
-                                    html.A(
-                                        "Log Out", 
-                                        href="/logout", 
-                                        style={
-                                            "fontSize": "0.8rem", 
-                                            "color": text_color, 
-                                            "textDecoration": "none", 
-                                            "fontWeight": "600",
-                                            "marginBottom": "8px",
-                                            "display": "block"
-                                        }
-                                    ) if is_current_user else None,
+                                    # Search bar (flexible)
+                                    html.Div([
+                                        html.H5(
+                                            id="profile-search-header",
+                                            style={"marginBottom": "8px", "fontSize": "0.95rem", "color": text_color}
+                                        ),
+                                        dbc.Input(
+                                            id="user-search-input", 
+                                            placeholder="Search Users", 
+                                            type="text", 
+                                            size="sm", 
+                                            className="custom-input-box mb-2", 
+                                            style={"width": "100%", "maxWidth": "300px"}
+                                        ),
+                                        html.Div(id="user-search-results")
+                                    ], style={"flex": "1", "marginRight": "20px", "position": "relative"}) if is_current_user else None,
+                                    
+                                    # Edit Profile button in bottom right
                                     html.Button(
                                         "Edit Profile",
                                         id="edit-profile-btn",
                                         style={
-                                            "background": "none",
-                                            "border": "none",
-                                            "padding": "0",
-                                            "color": text_color,
-                                            "fontWeight": "bold",
-                                            "fontSize": "0.8rem",
+                                            "backgroundColor": "#2D2D2D",
+                                            "border": "0px solid #000000",
+                                            "borderRadius": "4px",
+                                            "padding": "6px 12px",
+                                            "color": "#ffffff",
+                                            "fontWeight": "600",
+                                            "fontSize": "0.85rem",
                                             "textDecoration": "none",
-                                            "marginBottom": "8px",
-                                            "display": "block"
+                                            "cursor": "pointer"
                                         }
                                     ) if is_current_user else None,
-                                ], style={"display": "flex", "flexDirection": "column", "alignItems": "flex-start", "minWidth": "fit-content"})
-                            ], style={"display": "flex", "alignItems": "flex-start", "width": "100%", "marginTop": "15px"}) if is_current_user else None,
-                        ], style={"display": "flex", "flexDirection": "column", "width": "100%", "gap": "10px"}, className="d-md-none")
+                                    html.Button("Save", id="save-profile-btn", className="btn btn-warning btn-sm", style={"display": "none"}) if is_current_user else None,
+                                    
+                                    # Follow button for other users
+                                    html.Button(
+                                        "Unfollow" if is_following else "Follow",
+                                        id={"type": "follow-user", "user_id": target_user_id},
+                                        style={
+                                            "backgroundColor": "white" if is_following else "#ffdd00",
+                                            "border": "1px solid #ccc",
+                                            "borderRadius": "12px",
+                                            "padding": "6px 12px",
+                                            "fontSize": "0.85rem",
+                                            "fontWeight": "500",
+                                            "color": "#000",
+                                            "cursor": "pointer",
+                                            "boxShadow": "0 1px 3px rgba(0, 0, 0, 0.1)",
+                                            "display": "block"
+                                        }
+                                    ) if not is_current_user and target_user_id != session_user_id else None,
+                                ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "flex-end", "width": "100%"}) if is_current_user else None,
+                            ], style={"display": "flex", "flexDirection": "column", "width": "100%"}),
+                        ], style={"display": "flex", "flexDirection": "column", "width": "100%", "gap": "15px"}),
                     ], style={"display": "flex", "flexDirection": "column", "width": "100%", "gap": "15px"})
                 ]),
                 id="profile-card",

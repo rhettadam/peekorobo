@@ -1,6 +1,7 @@
 import dash
 import dash_bootstrap_components as dbc
-from dash import callback, html, dcc, dash_table, ctx, ALL, MATCH, no_update, callback_context
+import dash_mantine_components as dmc
+from dash import html, dcc, dash_table, ctx, ALL, MATCH, no_update, callback_context
 from dash.dependencies import Input, Output, State
 
 import flask
@@ -61,20 +62,29 @@ server = app.server
 server.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-placeholder-key")
 
 def serve_layout():
-    return html.Div([
-        dcc.Location(id='url', refresh=False),
-        dcc.Store(id='tab-title', data='Peekorobo'),
-        dcc.Store(id='theme-store'),
-        html.Div(
-            id='page-content-animated-wrapper',
-            children=html.Div(id='page-content'),
-            className='fade-page',
-        ),
-        universal_profile_icon_or_toast(),
-        html.Div(id='dummy-output', style={'display': 'none'}),
-        html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'}),
-        dcc.Interval(id='last-updated-interval', interval=60000, n_intervals=0)  # Update every minute
-    ])
+    return dmc.MantineProvider(
+        theme={
+            "colorScheme": "light",
+            "primaryColor": "blue",
+            "components": {
+                "ColorPicker": {"styles": {"root": {"width": "100%"}}}
+            }
+        },
+        children=html.Div([
+            dcc.Location(id='url', refresh=False),
+            dcc.Store(id='tab-title', data='Peekorobo'),
+            dcc.Store(id='theme-store'),
+            html.Div(
+                id='page-content-animated-wrapper',
+                children=html.Div(id='page-content'),
+                className='fade-page',
+            ),
+            universal_profile_icon_or_toast(),
+            html.Div(id='dummy-output', style={'display': 'none'}),
+            html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'}),
+            dcc.Interval(id='last-updated-interval', interval=60000, n_intervals=0)  # Update every minute
+        ])
+    )
 
 app.layout = serve_layout
 
@@ -633,10 +643,32 @@ def logout():
     return flask.redirect("/login")
 
 @app.callback(
+    Output("current-color-display", "children"),
+    Output("current-color-display", "style"),
+    Input("edit-bg-color", "value")
+)
+def update_color_display(color_value):
+    if not color_value:
+        color_value = "#f9f9f9"
+    
+    return color_value, {
+        "fontSize": "0.7rem",
+        "color": "#fff",
+        "fontFamily": "monospace",
+        "backgroundColor": color_value,
+        "padding": "2px 6px",
+        "borderRadius": "3px",
+        "border": "1px solid #666"
+    }
+
+@app.callback(
     Output("profile-display", "hidden"),
     Output("profile-card", "style"),
     Output("profile-edit-form", "hidden"),
     Output("save-profile-btn", "style"),
+    Output("edit-profile-btn", "style"),
+    Output("logout-btn", "style"),
+    Output("user-search-input", "style"),
     Output("edit-profile-btn", "n_clicks"),
     Output("user-avatar-img", "src"),
     Output("profile-role", "children"),
@@ -666,15 +698,19 @@ def handle_profile_edit(
 ):
     triggered_id = ctx.triggered_id
     if not triggered_id:
-        return [dash.no_update] * 15
+        return [dash.no_update] * 18
 
     user_id = session_data if isinstance(session_data, str) else session_data.get("user_id") if session_data else None
     if not user_id:
-        return [dash.no_update] * 15
+        return [dash.no_update] * 18
+
+    # Handle color picker format (direct hex string)
+    if not color:
+        color = "#f9f9f9"
 
     if triggered_id == "save-profile-btn":
         if not username or len(username.strip()) < 3:
-            return [dash.no_update] * 15
+            return [dash.no_update] * 18
 
         try:
             with DatabaseConnection() as conn:
@@ -682,7 +718,7 @@ def handle_profile_edit(
                 
                 cur.execute("SELECT id FROM users WHERE LOWER(username) = %s AND id != %s", (username.lower(), user_id))
                 if cur.fetchone():
-                    return [dash.no_update] * 15
+                    return [dash.no_update] * 18
 
                 cur.execute("""
                     UPDATE users
@@ -717,6 +753,36 @@ def handle_profile_edit(
             },
             True,  # hide profile-edit-form
             {"display": "none"},
+            {
+                "backgroundColor": "#2D2D2D",
+                "border": "0px solid #000000",
+                "borderRadius": "4px",
+                "padding": "6px 12px",
+                "color": "#ffffff",
+                "fontWeight": "600",
+                "fontSize": "0.85rem",
+                "textDecoration": "none",
+                "cursor": "pointer",
+                "display": "inline-block"
+            },  # show edit-profile-btn
+            {
+                "fontSize": "0.8rem", 
+                "color": "#ffffff", 
+                "textDecoration": "none", 
+                "fontWeight": "600",
+                "alignSelf": "flex-start",
+                "marginTop": "5px",
+                "backgroundColor": "#2D2D2D",
+                "border": "0px solid #ffffff",
+                "borderRadius": "4px",
+                "padding": "6px 12px",
+                "display": "inline-block"
+            },  # show logout-btn
+            {
+                "width": "100%", 
+                "maxWidth": "300px",
+                "display": "block"
+            },  # show search bar
             0,
             get_user_avatar(avatar_key_selected),
             html.Span(f"Role: {new_role}", style={"color": text_color}),
@@ -759,8 +825,11 @@ def handle_profile_edit(
             },
             False,  # hide profile display
             {"display": "inline-block"},
+            {"display": "none"},  # hide edit-profile-btn
+            {"display": "none"},  # hide logout-btn
+            {"display": "none"},  # hide search bar
             dash.no_update,
-            dash.no_update,
+            dash.no_update,  # user-avatar-img.src
             html.Span(f"Role: {role}", style={"color": text_color}),
             html.Span([
                 "Team: ",
@@ -775,7 +844,7 @@ def handle_profile_edit(
             f"Followers: {followers_count}",  # profile-followers children
         )
 
-    return [dash.no_update] * 15
+    return [dash.no_update] * 18
     
 @app.callback(
     Output({"type": "follow-user", "user_id": MATCH}, "children"),
@@ -830,25 +899,13 @@ def toggle_follow_user(_, session_data, current_text):
         return current_text
 
 @app.callback(
-    Output("user-search-results-desktop", "children"),
-    Input("user-search-input-desktop", "value"),
+    Output("user-search-results", "children"),
+    Input("user-search-input", "value"),
     State("user-session", "data")
 )
-def search_users_desktop(query, session_data):
+def search_users(query, session_data):
     if not query or not session_data:
-        print("No desktop query or session data, returning empty")
-        return []
-    
-    return search_users_common(query, session_data)
-
-@app.callback(
-    Output("user-search-results-mobile", "children"),
-    Input("user-search-input-mobile", "value"),
-    State("user-session", "data")
-)
-def search_users_mobile(query, session_data):
-    if not query or not session_data:
-        print("No mobile query or session data, returning empty")
+        print("No query or session data, returning empty")
         return []
     
     return search_users_common(query, session_data)
@@ -917,7 +974,7 @@ def search_users_common(query, session_data):
             "position": "absolute",
             "top": "100%",
             "left": "0",
-            "right": "0",
+            "width": "300px",
             "backgroundColor": "var(--card-bg)",
             "border": "1px solid #ddd",
             "borderRadius": "8px",
