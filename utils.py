@@ -8,7 +8,7 @@ import pandas as pd
 import dash_bootstrap_components as dbc
 from dash import html
 from flask import session
-from datagather import DatabaseConnection
+from datagather import DatabaseConnection, get_team_avatar
 from datetime import datetime, date
 import json
 
@@ -438,11 +438,52 @@ def get_available_avatars():
         return [f for f in os.listdir(avatar_dir) if f.endswith(".png")]
 
 def get_contrast_text_color(hex_color):
-        """Return black or white text color based on background brightness."""
-        hex_color = hex_color.lstrip("#")
-        r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        brightness = (r * 299 + g * 587 + b * 114) / 1000
-        return "#000000" if brightness > 150 else "#FFFFFF"
+    """Return black or white text color based on WCAG contrast ratio calculation."""
+    def get_luminance(r, g, b):
+        """Calculate relative luminance using WCAG formula."""
+        def adjust_color(c):
+            c = c / 255.0
+            if c <= 0.03928:
+                return c / 12.92
+            else:
+                return ((c + 0.055) / 1.055) ** 2.4
+        
+        r_lum = adjust_color(r)
+        g_lum = adjust_color(g)
+        b_lum = adjust_color(b)
+        
+        return 0.2126 * r_lum + 0.7152 * g_lum + 0.0722 * b_lum
+    
+    def get_contrast_ratio(lum1, lum2):
+        """Calculate contrast ratio between two luminances."""
+        lighter = max(lum1, lum2)
+        darker = min(lum1, lum2)
+        return (lighter + 0.05) / (darker + 0.05)
+    
+    # Parse hex color
+    hex_color = hex_color.lstrip("#")
+    r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    
+    # Calculate luminance of background color
+    bg_luminance = get_luminance(r, g, b)
+    
+    # Calculate contrast ratios with black and white text
+    black_luminance = get_luminance(0, 0, 0)
+    white_luminance = get_luminance(255, 255, 255)
+    
+    contrast_with_black = get_contrast_ratio(bg_luminance, black_luminance)
+    contrast_with_white = get_contrast_ratio(bg_luminance, white_luminance)
+    
+    # Return the color with better contrast ratio
+    # WCAG AA requires 4.5:1 for normal text, 3:1 for large text
+    # We'll use 3:1 as our threshold for better readability
+    if contrast_with_black >= 3.0:
+        return "#000000"  # Black text
+    elif contrast_with_white >= 3.0:
+        return "#FFFFFF"  # White text
+    else:
+        # If neither meets the threshold, choose the better one
+        return "#000000" if contrast_with_black > contrast_with_white else "#FFFFFF"
 
 def get_user_avatar(avatar_key):
     return f"/assets/avatars/{avatar_key}"

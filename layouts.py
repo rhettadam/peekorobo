@@ -32,6 +32,24 @@ def get_team_card_colors(team_number):
         # Fallback gradient
         return "linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)"
 
+def get_team_card_colors_with_text(team_number):
+    """Get team colors and appropriate text color for card."""
+    try:
+        with open("data/team_colors.json", "r", encoding="utf-8") as f:
+            team_colors = json.load(f)
+        
+        colors = team_colors.get(str(team_number), {})
+        primary = colors.get("primary", "#1e3a8a")
+        secondary = colors.get("secondary", "#3b82f6")
+        
+        # Use primary color to determine text color
+        text_color = get_contrast_text_color(primary)
+        
+        return f"linear-gradient(135deg, {primary} 0%, {secondary} 100%)", text_color
+    except Exception:
+        # Fallback gradient and text color
+        return "linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)", "white"
+
 def team_layout(team_number, year, team_database, event_database, event_matches, event_awards, event_rankings, event_teams):
 
     user_id = session.get("user_id")
@@ -74,13 +92,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         }
     )
 
-    # Add alert component without pattern matching
-    favorite_alert = dbc.Alert(
-        id="favorite-alert",
-        is_open=False,
-        duration=3000,
-        color="warning"
-    )
+
     
     if not team_number:
         return dbc.Alert("No team number provided. Please go back and search again.", color="warning")
@@ -1735,6 +1747,9 @@ def create_team_card(team, year, avatar_url, epa_ranks):
     location = ", ".join(filter(None, [team.get("city", ""), team.get("state_prov", ""), team.get("country", "")]))
     epa_display = epa_data.get("epa_display", "N/A")
     rank = epa_data.get("rank", "N/A")
+    
+    # Get team colors for background and text color
+    background_gradient, text_color = get_team_card_colors_with_text(team_number)
 
     return dbc.Card(
         [
@@ -1753,25 +1768,37 @@ def create_team_card(team, year, avatar_url, epa_ranks):
                     html.H5(f"#{team_number} | {nickname}", className="card-title", style={
                         "fontSize": "1.1rem",
                         "textAlign": "center",
-                        "marginBottom": "0.5rem"
+                        "marginBottom": "0.5rem",
+                        "color": text_color
                     }),
                     html.P(f"{location}", className="card-text", style={
                         "fontSize": "0.9rem",
                         "textAlign": "center",
-                        "marginBottom": "0.5rem"
+                        "marginBottom": "0.5rem",
+                        "color": text_color
                     }),
                     html.P(f"ACE: {epa_display} (Global Rank: {rank})", className="card-text", style={
                         "fontSize": "0.9rem",
                         "textAlign": "center",
-                        "marginBottom": "auto"
+                        "marginBottom": "auto",
+                        "color": text_color
                     }),
                     dbc.Button(
                         "View Team",
                         href=f"/team/{team_number}/{year}",
                         color="warning",
-                        outline=True,
-                        className="custom-view-btn mt-3",
-                    )
+                        outline=False,
+                        className="mt-3 view-team-btn-hover",
+                        style={
+                            "color": text_color,
+                            "border": f"2px solid {text_color}",
+                            "borderRadius": "9999px",
+                            "padding": "6px 7px",
+                            "fontSize": "0.85rem",
+                            "backgroundColor": "transparent",
+                            "transition": "all 0.2s ease-in-out"
+                        }
+                    ),
                 ],
                 style={
                     "display": "flex",
@@ -1790,12 +1817,227 @@ def create_team_card(team, year, avatar_url, epa_ranks):
             "flexDirection": "column",
             "justifyContent": "space-between",
             "alignItems": "stretch",
-            "borderRadius": "12px"
+            "borderRadius": "12px",
+            "background": background_gradient
         }
     )
 
+def create_team_card_spotlight(team, year_team_database, event_year):
+        t_num = team.get("tk")  # from compressed team list
+        
+        # Use the passed year_team_database
+        team_data = year_team_database.get(event_year, {}).get(t_num, {})
+        all_teams = year_team_database.get(event_year, {})
+
+        nickname = team_data.get("nickname", "Unknown")
+        city = team_data.get("city", "")
+        state = team_data.get("state_prov", "")
+        country = team_data.get("country", "")
+        location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
+
+        # === EPA & Rank Calculation (standalone) ===
+        team_epas = [
+            (tnum, data.get("epa", 0))
+            for tnum, data in all_teams.items()
+            if isinstance(data, dict)
+        ]
+        team_epas.sort(key=lambda x: x[1], reverse=True)
+        rank_map = {tnum: i + 1 for i, (tnum, _) in enumerate(team_epas)}
+
+        team_epa = team_data.get("epa", 0)
+        epa_display = f"{team_epa:.1f}"
+        epa_rank = rank_map.get(t_num, "N/A")
+
+        # === Avatar and link ===
+        avatar_url = get_team_avatar(t_num, event_year)
+        team_url = f"/team/{t_num}/{event_year}"
+        
+        # Get team colors for background and text color
+        background_gradient, text_color = get_team_card_colors_with_text(t_num)
+
+        # === Card Layout ===
+        card_body = dbc.CardBody(
+            [
+                html.H5(f"#{t_num} | {nickname}", className="card-title", style={
+                    "fontSize": "1.1rem",
+                    "textAlign": "center",
+                    "marginBottom": "0.5rem",
+                    "color": text_color
+                }),
+                html.P(f"{location_str}", className="card-text", style={
+                    "fontSize": "0.9rem",
+                    "textAlign": "center",
+                    "marginBottom": "0.5rem",
+                    "color": text_color
+                }),
+                html.P(f"ACE: {epa_display} (Global Rank: {epa_rank})", className="card-text", style={
+                    "fontSize": "0.9rem",
+                    "textAlign": "center",
+                    "marginBottom": "auto",
+                    "color": text_color
+                }),
+                dbc.Button(
+                    "View Team",
+                    href=team_url,
+                    color="warning",
+                    outline=False,
+                    className="mt-3 view-team-btn-hover",
+                    style={
+                        "color": text_color,
+                        "border": f"2px solid {text_color}",
+                        "borderRadius": "9999px",
+                        "padding": "6px 7px",
+                        "fontSize": "0.85rem",
+                        "backgroundColor": "transparent",
+                        "transition": "all 0.2s ease-in-out"
+                    }
+                ),
+            ],
+            style={
+                "display": "flex",
+                "flexDirection": "column",
+                "flexGrow": "1",
+                "justifyContent": "space-between",
+                "padding": "1rem"
+            }
+        )
+
+        card_elements = []
+        if avatar_url:
+            card_elements.append(
+                dbc.CardImg(
+                    src=avatar_url,
+                    top=True,
+                    style={
+                        "width": "100%",
+                        "height": "150px",
+                        "objectFit": "contain",
+                        "backgroundColor": "transparent",
+                        "padding": "0.5rem"
+                    }
+                )
+            )
+
+        card_elements.append(card_body)
+
+        return dbc.Card(
+            card_elements,
+            className="m-2 shadow-sm",
+            style={
+                "width": "18rem",
+                "height": "22rem",
+                "display": "flex",
+                "flexDirection": "column",
+                "justifyContent": "space-between",
+                "alignItems": "stretch",
+                "borderRadius": "12px",
+                "background": background_gradient
+            },
+        )
+
+def create_team_card_spotlight_event(team, event_team_data, event_year, event_rank_map):
+    """Create a spotlight card for event-specific stats with team gradients."""
+    t_num = team.get("tk")  # from compressed team list
+    
+    # Get team info from event_teams
+    nickname = team.get('nn', 'Unknown')
+    city = team.get("c", "")
+    state = team.get("s", "")
+    country = team.get("co", "")
+    location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
+    
+    # Calculate event-specific rank
+    team_event_epa = event_team_data.get("epa", 0)
+    event_rank = event_rank_map.get(team_event_epa, "N/A")
+    
+    # === Avatar and link ===
+    avatar_url = get_team_avatar(t_num, event_year)
+    team_url = f"/team/{t_num}/{event_year}"
+    
+    # Get team colors for background and text color
+    background_gradient, text_color = get_team_card_colors_with_text(t_num)
+
+    # === Card Layout ===
+    card_body = dbc.CardBody(
+        [
+            html.H5(f"#{t_num} | {nickname}", className="card-title", style={
+                "fontSize": "1.1rem",
+                "textAlign": "center",
+                "marginBottom": "0.5rem",
+                "color": text_color
+            }),
+            html.P(f"{location_str}", className="card-text", style={
+                "fontSize": "0.9rem",
+                "textAlign": "center",
+                "marginBottom": "0.5rem",
+                "color": text_color
+            }),
+            html.P(f"Event ACE: {team_event_epa:.1f} (Event Rank: {event_rank})", className="card-text", style={
+                "fontSize": "0.9rem",
+                "textAlign": "center",
+                "marginBottom": "auto",
+                "color": text_color
+            }),
+            dbc.Button(
+                "View Team",
+                href=team_url,
+                color="warning",
+                outline=False,
+                className="mt-3 view-team-btn-hover",
+                style={
+                    "color": text_color,
+                    "border": f"2px solid {text_color}",
+                    "borderRadius": "9999px",
+                    "padding": "6px 7px",
+                    "fontSize": "0.85rem",
+                    "backgroundColor": "transparent",
+                    "transition": "all 0.2s ease-in-out"
+                }
+            ),
+        ],
+        style={
+            "display": "flex",
+            "flexDirection": "column",
+            "flexGrow": "1",
+            "justifyContent": "space-between",
+            "padding": "1rem"
+        }
+    )
+
+    card_elements = []
+    if avatar_url:
+        card_elements.append(
+            dbc.CardImg(
+                src=avatar_url,
+                top=True,
+                style={
+                    "width": "100%",
+                    "height": "150px",
+                    "objectFit": "contain",
+                    "backgroundColor": "transparent",
+                    "padding": "0.5rem"
+                }
+            )
+        )
+
+    card_elements.append(card_body)
+
+    return dbc.Card(
+        card_elements,
+        className="m-2 shadow-sm",
+        style={
+            "width": "18rem",
+            "height": "22rem",
+            "display": "flex",
+            "flexDirection": "column",
+            "justifyContent": "space-between",
+            "alignItems": "stretch",
+            "borderRadius": "12px",
+            "background": background_gradient
+        },
+    )
+
 def teams_layout(default_year=current_year):
-    user_id = session.get("user_id")
     teams_year_dropdown = dcc.Dropdown(
         id="teams-year-dropdown",
         options=[{"label": str(y), "value": y} for y in range(1992, 2026)],
@@ -4110,48 +4352,6 @@ def event_layout(event_key):
         active_tab=None,  # Will be set by callback
         className="mb-4",
     )
-
-    # --- Insights Section ---
-    # Load insights for the year
-    try:
-        with open('data/insights.json', 'r', encoding='utf-8') as f:
-            all_insights = json.load(f)
-        year_insights = all_insights.get(str(year), [])
-    except Exception:
-        year_insights = []
-
-    insight_options = [
-        {
-            "label": i.get("name", f"Option {ix+1}")
-                .replace("typed_leaderboard_", "")
-                .replace("_", " ")
-                .title() if i.get("name") else f"Option {ix+1}",
-            "value": i.get("name", f"Option {ix+1}")
-        }
-        for ix, i in enumerate(year_insights)
-    ]
-
-    # Default to first option if available
-    default_insight = insight_options[0]["value"] if insight_options else None
-
-    insights_section = html.Div([
-        html.Hr(),
-        html.H4("Yearly Insights", className="mb-3 mt-4 text-center"),
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("Select Insight Type:"),
-                dcc.Dropdown(
-                    id="insights-dropdown",
-                    options=insight_options,
-                    value=default_insight,
-                    clearable=False,
-                    style={"marginBottom": "1.5rem"}
-                ),
-            ], md=6, xs=12, style={"margin": "0 auto"}),
-        ], className="justify-content-center"),
-        html.Div(id="insights-table-container", style={"marginTop": "1.5rem"}),
-    ]) if insight_options else None
-
     return html.Div(
         [
             dcc.Location(id="event-url", refresh=False),
@@ -4169,8 +4369,7 @@ def event_layout(event_key):
                     dcc.Store(id="store-event-year", data=parsed_year),
                     html.Div(id="data-display-container"),
                     html.Div(id="event-alliances-content"),
-                    html.Div(id="event-metrics-content"),
-                    insights_section,
+                    html.Div(id="event-metrics-content")
                 ],
                 style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
             ),

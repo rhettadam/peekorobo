@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout
 
 from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
@@ -1472,102 +1472,6 @@ def set_event_tabs_active_tab(tab):
 )
 def update_event_display(active_tab, rankings, epa_data, event_teams, event_matches, event_year, pathname):
 
-    def create_team_card_spotlight(team, year_team_database, event_year):
-        t_num = team.get("tk")  # from compressed team list
-        
-        # Use the passed year_team_database
-        team_data = year_team_database.get(event_year, {}).get(t_num, {})
-        all_teams = year_team_database.get(event_year, {})
-
-        nickname = team_data.get("nickname", "Unknown")
-        city = team_data.get("city", "")
-        state = team_data.get("state_prov", "")
-        country = team_data.get("country", "")
-        location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
-
-        # === EPA & Rank Calculation (standalone) ===
-        team_epas = [
-            (tnum, data.get("epa", 0))
-            for tnum, data in all_teams.items()
-            if isinstance(data, dict)
-        ]
-        team_epas.sort(key=lambda x: x[1], reverse=True)
-        rank_map = {tnum: i + 1 for i, (tnum, _) in enumerate(team_epas)}
-
-        team_epa = team_data.get("epa", 0)
-        epa_display = f"{team_epa:.1f}"
-        epa_rank = rank_map.get(t_num, "N/A")
-
-        # === Avatar and link ===
-        avatar_url = get_team_avatar(t_num, event_year)
-        team_url = f"/team/{t_num}/{event_year}"
-
-        # === Card Layout ===
-        card_body = dbc.CardBody(
-            [
-                html.H5(f"#{t_num} | {nickname}", className="card-title", style={
-                    "fontSize": "1.1rem",
-                    "textAlign": "center",
-                    "marginBottom": "0.5rem"
-                }),
-                html.P(f"{location_str}", className="card-text", style={
-                    "fontSize": "0.9rem",
-                    "textAlign": "center",
-                    "marginBottom": "0.5rem"
-                }),
-                html.P(f"ACE: {epa_display} (Global Rank: {epa_rank})", className="card-text", style={
-                    "fontSize": "0.9rem",
-                    "textAlign": "center",
-                    "marginBottom": "auto"
-                }),
-                dbc.Button(
-                    "View Team",
-                    href=team_url,
-                    color="warning",
-                    outline=True,
-                    className="custom-view-btn mt-3",
-                ),
-            ],
-            style={
-                "display": "flex",
-                "flexDirection": "column",
-                "flexGrow": "1",
-                "justifyContent": "space-between",
-                "padding": "1rem"
-            }
-        )
-
-        card_elements = []
-        if avatar_url:
-            card_elements.append(
-                dbc.CardImg(
-                    src=avatar_url,
-                    top=True,
-                    style={
-                        "width": "100%",
-                        "height": "150px",
-                        "objectFit": "contain",
-                        "backgroundColor": "transparent",
-                        "padding": "0.5rem"
-                    }
-                )
-            )
-
-        card_elements.append(card_body)
-
-        return dbc.Card(
-            card_elements,
-            className="m-2 shadow-sm",
-            style={
-                "width": "18rem",
-                "height": "22rem",
-                "display": "flex",
-                "flexDirection": "column",
-                "justifyContent": "space-between",
-                "alignItems": "stretch",
-                "borderRadius": "12px"
-            },
-        )
     # --- URL update logic ---
     # Extract event_key from pathname
     event_key = None
@@ -1696,7 +1600,27 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         if event_year != current_year:
             year_team_data = {event_year: year_team_data}
         
-        # Sort teams by overall EPA from year_team_database
+        # Add stats selector
+        stats_selector = dbc.Row([
+            dbc.Col([
+                html.Label("Stats Type:", style={"fontWeight": "bold", "color": "var(--text-primary)", "marginRight": "10px"}),
+                dcc.Dropdown(
+                    id="event-teams-stats-selector",
+                    options=[
+                        {"label": "Overall Stats", "value": "overall"},
+                        {"label": "Event Stats", "value": "event"}
+                    ],
+                    value="overall",
+                    clearable=False,
+                    style={"width": "200px"}
+                )
+            ], md=3, className="d-flex align-items-center"),
+            dbc.Col([
+                html.Div(id="event-teams-stats-display")
+            ], md=9)
+        ], className="mb-4 align-items-center", align="center")
+
+        # Sort teams by overall EPA from year_team_database for spotlight cards
         sorted_teams = sorted(
             event_teams,
             key=lambda t: year_team_data.get(event_year, {}).get(int(t.get("tk")), {}).get("epa", 0),
@@ -1708,77 +1632,12 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             dbc.Col(create_team_card_spotlight(t, year_team_data, event_year), width="auto")
             for t in top_3
         ]
-        spotlight_layout = dbc.Row(spotlight_cards, className="justify-content-center mb-4")
-
-        rows = []
-        for t in event_teams:
-            tnum = t.get("tk")
-            tstr = str(tnum)
-            # Convert team number to integer for year_team_database lookup
-            team_data = year_team_data.get(event_year, {}).get(int(tnum), {})
-            
-            rows.append({
-                "ACE Rank": rank_map.get(int(tnum), "N/A"),
-                "EPA": f"{team_data.get('normal_epa', 0):.2f}",
-                "Confidence": f"{team_data.get('confidence', 0):.2f}",
-                "ACE": f"{team_data.get('epa', 0):.2f}",
-                "Auto": f"{team_data.get('auto_epa', 0):.2f}",
-                "Teleop": f"{team_data.get('teleop_epa', 0):.2f}",
-                "Endgame": f"{team_data.get('endgame_epa', 0):.2f}",
-                "Team": f"[{tstr} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tstr}/{event_year})",
-                "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
-            })
-
-        # Sort by overall EPA value
-        rows.sort(key=lambda r: float(r["ACE"]) if r["ACE"] != "N/A" else 0, reverse=True)
-
-        columns = [
-            {"name": "ACE Rank", "id": "ACE Rank"},
-            {"name": "Team", "id": "Team", "presentation": "markdown"},
-            {"name": "EPA", "id": "EPA"},
-            {"name": "Confidence", "id": "Confidence"},
-            {"name": "ACE", "id": "ACE"},
-            {"name": "Auto", "id": "Auto"},
-            {"name": "Teleop", "id": "Teleop"},
-            {"name": "Endgame", "id": "Endgame"},
-            {"name": "Location", "id": "Location"},
-        ]
-
-        # --- GLOBAL PERCENTILES FOR COLORING ---
-        # Use all teams for the year, not just event teams
-        if event_year == current_year:
-            global_teams = TEAM_DATABASE.get(event_year, {}).values()
-        else:
-            global_teams = year_team_data.get(event_year, {}).values()
-        global_epa_values = [t.get("epa", 0) for t in global_teams]
-        global_confidence_values = [t.get("confidence", 0) for t in global_teams]
-        global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
-        global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
-        global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
-
-        percentiles_dict = {
-            "ACE": compute_percentiles(global_epa_values),
-            "Auto": compute_percentiles(global_auto_values),
-            "Teleop": compute_percentiles(global_teleop_values),
-            "Endgame": compute_percentiles(global_endgame_values),
-            "Confidence": compute_percentiles(global_confidence_values),
-        }
-        style_data_conditional = get_epa_styling(percentiles_dict)
 
         return html.Div([
-            spotlight_layout,
+            stats_selector,
+            html.Div(id="event-teams-spotlight"),
             ace_legend_layout(),
-            dash_table.DataTable(
-                columns=columns,
-                sort_action="native",
-                sort_mode="multi",
-                data=rows,
-                page_size=10,
-                style_table=common_style_table,
-                style_header=common_style_header,
-                style_cell=common_style_cell,
-                style_data_conditional=style_data_conditional
-            )
+            html.Div(id="event-teams-stats-display")
         ]), query_string
 
     # === Matches Tab ===
@@ -1965,6 +1824,334 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         return "", query_string
 
     return dbc.Alert("No data available.", color="warning"), query_string
+
+@app.callback(
+    [Output("event-teams-stats-display", "children"),
+     Output("event-teams-spotlight", "children")],
+    Input("event-teams-stats-selector", "value"),
+    [
+        State("store-event-epa", "data"),
+        State("store-event-teams", "data"),
+        State("store-event-matches", "data"),
+        State("store-event-year", "data"),
+        State("url", "pathname"),
+    ],
+    suppress_callback_exceptions=True,
+)
+def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_matches, event_year, pathname):
+    """Update the teams table and spotlight cards based on selected stats type (overall vs event-specific)"""
+    
+    if not stats_type or not event_teams:
+        return "", ""
+    
+    # Extract event_key from pathname
+    event_key = None
+    if pathname and "/event/" in pathname:
+        event_key = pathname.split("/event/")[-1].split("/")[0]
+    
+    if not event_key:
+        return "", ""
+    
+    # Load team data for the specific year
+    if event_year == current_year:
+        year_team_data = TEAM_DATABASE
+    else:
+        try:
+            year_team_data, _, _, _, _, _ = load_year_data(event_year)
+        except Exception as e:
+            error_alert = dbc.Alert(f"Error loading team data for year {event_year}: {str(e)}", color="danger")
+            return error_alert, ""
+    
+    if event_year != current_year:
+        year_team_data = {event_year: year_team_data}
+    
+    # Calculate ranks based on selected stats type
+    if stats_type == "overall":
+        # Use overall EPA for ranking
+        team_epas = []
+        for tnum, team_data in year_team_data.get(event_year, {}).items():
+            if team_data:
+                team_epas.append((tnum, team_data.get("epa", 0)))
+        team_epas.sort(key=lambda x: x[1], reverse=True)
+        rank_map = {tnum: i+1 for i, (tnum, _) in enumerate(team_epas)}
+        
+        # Sort teams by overall EPA for spotlight cards
+        sorted_teams = sorted(
+            event_teams,
+            key=lambda t: year_team_data.get(event_year, {}).get(int(t.get("tk")), {}).get("epa", 0),
+            reverse=True
+        )
+        
+        # Build rows with overall stats
+        rows = []
+        for t in event_teams:
+            tnum = t.get("tk")
+            tstr = str(tnum)
+            team_data = year_team_data.get(event_year, {}).get(int(tnum), {})
+            
+            rows.append({
+                "ACE Rank": rank_map.get(int(tnum), "N/A"),
+                "EPA": f"{team_data.get('normal_epa', 0):.2f}",
+                "Confidence": f"{team_data.get('confidence', 0):.2f}",
+                "ACE": f"{team_data.get('epa', 0):.2f}",
+                "Auto": f"{team_data.get('auto_epa', 0):.2f}",
+                "Teleop": f"{team_data.get('teleop_epa', 0):.2f}",
+                "Endgame": f"{team_data.get('endgame_epa', 0):.2f}",
+                "Team": f"[{tstr} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tstr}/{event_year})",
+                "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
+            })
+        
+        # Sort by overall EPA value
+        rows.sort(key=lambda r: float(r["ACE"]) if r["ACE"] != "N/A" else 0, reverse=True)
+        
+        # Use global percentiles for coloring
+        if event_year == current_year:
+            global_teams = TEAM_DATABASE.get(event_year, {}).values()
+        else:
+            global_teams = year_team_data.get(event_year, {}).values()
+        global_epa_values = [t.get("epa", 0) for t in global_teams]
+        global_confidence_values = [t.get("confidence", 0) for t in global_teams]
+        global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
+        global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
+        global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
+        
+    else:  # stats_type == "event"
+        # Use event-specific EPA for ranking within the event
+        event_epa_values = [data.get("epa", 0) for data in epa_data.values()]
+        event_epa_values.sort(reverse=True)
+        event_rank_map = {epa_val: i+1 for i, epa_val in enumerate(event_epa_values)}
+        
+        # Calculate overall ACE ranks using the full dataset
+        overall_team_epas = []
+        for tnum, team_data in year_team_data.get(event_year, {}).items():
+            if team_data:
+                overall_team_epas.append((tnum, team_data.get("epa", 0)))
+        overall_team_epas.sort(key=lambda x: x[1], reverse=True)
+        overall_rank_map = {tnum: i+1 for i, (tnum, _) in enumerate(overall_team_epas)}
+        
+        # Calculate SoS for each team using the same logic as the SoS tab
+        team_numbers = [t["tk"] for t in event_teams]
+        team_sos = {}
+        
+        if event_matches:
+            # Only consider qualification matches for SoS
+            qm_matches = [m for m in event_matches if m.get("cl") == "qm"]
+            
+            for team_num in team_numbers:
+                team_num_str = str(team_num)
+                # Find matches this team played
+                team_matches = [m for m in qm_matches if team_num_str in m.get("rt", "").split(",") or team_num_str in m.get("bt", "").split(",")]
+                if not team_matches:
+                    team_sos[team_num] = 0
+                    continue
+                
+                win_probs = []
+                for m in team_matches:
+                    # Determine alliance
+                    if team_num_str in m.get("rt", "").split(","):
+                        alliance = "red"
+                        opp_teams = [int(t) for t in m.get("bt", "").split(",") if t.strip().isdigit()]
+                    else:
+                        alliance = "blue"
+                        opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
+                    
+                    # Win probability (use adaptive prediction)
+                    red_info = [
+                        {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
+                        for t in m.get("rt", "").split(",") if t.strip().isdigit()
+                    ]
+                    blue_info = [
+                        {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
+                        for t in m.get("bt", "").split(",") if t.strip().isdigit()
+                    ]
+                    p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, m.get("ek", ""), m.get("k", ""))
+                    win_prob = p_red if alliance == "red" else p_blue
+                    win_probs.append(win_prob)
+                
+                avg_win_prob = sum(win_probs) / len(win_probs) if win_probs else 0
+                team_sos[team_num] = avg_win_prob  # SoS: 0 = lose all, 1 = win all
+        else:
+            # Fallback to simplified calculation if no match data
+            for team_num in team_numbers:
+                team_sos[team_num] = 0.5  # Default to 50% win probability
+        
+        # Sort teams by event-specific EPA for spotlight cards
+        sorted_teams = sorted(
+            event_teams,
+            key=lambda t: epa_data.get(str(t.get("tk")), {}).get("epa", 0),
+            reverse=True
+        )
+        
+        # Build rows with event-specific stats
+        rows = []
+        for t in event_teams:
+            tnum = t.get("tk")
+            tstr = str(tnum)
+            event_team_data = epa_data.get(tstr, {})
+            
+            # Find rank for this team's event EPA
+            team_event_epa = event_team_data.get("epa", 0)
+            event_rank = event_rank_map.get(team_event_epa, "N/A")
+            
+            # Get overall ACE rank
+            overall_ace_rank = overall_rank_map.get(int(tnum), "N/A")
+            
+            # Get SoS
+            sos_value = team_sos.get(tnum, 0)
+            
+            # Calculate ACE improvement from overall to event
+            overall_team_data = year_team_data.get(event_year, {}).get(int(tnum), {})
+            overall_ace = overall_team_data.get('epa', 0)
+            event_ace = event_team_data.get('epa', 0)
+            ace_improvement = event_ace - overall_ace
+            
+            rows.append({
+                "Event Rank": event_rank,
+                "ACE Rank": overall_ace_rank,
+                "EPA": f"{event_team_data.get('normal_epa', 0):.2f}",
+                "Confidence": f"{event_team_data.get('confidence', 0):.2f}",
+                "ACE": f"{event_team_data.get('epa', 0):.2f}",
+                "Auto": f"{event_team_data.get('auto_epa', 0):.2f}",
+                "Teleop": f"{event_team_data.get('teleop_epa', 0):.2f}",
+                "Endgame": f"{event_team_data.get('endgame_epa', 0):.2f}",
+                "SoS": f"{sos_value:.2f}",
+                "ACE Δ": f"{ace_improvement:+.2f}",
+                "Team": f"[{tstr} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tstr}/{event_year})",
+                "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
+            })
+        
+        # Sort by event EPA value
+        rows.sort(key=lambda r: float(r["ACE"]) if r["ACE"] != "N/A" else 0, reverse=True)
+        
+        # Use event-specific percentiles for coloring
+        event_confidence_values = [data.get("confidence", 0) for data in epa_data.values()]
+        event_auto_values = [data.get("auto_epa", 0) for data in epa_data.values()]
+        event_teleop_values = [data.get("teleop_epa", 0) for data in epa_data.values()]
+        event_endgame_values = [data.get("endgame_epa", 0) for data in epa_data.values()]
+        sos_values = list(team_sos.values())
+        
+        # Calculate ACE improvement values
+        ace_improvement_values = []
+        for t in event_teams:
+            tnum = t.get("tk")
+            tstr = str(tnum)
+            event_team_data = epa_data.get(tstr, {})
+            overall_team_data = year_team_data.get(event_year, {}).get(int(tnum), {})
+            overall_ace = overall_team_data.get('epa', 0)
+            event_ace = event_team_data.get('epa', 0)
+            ace_improvement_values.append(event_ace - overall_ace)
+        
+
+        for t in event_teams:
+            tnum = t.get("tk")
+            sos_value = team_sos.get(tnum, 0)
+            event_team_data = epa_data.get(str(tnum), {})
+
+        
+        global_epa_values = event_epa_values
+        global_confidence_values = event_confidence_values
+        global_auto_values = event_auto_values
+        global_teleop_values = event_teleop_values
+        global_endgame_values = event_endgame_values
+    
+    # Common styles
+    common_style_table = {"overflowX": "auto", "borderRadius": "10px", "border": "none"}
+    common_style_header = {
+        "backgroundColor": "var(--card-bg)",
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "borderBottom": "1px solid #ccc",
+        "padding": "6px",
+        "fontSize": "13px",
+    }
+    common_style_cell = {
+        "backgroundColor": "var(--card-bg)",
+        "textAlign": "center",
+        "padding": "10px",
+        "border": "none",
+        "fontSize": "14px",
+    }
+    
+    # Calculate percentiles for styling
+    percentiles_dict = {
+        "ACE": compute_percentiles(global_epa_values),
+        "Auto": compute_percentiles(global_auto_values),
+        "Teleop": compute_percentiles(global_teleop_values),
+        "Endgame": compute_percentiles(global_endgame_values),
+        "Confidence": compute_percentiles(global_confidence_values),
+    }
+    
+    # Add additional percentiles for event stats
+    if stats_type == "event":
+        percentiles_dict["SoS"] = compute_percentiles(sos_values)
+        percentiles_dict["ACE Δ"] = compute_percentiles(ace_improvement_values)
+    style_data_conditional = get_epa_styling(percentiles_dict)
+    
+    # Define columns based on stats type
+    if stats_type == "overall":
+        columns = [
+            {"name": "ACE Rank", "id": "ACE Rank"},
+            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "EPA", "id": "EPA"},
+            {"name": "Confidence", "id": "Confidence"},
+            {"name": "ACE", "id": "ACE"},
+            {"name": "Auto", "id": "Auto"},
+            {"name": "Teleop", "id": "Teleop"},
+            {"name": "Endgame", "id": "Endgame"},
+            {"name": "Location", "id": "Location"},
+        ]
+    else:  # event stats
+        columns = [
+            {"name": "ACE Rank", "id": "ACE Rank"},
+            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "EPA", "id": "EPA"},
+            {"name": "Confidence", "id": "Confidence"},
+            {"name": "ACE", "id": "ACE"},
+            {"name": "Auto", "id": "Auto"},
+            {"name": "Teleop", "id": "Teleop"},
+            {"name": "Endgame", "id": "Endgame"},
+            {"name": "SoS", "id": "SoS"},
+            {"name": "ACE Δ", "id": "ACE Δ"},
+            {"name": "Location", "id": "Location"},
+        ]
+    
+    # Create spotlight cards based on selected stats type
+    top_3 = sorted_teams[:3]
+    
+    if stats_type == "overall":
+        # Use overall stats for spotlight cards
+        spotlight_cards = [
+            dbc.Col(create_team_card_spotlight(t, year_team_data, event_year), width="auto")
+            for t in top_3
+        ]
+    else:
+        # Use event-specific stats for spotlight cards
+        spotlight_cards = []
+        for t in top_3:
+            tnum = t.get("tk")
+            tstr = str(tnum)
+            event_team_data = epa_data.get(tstr, {})
+            
+            spotlight_cards.append(
+                dbc.Col(
+                    create_team_card_spotlight_event(t, event_team_data, event_year, event_rank_map),
+                    width="auto"
+                )
+            )
+    
+    spotlight_layout = dbc.Row(spotlight_cards, className="justify-content-center mb-4")
+    
+    return dash_table.DataTable(
+        columns=columns,
+        sort_action="native",
+        sort_mode="multi",
+        data=rows,
+        page_size=10,
+        style_table=common_style_table,
+        style_header=common_style_header,
+        style_cell=common_style_cell,
+        style_data_conditional=style_data_conditional
+    ), spotlight_layout
 
 @app.callback(
     Output("matches-container", "children"),

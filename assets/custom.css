@@ -771,7 +771,6 @@ label {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-fill-color: transparent;
 }
 
 .frc-link {
@@ -1006,4 +1005,9 @@ label {
 .insights-summary {
     font-size: 0.95rem;
     color: var(--text-secondary);
+}
+
+.view-team-btn-hover:hover {
+    background-color: white !important;
+    color: black !important;
 }
