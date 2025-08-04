@@ -738,3 +738,11 @@ def get_all_team_favorites_counts():
         print(f"Error getting favorites counts: {e}")
     
     return favorites_counts
+
+# Load team colors globally for efficient access
+try:
+    with open('data/team_colors.json', 'r', encoding='utf-8') as f:
+        TEAM_COLORS = json.load(f)
+except Exception as e:
+    print(f"Warning: Could not load team colors: {e}")
+    TEAM_COLORS = {} 

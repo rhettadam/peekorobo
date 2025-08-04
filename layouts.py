@@ -10,6 +10,7 @@ import re
 import plotly.graph_objs as go
 import dash_mantine_components as dmc
 from utils import WEEK_RANGES_BY_YEAR
+from datagather import TEAM_COLORS
 
 current_year = 2025
 
@@ -20,10 +21,7 @@ with open('data/district_states.json', 'r', encoding='utf-8') as f:
 def get_team_card_colors(team_number):
     """Get team colors for card background gradient."""
     try:
-        with open("data/team_colors.json", "r", encoding="utf-8") as f:
-            team_colors = json.load(f)
-        
-        colors = team_colors.get(str(team_number), {})
+        colors = TEAM_COLORS.get(str(team_number), {})
         primary = colors.get("primary", "#1e3a8a")
         secondary = colors.get("secondary", "#3b82f6")
         
@@ -33,22 +31,46 @@ def get_team_card_colors(team_number):
         return "linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)"
 
 def get_team_card_colors_with_text(team_number):
-    """Get team colors and appropriate text color for card."""
+    """Get team colors and appropriate text color for card with cleaner, more subtle styling."""
     try:
-        with open("data/team_colors.json", "r", encoding="utf-8") as f:
-            team_colors = json.load(f)
+        colors = TEAM_COLORS.get(str(team_number), {})
+        primary = colors.get("primary", "#3b82f6")  # Default to a medium blue
+        secondary = colors.get("secondary", "#1e40af")  # Default to a darker blue
         
-        colors = team_colors.get(str(team_number), {})
-        primary = colors.get("primary", "#1e3a8a")
-        secondary = colors.get("secondary", "#3b82f6")
+        # Create a more subtle gradient with softer colors
+        # Use the primary color as base but make it lighter and more muted
+        import colorsys
         
-        # Use primary color to determine text color
-        text_color = get_contrast_text_color(primary)
+        def hex_to_rgb(hex_color):
+            hex_color = hex_color.lstrip('#')
+            return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
         
-        return f"linear-gradient(135deg, {primary} 0%, {secondary} 100%)", text_color
+        def rgb_to_hex(rgb):
+            return '#{:02x}{:02x}{:02x}'.format(*rgb)
+        
+        def adjust_color_brightness(hex_color, factor):
+            rgb = hex_to_rgb(hex_color)
+            h, s, v = colorsys.rgb_to_hsv(rgb[0]/255, rgb[1]/255, rgb[2]/255)
+            # Increase brightness and reduce saturation for a cleaner look
+            v = min(1.0, v * factor)
+            s = max(0.1, s * 0.7)  # Reduce saturation for softer look
+            new_rgb = colorsys.hsv_to_rgb(h, s, v)
+            return rgb_to_hex(tuple(int(c * 255) for c in new_rgb))
+        
+        # Create softer versions of the team colors
+        soft_primary = adjust_color_brightness(primary, 1.3)  # Lighter version
+        soft_secondary = adjust_color_brightness(secondary, 0.8)  # Darker, more muted version
+        
+        # Create a subtle gradient from left to right (like the screenshot)
+        gradient = f"linear-gradient(90deg, {soft_primary} 0%, {soft_secondary} 100%)"
+        
+        # Use white text for better contrast on the softer background
+        text_color = "#FFFFFF"
+        
+        return gradient, text_color
     except Exception:
-        # Fallback gradient and text color
-        return "linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)", "white"
+        # Fallback to a clean, modern gradient similar to the screenshot
+        return "linear-gradient(90deg, #4f7cac 0%, #2d3748 100%)", "#FFFFFF"
 
 def team_layout(team_number, year, team_database, event_database, event_matches, event_awards, event_rankings, event_teams):
 
@@ -398,10 +420,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         district_name = None
         district_teams = 0
         
-        try:
-            with open("data/district_states.json", "r") as f:
-                district_definitions = json.load(f)
-            
+        try:  
             # Check if this is a western Pennsylvania team first
             team_city = selected_team.get("city", "")
             is_western_pa = ((state.upper() == "PA" or state.upper() == "PENNSYLVANIA") and is_western_pennsylvania_city(team_city))
@@ -412,7 +431,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                 district_teams = 0
             else:
                 # Find which district the team belongs to
-                for district_code, district_info in district_definitions.items():
+                for district_code, district_info in DISTRICT_STATES_COMBINED.items():
                     district_states = district_info.get("abbreviations", [])
                     district_names = district_info.get("names", [])
                     
@@ -480,8 +499,8 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         
         # Check if district has multiple states
         district_has_multiple_states = False
-        if district_name and district_definitions:
-            district_info = district_definitions.get(district_name, {})
+        if district_name and DISTRICT_STATES_COMBINED:
+            district_info = DISTRICT_STATES_COMBINED.get(district_name, {})
             district_states = district_info.get("abbreviations", [])
             district_names = district_info.get("names", [])
             
@@ -1758,45 +1777,54 @@ def create_team_card(team, year, avatar_url, epa_ranks):
                 top=True,
                 style={
                     "objectFit": "contain",
-                    "height": "150px",
-                    "padding": "0.5rem",
-                    "backgroundColor": "transparent"
+                    "height": "140px",
+                    "padding": "1rem",
+                    "backgroundColor": "transparent",
+                    "borderRadius": "12px 12px 0 0"
                 }
             ),
             dbc.CardBody(
                 [
                     html.H5(f"#{team_number} | {nickname}", className="card-title", style={
-                        "fontSize": "1.1rem",
+                        "fontSize": "1.2rem",
+                        "fontWeight": "600",
                         "textAlign": "center",
-                        "marginBottom": "0.5rem",
-                        "color": text_color
+                        "marginBottom": "0.75rem",
+                        "color": text_color,
+                        "lineHeight": "1.3"
                     }),
                     html.P(f"{location}", className="card-text", style={
-                        "fontSize": "0.9rem",
+                        "fontSize": "0.95rem",
                         "textAlign": "center",
-                        "marginBottom": "0.5rem",
-                        "color": text_color
+                        "marginBottom": "0.75rem",
+                        "color": text_color,
+                        "opacity": "0.9",
+                        "fontWeight": "400"
                     }),
                     html.P(f"ACE: {epa_display} (Global Rank: {rank})", className="card-text", style={
                         "fontSize": "0.9rem",
                         "textAlign": "center",
-                        "marginBottom": "auto",
-                        "color": text_color
+                        "marginBottom": "1rem",
+                        "color": text_color,
+                        "opacity": "0.85",
+                        "fontWeight": "500"
                     }),
                     dbc.Button(
                         "View Team",
                         href=f"/team/{team_number}/{year}",
                         color="warning",
                         outline=False,
-                        className="mt-3 view-team-btn-hover",
+                        className="mt-auto view-team-btn-hover",
                         style={
                             "color": text_color,
                             "border": f"2px solid {text_color}",
-                            "borderRadius": "9999px",
-                            "padding": "6px 7px",
-                            "fontSize": "0.85rem",
-                            "backgroundColor": "transparent",
-                            "transition": "all 0.2s ease-in-out"
+                            "borderRadius": "8px",
+                            "padding": "8px 16px",
+                            "fontSize": "0.9rem",
+                            "fontWeight": "500",
+                            "backgroundColor": "rgba(255, 255, 255, 0.1)",
+                            "transition": "all 0.3s ease-in-out",
+                            "backdropFilter": "blur(10px)"
                         }
                     ),
                 ],
@@ -1805,11 +1833,12 @@ def create_team_card(team, year, avatar_url, epa_ranks):
                     "flexDirection": "column",
                     "flexGrow": "1",
                     "justifyContent": "space-between",
-                    "padding": "1rem"
+                    "padding": "1.25rem",
+                    "minHeight": "140px"
                 }
             )
         ],
-        className="m-2 shadow-sm",
+        className="m-2",
         style={
             "width": "18rem",
             "height": "22rem",
@@ -1817,8 +1846,12 @@ def create_team_card(team, year, avatar_url, epa_ranks):
             "flexDirection": "column",
             "justifyContent": "space-between",
             "alignItems": "stretch",
-            "borderRadius": "12px",
-            "background": background_gradient
+            "borderRadius": "16px",
+            "background": background_gradient,
+            "border": "none",
+            "boxShadow": "0 4px 20px rgba(0, 0, 0, 0.15)",
+            "transition": "all 0.3s ease-in-out",
+            "overflow": "hidden"
         }
     )
 
@@ -1859,37 +1892,45 @@ def create_team_card_spotlight(team, year_team_database, event_year):
         card_body = dbc.CardBody(
             [
                 html.H5(f"#{t_num} | {nickname}", className="card-title", style={
-                    "fontSize": "1.1rem",
+                    "fontSize": "1.2rem",
+                    "fontWeight": "600",
                     "textAlign": "center",
-                    "marginBottom": "0.5rem",
-                    "color": text_color
+                    "marginBottom": "0.75rem",
+                    "color": text_color,
+                    "lineHeight": "1.3"
                 }),
                 html.P(f"{location_str}", className="card-text", style={
-                    "fontSize": "0.9rem",
+                    "fontSize": "0.95rem",
                     "textAlign": "center",
-                    "marginBottom": "0.5rem",
-                    "color": text_color
+                    "marginBottom": "0.75rem",
+                    "color": text_color,
+                    "opacity": "0.9",
+                    "fontWeight": "400"
                 }),
                 html.P(f"ACE: {epa_display} (Global Rank: {epa_rank})", className="card-text", style={
                     "fontSize": "0.9rem",
                     "textAlign": "center",
-                    "marginBottom": "auto",
-                    "color": text_color
+                    "marginBottom": "1rem",
+                    "color": text_color,
+                    "opacity": "0.85",
+                    "fontWeight": "500"
                 }),
                 dbc.Button(
                     "View Team",
                     href=team_url,
                     color="warning",
                     outline=False,
-                    className="mt-3 view-team-btn-hover",
+                    className="mt-auto view-team-btn-hover",
                     style={
                         "color": text_color,
                         "border": f"2px solid {text_color}",
-                        "borderRadius": "9999px",
-                        "padding": "6px 7px",
-                        "fontSize": "0.85rem",
-                        "backgroundColor": "transparent",
-                        "transition": "all 0.2s ease-in-out"
+                        "borderRadius": "8px",
+                        "padding": "8px 16px",
+                        "fontSize": "0.9rem",
+                        "fontWeight": "500",
+                        "backgroundColor": "rgba(255, 255, 255, 0.1)",
+                        "transition": "all 0.3s ease-in-out",
+                        "backdropFilter": "blur(10px)"
                     }
                 ),
             ],
@@ -1898,7 +1939,8 @@ def create_team_card_spotlight(team, year_team_database, event_year):
                 "flexDirection": "column",
                 "flexGrow": "1",
                 "justifyContent": "space-between",
-                "padding": "1rem"
+                "padding": "1.25rem",
+                "minHeight": "140px"
             }
         )
 
@@ -1910,10 +1952,11 @@ def create_team_card_spotlight(team, year_team_database, event_year):
                     top=True,
                     style={
                         "width": "100%",
-                        "height": "150px",
+                        "height": "140px",
                         "objectFit": "contain",
                         "backgroundColor": "transparent",
-                        "padding": "0.5rem"
+                        "padding": "1rem",
+                        "borderRadius": "16px 16px 0 0"
                     }
                 )
             )
@@ -1922,7 +1965,7 @@ def create_team_card_spotlight(team, year_team_database, event_year):
 
         return dbc.Card(
             card_elements,
-            className="m-2 shadow-sm",
+            className="m-2",
             style={
                 "width": "18rem",
                 "height": "22rem",
@@ -1930,8 +1973,12 @@ def create_team_card_spotlight(team, year_team_database, event_year):
                 "flexDirection": "column",
                 "justifyContent": "space-between",
                 "alignItems": "stretch",
-                "borderRadius": "12px",
-                "background": background_gradient
+                "borderRadius": "16px",
+                "background": background_gradient,
+                "border": "none",
+                "boxShadow": "0 4px 20px rgba(0, 0, 0, 0.15)",
+                "transition": "all 0.3s ease-in-out",
+                "overflow": "hidden"
             },
         )
 
@@ -1961,37 +2008,45 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
     card_body = dbc.CardBody(
         [
             html.H5(f"#{t_num} | {nickname}", className="card-title", style={
-                "fontSize": "1.1rem",
+                "fontSize": "1.2rem",
+                "fontWeight": "600",
                 "textAlign": "center",
-                "marginBottom": "0.5rem",
-                "color": text_color
+                "marginBottom": "0.75rem",
+                "color": text_color,
+                "lineHeight": "1.3"
             }),
             html.P(f"{location_str}", className="card-text", style={
-                "fontSize": "0.9rem",
+                "fontSize": "0.95rem",
                 "textAlign": "center",
-                "marginBottom": "0.5rem",
-                "color": text_color
+                "marginBottom": "0.75rem",
+                "color": text_color,
+                "opacity": "0.9",
+                "fontWeight": "400"
             }),
             html.P(f"Event ACE: {team_event_epa:.1f} (Event Rank: {event_rank})", className="card-text", style={
                 "fontSize": "0.9rem",
                 "textAlign": "center",
-                "marginBottom": "auto",
-                "color": text_color
+                "marginBottom": "1rem",
+                "color": text_color,
+                "opacity": "0.85",
+                "fontWeight": "500"
             }),
             dbc.Button(
                 "View Team",
                 href=team_url,
                 color="warning",
                 outline=False,
-                className="mt-3 view-team-btn-hover",
+                className="mt-auto view-team-btn-hover",
                 style={
                     "color": text_color,
                     "border": f"2px solid {text_color}",
-                    "borderRadius": "9999px",
-                    "padding": "6px 7px",
-                    "fontSize": "0.85rem",
-                    "backgroundColor": "transparent",
-                    "transition": "all 0.2s ease-in-out"
+                    "borderRadius": "8px",
+                    "padding": "8px 16px",
+                    "fontSize": "0.9rem",
+                    "fontWeight": "500",
+                    "backgroundColor": "rgba(255, 255, 255, 0.1)",
+                    "transition": "all 0.3s ease-in-out",
+                    "backdropFilter": "blur(10px)"
                 }
             ),
         ],
@@ -2000,7 +2055,8 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
             "flexDirection": "column",
             "flexGrow": "1",
             "justifyContent": "space-between",
-            "padding": "1rem"
+            "padding": "1.25rem",
+            "minHeight": "140px"
         }
     )
 
@@ -2012,10 +2068,11 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
                 top=True,
                 style={
                     "width": "100%",
-                    "height": "150px",
+                    "height": "140px",
                     "objectFit": "contain",
                     "backgroundColor": "transparent",
-                    "padding": "0.5rem"
+                    "padding": "1rem",
+                    "borderRadius": "16px 16px 0 0"
                 }
             )
         )
@@ -2024,7 +2081,7 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
 
     return dbc.Card(
         card_elements,
-        className="m-2 shadow-sm",
+        className="m-2",
         style={
             "width": "18rem",
             "height": "22rem",
@@ -2032,8 +2089,12 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
             "flexDirection": "column",
             "justifyContent": "space-between",
             "alignItems": "stretch",
-            "borderRadius": "12px",
-            "background": background_gradient
+            "borderRadius": "16px",
+            "background": background_gradient,
+            "border": "none",
+            "boxShadow": "0 4px 20px rgba(0, 0, 0, 0.15)",
+            "transition": "all 0.3s ease-in-out",
+            "overflow": "hidden"
         },
     )
 
@@ -3489,6 +3550,484 @@ def match_layout(event_key, match_key):
         footer
     ])
 
+def generate_team_recommendations(team_database, favorite_teams, user_team_affil, text_color):
+    """Generate personalized team recommendations based on user preferences and data."""
+    recommendations = []
+    
+    if not team_database:
+        return [html.Div("No team data available", style={"color": text_color})]
+    
+    # Get current year data
+    current_year_data = team_database.get(2025, {})
+    if not current_year_data:
+        return [html.Div("No 2025 team data available", style={"color": text_color})]
+    
+    # Get user's team location info
+    user_team_location = None
+    if user_team_affil and user_team_affil != "####":
+        try:
+            user_team_num = int(user_team_affil)
+            user_team_data = current_year_data.get(user_team_num, {})
+            if user_team_data:
+                user_team_location = {
+                    "state": user_team_data.get("state_prov", ""),
+                    "country": user_team_data.get("country", ""),
+                    "city": user_team_data.get("city", "")
+                }
+        except ValueError:
+            pass
+    
+    # Get favorite teams' characteristics
+    favorite_team_epas = []
+    favorite_team_locations = []
+    favorite_team_states = set()
+    favorite_team_countries = set()
+    favorite_team_cities = set()
+    
+    for team_key in favorite_teams:
+        try:
+            team_num = int(team_key)
+            team_data = current_year_data.get(team_num, {})
+            if team_data:
+                epa = team_data.get("epa", 0)
+                state = team_data.get("state_prov", "")
+                country = team_data.get("country", "")
+                city = team_data.get("city", "")
+                
+                favorite_team_epas.append(epa)
+                favorite_team_locations.append({
+                    "state": state,
+                    "country": country,
+                    "city": city
+                })
+                
+                if state:
+                    favorite_team_states.add(state)
+                if country:
+                    favorite_team_countries.add(country)
+                if city:
+                    favorite_team_cities.add(city)
+        except ValueError:
+            continue
+    
+    # Calculate statistics of favorite teams
+    avg_favorite_epa = sum(favorite_team_epas) / len(favorite_team_epas) if favorite_team_epas else 0
+    min_favorite_epa = min(favorite_team_epas) if favorite_team_epas else 0
+    max_favorite_epa = max(favorite_team_epas) if favorite_team_epas else 0
+    epa_range = max_favorite_epa - min_favorite_epa
+    
+    # Generate recommendations
+    candidate_teams = []
+    
+    for team_num, team_data in current_year_data.items():
+        # Skip if already a favorite
+        if str(team_num) in favorite_teams:
+            continue
+            
+        team_epa = team_data.get("epa", 0)
+        team_state = team_data.get("state_prov", "")
+        team_country = team_data.get("country", "")
+        team_city = team_data.get("city", "")
+        team_nickname = team_data.get("nickname", "")
+        
+        # Calculate recommendation score
+        score = 0
+        
+        # Location-based scoring (considering ALL favorite teams)
+        if user_team_location:
+            if team_state == user_team_location["state"]:
+                score += 50
+            if team_country == user_team_location["country"]:
+                score += 30
+        
+        # Performance-based scoring (considering ALL favorite teams)
+        if favorite_team_epas:
+            # Check if team fits within the EPA range of favorite teams
+            if min_favorite_epa <= team_epa <= max_favorite_epa:
+                score += 50  # High score for teams within favorite range
+            else:
+                # Calculate distance from favorite EPA range
+                if team_epa < min_favorite_epa:
+                    epa_distance = min_favorite_epa - team_epa
+                else:
+                    epa_distance = team_epa - max_favorite_epa
+                
+                if epa_distance < 10:
+                    score += 30
+                elif epa_distance < 20:
+                    score += 15
+        
+        # Regional bonus for ALL favorite team locations
+        if team_state in favorite_team_states:
+            score += 40  # Higher score for exact state matches
+        if team_country in favorite_team_countries:
+            score += 25  # Good score for same country
+        
+        # City-level matching (bonus for exact city matches)
+        if team_city in favorite_team_cities:
+            score += 60  # Very high score for same city
+        
+        # High performer bonus (if user likes high performers)
+        if team_epa > 100 and max_favorite_epa > 80:  # Top tier teams, if user likes good teams
+            score += 35
+        elif team_epa > 80 and avg_favorite_epa > 60:  # Good teams, if user likes decent teams
+            score += 20
+        
+        # Diversity bonus (if user has diverse favorites, suggest diverse teams)
+        if len(favorite_team_states) > 2:  # User likes teams from multiple states
+            if team_state not in favorite_team_states:
+                score += 15  # Bonus for new states
+        elif len(favorite_team_states) == 1:  # User likes teams from one state
+            if team_state in favorite_team_states:
+                score += 25  # Higher bonus for same state
+        
+        if score > 0:
+            candidate_teams.append({
+                "team_num": team_num,
+                "team_data": team_data,
+                "score": score
+            })
+    
+    # Sort by score and take top 6
+    candidate_teams.sort(key=lambda x: x["score"], reverse=True)
+    top_teams = candidate_teams[:6]
+    
+    # Create recommendation cards
+    for team_info in top_teams:
+        team_num = team_info["team_num"]
+        team_data = team_info["team_data"]
+        score = team_info["score"]
+        
+        # Get team colors
+        background_gradient, card_text_color = get_team_card_colors_with_text(str(team_num))
+        
+        # Get avatar
+        avatar_url = get_team_avatar(team_num, 2025)
+        
+        reason_text = "Recommended for you"
+        
+        card = html.Div([
+            # Header with avatar and team info
+            html.Div([
+                html.Div([
+                    html.Img(
+                        src=avatar_url,
+                        style={
+                            "width": "50px",
+                            "height": "50px",
+                            "objectFit": "contain",
+                            "borderRadius": "10px",
+                            "backgroundColor": "rgba(255, 255, 255, 0.1)",
+                            "padding": "4px"
+                        }
+                    ),
+                    html.Div([
+                        html.H4(f"#{team_num}", style={
+                            "margin": "0 0 2px 0",
+                            "fontSize": "1.2rem",
+                            "fontWeight": "700",
+                            "color": card_text_color,
+                            "lineHeight": "1.2"
+                        }),
+                        html.P(team_data.get("nickname", ""), style={
+                            "margin": "0",
+                            "fontSize": "0.85rem",
+                            "color": card_text_color,
+                            "opacity": "0.9",
+                            "fontWeight": "400",
+                            "lineHeight": "1.3"
+                        })
+                    ], style={"marginLeft": "12px", "flex": "1"})
+                ], style={"display": "flex", "alignItems": "center"}),
+                
+                # ACE score badge
+                html.Div([
+                    html.Span("ACE", style={
+                        "fontSize": "0.7rem",
+                        "fontWeight": "600",
+                        "color": card_text_color,
+                        "opacity": "0.8",
+                        "textTransform": "uppercase",
+                        "letterSpacing": "0.5px"
+                    }),
+                    html.Br(),
+                    html.Span(f"{team_data.get('epa', 0):.1f}", style={
+                        "fontSize": "1.1rem",
+                        "fontWeight": "700",
+                        "color": card_text_color,
+                        "lineHeight": "1.2"
+                    })
+                ], style={
+                    "textAlign": "center",
+                    "backgroundColor": "rgba(255, 255, 255, 0.1)",
+                    "padding": "8px 12px",
+                    "borderRadius": "8px",
+                    "minWidth": "60px"
+                })
+            ], style={
+                "display": "flex",
+                "justifyContent": "space-between",
+                "alignItems": "center",
+                "padding": "16px 16px 12px 16px"
+            }),
+            
+            # Recommendation reason
+            html.Div([
+                html.Span(reason_text, style={
+                    "fontSize": "0.75rem",
+                    "color": card_text_color,
+                    "opacity": "0.8",
+                    "fontWeight": "400",
+                    "lineHeight": "1.4"
+                })
+            ], style={
+                "padding": "0 16px 12px 16px"
+            }),
+            
+            # Modern button
+            html.A(
+                "View Team",
+                href=f"/team/{team_num}/2025",
+                style={
+                    "display": "block",
+                    "textAlign": "center",
+                    "padding": "10px 16px",
+                    "backgroundColor": "rgba(255, 255, 255, 0.15)",
+                    "color": card_text_color,
+                    "textDecoration": "none",
+                    "borderRadius": "8px",
+                    "fontSize": "0.85rem",
+                    "fontWeight": "600",
+                    "transition": "all 0.2s ease",
+                    "margin": "0 16px 16px 16px",
+                    "border": "1px solid rgba(255, 255, 255, 0.2)",
+                    "backdropFilter": "blur(10px)"
+                }
+            )
+        ], style={
+            "background": background_gradient,
+            "borderRadius": "16px",
+            "overflow": "hidden",
+            "boxShadow": "0 8px 25px rgba(0, 0, 0, 0.15)",
+            "transition": "all 0.3s ease",
+            "cursor": "pointer",
+            "position": "relative"
+        })
+        
+        recommendations.append(card)
+    
+    return recommendations if recommendations else [html.Div("No recommendations available", style={"color": text_color})]
+
+def generate_event_recommendations(event_database, favorite_teams, favorite_events, text_color):
+    """Generate personalized event recommendations based on user preferences."""
+    recommendations = []
+    
+    if not event_database:
+        return [html.Div("No event data available", style={"color": text_color})]
+    
+    # Get current year data
+    current_year_events = event_database.get(2025, {})
+    if not current_year_events:
+        return [html.Div("No 2025 event data available", style={"color": text_color})]
+    
+    # Get upcoming events (events that haven't started yet)
+    from datetime import datetime
+    current_date = datetime.now()
+    
+    upcoming_events = []
+    for event_key, event_data in current_year_events.items():
+        if event_data.get("start_date"):
+            try:
+                event_date = datetime.strptime(event_data["start_date"], "%Y-%m-%d")
+                if event_date > current_date:
+                    upcoming_events.append((event_key, event_data))
+            except ValueError:
+                continue
+    
+    # Sort by date
+    upcoming_events.sort(key=lambda x: x[1].get("start_date", ""))
+    
+    # Generate recommendations
+    candidate_events = []
+    
+    for event_key, event_data in upcoming_events[:20]:  # Look at next 20 events
+        event_name = event_data.get("name", "")
+        event_date = event_data.get("start_date", "")
+        event_city = event_data.get("city", "")
+        event_state = event_data.get("state_prov", "")
+        event_country = event_data.get("country", "")
+        
+        # Calculate recommendation score
+        score = 0
+        
+        # Check if favorite teams are participating
+        favorite_teams_participating = 0
+        for team_key in favorite_teams:
+            # This would need to be enhanced with actual event team data
+            # For now, we'll use a simple scoring system
+            pass
+        
+        # Location-based scoring (if user has location info)
+        # This would be enhanced with actual user location data
+        
+        # Event type scoring
+        if "Championship" in event_name or "Worlds" in event_name:
+            score += 50
+        elif "District" in event_name:
+            score += 30
+        elif "Regional" in event_name:
+            score += 25
+        
+        # Proximity to current date (sooner events get higher scores)
+        try:
+            days_until = (datetime.strptime(event_date, "%Y-%m-%d") - current_date).days
+            if days_until <= 7:
+                score += 40
+            elif days_until <= 14:
+                score += 30
+            elif days_until <= 30:
+                score += 20
+        except ValueError:
+            pass
+        
+        if score > 0:
+            candidate_events.append({
+                "event_key": event_key,
+                "event_data": event_data,
+                "score": score
+            })
+    
+    # Sort by score and take top 4
+    candidate_events.sort(key=lambda x: x["score"], reverse=True)
+    top_events = candidate_events[:4]
+    
+    # Create recommendation cards
+    for event_info in top_events:
+        event_key = event_info["event_key"]
+        event_data = event_info["event_data"]
+        
+        event_name = event_data.get("name", "")
+        event_date = event_data.get("start_date", "")
+        event_city = event_data.get("city", "")
+        event_state = event_data.get("state_prov", "")
+        event_country = event_data.get("country", "")
+        
+        # Format date
+        try:
+            formatted_date = datetime.strptime(event_date, "%Y-%m-%d").strftime("%B %d, %Y")
+        except ValueError:
+            formatted_date = event_date
+        
+        # Create location string
+        location_parts = [event_city, event_state, event_country]
+        location = ", ".join([part for part in location_parts if part])
+        
+        # Determine event type icon
+        event_icon = "🏆"
+        if "Championship" in event_name or "Worlds" in event_name:
+            event_icon = "👑"
+        elif "District" in event_name:
+            event_icon = "🏅"
+        elif "Regional" in event_name:
+            event_icon = "🎯"
+        
+        card = html.Div([
+            # Header with icon and event info
+            html.Div([
+                html.Div([
+                    html.Span(event_icon, style={
+                        "fontSize": "2.5rem", 
+                        "marginRight": "16px",
+                        "filter": "drop-shadow(0 2px 4px rgba(0,0,0,0.2))"
+                    }),
+                    html.Div([
+                        html.H4(event_name, style={
+                            "margin": "0 0 6px 0",
+                            "fontSize": "1.2rem",
+                            "fontWeight": "700",
+                            "color": text_color,
+                            "lineHeight": "1.3"
+                        }),
+                        html.P(location, style={
+                            "margin": "0",
+                            "fontSize": "0.9rem",
+                            "color": text_color,
+                            "opacity": "0.8",
+                            "fontWeight": "400",
+                            "lineHeight": "1.4"
+                        })
+                    ], style={"flex": "1"})
+                ], style={"display": "flex", "alignItems": "center"}),
+                
+                # Date badge
+                html.Div([
+                    html.Span("UPCOMING", style={
+                        "fontSize": "0.65rem",
+                        "fontWeight": "700",
+                        "color": text_color,
+                        "opacity": "0.7",
+                        "textTransform": "uppercase",
+                        "letterSpacing": "0.8px"
+                    }),
+                    html.Br(),
+                    html.Span(formatted_date, style={
+                        "fontSize": "0.9rem",
+                        "fontWeight": "600",
+                        "color": text_color,
+                        "lineHeight": "1.3"
+                    })
+                ], style={
+                    "textAlign": "center",
+                    "backgroundColor": "rgba(255, 255, 255, 0.1)",
+                    "padding": "10px 14px",
+                    "borderRadius": "10px",
+                    "minWidth": "80px",
+                    "border": "1px solid rgba(255, 255, 255, 0.15)"
+                })
+            ], style={
+                "display": "flex",
+                "justifyContent": "space-between",
+                "alignItems": "center",
+                "padding": "20px 20px 16px 20px"
+            }),
+            
+            # Modern button
+            html.A(
+                "View Event",
+                href=f"/event/{event_key}",
+                style={
+                    "display": "block",
+                    "textAlign": "center",
+                    "padding": "12px 20px",
+                    "backgroundColor": "rgba(255, 255, 255, 0.15)",
+                    "color": text_color,
+                    "textDecoration": "none",
+                    "borderRadius": "10px",
+                    "fontSize": "0.9rem",
+                    "fontWeight": "600",
+                    "transition": "all 0.2s ease",
+                    "margin": "0 20px 20px 20px",
+                    "border": "1px solid rgba(255, 255, 255, 0.2)",
+                    "backdropFilter": "blur(10px)",
+                    "textTransform": "uppercase",
+                    "letterSpacing": "0.5px"
+                }
+            )
+        ], style={
+            "background": "linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%)",
+            "borderRadius": "18px",
+            "overflow": "hidden",
+            "boxShadow": "0 10px 30px rgba(0, 0, 0, 0.15)",
+            "transition": "all 0.3s ease",
+            "cursor": "pointer",
+            "position": "relative",
+            "backdropFilter": "blur(10px)"
+        })
+        
+        recommendations.append(card)
+    
+    return recommendations if recommendations else [html.Div("No upcoming events available", style={"color": text_color})]
+
 def user_profile_layout(username=None, _user_id=None, deleted_items=None):
     """
     Combined layout for both current user profile and other user profiles.
@@ -4116,9 +4655,80 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                 id="profile-card",
                 style={"borderRadius": "10px", "boxShadow": "0px 6px 16px rgba(0,0,0,0.2)", "marginBottom": "20px", "backgroundColor": color or "var(--card-bg)"}
             ),
+            
+            # Teams You Might Like Section
+            html.Div([
+                html.Div([
+                    html.H3("Teams You Might Like", className="mb-3", style={
+                        "color": "var(--text-primary)",
+                        "fontSize": "1.5rem",
+                        "fontWeight": "600",
+                        "display": "flex",
+                        "alignItems": "center",
+                        "gap": "8px"
+                    }),
+                    html.P("Based on your location, favorite teams, and performance patterns", style={
+                        "color": "var(--text-secondary)",
+                        "opacity": "0.8",
+                        "fontSize": "0.9rem",
+                        "marginBottom": "20px"
+                    })
+                ]),
+                
+                # Generate team recommendations
+                html.Div([
+                    *generate_team_recommendations(TEAM_DATABASE, team_keys, team_affil, text_color)
+                ], style={
+                    "display": "grid",
+                    "gridTemplateColumns": "repeat(auto-fill, minmax(280px, 1fr))",
+                    "gap": "20px",
+                    "marginBottom": "30px"
+                })
+            ], style={
+                "marginBottom": "30px",
+                "padding": "20px",
+                "backgroundColor": "rgba(255, 255, 255, 0.05)",
+                "borderRadius": "12px",
+                "border": "1px solid rgba(255, 255, 255, 0.1)"
+            }),
+            
+            # Events to Watch Section
+            html.Div([
+                html.Div([
+                    html.H3("Events to Watch", className="mb-3", style={
+                        "color": "var(--text-primary)",
+                        "fontSize": "1.5rem",
+                        "fontWeight": "600",
+                        "display": "flex",
+                        "alignItems": "center",
+                        "gap": "8px"
+                    }),
+                    html.P("Upcoming events featuring your favorite teams and top performers", style={
+                        "color": "var(--text-secondary)",
+                        "opacity": "0.8",
+                        "fontSize": "0.9rem",
+                        "marginBottom": "20px"
+                    })
+                ]),
+                
+                # Generate event recommendations
+                html.Div([
+                    *generate_event_recommendations(EVENT_DATABASE, team_keys, event_keys, text_color)
+                ], style={
+                    "display": "grid",
+                    "gridTemplateColumns": "repeat(auto-fill, minmax(320px, 1fr))",
+                    "gap": "20px"
+                })
+            ], style={
+                "marginBottom": "30px",
+                "padding": "20px",
+                "backgroundColor": "rgba(255, 255, 255, 0.05)",
+                "borderRadius": "12px",
+                "border": "1px solid rgba(255, 255, 255, 0.1)"
+            }),
+            html.Hr(),
             html.H3("Favorite Teams", className="mb-3"),
             *team_cards,
-            html.Hr(),
         ], style={"padding": "20px", "maxWidth": "1000px"}),
         footer
     ])

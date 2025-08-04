@@ -11,6 +11,7 @@ from flask import session
 from datagather import DatabaseConnection, get_team_avatar
 from datetime import datetime, date
 import json
+from datagather import TEAM_COLORS
 
 current_year = 2025
 
@@ -526,11 +527,7 @@ def user_team_card(title, body_elements, delete_button=None, team_number=None):
         gradient_style = {}
         if team_number:
             try:
-                import json
-                with open('data/team_colors.json', 'r') as f:
-                    team_colors = json.load(f)
-                
-                team_colors_data = team_colors.get(str(team_number), {})
+                team_colors_data = TEAM_COLORS.get(str(team_number), {})
                 primary_color = team_colors_data.get('primary', '#1566ac')
                 secondary_color = team_colors_data.get('secondary', '#c0b8bb')
                 
