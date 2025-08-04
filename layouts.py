@@ -3597,6 +3597,16 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     following_count = len(following_ids)
                     color = user_row[7] or "#ffffff"
                     
+                    # Get usernames and avatars for followers (for other users too)
+                    if followers_ids:
+                        cursor.execute("SELECT id, username, avatar_key FROM users WHERE id = ANY(%s)", (followers_ids,))
+                        followers_user_objs = cursor.fetchall()
+                    
+                    # Get usernames and avatars for following (for other users too)
+                    if following_ids:
+                        cursor.execute("SELECT id, username, avatar_key FROM users WHERE id = ANY(%s)", (following_ids,))
+                        following_user_objs = cursor.fetchall()
+                    
                     # Check if current user is following this user
                     is_following = session_user_id in followers_ids
 
@@ -3651,14 +3661,14 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                 html.Div([
                     html.Span([
                         f"Followers: {followers_count} ",
-                        html.Span("▼", id="followers-arrow", style={"cursor": "pointer", "fontSize": "0.75rem"})
+                        html.Span("▼", id=f"followers-arrow-{username}" if username else "followers-arrow", style={"cursor": "pointer", "fontSize": "0.75rem", "color": text_color})
                     ], id="profile-followers", style={"color": text_color, "fontWeight": "500", "position": "relative"}),
         
                     html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
         
                     html.Span([
                         f"Following: {following_count} ",
-                        html.Span("▼", id="following-arrow", style={"cursor": "pointer", "fontSize": "0.75rem"})
+                        html.Span("▼", id=f"following-arrow-{username}" if username else "following-arrow", style={"cursor": "pointer", "fontSize": "0.75rem", "color": text_color})
                     ], id="profile-following", style={"color": text_color, "fontWeight": "500", "position": "relative"}),
                 ], style={
                     "fontSize": "0.85rem",
@@ -3698,15 +3708,15 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                         })
                     ], id="profile-team"),
                     html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
-                    html.Span(f"Followers: {followers_count}", style={
-                        "color": text_color,
-                        "fontWeight": "500",
-                    }),
-                    html.Span(" | ", style={"margin": "0 8px", "color": text_color}),
-                    html.Span(f"Following: {following_count}", style={
-                        "color": text_color,
-                        "fontWeight": "500",
-                    })
+                    html.Span([
+                        f"Followers: {followers_count} ",
+                        html.Span("▼", id=f"followers-arrow-{username}" if username else "followers-arrow", style={"cursor": "pointer", "fontSize": "0.75rem", "color": text_color})
+                    ], id="profile-followers", style={"color": text_color, "fontWeight": "500", "position": "relative"}),
+                    html.Span(" | ", style={"margin": "0 8px", "color": "#999"}),
+                    html.Span([
+                        f"Following: {following_count} ",
+                        html.Span("▼", id=f"following-arrow-{username}" if username else "following-arrow", style={"cursor": "pointer", "fontSize": "0.75rem", "color": text_color})
+                    ], id="profile-following", style={"color": text_color, "fontWeight": "500", "position": "relative"}),
                 ], style={
                     "fontSize": "0.85rem",
                     "color": text_color,
@@ -3879,11 +3889,11 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
 
     # Note: All content is now integrated directly into the main layout for better mobile organization
 
-    # Build popovers for followers/following (only for current user)
+    # Build popovers for followers/following (for all users)
     followers_popover = None
     following_popover = None
     
-    if is_current_user and followers_user_objs:
+    if followers_user_objs:
         followers_popover = dbc.Popover(
             [
                 dbc.PopoverHeader("Followers"),
@@ -3899,7 +3909,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                         "paddingLeft": "0",
                         "marginBottom": "0"
                     }),
-                    html.Div("See all", id="followers-see-more", style={
+                    html.Div("See all", id={"type": "followers-see-more", "username": username} if username else "followers-see-more", style={
                         "color": "#007bff", "cursor": "pointer", "fontSize": "0.75rem", "marginTop": "5px"
                     }) if len(followers_user_objs) > 5 else None,
                     html.Ul([
@@ -3908,7 +3918,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                             html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
                         ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
                         for user in followers_user_objs[5:]
-                    ], id="followers-hidden", style={
+                    ], id={"type": "followers-hidden", "username": username} if username else "followers-hidden", style={
                         "display": "none",
                         "marginTop": "5px",
                         "paddingLeft": "0",
@@ -3917,13 +3927,13 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     })
                 ])
             ],
-            id="popover-followers",
-            target="followers-arrow",
+            id=f"popover-followers-{username}" if username else "popover-followers",
+            target=f"followers-arrow-{username}" if username else "followers-arrow",
             trigger="hover",
             placement="bottom"
         )
     
-    if is_current_user and following_user_objs:
+    if following_user_objs:
         following_popover = dbc.Popover(
             [
                 dbc.PopoverHeader("Following"),
@@ -3939,7 +3949,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                         "paddingLeft": "0",
                         "marginBottom": "0"
                     }),
-                    html.Div("See all", id="following-see-more", style={
+                    html.Div("See all", id={"type": "following-see-more", "username": username} if username else "following-see-more", style={
                         "color": "#007bff", "cursor": "pointer", "fontSize": "0.75rem", "marginTop": "5px"
                     }) if len(following_user_objs) > 5 else None,
                     html.Ul([
@@ -3948,7 +3958,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                             html.A(user[1], href=f"/user/{user[1]}", style={"textDecoration": "none", "color": "#007bff"})
                         ], style={"display": "flex", "alignItems": "center", "marginBottom": "5px"})
                         for user in following_user_objs[5:]
-                    ], id="following-hidden", style={
+                    ], id={"type": "following-hidden", "username": username} if username else "following-hidden", style={
                         "display": "none",
                         "marginTop": "5px",
                         "paddingLeft": "0",
@@ -3957,8 +3967,8 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     })
                 ])
             ],
-            id="popover-following",
-            target="following-arrow",
+            id=f"popover-following-{username}" if username else "popover-following",
+            target=f"following-arrow-{username}" if username else "following-arrow",
             trigger="hover",
             placement="bottom"
         )
@@ -3975,6 +3985,8 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
         layout_components.append(dcc.Store(id="favorites-store", data={"deleted": []}))
     
     layout_components.extend([
+        followers_popover,
+        following_popover,
         dbc.Container([
             dbc.Card(
                 dbc.CardBody([

@@ -637,6 +637,31 @@ def toggle_following_list(n_clicks):
     # Toggle between hidden and visible
     return {"display": "block", "marginTop": "5px", "paddingLeft": "0", "listStyleType": "none", "marginBottom": "0"}
 
+# New callbacks for dynamic user-specific IDs
+@app.callback(
+    Output({"type": "followers-hidden", "username": MATCH}, "style"),
+    Input({"type": "followers-see-more", "username": MATCH}, "n_clicks"),
+    prevent_initial_call=True
+)
+def toggle_followers_list_dynamic(n_clicks):
+    if n_clicks is None:
+        return dash.no_update
+    
+    # Toggle between hidden and visible
+    return {"display": "block", "marginTop": "5px", "paddingLeft": "0", "listStyleType": "none", "marginBottom": "0"}
+
+@app.callback(
+    Output({"type": "following-hidden", "username": MATCH}, "style"),
+    Input({"type": "following-see-more", "username": MATCH}, "n_clicks"),
+    prevent_initial_call=True
+)
+def toggle_following_list_dynamic(n_clicks):
+    if n_clicks is None:
+        return dash.no_update
+    
+    # Toggle between hidden and visible
+    return {"display": "block", "marginTop": "5px", "paddingLeft": "0", "listStyleType": "none", "marginBottom": "0"}
+
 @app.server.route("/logout")
 def logout():
     flask.session.clear()
