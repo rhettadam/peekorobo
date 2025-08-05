@@ -3490,58 +3490,140 @@ def load_teams(
                     "team_number": str(t.get("team_number")),
                 })
 
+        if not chart_data:
+            # Return empty figure if no data
+            fig = go.Figure()
+            fig.update_layout(
+                title="No data available for selected filters",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                annotations=[{
+                    "text": "No teams match the current filters",
+                    "xref": "paper",
+                    "yref": "paper",
+                    "showarrow": False,
+                    "font": {"size": 16, "color": "#777"}
+                }]
+            )
+            return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, url_update, style_data_conditional
+
         df = pd.DataFrame(chart_data)
-        df["label"] = ""
         q = (search_query or "").lower().strip()
         df["is_match"] = df["team"].str.lower().str.contains(q) if q else False
-        df["hover"] = df.apply(lambda r: f"<b>{r['team']}</b><br>X: {r['x']:.2f}<br>Y: {r['y']:.2f}", axis=1)
+        
+        # Improved hover text with better formatting
+        df["hover"] = df.apply(lambda r: f"<b>{r['team']}</b><br>{x_axis.replace('_epa', ' ACE').replace('epa', 'Total EPA').replace('+', ' + ')}: {r['x']:.2f}<br>{y_axis.replace('_epa', ' ACE').replace('epa', 'Total EPA').replace('+', ' + ')}: {r['y']:.2f}<br>ACE: {r['epa']:.2f}", axis=1)
 
+        # Create figure with improved styling
         fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=df.loc[~df["is_match"], "x"],
-            y=df.loc[~df["is_match"], "y"],
-            mode="markers+text",
-            marker=dict(size=6, color="rgba(30, 136, 229, 0.3)", line=dict(width=0)),
-            text=df.loc[~df["is_match"], "label"],
-            textfont=dict(size=9, color="#777"),
-            textposition="top center",
-            hovertext=df.loc[~df["is_match"], "hover"],
-            hoverinfo="text",
-        ))
-        fig.add_trace(go.Scatter(
-            x=df.loc[df["is_match"], "x"],
-            y=df.loc[df["is_match"], "y"],
-            mode="markers+text",
-            marker=dict(size=8, color="#777", line=dict(width=2, color="black")),
-            text=df.loc[df["is_match"], "label"],
-            textfont=dict(size=10, color="#777"),
-            textposition="top center",
-            hovertext=df.loc[df["is_match"], "hover"],
-            hoverinfo="text",
-        ))
+        
+        # Regular teams (non-matching search)
+        if len(df[~df["is_match"]]) > 0:
+            fig.add_trace(go.Scatter(
+                x=df.loc[~df["is_match"], "x"],
+                y=df.loc[~df["is_match"], "y"],
+                mode="markers",
+                marker=dict(
+                    size=8,
+                    color=df.loc[~df["is_match"], "epa"],
+                    colorscale="Viridis",
+                    colorbar=dict(
+                        title=dict(
+                            text="ACE",
+                            font=dict(color="#777")
+                        ),
+                        tickfont=dict(color="#777"),
+                        thickness=15,
+                        len=1.0,
+                        x=0,
+                        y=-0.15,
+                        orientation="h",
+                        xanchor="left",
+                        yanchor="top"
+                    ),
+                    showscale=True,
+                    line=dict(width=1, color="rgba(255,255,255,0.3)"),
+                    opacity=0.7
+                ),
+                hovertext=df.loc[~df["is_match"], "hover"],
+                hoverinfo="text",
+                showlegend=False,
+                hovertemplate="%{hovertext}<extra></extra>"
+            ))
+        
+        # Highlighted teams (matching search)
+        if len(df[df["is_match"]]) > 0:
+            fig.add_trace(go.Scatter(
+                x=df.loc[df["is_match"], "x"],
+                y=df.loc[df["is_match"], "y"],
+                mode="markers+text",
+                marker=dict(
+                    size=12,
+                    color="#ffdd00",
+                    line=dict(width=2, color="#000000"),
+                    opacity=0.9
+                ),
+                text=df.loc[df["is_match"], "team_number"],
+                textfont=dict(size=10, color="#000000"),
+                textposition="middle center",
+                hovertext=df.loc[df["is_match"], "hover"],
+                hoverinfo="text",
+                name="Search Results",
+                hovertemplate="%{hovertext}<extra></extra>"
+            ))
 
+        # Improved layout with better mobile responsiveness
         fig.update_layout(
-            title="EPA Breakdown Bubble Chart",
-            xaxis_title=x_axis.replace("_epa", " ACE").replace("epa", "Total EPA").replace("+", " + "),
-            yaxis_title=y_axis.replace("_epa", " ACE").replace("epa", "Total EPA").replace("+", " + "),
-            margin=dict(l=40, r=40, t=40, b=40),
+            xaxis_title=dict(
+                text=x_axis.replace("_epa", " ACE").replace("epa", "Total EPA").replace("+", " + "),
+                font=dict(size=14, color="#777")
+            ),
+            yaxis_title=dict(
+                text=y_axis.replace("_epa", " ACE").replace("epa", "Total EPA").replace("+", " + "),
+                font=dict(size=14, color="#777")
+            ),
+            margin=dict(l=60, r=80, t=60, b=60),  # Increased margins for mobile
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
-            showlegend=False,
+            showlegend=True,
+            legend=dict(
+                x=0.02,
+                y=0.98,
+                bgcolor="rgba(0,0,0,0.7)",
+                bordercolor="#777",
+                borderwidth=1,
+                font=dict(color="#ffffff")
+            ),
             xaxis=dict(
-                showgrid=False,
-                zeroline=False,
-                color="#777",  # Axis ticks and label color
-                title=dict(font=dict(color="#777")),  # x-axis title color
+                showgrid=True,
+                gridcolor="rgba(255,255,255,0.1)",
+                zeroline=True,
+                zerolinecolor="rgba(255,255,255,0.2)",
+                color="#777",
+                title=dict(font=dict(color="#777")),
+                tickfont=dict(color="#777", size=12)
             ),
             yaxis=dict(
-                showgrid=False,
-                zeroline=False,
-                color="#777",  # Axis ticks and label color
-                title=dict(font=dict(color="#777")),  # y-axis title color
+                showgrid=True,
+                gridcolor="rgba(255,255,255,0.1)",
+                zeroline=True,
+                zerolinecolor="rgba(255,255,255,0.2)",
+                color="#777",
+                title=dict(font=dict(color="#777")),
+                tickfont=dict(color="#777", size=12)
             ),
-            font=dict(color="#777"),  # Title and general font color
+            font=dict(color="#777"),
+            # Mobile-friendly settings
+            autosize=True,
+            height=600,  # Responsive height
+            # Performance optimizations
+            uirevision=True,  # Maintains zoom/pan state
+            dragmode="pan",  # Better mobile interaction
         )
+        
+
         return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, url_update, style_data_conditional
 
     return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, url_update, style_data_conditional

@@ -61,16 +61,16 @@ def get_team_card_colors_with_text(team_number):
         soft_primary = adjust_color_brightness(primary, 1.3)  # Lighter version
         soft_secondary = adjust_color_brightness(secondary, 0.8)  # Darker, more muted version
         
-        # Create a subtle gradient from left to right (like the screenshot)
-        gradient = f"linear-gradient(90deg, {soft_primary} 0%, {soft_secondary} 100%)"
+        # Create a subtle gradient at an angle (diagonal)
+        gradient = f"linear-gradient(135deg, {soft_primary} 0%, {soft_secondary} 100%)"
         
         # Use white text for better contrast on the softer background
         text_color = "#FFFFFF"
         
         return gradient, text_color
     except Exception:
-        # Fallback to a clean, modern gradient similar to the screenshot
-        return "linear-gradient(90deg, #4f7cac 0%, #2d3748 100%)", "#FFFFFF"
+        # Fallback to a clean, modern gradient at an angle
+        return "linear-gradient(135deg, #4f7cac 0%, #2d3748 100%)", "#FFFFFF"
 
 def team_layout(team_number, year, team_database, event_database, event_matches, event_awards, event_rankings, event_teams):
 
@@ -2152,7 +2152,13 @@ def teams_layout(default_year=current_year):
         value=[],
         id="percentile-toggle",
         switch=True,
-        style={"marginTop": "0px"}
+        style={
+            "marginTop": "0px",
+            "--bs-primary": "#ffdd00",  # Yellow color when on
+            "--bs-secondary": "#6c757d",  # Dark gray when off
+            "--bs-body-bg": "#2d2d2d",  # Dark background
+            "--bs-body-color": "#ffffff",  # White text
+        }
     )
 
     x_axis_dropdown = dcc.Dropdown(
@@ -2431,7 +2437,28 @@ def teams_layout(default_year=current_year):
             teams_table
         ]),
         html.Div(id="avatar-gallery", className="d-flex flex-wrap justify-content-center", style={"gap": "5px", "padding": "1rem", "display": "none"}),
-        dcc.Graph(id="bubble-chart", style={"display": "none", "height": "700px"})
+        dcc.Graph(
+            id="bubble-chart", 
+            style={
+                "display": "none", 
+                "height": "600px",
+                "width": "100%",
+                "maxWidth": "100%"
+            },
+            config={
+                "displayModeBar": True,
+                "displaylogo": False,
+                "modeBarButtonsToRemove": ["pan2d", "lasso2d", "select2d"],
+                "responsive": True,
+                "toImageButtonOptions": {
+                    "format": "png",
+                    "filename": "team_performance_chart",
+                    "height": 600,
+                    "width": 800,
+                    "scale": 2
+                }
+            }
+        )
     ])
 
     return html.Div(
@@ -2450,10 +2477,16 @@ def teams_layout(default_year=current_year):
                 "padding": "10px",
                 "maxWidth": "1200px",
                 "margin": "0 auto",
-                "flexGrow": "1" # Added flex-grow
-                }),
+                "flexGrow": "1"
+            }),
             footer,
-        ]
+        ],
+        style={
+            "display": "flex",
+            "flexDirection": "column",
+            "minHeight": "100vh",
+            "backgroundColor": "var(--bg-primary)"
+        }
     )
 
 def events_layout(year=current_year):
@@ -4593,9 +4626,9 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                                     profile_edit_form,
                                 ], style={"width": "100%", "marginBottom": "15px"}),
                                 
-                                # Bottom section with search and Edit Profile
+                                # Bottom section with search, Edit Profile, and Follow button
                                 html.Div([
-                                    # Search bar (flexible)
+                                    # Search bar (flexible) - only for current user
                                     html.Div([
                                         html.H5(
                                             id="profile-search-header",
@@ -4612,7 +4645,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                                         html.Div(id="user-search-results")
                                     ], style={"flex": "1", "marginRight": "20px", "position": "relative"}) if is_current_user else None,
                                     
-                                    # Edit Profile button in bottom right
+                                    # Edit Profile button - only for current user
                                     html.Button(
                                         "Edit Profile",
                                         id="edit-profile-btn",
@@ -4647,7 +4680,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                                             "display": "block"
                                         }
                                     ) if not is_current_user and target_user_id != session_user_id else None,
-                                ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "flex-end", "width": "100%"}) if is_current_user else None,
+                                ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "flex-end", "width": "100%"}),
                             ], style={"display": "flex", "flexDirection": "column", "width": "100%"}),
                         ], style={"display": "flex", "flexDirection": "column", "width": "100%", "gap": "15px"}),
                     ], style={"display": "flex", "flexDirection": "column", "width": "100%", "gap": "15px"})
