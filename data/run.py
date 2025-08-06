@@ -1552,12 +1552,12 @@ def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, st
         # Pre-season events (before first regular week)
         first_regular_week = datetime.strptime(week_ranges[year_str][0][0], '%Y-%m-%d')
         if event_start < first_regular_week:
-            return 0.3, 'preseason'  # Very low weight for pre-season
+            return 0.05, 'preseason'  # Minimal weight for pre-season
         
         # Off-season events (after last regular week)
         last_regular_week = datetime.strptime(week_ranges[year_str][-1][1], '%Y-%m-%d')
         if event_start > last_regular_week:
-            return 0.5, 'offseason'  # Lower weight for off-season
+            return 0.1, 'offseason'  # Very minimal weight for off-season
         
         # Regular season events - calculate position within season
         season_start = first_regular_week
@@ -1651,13 +1651,29 @@ def log_chronological_weighting(event_epas: List[Dict], team_number: int, year: 
         #print(f"\n📈 Average Weighted EPA: {avg_weighted_epa:.2f}")
         #print(f"📊 Total Weight: {total_weight:.3f}")
 
-def aggregate_overall_epa(event_epas: List[Dict], year: int = None) -> Dict:
+def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number: int = None) -> Dict:
     try:
         if not event_epas:
             return {
                 "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
                 "confidence": 0.0, "actual_epa": 0.0,
                 "wins": 0, "losses": 0, "ties": 0
+            }
+
+        # Check if this is a demo team (9970-9999) - return zeroed overall stats
+        if team_number is not None and 9970 <= team_number <= 9999:
+            return {
+                "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
+                "confidence": 0.0, "actual_epa": 0.0,
+                "wins": 0, "losses": 0, "ties": 0,
+                "confidence_components": {
+                    "consistency": 0.0,
+                    "record": 0.0,
+                    "veteran": 0.0,
+                    "dominance": 0.0,
+                    "event": 0.0,
+                    "raw": 0.0
+                }
             }
 
         # Filter out events with no valid matches or zero EPAs
@@ -2062,35 +2078,16 @@ def fetch_team_components(team, year):
             continue
 
     # Aggregate overall EPA from full event-specific EPAs
-    overall_epa_data = aggregate_overall_epa(event_epa_full, year)
+    overall_epa_data = aggregate_overall_epa(event_epa_full, year, team_number)
     
-    # Log chronological weighting for teams with multiple events
-    if len(event_epa_full) > 1:
+    # Log chronological weighting for teams with multiple events (but not for demo teams)
+    if len(event_epa_full) > 1 and not (9970 <= team_number <= 9999):
         log_chronological_weighting(event_epa_full, team_number, year)
     overall_epa_data["wins"] = total_wins
     overall_epa_data["losses"] = total_losses
     overall_epa_data["ties"] = total_ties
 
-    # DEMO TEAM LOGIC: If team number is between 9970 and 9999, zero out overall stats
-    if 9970 <= team_number <= 9999:
-        return {
-            "team_number": team.get("team_number"),
-            "nickname": team.get("nickname"),
-            "city": team.get("city"),
-            "state_prov": team.get("state_prov"),
-            "country": team.get("country"),
-            "website": website,
-            "normal_epa": 0,
-            "confidence": 0,
-            "epa": 0,
-            "auto_epa": 0,
-            "teleop_epa": 0,
-            "endgame_epa": 0,
-            "wins": 0,
-            "losses": 0,
-            "ties": 0,
-            "event_epas": event_epa_results, # List of event-specific EPA results
-        }
+
 
     return {
         "team_number": team.get("team_number"),
@@ -2237,7 +2234,7 @@ def analyze_single_team(team_key: str, year: int):
         except Exception as e:
             print(f"Failed to fetch matches for team {team_key} at event {event_key}: {e}")
 
-    overall_epa_data = aggregate_overall_epa(event_epa_results, year)
+    overall_epa_data = aggregate_overall_epa(event_epa_results, year, team_number)
     overall_epa_data["wins"] = total_wins
     overall_epa_data["losses"] = total_losses
     overall_epa_data["ties"] = total_ties
@@ -2249,6 +2246,10 @@ def analyze_single_team(team_key: str, year: int):
     print(f"Overall Confidence: {overall_epa_data['confidence']}")
     print(f"Actual Overall EPA: {overall_epa_data['actual_epa']}")
     print(f"Overall Record: {overall_epa_data['wins']}-{overall_epa_data['losses']}-{overall_epa_data['ties']}")
+    
+    # Add note for demo teams
+    if 9970 <= team_number <= 9999:
+        print(f"\n⚠️  NOTE: Team {team_number} is a demo team (9970-9999). Overall stats are zeroed out, but event-specific stats are retained below.")
 
     if event_epa_results:
         print(f"\n{'='*50}")
@@ -2282,12 +2283,17 @@ def analyze_single_team(team_key: str, year: int):
         print(f"\n{'='*50}")
         print("Overall Confidence Breakdown (Weighted Average)")
         print(f"{'='*50}")
-        print(f"→ Consistency:     {round(overall_epa_data['avg_consistency'], 3)} × {weights['consistency']} = {round(components['consistency'], 4)}")
-        print(f"→ Record Align:    {round(overall_epa_data['avg_record_alignment'], 3)} × {weights['record_alignment']} = {round(components['record'], 4)}")
-        print(f"→ Veteran Boost:   {round(overall_epa_data['avg_veteran_boost'], 3)} × {weights['veteran']} = {round(components['veteran'], 4)}")
-        print(f"→ Dominance:       {round(overall_epa_data['avg_dominance'], 3)} × {weights['dominance']} = {round(components['dominance'], 4)}")
-        print(f"→ Event Boost:     {round(overall_epa_data['avg_event_boost'], 3)} × {weights['events']} = {round(components['event'], 4)}")
-        print(f"→ Confidence Total: {round(components['raw'], 4)} → Capped: {round(overall_epa_data['confidence'], 3)}")
+        
+        # Add note for demo teams in confidence breakdown
+        if 9970 <= team_number <= 9999:
+            print("⚠️  NOTE: Overall confidence breakdown is zeroed for demo teams.")
+        else:
+            print(f"→ Consistency:     {round(overall_epa_data['avg_consistency'], 3)} × {weights['consistency']} = {round(components['consistency'], 4)}")
+            print(f"→ Record Align:    {round(overall_epa_data['avg_record_alignment'], 3)} × {weights['record_alignment']} = {round(components['record'], 4)}")
+            print(f"→ Veteran Boost:   {round(overall_epa_data['avg_veteran_boost'], 3)} × {weights['veteran']} = {round(components['veteran'], 4)}")
+            print(f"→ Dominance:       {round(overall_epa_data['avg_dominance'], 3)} × {weights['dominance']} = {round(components['dominance'], 4)}")
+            print(f"→ Event Boost:     {round(overall_epa_data['avg_event_boost'], 3)} × {weights['events']} = {round(components['event'], 4)}")
+            print(f"→ Confidence Total: {round(components['raw'], 4)} → Capped: {round(overall_epa_data['confidence'], 3)}")
 
 def restart_heroku_app():
     """Restart the Heroku app to reload updated data."""
