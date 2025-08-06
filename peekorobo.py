@@ -1581,27 +1581,27 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             nickname = team_data.get("nickname", "Unknown")
 
             data_rows.append({
-                "Rank": rank_info.get("rk", "N/A"),
+                "Rank": rank_info.get("rk", None),
                 "Team": f"[{tstr} | {truncate_name(nickname)}](/team/{tstr}/{event_year})",
-                "Wins": rank_info.get("w", "N/A"),
-                "Losses": rank_info.get("l", "N/A"),
-                "Ties": rank_info.get("t", "N/A"),
-                "DQ": rank_info.get("dq", "N/A"),
-                "ACE Rank": rank_map.get(int(tstr), "N/A"),
-                "ACE": epa_data.get(tstr, {}).get("epa", "N/A"),
+                "Wins": rank_info.get("w", None),
+                "Losses": rank_info.get("l", None),
+                "Ties": rank_info.get("t", None),
+                "DQ": rank_info.get("dq", None),
+                "ACE Rank": rank_map.get(int(tstr), None),
+                "ACE": epa_data.get(tstr, {}).get("epa", None),
             })
 
         data_rows.sort(key=lambda r: safe_int(r["Rank"]))
 
         columns = [
-            {"name": "Rank", "id": "Rank"},
+            {"name": "Rank", "id": "Rank", "type": "numeric"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
-            {"name": "Wins", "id": "Wins"},
-            {"name": "Losses", "id": "Losses"},
-            {"name": "Ties", "id": "Ties"},
-            {"name": "DQ", "id": "DQ"},
-            {"name": "ACE Rank", "id": "ACE Rank"},
-            {"name": "ACE", "id": "ACE"},
+            {"name": "Wins", "id": "Wins", "type": "numeric"},
+            {"name": "Losses", "id": "Losses", "type": "numeric"},
+            {"name": "Ties", "id": "Ties", "type": "numeric"},
+            {"name": "DQ", "id": "DQ", "type": "numeric"},
+            {"name": "ACE Rank", "id": "ACE Rank", "type": "numeric"},
+            {"name": "ACE", "id": "ACE", "type": "numeric"},
         ]
 
         return html.Div([
@@ -1610,12 +1610,19 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 columns=columns,
                 sort_action="native",
                 sort_mode="multi",
+                filter_action="native",
+                filter_options={"case": "insensitive"},
                 data=data_rows,
                 page_size=10,
                 style_table=common_style_table,
                 style_header=common_style_header,
                 style_cell=common_style_cell,
-                style_data_conditional=style_data_conditional
+                style_data_conditional=style_data_conditional,
+                style_filter={
+                    "backgroundColor": "var(--input-bg)",
+                    "color": "var(--text-primary)",
+                    "borderColor": "var(--input-border)",
+                }
             )
         ]), query_string
 
@@ -1774,32 +1781,32 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             team_data = team_lookup.get(team_num_int, {})
             nickname = team_data.get("nn", "Unknown")
             def match_label(m):
-                if not m: return "N/A"
+                if not m: return None
                 label = m.get("k", "").split("_", 1)[-1].upper()
                 return f"[{label}](/match/{m.get('ek', '')}/{label})"
             team_sos_rows.append({
                 "Team": f"[{team_num} | {truncate_name(nickname)}](/team/{team_num}/{event_year})",
-                "SoS": f"{sos_metric:.3f}",
-                "Avg Opponent ACE": f"{avg_opp_ace:.2f}",
-                "Avg Win Prob": f"{avg_win_prob:.2%}",
+                "SoS": sos_metric,
+                "Avg Opponent ACE": avg_opp_ace,
+                "Avg Win Prob": avg_win_prob,
                 "Hardest Match": match_label(hardest),
-                "Hardest Win Prob": f"{hardest_prob:.2%}",
+                "Hardest Win Prob": hardest_prob,
                 "Easiest Match": match_label(easiest),
-                "Easiest Win Prob": f"{easiest_prob:.2%}",
+                "Easiest Win Prob": easiest_prob,
                 "# Matches": len(team_matches),
             })
         # Sort by SoS (ascending: hardest at bottom, easiest at top)
-        team_sos_rows.sort(key=lambda r: float(r["SoS"]), reverse=True)
+        team_sos_rows.sort(key=lambda r: r["SoS"], reverse=True)
         sos_columns = [
             {"name": "Team", "id": "Team", "presentation": "markdown"},
-            {"name": "SoS", "id": "SoS"},
-            {"name": "Avg Opponent ACE", "id": "Avg Opponent ACE"},
-            {"name": "Avg Win Prob", "id": "Avg Win Prob"},
+            {"name": "SoS", "id": "SoS", "type": "numeric"},
+            {"name": "Avg Opponent ACE", "id": "Avg Opponent ACE", "type": "numeric"},
+            {"name": "Avg Win Prob", "id": "Avg Win Prob", "type": "numeric"},
             {"name": "Hardest Match", "id": "Hardest Match", "presentation": "markdown"},
-            {"name": "Hardest Win Prob", "id": "Hardest Win Prob"},
+            {"name": "Hardest Win Prob", "id": "Hardest Win Prob", "type": "numeric"},
             {"name": "Easiest Match", "id": "Easiest Match", "presentation": "markdown"},
-            {"name": "Easiest Win Prob", "id": "Easiest Win Prob"},
-            {"name": "# Matches", "id": "# Matches"},
+            {"name": "Easiest Win Prob", "id": "Easiest Win Prob", "type": "numeric"},
+            {"name": "# Matches", "id": "# Matches", "type": "numeric"},
         ]
         return html.Div([
             html.H4("Strength of Schedule (SoS)", className="mb-3 mt-3"),
@@ -1807,11 +1814,18 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 columns=sos_columns,
                 sort_action="native",
                 sort_mode="multi",
+                filter_action="native",
+                filter_options={"case": "insensitive"},
                 data=team_sos_rows,
                 page_size=15,
                 style_table=common_style_table,
                 style_header=common_style_header,
                 style_cell=common_style_cell,
+                style_filter={
+                    "backgroundColor": "var(--input-bg)",
+                    "color": "var(--text-primary)",
+                    "borderColor": "var(--input-border)",
+                }
             )
         ]), query_string
 
@@ -1915,19 +1929,19 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             team_data = year_team_data.get(event_year, {}).get(int(tnum), {})
             
             rows.append({
-                "ACE Rank": rank_map.get(int(tnum), "N/A"),
-                "EPA": f"{team_data.get('normal_epa', 0):.2f}",
-                "Confidence": f"{team_data.get('confidence', 0):.2f}",
-                "ACE": f"{team_data.get('epa', 0):.2f}",
-                "Auto": f"{team_data.get('auto_epa', 0):.2f}",
-                "Teleop": f"{team_data.get('teleop_epa', 0):.2f}",
-                "Endgame": f"{team_data.get('endgame_epa', 0):.2f}",
+                "ACE Rank": rank_map.get(int(tnum), None),
+                "EPA": team_data.get('normal_epa', 0),
+                "Confidence": team_data.get('confidence', 0),
+                "ACE": team_data.get('epa', 0),
+                "Auto": team_data.get('auto_epa', 0),
+                "Teleop": team_data.get('teleop_epa', 0),
+                "Endgame": team_data.get('endgame_epa', 0),
                 "Team": f"[{tstr} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tstr}/{event_year})",
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
         
         # Sort by overall EPA value
-        rows.sort(key=lambda r: float(r["ACE"]) if r["ACE"] != "N/A" else 0, reverse=True)
+        rows.sort(key=lambda r: r["ACE"] if r["ACE"] is not None else 0, reverse=True)
         
         # Use global percentiles for coloring
         if event_year == current_year:
@@ -2016,10 +2030,10 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             
             # Find rank for this team's event EPA
             team_event_epa = event_team_data.get("epa", 0)
-            event_rank = event_rank_map.get(team_event_epa, "N/A")
+            event_rank = event_rank_map.get(team_event_epa, None)
             
             # Get overall ACE rank
-            overall_ace_rank = overall_rank_map.get(int(tnum), "N/A")
+            overall_ace_rank = overall_rank_map.get(int(tnum), None)
             
             # Get SoS
             sos_value = team_sos.get(tnum, 0)
@@ -2033,20 +2047,20 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             rows.append({
                 "Event Rank": event_rank,
                 "ACE Rank": overall_ace_rank,
-                "EPA": f"{event_team_data.get('normal_epa', 0):.2f}",
-                "Confidence": f"{event_team_data.get('confidence', 0):.2f}",
-                "ACE": f"{event_team_data.get('epa', 0):.2f}",
-                "Auto": f"{event_team_data.get('auto_epa', 0):.2f}",
-                "Teleop": f"{event_team_data.get('teleop_epa', 0):.2f}",
-                "Endgame": f"{event_team_data.get('endgame_epa', 0):.2f}",
-                "SoS": f"{sos_value:.2f}",
-                "ACE Δ": f"{ace_improvement:+.2f}",
+                "EPA": event_team_data.get('normal_epa', 0),
+                "Confidence": event_team_data.get('confidence', 0),
+                "ACE": event_team_data.get('epa', 0),
+                "Auto": event_team_data.get('auto_epa', 0),
+                "Teleop": event_team_data.get('teleop_epa', 0),
+                "Endgame": event_team_data.get('endgame_epa', 0),
+                "SoS": sos_value,
+                "ACE Δ": ace_improvement,
                 "Team": f"[{tstr} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tstr}/{event_year})",
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
         
         # Sort by event EPA value
-        rows.sort(key=lambda r: float(r["ACE"]) if r["ACE"] != "N/A" else 0, reverse=True)
+        rows.sort(key=lambda r: r["ACE"] if r["ACE"] is not None else 0, reverse=True)
         
         # Use event-specific percentiles for coloring
         event_confidence_values = [data.get("confidence", 0) for data in epa_data.values()]
@@ -2115,28 +2129,29 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
     # Define columns based on stats type
     if stats_type == "overall":
         columns = [
-            {"name": "ACE Rank", "id": "ACE Rank"},
+            {"name": "ACE Rank", "id": "ACE Rank", "type": "numeric"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
-            {"name": "EPA", "id": "EPA"},
-            {"name": "Confidence", "id": "Confidence"},
-            {"name": "ACE", "id": "ACE"},
-            {"name": "Auto", "id": "Auto"},
-            {"name": "Teleop", "id": "Teleop"},
-            {"name": "Endgame", "id": "Endgame"},
+            {"name": "EPA", "id": "EPA", "type": "numeric"},
+            {"name": "Confidence", "id": "Confidence", "type": "numeric"},
+            {"name": "ACE", "id": "ACE", "type": "numeric"},
+            {"name": "Auto", "id": "Auto", "type": "numeric"},
+            {"name": "Teleop", "id": "Teleop", "type": "numeric"},
+            {"name": "Endgame", "id": "Endgame", "type": "numeric"},
             {"name": "Location", "id": "Location"},
         ]
     else:  # event stats
         columns = [
-            {"name": "ACE Rank", "id": "ACE Rank"},
+            {"name": "Event Rank", "id": "Event Rank", "type": "numeric"},
+            {"name": "ACE Rank", "id": "ACE Rank", "type": "numeric"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
-            {"name": "EPA", "id": "EPA"},
-            {"name": "Confidence", "id": "Confidence"},
-            {"name": "ACE", "id": "ACE"},
-            {"name": "Auto", "id": "Auto"},
-            {"name": "Teleop", "id": "Teleop"},
-            {"name": "Endgame", "id": "Endgame"},
-            {"name": "SoS", "id": "SoS"},
-            {"name": "ACE Δ", "id": "ACE Δ"},
+            {"name": "EPA", "id": "EPA", "type": "numeric"},
+            {"name": "Confidence", "id": "Confidence", "type": "numeric"},
+            {"name": "ACE", "id": "ACE", "type": "numeric"},
+            {"name": "Auto", "id": "Auto", "type": "numeric"},
+            {"name": "Teleop", "id": "Teleop", "type": "numeric"},
+            {"name": "Endgame", "id": "Endgame", "type": "numeric"},
+            {"name": "SoS", "id": "SoS", "type": "numeric"},
+            {"name": "ACE Δ", "id": "ACE Δ", "type": "numeric"},
             {"name": "Location", "id": "Location"},
         ]
     
@@ -2170,12 +2185,19 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         columns=columns,
         sort_action="native",
         sort_mode="multi",
+        filter_action="native",
+        filter_options={"case": "insensitive"},
         data=rows,
         page_size=10,
         style_table=common_style_table,
         style_header=common_style_header,
         style_cell=common_style_cell,
-        style_data_conditional=style_data_conditional
+        style_data_conditional=style_data_conditional,
+        style_filter={
+            "backgroundColor": "var(--input-bg)",
+            "color": "var(--text-primary)",
+            "borderColor": "var(--input-border)",
+        }
     ), spotlight_layout
 
 @app.callback(
