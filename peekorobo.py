@@ -1786,13 +1786,13 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 return f"[{label}](/match/{m.get('ek', '')}/{label})"
             team_sos_rows.append({
                 "Team": f"[{team_num} | {truncate_name(nickname)}](/team/{team_num}/{event_year})",
-                "SoS": sos_metric,
-                "Avg Opponent ACE": avg_opp_ace,
-                "Avg Win Prob": avg_win_prob,
+                "SoS": round(sos_metric, 2),
+                "Avg Opponent ACE": round(avg_opp_ace, 2),
+                "Avg Win Prob": round(avg_win_prob, 2),
                 "Hardest Match": match_label(hardest),
-                "Hardest Win Prob": hardest_prob,
+                "Hardest Win Prob": round(hardest_prob, 2),
                 "Easiest Match": match_label(easiest),
-                "Easiest Win Prob": easiest_prob,
+                "Easiest Win Prob": round(easiest_prob, 2),
                 "# Matches": len(team_matches),
             })
         # Sort by SoS (ascending: hardest at bottom, easiest at top)
@@ -2008,7 +2008,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                     win_probs.append(win_prob)
                 
                 avg_win_prob = sum(win_probs) / len(win_probs) if win_probs else 0
-                team_sos[team_num] = avg_win_prob  # SoS: 0 = lose all, 1 = win all
+                team_sos[team_num] = round(avg_win_prob, 2)  # SoS: 0 = lose all, 1 = win all
         else:
             # Fallback to simplified calculation if no match data
             for team_num in team_numbers:
@@ -2053,8 +2053,8 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                 "Auto": event_team_data.get('auto_epa', 0),
                 "Teleop": event_team_data.get('teleop_epa', 0),
                 "Endgame": event_team_data.get('endgame_epa', 0),
-                "SoS": sos_value,
-                "ACE Δ": ace_improvement,
+                "SoS": round(sos_value, 2),
+                "ACE Δ": round(ace_improvement, 2),
                 "Team": f"[{tstr} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tstr}/{event_year})",
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
@@ -2078,7 +2078,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             overall_team_data = year_team_data.get(event_year, {}).get(int(tnum), {})
             overall_ace = overall_team_data.get('epa', 0)
             event_ace = event_team_data.get('epa', 0)
-            ace_improvement_values.append(event_ace - overall_ace)
+            ace_improvement_values.append(round(event_ace - overall_ace, 2))
         
 
         for t in event_teams:
