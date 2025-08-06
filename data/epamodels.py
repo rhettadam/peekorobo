@@ -178,20 +178,21 @@ def endgame_2024(breakdown, team_count):
 
 def auto_2023(breakdowns, team_count):
     def score_per_breakdown(b):
-        # Mobility (3 pts per Yes)
+        # Mobility (3 pts per robot that moved)
         mobility = sum(1 for i in range(1, 4) if b.get(f"mobilityRobot{i}") == "Yes") * 3
         
-        # Estimate speaker scoring
-        scored_rows = {"B": 3, "M": 4, "T": 6}
-        score = 0
-        auto_comm = b.get("autoCommunity", {})
-        for row, row_vals in auto_comm.items():
-            row_score = scored_rows.get(row, 0)
-            score += sum(1 for v in row_vals if v != "None") * row_score
+        # Game Pieces (use API fields directly)
+        auto_game_pieces = b.get("autoGamePiecePoints", 0)
+        
+        # Links (5 pts each)
+        auto_links = b.get("autoLinkPoints", 0)
+        
+        # Total auto score
+        total_auto = mobility + auto_game_pieces + auto_links
         
         # Scale based on team count
         scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
-        return (mobility + (score / team_count)) * scaling_factor
+        return (total_auto / team_count) * scaling_factor
 
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)
@@ -223,16 +224,18 @@ def auto_2023(breakdowns, team_count):
 
 def teleop_2023(breakdowns, team_count):
     def score_per_breakdown(b):
-        scored_rows = {"B": 2, "M": 3, "T": 5}
-        score = 0
-        teleop_comm = b.get("teleopCommunity", {})
-        for row, cells in teleop_comm.items():
-            row_score = scored_rows.get(row, 0)
-            score += sum(1 for val in cells if val != "None") * row_score
+        # Game Pieces (use API fields directly)
+        teleop_game_pieces = b.get("teleopGamePiecePoints", 0)
+        
+        # Links (5 pts each)
+        teleop_links = b.get("teleopLinkPoints", 0)
+        
+        # Total teleop score
+        total_teleop = teleop_game_pieces + teleop_links
         
         # Scale based on team count
         scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
-        return (score / team_count) * scaling_factor
+        return (total_teleop / team_count) * scaling_factor
 
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)
@@ -264,19 +267,26 @@ def teleop_2023(breakdowns, team_count):
 
 def endgame_2023(breakdowns, team_count):
     def score_per_breakdown(b):
-        score = 0
+        # Charge Station scoring (corrected values from game manual)
+        charge_station_score = 0
         for i in range(1, 4):
             state = b.get(f"endGameChargeStationRobot{i}", "None")
             if state == "Docked":
-                score += 6
+                charge_station_score += 8  # Corrected from 6 to 8
             elif state == "Engaged":
-                score += 10
+                charge_station_score += 12  # Corrected from 10 to 12
             elif state == "Park":
-                score += 2
+                charge_station_score += 2
+        
+        # Links in endgame (5 pts each)
+        endgame_links = b.get("endGameLinkPoints", 0)
+        
+        # Total endgame score
+        total_endgame = charge_station_score + endgame_links
         
         # Scale based on team count
         scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
-        return (score / team_count) * scaling_factor
+        return (total_endgame / team_count) * scaling_factor
 
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)
