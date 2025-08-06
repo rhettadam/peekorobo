@@ -178,21 +178,26 @@ def endgame_2024(breakdown, team_count):
 
 def auto_2023(breakdowns, team_count):
     def score_per_breakdown(b):
-        # Mobility (3 pts per robot that moved)
+        # Mobility (3 pts per robot that moved) - this is per robot, not alliance-wide
         mobility = sum(1 for i in range(1, 4) if b.get(f"mobilityRobot{i}") == "Yes") * 3
         
-        # Game Pieces (use API fields directly)
-        auto_game_pieces = b.get("autoGamePiecePoints", 0)
+        # Game Pieces from autoCommunity (B=3, M=4, T=6 points) - this is alliance-wide
+        scored_rows = {"B": 3, "M": 4, "T": 6}
+        game_piece_score = 0
+        auto_comm = b.get("autoCommunity", {})
+        for row, row_vals in auto_comm.items():
+            row_score = scored_rows.get(row, 0)
+            game_piece_score += sum(1 for v in row_vals if v != "None") * row_score
+
+        # autoChargeStationPoints includes auto docking and other charge station achievements
+        charge_station_points = b.get("autoChargeStationPoints", 0)
         
-        # Links (5 pts each)
-        auto_links = b.get("autoLinkPoints", 0)
+        # Total auto score - only divide alliance-wide components by team_count
+        total_auto = mobility + game_piece_score + charge_station_points
         
-        # Total auto score
-        total_auto = mobility + auto_game_pieces + auto_links
-        
-        # Scale based on team count
+        # Apply scaling factor
         scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
-        return (total_auto / team_count) * scaling_factor
+        return total_auto * scaling_factor
 
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)
@@ -224,18 +229,23 @@ def auto_2023(breakdowns, team_count):
 
 def teleop_2023(breakdowns, team_count):
     def score_per_breakdown(b):
-        # Game Pieces (use API fields directly)
-        teleop_game_pieces = b.get("teleopGamePiecePoints", 0)
+        # Game Pieces from teleopCommunity (B=2, M=3, T=5 points) - this is alliance-wide
+        scored_rows = {"B": 2, "M": 3, "T": 5}
+        game_piece_score = 0
+        teleop_comm = b.get("teleopCommunity", {})
+        for row, cells in teleop_comm.items():
+            row_score = scored_rows.get(row, 0)
+            game_piece_score += sum(1 for val in cells if val != "None") * row_score
         
-        # Links (5 pts each)
-        teleop_links = b.get("teleopLinkPoints", 0)
+        # linkPoints is total for the match, attribute to teleop as pragmatic solution
+        link_points = b.get("linkPoints", 0)
         
-        # Total teleop score
-        total_teleop = teleop_game_pieces + teleop_links
+        # Total teleop score - divide alliance-wide components by team_count
+        total_teleop = game_piece_score + link_points
         
-        # Scale based on team count
+        # Apply scaling factor
         scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
-        return (total_teleop / team_count) * scaling_factor
+        return total_teleop * scaling_factor
 
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)
@@ -267,26 +277,23 @@ def teleop_2023(breakdowns, team_count):
 
 def endgame_2023(breakdowns, team_count):
     def score_per_breakdown(b):
-        # Charge Station scoring (corrected values from game manual)
+        # Charge Station scoring (corrected values from game manual) - this is per robot
         charge_station_score = 0
         for i in range(1, 4):
             state = b.get(f"endGameChargeStationRobot{i}", "None")
             if state == "Docked":
-                charge_station_score += 8  # Corrected from 6 to 8
-            elif state == "Engaged":
-                charge_station_score += 12  # Corrected from 10 to 12
+                charge_station_score += 10  # Corrected from 6 to 8
             elif state == "Park":
                 charge_station_score += 2
+            else:
+                charge_station_score += 0
+    
+        # Total endgame score - only divide alliance-wide components by team_count
+        total_endgame = charge_station_score 
         
-        # Links in endgame (5 pts each)
-        endgame_links = b.get("endGameLinkPoints", 0)
-        
-        # Total endgame score
-        total_endgame = charge_station_score + endgame_links
-        
-        # Scale based on team count
+        # Apply scaling factor
         scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
-        return (total_endgame / team_count) * scaling_factor
+        return total_endgame * scaling_factor
 
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)
