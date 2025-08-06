@@ -2208,12 +2208,22 @@ def teams_layout(default_year=current_year):
         style={"display": "none", "marginBottom": "5px", "marginTop": "0px"}
     )
 
-    search_input = dbc.Input(
+    search_input = dcc.Input(
         id="search-bar",
-        placeholder="Search",
         type="text",
+        debounce=True,
+        placeholder="Search teams..",
         className="custom-input-box",
-        style={"width": "100%"},
+        style={
+            "width": "100%",
+            "padding": "10px 14px",
+            "borderRadius": "12px",         # Rounded corners
+            "border": "1px solid #ccc",     # Light flat border
+            "outline": "none",              # Remove focus border glow
+            "boxShadow": "none",            # Remove any shadows
+            "fontSize": "16px",
+            "backgroundColor": "#f8f9fa",   # Light gray background (flat)
+        },
     )
 
     filters_row = html.Div(

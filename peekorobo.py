@@ -82,6 +82,7 @@ def serve_layout():
             universal_profile_icon_or_toast(),
             html.Div(id='dummy-output', style={'display': 'none'}),
             html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'}),
+
             dcc.Interval(id='last-updated-interval', interval=60000, n_intervals=0)  # Update every minute
         ])
     )
@@ -197,6 +198,8 @@ app.clientside_callback(
     Input("theme-store", "data"),
     prevent_initial_call=True
 )
+
+
 
 # Add a callback to update the "Last Updated" text
 @app.callback(
@@ -3197,7 +3200,6 @@ app.clientside_callback(
         Input("percentile-toggle", "value"),
     ],
     [State("teams-url", "href")],
-    prevent_initial_call=True,
 )
 def load_teams(
     selected_district,
@@ -3212,6 +3214,16 @@ def load_teams(
     href
 ):
     ctx = callback_context
+    
+    # Simple debouncing: if this is a search trigger and the query is very short, 
+    # wait for more input before processing
+    # Debouncing: ignore very short queries unless it's a valid team number (3+ digits)
+
+    if ctx.triggered and any(t["prop_id"].startswith("search-bar.value") for t in ctx.triggered):
+        q = search_query.strip()
+        if len(q) < 3 and not (q.isdigit() and len(q) >= 3):
+            return no_update, no_update, ..., no_update
+
     # Default filter values
     default_values = {
         "year": current_year,
@@ -3295,13 +3307,69 @@ def load_teams(
         teams_data = [t for t in teams_data if (t.get("state_prov") or "").lower() == selected_state.lower()]
 
     if search_query:
-        q = search_query.lower()
-        teams_data = [
-            t for t in teams_data
-            if q in str(t.get("team_number", "")).lower()
-            or q in t.get("nickname", "").lower()
-            or q in t.get("city", "").lower()
-        ]
+        q = search_query.lower().strip()
+        if q:  # Only search if there's actually a query
+            # Split search terms for more flexible matching
+            search_terms = q.split()
+            
+            def team_matches_search(team):
+                """Enhanced search function for teams"""
+                team_num = str(team.get("team_number", "")).lower()
+                nickname = (team.get("nickname", "") or "").lower()
+                city = (team.get("city", "") or "").lower()
+                
+                # Check if all search terms match any field
+                for term in search_terms:
+                    term_matches = False
+                    
+                    # For numeric terms, prioritize exact team number matches
+                    if term.isdigit():
+                        # Exact match is fastest
+                        if term == team_num:
+                            term_matches = True
+                        # Then check if team number starts with the term
+                        elif team_num.startswith(term):
+                            term_matches = True
+                        # Only do substring search as last resort for numbers
+                        elif term in team_num:
+                            term_matches = True
+                    else:
+                        # For text terms, check nickname and city
+                        if term in nickname or term in city:
+                            term_matches = True
+                        # Check word boundaries for names
+                        elif any(word.startswith(term) for word in nickname.split()):
+                            term_matches = True
+                    
+                    if not term_matches:
+                        return False
+                return True
+            
+            # Apply search filter
+            filtered_teams = [t for t in teams_data if team_matches_search(t)]
+            
+            # Limit results to prevent performance issues with very broad searches
+            if len(filtered_teams) > 1000:
+                # If search returns too many results, prioritize exact matches
+                exact_matches = []
+                partial_matches = []
+                
+                for team in filtered_teams:
+                    team_num = str(team.get("team_number", "")).lower()
+                    nickname = (team.get("nickname", "") or "").lower()
+                    
+                    # Check for exact matches first
+                    if any(term == team_num for term in search_terms if term.isdigit()):
+                        exact_matches.append(team)
+                    elif any(term in nickname.split() for term in search_terms if not term.isdigit()):
+                        exact_matches.append(team)
+                    else:
+                        partial_matches.append(team)
+                
+                # Return exact matches first, then partial matches up to limit
+                teams_data = exact_matches + partial_matches[:1000 - len(exact_matches)]
+            else:
+                teams_data = filtered_teams
 
     teams_data.sort(key=lambda t: t.get("weighted_ace") or 0, reverse=True)
     
