@@ -2316,7 +2316,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
                 pred_winner = "Red" if p_red > p_blue else "Blue"
 
             yid = match.get("yt")
-            video_link = f"[Watch](https://www.youtube.com/watch?v={yid})" if yid else "N/A"
+            video_link = f"[▶](https://www.youtube.com/watch?v={yid})" if yid else "N/A"
 
             # Add match link for the label
             match_link = f"[{label}](/match/{event_key}/{label})"
@@ -2401,10 +2401,19 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
 
     if table_style == "both":
         row_style = [
-            # Row coloring for winner (these should come first)
-            {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
-            {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
+            # Row coloring for winner (excluding Video and Match columns)
+            {"if": {"filter_query": '{Winner} = "Red"', "column_id": "Winner"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Winner} = "Red"', "column_id": "Pred Winner"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Winner} = "Blue"', "column_id": "Winner"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Winner} = "Blue"', "column_id": "Pred Winner"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)"},
+
             # --- Cell-level prediction rules (these should come after row-level rules) ---
+            # Alliance column styling
+            {"if": {"column_id": "Red Alliance"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
+            {"if": {"column_id": "Blue Alliance"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
+            # Score column styling
+            {"if": {"column_id": "Red Score"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
+            {"if": {"column_id": "Blue Score"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
             # Red prediction styling
             {"if": {"filter_query": "{Red Prediction %} >= 45 && {Red Prediction %} < 50", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lowneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
             {"if": {"filter_query": "{Red Prediction %} >= 50 && {Red Prediction %} < 55", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-highneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
@@ -2432,16 +2441,17 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             {"if": {"filter_query": "{Blue Prediction %} < 15 && {Blue Prediction %} >= 5", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-darkred)", "color": "var(--text-primary)"},
             {"if": {"filter_query": "{Blue Prediction %} < 5", "column_id": "Blue Pred"}, "backgroundColor": "var(--table-row-prediction-deepred)", "color": "var(--text-primary)"},
             # Predicted Winner styling
-            {"if": {"filter_query": '{Pred Winner} = "Red"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
-            {"if": {"filter_query": '{Pred Winner} = "Blue"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Pred Winner} = "Red"', "column_id": "Pred Winner"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Pred Winner} = "Blue"', "column_id": "Pred Winner"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)"},
             {"if": {"filter_query": '{Pred Winner} = "Tie"', "column_id": "Pred Winner"}, "backgroundColor": "var(--table-row-yellow)", "color": "var(--text-primary)"},
         ]
     else:
         # Team focus styling
         row_style = [
-            # Row coloring for winner
-            {"if": {"filter_query": '{Winner} = "Red"'}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
-            {"if": {"filter_query": '{Winner} = "Blue"'}, "backgroundColor": "var(--table-row-blue)", "color": "var(--text-primary)"},
+            # Row coloring for winner (excluding Video and Match columns)
+            {"if": {"filter_query": '{Winner} = "Red"', "column_id": "Winner"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)"},
+            {"if": {"filter_query": '{Winner} = "Blue"', "column_id": "Winner"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)"},
+
             # Team prediction styling
             {"if": {"filter_query": "{Prediction %} >= 45 && {Prediction %} < 50", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-lowneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
             {"if": {"filter_query": "{Prediction %} >= 50 && {Prediction %} < 55", "column_id": "Prediction"}, "backgroundColor": "var(--table-row-prediction-highneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
@@ -2460,6 +2470,12 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             {"if": {"filter_query": '{Winner} = "Red" && {Alliance} != "Red"', "column_id": "Outcome"}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
             {"if": {"filter_query": '{Winner} = "Blue" && {Alliance} = "Blue"', "column_id": "Outcome"}, "backgroundColor": "var(--table-row-green)", "color": "var(--text-primary)"},
             {"if": {"filter_query": '{Winner} = "Blue" && {Alliance} != "Blue"', "column_id": "Outcome"}, "backgroundColor": "var(--table-row-red)", "color": "var(--text-primary)"},
+            # Alliance column styling
+            {"if": {"column_id": "Red Alliance"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
+            {"if": {"column_id": "Blue Alliance"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
+            # Score column styling
+            {"if": {"column_id": "Score"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
+            {"if": {"column_id": "Opponent Score"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
         ]
 
     style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "color": "var(--text-primary)", "backgroundColor": "transparent"}
@@ -2683,7 +2699,6 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
     if playoff_matches:
         playoff_section = dbc.Col([
             html.H6([
-                html.I(className="fas fa-trophy me-1", style={"color": "#007bff"}),
                 "Playoff Stats"
             ], style={"color": "#007bff", "fontWeight": "bold", "textAlign": "center", "marginBottom": "15px"}),
             dbc.Row([
@@ -2751,7 +2766,6 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
     if qual_matches:
         qual_section = dbc.Col([
             html.H6([
-                html.I(className="fas fa-robot me-1", style={"color": "#007bff"}),
                 "Qualification Stats"
             ], style={"color": "#007bff", "fontWeight": "bold", "textAlign": "center", "marginBottom": "15px"}),
             dbc.Row([

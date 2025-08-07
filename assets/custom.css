@@ -395,13 +395,13 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 /* Links */
 a, a:active {
     color: #007bff;
-    text-decoration: underline;
+    text-decoration: none;
     transition: color 0.2s;
 }
 
 a:hover, a:focus {
     color: #339cff;
-    text-decoration: underline;
+    text-decoration: none;
 }
 
 /* Scrollbar */
@@ -841,12 +841,275 @@ label {
     color: #000 !important;
 }
 
-/* Only apply row hover/selected background if the cell does NOT have an inline background color */
-.dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell:not([style*="background-color"]) {
-    background-color: rgba(255, 221, 0, 0.1) !important;
+/* Completely disable all row hover effects in DataTables */
+/* Target all possible hover states with maximum specificity */
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell[style*="background-color"],
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell[class*="dash-cell"],
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell[class*="dash-spreadsheet-cell"],
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell[class*="cell"],
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell[class*="spreadsheet"],
+/* Target the row itself */
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover td,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover th,
+/* Override any pseudo-elements */
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell::before,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell::after,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell *,
+/* Target any child elements that might have hover effects */
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell div,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell span,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell a,
+/* Use the most specific selectors possible */
+body .dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell,
+html body .dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row:hover .dash-cell {
+    background-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+    transform: none !important;
+    transition: none !important;
 }
-.dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell:not([style*="background-color"]) {
-    background-color: rgba(255, 221, 0, 0.3) !important;
+
+/* Also disable any selected row effects */
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell[style*="background-color"],
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell[class*="dash-cell"],
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell[class*="dash-spreadsheet-cell"],
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell[class*="cell"],
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell[class*="spreadsheet"],
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected td,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected th,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell::before,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell::after,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell *,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell div,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell span,
+.dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell a,
+body .dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell,
+html body .dash-table-container .dash-spreadsheet-inner .dash-spreadsheet-row.selected .dash-cell {
+    background-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+    transform: none !important;
+    transition: none !important;
+}
+
+/* NUCLEAR OPTION - COMPLETELY DISABLE ALL HOVER EFFECTS */
+/* Target every possible hover state with maximum specificity */
+.dash-table-container tr:hover td,
+.dash-table-container tr:hover th,
+.dash-table-container tr:hover .dash-cell,
+.dash-table-container tr:hover .dash-cell *,
+.dash-table-container tr:hover .dash-cell div,
+.dash-table-container tr:hover .dash-cell span,
+.dash-table-container tr:hover .dash-cell a,
+.dash-table-container tr:hover .dash-cell p,
+.dash-table-container tr:hover .dash-cell strong,
+.dash-table-container tr:hover .dash-cell em,
+.dash-table-container tr:hover .dash-cell b,
+.dash-table-container tr:hover .dash-cell i,
+.dash-table-container tr:hover .dash-cell mark,
+.dash-table-container tr:hover .dash-cell small,
+.dash-table-container tr:hover .dash-cell sub,
+.dash-table-container tr:hover .dash-cell sup,
+.dash-table-container tr:hover .dash-cell code,
+.dash-table-container tr:hover .dash-cell pre,
+.dash-table-container tr:hover .dash-cell blockquote,
+.dash-table-container tr:hover .dash-cell ul,
+.dash-table-container tr:hover .dash-cell ol,
+.dash-table-container tr:hover .dash-cell li,
+.dash-table-container tr:hover .dash-cell dl,
+.dash-table-container tr:hover .dash-cell dt,
+.dash-table-container tr:hover .dash-cell dd,
+.dash-table-container tr:hover .dash-cell table,
+.dash-table-container tr:hover .dash-cell caption,
+.dash-table-container tr:hover .dash-cell tbody,
+.dash-table-container tr:hover .dash-cell tfoot,
+.dash-table-container tr:hover .dash-cell thead,
+.dash-table-container tr:hover .dash-cell tr,
+.dash-table-container tr:hover .dash-cell th,
+.dash-table-container tr:hover .dash-cell td,
+.dash-table-container tr:hover .dash-cell col,
+.dash-table-container tr:hover .dash-cell colgroup,
+.dash-table-container tr:hover .dash-cell fieldset,
+.dash-table-container tr:hover .dash-cell legend,
+.dash-table-container tr:hover .dash-cell button,
+.dash-table-container tr:hover .dash-cell input,
+.dash-table-container tr:hover .dash-cell select,
+.dash-table-container tr:hover .dash-cell textarea,
+.dash-table-container tr:hover .dash-cell label,
+.dash-table-container tr:hover .dash-cell form,
+.dash-table-container tr:hover .dash-cell iframe,
+.dash-table-container tr:hover .dash-cell object,
+.dash-table-container tr:hover .dash-cell embed,
+.dash-table-container tr:hover .dash-cell param,
+.dash-table-container tr:hover .dash-cell video,
+.dash-table-container tr:hover .dash-cell audio,
+.dash-table-container tr:hover .dash-cell source,
+.dash-table-container tr:hover .dash-cell track,
+.dash-table-container tr:hover .dash-cell canvas,
+.dash-table-container tr:hover .dash-cell svg,
+.dash-table-container tr:hover .dash-cell path,
+.dash-table-container tr:hover .dash-cell rect,
+.dash-table-container tr:hover .dash-cell circle,
+.dash-table-container tr:hover .dash-cell ellipse,
+.dash-table-container tr:hover .dash-cell line,
+.dash-table-container tr:hover .dash-cell polyline,
+.dash-table-container tr:hover .dash-cell polygon,
+.dash-table-container tr:hover .dash-cell text,
+.dash-table-container tr:hover .dash-cell tspan,
+.dash-table-container tr:hover .dash-cell g,
+.dash-table-container tr:hover .dash-cell defs,
+.dash-table-container tr:hover .dash-cell clipPath,
+.dash-table-container tr:hover .dash-cell mask,
+.dash-table-container tr:hover .dash-cell pattern,
+.dash-table-container tr:hover .dash-cell image,
+.dash-table-container tr:hover .dash-cell use,
+.dash-table-container tr:hover .dash-cell symbol,
+.dash-table-container tr:hover .dash-cell marker,
+.dash-table-container tr:hover .dash-cell linearGradient,
+.dash-table-container tr:hover .dash-cell radialGradient,
+.dash-table-container tr:hover .dash-cell stop,
+.dash-table-container tr:hover .dash-cell filter,
+.dash-table-container tr:hover .dash-cell feGaussianBlur,
+.dash-table-container tr:hover .dash-cell feOffset,
+.dash-table-container tr:hover .dash-cell feMerge,
+.dash-table-container tr:hover .dash-cell feMergeNode,
+.dash-table-container tr:hover .dash-cell feComposite,
+.dash-table-container tr:hover .dash-cell feBlend,
+.dash-table-container tr:hover .dash-cell feColorMatrix,
+.dash-table-container tr:hover .dash-cell feConvolveMatrix,
+.dash-table-container tr:hover .dash-cell feDisplacementMap,
+.dash-table-container tr:hover .dash-cell feFlood,
+.dash-table-container tr:hover .dash-cell feImage,
+.dash-table-container tr:hover .dash-cell feMorphology,
+.dash-table-container tr:hover .dash-cell feTile,
+.dash-table-container tr:hover .dash-cell feTurbulence,
+.dash-table-container tr:hover .dash-cell feDistantLight,
+.dash-table-container tr:hover .dash-cell fePointLight,
+.dash-table-container tr:hover .dash-cell feSpotLight,
+.dash-table-container tr:hover .dash-cell feFuncR,
+.dash-table-container tr:hover .dash-cell feFuncG,
+.dash-table-container tr:hover .dash-cell feFuncB,
+.dash-table-container tr:hover .dash-cell feFuncA,
+.dash-table-container tr:hover .dash-cell feComponentTransfer,
+.dash-table-container tr:hover .dash-cell feSpecularLighting,
+.dash-table-container tr:hover .dash-cell feDiffuseLighting,
+.dash-table-container tr:hover .dash-cell feDropShadow,
+.dash-table-container tr:hover .dash-cell feDropShadow *,
+.dash-table-container tr:hover .dash-cell *,
+.dash-table-container tr:hover .dash-cell * *,
+.dash-table-container tr:hover .dash-cell * * *,
+.dash-table-container tr:hover .dash-cell * * * *,
+.dash-table-container tr:hover .dash-cell * * * * *,
+.dash-table-container tr:hover .dash-cell * * * * * *,
+.dash-table-container tr:hover .dash-cell * * * * * * *,
+.dash-table-container tr:hover .dash-cell * * * * * * * *,
+.dash-table-container tr:hover .dash-cell * * * * * * * * *,
+.dash-table-container tr:hover .dash-cell * * * * * * * * * *,
+/* Also target the row itself */
+.dash-table-container tr:hover,
+.dash-table-container tr:hover *,
+.dash-table-container tr:hover * *,
+.dash-table-container tr:hover * * *,
+.dash-table-container tr:hover * * * *,
+.dash-table-container tr:hover * * * * *,
+.dash-table-container tr:hover * * * * * *,
+.dash-table-container tr:hover * * * * * * *,
+.dash-table-container tr:hover * * * * * * * *,
+.dash-table-container tr:hover * * * * * * * * *,
+.dash-table-container tr:hover * * * * * * * * * *,
+/* Target with maximum specificity */
+html body .dash-table-container tr:hover td,
+html body .dash-table-container tr:hover th,
+html body .dash-table-container tr:hover .dash-cell,
+html body .dash-table-container tr:hover .dash-cell *,
+html body .dash-table-container tr:hover,
+html body .dash-table-container tr:hover *,
+/* Target with even more specificity */
+html body div .dash-table-container tr:hover td,
+html body div .dash-table-container tr:hover th,
+html body div .dash-table-container tr:hover .dash-cell,
+html body div .dash-table-container tr:hover .dash-cell *,
+html body div .dash-table-container tr:hover,
+html body div .dash-table-container tr:hover *,
+/* Target with the most specificity possible */
+html body div div .dash-table-container tr:hover td,
+html body div div .dash-table-container tr:hover th,
+html body div div .dash-table-container tr:hover .dash-cell,
+html body div div .dash-table-container tr:hover .dash-cell *,
+html body div div .dash-table-container tr:hover,
+html body div div .dash-table-container tr:hover * {
+    background-color: transparent !important;
+    background-image: none !important;
+    background-size: auto !important;
+    background-repeat: repeat !important;
+    background-attachment: scroll !important;
+    background-position: 0% 0% !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+    -webkit-animation: none !important;
+    -moz-animation: none !important;
+    -o-animation: none !important;
+    -ms-animation: none !important;
+    -webkit-transform: none !important;
+    -moz-transform: none !important;
+    -o-transform: none !important;
+    -ms-transform: none !important;
+    -webkit-transition: none !important;
+    -moz-transition: none !important;
+    -o-transition: none !important;
+    -ms-transition: none !important;
+    -webkit-box-shadow: none !important;
+    -moz-box-shadow: none !important;
+    -o-box-shadow: none !important;
+    -ms-box-shadow: none !important;
+    -webkit-filter: none !important;
+    -moz-filter: none !important;
+    -o-filter: none !important;
+    -ms-filter: none !important;
+    -webkit-opacity: 1 !important;
+    -moz-opacity: 1 !important;
+    -o-opacity: 1 !important;
+    -ms-opacity: 1 !important;
+    -webkit-background-color: transparent !important;
+    -moz-background-color: transparent !important;
+    -o-background-color: transparent !important;
+    -ms-background-color: transparent !important;
+    -webkit-background: transparent !important;
+    -moz-background: transparent !important;
+    -o-background: transparent !important;
+    -ms-background: transparent !important;
+    -webkit-background-image: none !important;
+    -moz-background-image: none !important;
+    -o-background-image: none !important;
+    -ms-background-image: none !important;
+    -webkit-background-size: auto !important;
+    -moz-background-size: auto !important;
+    -o-background-size: auto !important;
+    -ms-background-size: auto !important;
+    -webkit-background-repeat: repeat !important;
+    -moz-background-repeat: repeat !important;
+    -o-background-repeat: repeat !important;
+    -ms-background-repeat: repeat !important;
+    -webkit-background-attachment: scroll !important;
+    -moz-background-attachment: scroll !important;
+    -o-background-attachment: scroll !important;
+    -ms-background-attachment: scroll !important;
+    -webkit-background-position: 0% 0% !important;
+    -moz-background-position: 0% 0% !important;
+    -o-background-position: 0% 0% !important;
+    -ms-background-position: 0% 0% !important;
 }
 
 /* Responsive table improvements */
