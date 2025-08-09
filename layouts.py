@@ -1135,434 +1135,118 @@ home_layout = html.Div([
 blog_layout = html.Div([
     topbar(),
     dbc.Container([
-        html.H1("The ACE Model: A Comprehensive Analysis", className="text-center my-4"),
-        
-        html.Div([
-            html.P([
-                "The ACE (Adjusted Contribution Estimate) algorithm represents a sophisticated evolution of traditional EPA (Expected Points Added) modeling in FIRST Robotics Competition. ",
-                "This comprehensive analysis examines the mathematical foundations, implementation details, and statistical methodologies that underpin this advanced performance prediction system."
-            ], style={"fontSize": "1.2rem", "lineHeight": "1.6", "marginBottom": "2rem"}),
-        ]),
+        html.H2("ACE (Adjusted Contribution Estimate) Algorithm", className="text-center my-4"),
 
-        # Core Model Overview
-        dbc.Card([
-            dbc.CardHeader(html.H3("Core Model Architecture", className="mb-0")),
-            dbc.CardBody([
-                html.P([
-                    "ACE extends traditional EPA by incorporating multiple statistical reliability factors into a confidence-weighted scoring system. ",
-                    "The fundamental equation is: ",
-                    html.Strong("ACE = EPA × Confidence"),
-                    ", where confidence represents a composite measure of statistical reliability ranging from 0.0 to 1.0."
-                ], style={"fontSize": "1.1rem"}),
-                
-                html.H5("Component Separation", className="mt-4"),
-                html.P([
-                    "The model calculates EPA separately for three distinct game phases: Auto, Teleop, and Endgame. ",
-                    "Each component undergoes independent statistical analysis and trimming to ensure robust estimation. ",
-                    "This separation allows for more granular performance assessment and better identification of team strengths and weaknesses."
-                ]),
-            ])
-        ], className="mb-4"),
+        html.P("The EPA (Estimated Points Added) model estimates a team's contribution to a match based on scoring breakdowns and trends. ACE (Adjusted Contribution Estimate) extends this by incorporating consistency, dominance, and statistical reliability.", style={"fontSize": "1.1rem"}),
 
-        # EPA Update Mechanism
+        html.H4("Core Model", className="mt-4"),
+        html.P("EPA updates are done incrementally after each match. Auto, Teleop, and Endgame contributions are calculated separately, then EPA is updated using a weighted delta with decay."),
+
         dbc.Card([
-            dbc.CardHeader(html.H3("EPA Update Mechanism", className="mb-0")),
+            dbc.CardHeader("EPA Update Formula"),
             dbc.CardBody([
-                html.P([
-                    "EPA values are updated incrementally after each match using an adaptive learning algorithm that incorporates match importance, ",
-                    "chronological weighting, and statistical decay factors."
-                ]),
-                
-                html.H5("Update Formula", className="mt-3"),
                 html.Pre("""
-# For each component (Auto, Teleop, Endgame):
+# For each component (auto, teleop, endgame):
 delta = decay * K * (actual - epa) 
 
 # Where:
-decay = (match_count / total_matches)²  # Simplified decay in current model
-K = 0.4 * match_importance * chronological_weight
+decay = world_champ_penalty * (match_count / total_matches)²
+K = 0.4 * match_importance * world_champ_penalty
+
+# World Championship penalties:
+Einstein: 0.95
+Division: 0.85
+Regular: 1.0
 
 # Match importance weights:
 importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
-
-# Chronological weighting (0.05-1.0 based on event timing):
-# Pre-season: 0.05, Early season: 0.2-0.4, Mid season: 0.4-0.8, Late season: 0.8-1.0
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "15px", "borderRadius": "8px"}),
-                
-                html.H5("Learning Rate Analysis", className="mt-3"),
-                html.P([
-                    "The learning rate K = 0.4 provides a balance between responsiveness to new data and stability. ",
-                    "This value was empirically determined to minimize prediction error while maintaining statistical robustness. ",
-                    "The decay factor ensures that early matches have reduced influence as the season progresses, ",
-                    "preventing early-season anomalies from disproportionately affecting final EPA values."
-                ]),
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
             ])
-        ], className="mb-4"),
+        ], className="my-3"),
 
-        # Chronological Weighting System
+        html.H4("Component Estimation", className="mt-4"),
+        html.P("Each component (Auto, Teleop, Endgame) is estimated separately with adaptive trimming based on match count:"),
+
         dbc.Card([
-            dbc.CardHeader(html.H3("Chronological Weighting System", className="mb-0")),
+            dbc.CardHeader("Adaptive Trimming"),
             dbc.CardBody([
-                html.P([
-                    "The model implements a sophisticated chronological weighting system that accounts for the temporal progression of team performance throughout the season. ",
-                    "This system recognizes that teams evolve and improve over time, making recent performances more predictive of future capability."
-                ]),
-                
-                html.H5("Weight Calculation Algorithm", className="mt-3"),
                 html.Pre("""
-# Event classification and weighting:
-def get_event_chronological_weight(event_key, year):
-    # Determine event type and timing within season
-    event_start = parse_event_date(event_key)
-    season_start = get_first_regular_week(year)
-    season_end = get_last_regular_week(year)
-    
-    # Pre-season events (before first regular week)
-    if event_start < season_start:
-        return 0.05, 'preseason'
-    
-    # Off-season events (after last regular week)
-    if event_start > season_end:
-        return 0.1, 'offseason'
-    
-    # Regular season events - calculate position within season
-    season_duration = (season_end - season_start).days
-    days_into_season = (event_start - season_start).days
-    season_progress = max(0.0, min(1.0, days_into_season / season_duration))
-    
-    # Enhanced chronological weighting curve:
-    if season_progress <= 0.2:  # Early season (first 20%)
-        weight = 0.2 + (season_progress / 0.2) * 0.2  # 0.2 to 0.4
-    elif season_progress <= 0.8:  # Mid season (20-80%)
-        weight = 0.4 + ((season_progress - 0.2) / 0.6) * 0.4  # 0.4 to 0.8
-    else:  # Late season (last 20%)
-        weight = 0.8 + ((season_progress - 0.8) / 0.2) * 0.2  # 0.8 to 1.0
-    
-    return weight, 'regular'
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "15px", "borderRadius": "8px"}),
-                
-                html.H5("Weighting Rationale", className="mt-3"),
-                html.P([
-                    "Early season events receive reduced weight (0.2-0.4) to account for teams still developing their robots and strategies. ",
-                    "Mid-season events (0.4-0.8) represent the period when teams have refined their approaches but may still be making improvements. ",
-                    "Late season events (0.8-1.0) receive full weight as they best represent a team's final competitive capability. ",
-                    "Pre-season events receive minimal weight (0.05) as they often involve incomplete robots or experimental strategies."
-                ]),
-                
-                html.H5("Multi-Event Aggregation", className="mt-3"),
-                html.P([
-                    "When a team participates in multiple events, the model aggregates EPA values using chronological weights: ",
-                    html.Strong("Weighted EPA = Σ(EPA_i × weight_i) / Σ(weight_i)"),
-                    ". This ensures that more recent and relevant performances have greater influence on the final ACE calculation."
-                ]),
+# Trimming percentages based on match count:
+< 12 matches: 0%
+< 25 matches: 3%
+< 40 matches: 5%
+< 60 matches: 8%
+< 100 matches: 10%
+≥ 100 matches: 12%
+
+# Trim from low end only:
+trimmed_scores = sorted(scores)[k:]  # k = n * trim_pct
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
             ])
-        ], className="mb-4"),
+        ], className="my-3"),
 
-        # B-Bot Handling System
+        html.H4("Confidence Calculation", className="mt-4"),
+        html.P("ACE = EPA × Confidence. Confidence is computed from multiple weighted components:"),
+
         dbc.Card([
-            dbc.CardHeader(html.H3("B-Bot Handling System", className="mb-0")),
+            dbc.CardHeader("Confidence Formula"),
             dbc.CardBody([
-                html.P([
-                    "The ACE model's event-based architecture provides unique advantages for handling B-bot scenarios, where teams field multiple robots across different events. ",
-                    "Because each event maintains independent EPA calculations, the same B-bot number (e.g., 9999) can have accurate, separate performance assessments at multiple events."
-                ]),
-                
-                html.H5("Event-Based B-Bot Tracking", className="mt-3"),
-                html.P([
-                    "The model's event-specific EPA calculations allow B-bots to be tracked independently across different competitions. ",
-                    "A B-bot numbered 9999 can have distinct performance profiles at Event A and Event B, with each event's EPA calculated separately ",
-                    "based on that specific event's match data. This granular approach ensures that robot evolution and event-specific performance ",
-                    "are accurately captured without cross-contamination between events."
-                ]),
-                
-                html.H5("Chezy Arena FMS Integration", className="mt-3"),
-                html.P([
-                    "California events require special handling due to their use of Chezy Arena, a different Field Management System (FMS) than the standard FIRST FMS. ",
-                    "Chezy Arena handles B-bot identification differently, using a suffix notation (e.g., 'frc604B') to distinguish B-bots from their base team numbers."
-                ]),
-                
-                html.H5("Detection and Mapping Algorithm", className="mt-3"),
-                html.Pre("""
-def detect_b_bot_mapping(event_key, team_number):
-    # Check if this is a California event with Chezy Arena FMS
-    if not (9970 <= team_number <= 9999):
-        return None
-    
-    event_data = get_event_data(event_key)
-    if event_data.get("state_prov") == "CA":
-        # Chezy Arena uses suffix notation (e.g., "frc604B")
-        all_matches = get_event_matches(event_key)
-        b_bot_mapping = {}
-        
-        for match in all_matches:
-            for alliance in ["red", "blue"]:
-                for team_key in match["alliances"][alliance]["team_keys"]:
-                    if team_key.endswith("B"):
-                        # Extract base number from Chezy Arena format
-                        base_num = int(team_key[3:-1])  # "frc604B" -> 604
-                        if base_num not in b_bot_mapping:
-                            b_bot_mapping[base_num] = team_key
-        
-        return b_bot_mapping if b_bot_mapping else None
-    return None
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "15px", "borderRadius": "8px"}),
-                
-                html.H5("Multi-Event B-Bot Performance", className="mt-3"),
-                html.P([
-                    "The event-based architecture enables sophisticated B-bot performance analysis:"
-                ]),
-                html.Ul([
-                    html.Li([
-                        html.Strong("Independent Event Tracking: "),
-                        "Each event maintains separate EPA calculations, allowing B-bots to show performance evolution across events"
-                    ]),
-                    html.Li([
-                        html.Strong("Accurate Attribution: "),
-                        "Match performances are correctly attributed to the specific B-bot that competed, preventing statistical contamination"
-                    ]),
-                    html.Li([
-                        html.Strong("Performance Comparison: "),
-                        "Teams can compare B-bot performance across different events to assess robot development and strategy effectiveness"
-                    ]),
-                    html.Li([
-                        html.Strong("Chronological Weighting: "),
-                        "B-bot performances receive appropriate chronological weighting, with later events having greater influence on overall assessment"
-                    ]),
-                ]),
-                
-                html.H5("Statistical Integrity", className="mt-3"),
-                html.P([
-                    "The Chezy Arena integration ensures that B-bot performances are accurately captured and processed. ",
-                    "The system automatically detects California events, applies the appropriate mapping corrections, and maintains ",
-                    "statistical integrity across all competition formats while preserving the granular, event-specific performance tracking ",
-                    "that makes the ACE model uniquely powerful for multi-robot scenarios."
-                ]),
-            ])
-        ], className="mb-4"),
-
-        # Adaptive Trimming System
-        dbc.Card([
-            dbc.CardHeader(html.H3("Adaptive Trimming System", className="mb-0")),
-            dbc.CardBody([
-                html.P([
-                    "To mitigate the impact of outlier scores and ensure statistical robustness, the model employs an adaptive trimming system ",
-                    "that removes the lowest-performing matches based on the total number of matches played."
-                ]),
-                
-                html.H5("Trimming Percentages", className="mt-3"),
-                html.Pre("""
-# Adaptive trimming (trim from low end only):
-< 10 matches:  0% trim
-< 20 matches:  5% trim  
-< 30 matches:  8% trim
-< 40 matches: 10% trim
-< 60 matches: 12% trim
-< 100 matches: 15% trim
-≥ 100 matches: 18% trim
-
-# Implementation:
-k = int(n * trim_pct)
-trimmed_scores = sorted(scores)[k:]  # Remove lowest k scores
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "15px", "borderRadius": "8px"}),
-                
-                html.P([
-                    "This trimming strategy is based on statistical analysis of match count distributions across different seasons. ",
-                    "The percentages are optimized for the typical number of matches teams play, with more aggressive trimming for teams with larger sample sizes."
-                ]),
-            ])
-        ], className="mb-4"),
-
-        # Confidence Calculation
-        dbc.Card([
-            dbc.CardHeader(html.H3("Confidence Calculation", className="mb-0")),
-            dbc.CardBody([
-                html.P([
-                    "The confidence score is a weighted composite of five statistical reliability factors, ",
-                    "each contributing to the overall assessment of EPA reliability."
-                ]),
-                
-                html.H5("Confidence Components", className="mt-3"),
                 html.Pre("""
 weights = {
-    "consistency": 0.35,      # Performance stability
-    "dominance": 0.35,        # Relative performance strength
-    "record_alignment": 0.10, # Win-loss record correlation
-    "veteran": 0.10,          # Team experience factor
-    "events": 0.10,           # Multi-event participation
+    "consistency": 0.4,
+    "dominance": 0.25,
+    "record_alignment": 0.15,
+    "veteran": 0.1,
+    "events": 0.05,
+    "base": 0.05
 }
 
-raw_confidence = Σ(weight_i × component_i)
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "15px", "borderRadius": "8px"}),
-                
-                html.H5("Component Definitions", className="mt-3"),
-                html.Ul([
-                    html.Li([
-                        html.Strong("Consistency (35%): "),
-                        "Measures performance stability using coefficient of variation: ",
-                        html.Code("consistency = max(0, 1 - stdev/peak)"),
-                        ". Higher consistency indicates less variance relative to peak performance."
-                    ]),
-                    html.Li([
-                        html.Strong("Dominance (35%): "),
-                        "Assesses relative performance strength using normalized margin scores: ",
-                        html.Code("dominance = mean(normalized_margins)"),
-                        " where margins are scaled by opponent score and normalized to [0,1]."
-                    ]),
-                    html.Li([
-                        html.Strong("Record Alignment (10%): "),
-                        "Correlates actual win-loss record with expected win rate: ",
-                        html.Code("record_alignment = 0.7 + (win_rate × 0.3)"),
-                        ". Scales win rate from [0,1] to [0.7,1.0]."
-                    ]),
-                    html.Li([
-                        html.Strong("Veteran Status (10%): "),
-                        "Provides confidence boost based on team experience: ",
-                        html.Code("veteran_boost = {1yr: 0.2, 2yr: 0.4, 3yr: 0.6, 4yr+: 1.0}"),
-                        "."
-                    ]),
-                    html.Li([
-                        html.Strong("Event Count (10%): "),
-                        "Rewards multi-event participation: ",
-                        html.Code("event_boost = {1: 0.5, 2: 0.9, 3+: 1.0}"),
-                        "."
-                    ]),
-                ]),
-                
-                html.H5("Non-Linear Scaling", className="mt-3"),
-                html.Pre("""
-# Apply non-linear scaling to raw confidence:
-if raw_confidence > 0.85:
-    confidence = 0.85 + (raw_confidence - 0.85) × 1.1
-elif raw_confidence < 0.65:
-    confidence = raw_confidence × 0.9
-else:
-    confidence = raw_confidence
+# Components:
+consistency = 1 - (stdev / peak_score)
+dominance = mean(normalized_margin_scores)
+record_alignment = 1 - |expected_win_rate - actual_win_rate|
+veteran_bonus = 1.0 if veteran else 0.6
+event_boost = 1.0 if events ≥ 2 else 0.60
 
-# Final confidence is capped to [0.0, 1.0]
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "15px", "borderRadius": "8px"}),
-                
-                html.P([
-                    "This non-linear scaling amplifies high-confidence predictions and reduces low-confidence ones, ",
-                    "creating a more decisive confidence distribution that better reflects statistical certainty."
-                ]),
+confidence = min(1.0, sum(weight * component))
+""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
             ])
-        ], className="mb-4"),
-        # Scoring Functions
+        ], className="my-3"),
+
+        html.H4("Key Components", className="mt-4"),
+        html.P("Each confidence component measures a different aspect of team performance:"),
+
         dbc.Card([
-            dbc.CardHeader(html.H3("Game-Specific Scoring Functions", className="mb-0")),
             dbc.CardBody([
-                html.P([
-                    "The model implements year-specific scoring functions that accurately parse match breakdowns ",
-                    "and calculate component contributions according to official game rules."
-                ]),
+                html.H6("Consistency (40%)"),
+                html.P("Measures stability of match-to-match performance. Higher when scores are more consistent relative to peak performance."),
                 
-                html.H5("2025 Example (Crescendo)", className="mt-3"),
-                html.Pre("""
-def auto_2025(breakdowns, team_count):
-    def score_per_breakdown(b):
-        reef = b.get("autoReef", {})
-        trough = reef.get("trough", 0)
-        bot = reef.get("tba_botRowCount", 0)
-        mid = reef.get("tba_midRowCount", 0)
-        top = reef.get("tba_topRowCount", 0)
-        coral_score = trough * 3 + bot * 4 + mid * 6 + top * 7
-        mobility = b.get("autoMobilityPoints", 0)
-        
-        # Scale by alliance size
-        scaling_factor = 1 / (1 + log(team_count))
-        return (mobility + coral_score) * scaling_factor
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "15px", "borderRadius": "8px"}),
+                html.H6("Dominance (25%)"),
+                html.P("Measures how much a team outperforms opponents. Calculated from normalized margin scores across matches."),
                 
-                html.P([
-                    "Each year's scoring functions are meticulously crafted to match official game rules, ",
-                    "with proper handling of alliance-wide vs. individual achievements and appropriate scaling factors."
-                ]),
+                html.H6("Record Alignment (15%)"),
+                html.P("How well actual win rate matches expected win rate based on dominance scores."),
+                
+                html.H6("Veteran Status (10%)"),
+                html.P("Veteran teams get higher confidence (1.0 vs 0.6) due to historical predictability."),
+                
+                html.H6("Event Count (5%)"),
+                html.P("Teams with multiple events get a confidence boost (1.0 vs 0.6)."),
+                
+                html.H6("Base Confidence (5%)"),
+                html.P("Minimum confidence floor to prevent extreme penalties.")
             ])
-        ], className="mb-4"),
+        ], className="my-3"),
 
-        # Statistical Robustness
-        dbc.Card([
-            dbc.CardHeader(html.H3("Statistical Robustness Features", className="mb-0")),
-            dbc.CardBody([
-                html.H5("Error Handling", className="mt-3"),
-                html.Ul([
-                    html.Li("Comprehensive retry mechanisms with exponential backoff for API calls"),
-                    html.Li("Graceful degradation when match breakdowns are unavailable"),
-                    html.Li("Fallback calculations for legacy years without detailed breakdowns"),
-                    html.Li("Robust handling of edge cases (demo teams, B-bot mappings, etc.)"),
-                ]),
-                
-                html.H5("Data Validation", className="mt-3"),
-                html.Ul([
-                    html.Li("Automatic detection and handling of California B-bot mapping issues"),
-                    html.Li("Validation of team experience data from historical records"),
-                    html.Li("Consistency checks for win-loss record calculations"),
-                    html.Li("Sanitization of floating-point calculations to prevent NaN values"),
-                ]),
-                
-                html.H5("Performance Optimization", className="mt-3"),
-                html.Ul([
-                    html.Li("Incremental database updates that only process changed data"),
-                    html.Li("Concurrent processing with thread pools for efficient data gathering"),
-                    html.Li("Optimized database queries with proper indexing"),
-                    html.Li("Memory-efficient processing of large datasets"),
-                ]),
-            ])
-        ], className="mb-4"),
-
-        # Model Validation
-        dbc.Card([
-            dbc.CardHeader(html.H3("Model Validation and Performance", className="mb-0")),
-            dbc.CardBody([
-                html.P([
-                    "The ACE model has undergone extensive validation and optimization to ensure accurate predictions:"
-                ]),
-                
-                html.H5("Prediction Accuracy", className="mt-3"),
-                html.Ul([
-                    html.Li("Significant reduction in Mean Absolute Error (MAE) compared to baseline EPA"),
-                    html.Li("Improved Root Mean Square Error (RMSE) indicating better overall fit"),
-                    html.Li("Enhanced winner prediction accuracy across multiple seasons"),
-                    html.Li("Consistent performance across different event types and competition levels"),
-                ]),
-                
-                html.H5("Statistical Validation", className="mt-3"),
-                html.Ul([
-                    html.Li("Cross-validation across multiple seasons (2015-2025)"),
-                    html.Li("Robustness testing with outlier scenarios"),
-                    html.Li("Sensitivity analysis of confidence component weights"),
-                    html.Li("Validation against known team performance patterns"),
-                ]),
-            ])
-        ], className="mb-4"),
-
-        # Conclusion
-        dbc.Card([
-            dbc.CardHeader(html.H3("Conclusion", className="mb-0")),
-            dbc.CardBody([
-                html.P([
-                    "The ACE model represents a significant advancement in FRC performance prediction, ",
-                    "combining sophisticated statistical methodologies with practical implementation considerations. ",
-                    "By incorporating confidence weighting, chronological factors, and robust statistical techniques, ",
-                    "ACE provides more reliable and nuanced performance assessments than traditional EPA models."
-                ], style={"fontSize": "1.1rem"}),
-                
-                html.P([
-                    "The model's success lies in its ability to balance mathematical rigor with practical applicability, ",
-                    "providing actionable insights for teams, scouts, and analysts while maintaining statistical validity ",
-                    "across diverse competition scenarios and team characteristics."
-                ], style={"fontSize": "1.1rem"}),
-            ])
-        ], className="mb-4"),
-
-    ], style={"maxWidth": "1000px", "margin": "0 auto", "padding": "20px"}),
+        html.Hr(),
+        html.P("The model is continuously evolving. To contribute, test ideas, or file issues, visit the GitHub repository:", className="mt-4"),
+        html.A("https://github.com/rhettadam/peekorobo", href="https://github.com/rhettadam/peekorobo", target="_blank")
+    ], style={
+        "maxWidth": "900px",
+        "flexGrow": "1" # Added flex-grow
+        }, className="py-4 mx-auto"),
     footer
-], style={
-    "display": "flex",
-    "flexDirection": "column",
-    "minHeight": "100vh",
-    "backgroundColor": "var(--bg-primary)"
-})
+])
 
 def insights_layout():
 
@@ -2791,7 +2475,6 @@ def teams_layout(default_year=current_year):
         [
             dcc.Location(id="teams-url", refresh=False),
             dcc.Store(id="user-session"),
-            dcc.Store(id="teams-tab-store"),
             topbar(),
             dbc.Container([
                 dbc.Row(id="top-teams-container", className="gx-4 gy-4 justify-content-center mb-5 d-none d-md-flex", justify="center"),

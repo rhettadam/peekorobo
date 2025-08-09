@@ -3761,27 +3761,6 @@ def sync_teams_dropdowns_with_url(search):
             percentile = ["filtered"]
     return country, state, district, year, percentile
 
-# Add a callback to set the teams-tab-store from the URL's search string
-@app.callback(
-    Output("teams-tab-store", "data"),
-    Input("teams-url", "search"),
-)
-def set_teams_tab_from_url(search):
-    if search and search.startswith("?"):
-        params = parse_qs(search[1:])
-        tab = params.get("tab", [None])[0]
-        if tab in ["table-tab", "avatars-tab", "bubble-chart-tab"]:
-            return tab
-    return "table-tab"
-
-# Add a callback to set the active_tab of teams-tabs from teams-tab-store
-@app.callback(
-    Output("teams-tabs", "active_tab"),
-    Input("teams-tab-store", "data"),
-)
-def set_teams_tabs_active_tab(tab):
-    return tab
-
 @app.callback(
     Output("axis-dropdown-container", "style"),
     Input("teams-tabs", "active_tab")
