@@ -9,7 +9,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 import random
-from typing import Dict, List, Optional, Union
+from typing import Dict, List
 from functools import wraps
 import signal
 import sys
@@ -18,7 +18,8 @@ import time  # <-- Added for runtime tracking
 import math
 import traceback
 
-from epamodels import *
+from yearmodels import *
+from datagather import get_connection_pool, get_pg_connection, return_pg_connection, close_connection_pool
 
 start_time = time.time()
 
@@ -33,12 +34,11 @@ from urllib.parse import urlparse
 
 # Global variables for cleanup
 active_executors = []
-active_connections = []
 shutdown_event = threading.Event()
 
 def signal_handler(signum, frame):
-    """Handle Ctrl+C and other termination signals gracefully."""
-    print(f"\nReceived signal {signum}. Shutting down gracefully...")
+    # Handle Ctrl+C and other termination signals
+    print(f"\nReceived signal {signum}. Shutting down...")
     shutdown_event.set()
     
     # Cancel all running futures
@@ -46,13 +46,8 @@ def signal_handler(signum, frame):
         if hasattr(executor, 'shutdown'):
             executor.shutdown(wait=False, cancel_futures=True)
     
-    # Close all database connections
-    for conn in active_connections:
-        try:
-            if conn and not conn.closed:
-                conn.close()
-        except Exception as e:
-            print(f"Warning: Error closing connection: {e}")
+    # Close the connection pool
+    close_connection_pool()
     
     print("Cleanup complete. Exiting.")
     sys.exit(0)
@@ -62,343 +57,246 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 def cleanup_executor(executor):
-    """Safely shutdown an executor."""
+    # Safely shutdown an executor
     if executor and hasattr(executor, 'shutdown'):
         try:
             executor.shutdown(wait=False, cancel_futures=True)
         except Exception as e:
             print(f"Warning: Error shutting down executor: {e}")
 
-def cleanup_connection(conn):
-    """Safely close a database connection."""
-    if conn and not conn.closed:
-        try:
-            conn.close()
-        except Exception as e:
-            print(f"Warning: Error closing connection: {e}")
+# Context manager for database connections
+class DatabaseConnection:
+    """Context manager for database connections from the pool."""
+    
+    def __init__(self):
+        self.conn = None
+        
+    def __enter__(self):
+        self.conn = get_pg_connection()
+        return self.conn
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.conn:
+            return_pg_connection(self.conn)
 
-# Robust retry for DB connection
+# Robust retry for DB connection (now using pool)
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
 def get_pg_connection():
     if shutdown_event.is_set():
         raise Exception("Shutdown requested")
         
-    url = os.environ.get("DATABASE_URL")
-    if url is None:
-        raise Exception("DATABASE_URL not set in environment.")
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
-    result = urlparse(url)
-    conn = psycopg2.connect(
-        database=result.path[1:],
-        user=result.username,
-        password=result.password,
-        host=result.hostname,
-        port=result.port,
-        connect_timeout=30,
-        options='-c statement_timeout=300000'
-    )
-    active_connections.append(conn)
-    return conn
-
-def create_epa_tables():
-    """Create all necessary tables if they don't exist."""
-    schema = """
-    CREATE TABLE IF NOT EXISTS events (
-        event_key TEXT PRIMARY KEY,
-        name TEXT,
-        year INTEGER,
-        start_date TEXT,
-        end_date TEXT,
-        event_type TEXT,
-        city TEXT,
-        state_prov TEXT,
-        country TEXT,
-        website TEXT
-    );
-    CREATE TABLE IF NOT EXISTS event_teams (
-        event_key TEXT,
-        team_number INTEGER,
-        nickname TEXT,
-        city TEXT,
-        state_prov TEXT,
-        country TEXT,
-        PRIMARY KEY (event_key, team_number)
-    );
-    CREATE TABLE IF NOT EXISTS event_rankings (
-        event_key TEXT,
-        team_number INTEGER,
-        rank INTEGER,
-        wins INTEGER,
-        losses INTEGER,
-        ties INTEGER,
-        dq INTEGER,
-        PRIMARY KEY (event_key, team_number)
-    );
-    CREATE TABLE IF NOT EXISTS event_matches (
-        match_key TEXT PRIMARY KEY,
-        event_key TEXT,
-        comp_level TEXT,
-        match_number INTEGER,
-        set_number INTEGER,
-        red_teams TEXT,
-        blue_teams TEXT,
-        red_score INTEGER,
-        blue_score INTEGER,
-        winning_alliance TEXT,
-        youtube_key TEXT
-    );
-    CREATE TABLE IF NOT EXISTS event_awards (
-        event_key TEXT,
-        team_number INTEGER,
-        award_name TEXT,
-        year INTEGER,
-        PRIMARY KEY (event_key, team_number, award_name)
-    );
-    CREATE TABLE IF NOT EXISTS team_epas (
-        team_number INTEGER,
-        year INTEGER,
-        nickname TEXT,
-        city TEXT,
-        state_prov TEXT,
-        country TEXT,
-        website TEXT,
-        normal_epa REAL,
-        epa REAL,
-        confidence REAL,
-        auto_epa REAL,
-        teleop_epa REAL,
-        endgame_epa REAL,
-        wins INTEGER,
-        losses INTEGER,
-        event_epas JSONB,
-        PRIMARY KEY (team_number, year)
-    );
-    """
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute(schema)
-    conn.commit()
-    cur.close()
-    conn.close()
-
-def clear_year_data(year):
-    """Delete all data for a specific year from all relevant tables."""
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    for table, year_col in [
-        ("events", "year"),
-        ("event_teams", "event_key"),
-        ("event_rankings", "event_key"),
-        ("event_matches", "event_key"),
-        ("event_awards", "year"),
-        ("team_epas", "year"),
-    ]:
-        if year_col == "year":
-            cur.execute(f"DELETE FROM {table} WHERE year = %s", (year,))
-        else:
-            cur.execute(f"DELETE FROM {table} WHERE LEFT({year_col}, 4) = %s", (str(year),))
-    conn.commit()
-    cur.close()
-    conn.close()
+    # Get connection from the pool
+    from datagather import get_pg_connection as get_pool_connection
+    return get_pool_connection()
 
 def insert_event_data(all_data, year):
-    """Insert event, teams, rankings, matches, and awards into PostgreSQL."""
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    for i, data in enumerate(tqdm(all_data, desc=f'Inserting {year} events')):
-        # Insert event
+    # Insert event, teams, rankings, matches, and awards into PostgreSQL
+    with DatabaseConnection() as conn:
+        cur = conn.cursor()
+        for i, data in enumerate(tqdm(all_data, desc=f'Inserting {year} events')):
+            # Insert event
+            cur.execute("""
+                INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (event_key) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    year = EXCLUDED.year,
+                    start_date = EXCLUDED.start_date,
+                    end_date = EXCLUDED.end_date,
+                    event_type = EXCLUDED.event_type,
+                    city = EXCLUDED.city,
+                    state_prov = EXCLUDED.state_prov,
+                    country = EXCLUDED.country,
+                    website = EXCLUDED.website
+            """, data["event"])
+            # Insert teams
+            if data["teams"]:
+                cur.executemany("""
+                    INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (event_key, team_number) DO UPDATE SET
+                        nickname = EXCLUDED.nickname,
+                        city = EXCLUDED.city,
+                        state_prov = EXCLUDED.state_prov,
+                        country = EXCLUDED.country
+                """, data["teams"])
+            # Insert rankings
+            if data["rankings"]:
+                cur.executemany("""
+                    INSERT INTO event_rankings (event_key, team_number, rank, wins, losses, ties, dq)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (event_key, team_number) DO UPDATE SET
+                        rank = EXCLUDED.rank,
+                        wins = EXCLUDED.wins,
+                        losses = EXCLUDED.losses,
+                        ties = EXCLUDED.ties,
+                        dq = EXCLUDED.dq
+                """, data["rankings"])
+            # Insert matches
+            if data["matches"]:
+                cur.executemany("""
+                    INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (match_key) DO UPDATE SET
+                        event_key = EXCLUDED.event_key,
+                        comp_level = EXCLUDED.comp_level,
+                        match_number = EXCLUDED.match_number,
+                        set_number = EXCLUDED.set_number,
+                        red_teams = EXCLUDED.red_teams,
+                        blue_teams = EXCLUDED.blue_teams,
+                        red_score = EXCLUDED.red_score,
+                        blue_score = EXCLUDED.blue_score,
+                        winning_alliance = EXCLUDED.winning_alliance,
+                        youtube_key = EXCLUDED.youtube_key
+                """, data["matches"])
+            # Insert awards
+            if data["awards"]:
+                cur.executemany("""
+                    INSERT INTO event_awards (event_key, team_number, award_name, year)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (event_key, team_number, award_name) DO NOTHING
+                """, data["awards"])
+        conn.commit()
+        cur.close()
+
+def insert_team_epa(result, year):
+    # Insert or update a team's EPA data for a given year
+    with DatabaseConnection() as conn:
+        cur = conn.cursor()
         cur.execute("""
-            INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (event_key) DO UPDATE SET
-                name = EXCLUDED.name,
-                year = EXCLUDED.year,
-                start_date = EXCLUDED.start_date,
-                end_date = EXCLUDED.end_date,
-                event_type = EXCLUDED.event_type,
+            INSERT INTO team_epas (team_number, year, nickname, city, state_prov, country, website,
+                                   normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+                                   wins, losses, event_epas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (team_number, year) DO UPDATE SET
+                nickname = EXCLUDED.nickname,
                 city = EXCLUDED.city,
                 state_prov = EXCLUDED.state_prov,
                 country = EXCLUDED.country,
-                website = EXCLUDED.website
-        """, data["event"])
-        # Insert teams
-        if data["teams"]:
-            cur.executemany("""
-                INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (event_key, team_number) DO UPDATE SET
-                    nickname = EXCLUDED.nickname,
-                    city = EXCLUDED.city,
-                    state_prov = EXCLUDED.state_prov,
-                    country = EXCLUDED.country
-            """, data["teams"])
-        # Insert rankings
-        if data["rankings"]:
-            cur.executemany("""
-                INSERT INTO event_rankings (event_key, team_number, rank, wins, losses, ties, dq)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (event_key, team_number) DO UPDATE SET
-                    rank = EXCLUDED.rank,
-                    wins = EXCLUDED.wins,
-                    losses = EXCLUDED.losses,
-                    ties = EXCLUDED.ties,
-                    dq = EXCLUDED.dq
-            """, data["rankings"])
-        # Insert matches
-        if data["matches"]:
-            cur.executemany("""
-                INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (match_key) DO UPDATE SET
-                    event_key = EXCLUDED.event_key,
-                    comp_level = EXCLUDED.comp_level,
-                    match_number = EXCLUDED.match_number,
-                    set_number = EXCLUDED.set_number,
-                    red_teams = EXCLUDED.red_teams,
-                    blue_teams = EXCLUDED.blue_teams,
-                    red_score = EXCLUDED.red_score,
-                    blue_score = EXCLUDED.blue_score,
-                    winning_alliance = EXCLUDED.winning_alliance,
-                    youtube_key = EXCLUDED.youtube_key
-            """, data["matches"])
-        # Insert awards
-        if data["awards"]:
-            cur.executemany("""
-                INSERT INTO event_awards (event_key, team_number, award_name, year)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (event_key, team_number, award_name) DO NOTHING
-            """, data["awards"])
-    conn.commit()
-    cur.close()
-    conn.close()
-
-def insert_team_epa(result, year):
-    """Insert or update a team's EPA data for a given year."""
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO team_epas (team_number, year, nickname, city, state_prov, country, website,
-                               normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                               wins, losses, event_epas)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (team_number, year) DO UPDATE SET
-            nickname = EXCLUDED.nickname,
-            city = EXCLUDED.city,
-            state_prov = EXCLUDED.state_prov,
-            country = EXCLUDED.country,
-            website = EXCLUDED.website,
-            normal_epa = EXCLUDED.normal_epa,
-            epa = EXCLUDED.epa,
-            confidence = EXCLUDED.confidence,
-            auto_epa = EXCLUDED.auto_epa,
-            teleop_epa = EXCLUDED.teleop_epa,
-            endgame_epa = EXCLUDED.endgame_epa,
-            wins = EXCLUDED.wins,
-            losses = EXCLUDED.losses,
-            event_epas = EXCLUDED.event_epas
-    """, (
-        result.get("team_number"),
-        year,
-        result.get("nickname"),
-        result.get("city"),
-        result.get("state_prov"),
-        result.get("country"),
-        result.get("website"),
-        result.get("normal_epa"),
-        result.get("epa"),
-        result.get("confidence"),
-        result.get("auto_epa"),
-        result.get("teleop_epa"),
-        result.get("endgame_epa"),
-        result.get("wins"),
-        result.get("losses"),
-        json.dumps(result.get("event_epas", []))
-    ))
-    conn.commit()
-    cur.close()
-    conn.close()
+                website = EXCLUDED.website,
+                normal_epa = EXCLUDED.normal_epa,
+                epa = EXCLUDED.epa,
+                confidence = EXCLUDED.confidence,
+                auto_epa = EXCLUDED.auto_epa,
+                teleop_epa = EXCLUDED.teleop_epa,
+                endgame_epa = EXCLUDED.endgame_epa,
+                wins = EXCLUDED.wins,
+                losses = EXCLUDED.losses,
+                event_epas = EXCLUDED.event_epas
+        """, (
+            result.get("team_number"),
+            year,
+            result.get("nickname"),
+            result.get("city"),
+            result.get("state_prov"),
+            result.get("country"),
+            result.get("website"),
+            result.get("normal_epa"),
+            result.get("epa"),
+            result.get("confidence"),
+            result.get("auto_epa"),
+            result.get("teleop_epa"),
+            result.get("endgame_epa"),
+            result.get("wins"),
+            result.get("losses"),
+            json.dumps(result.get("event_epas", []))
+        ))
+        conn.commit()
+        cur.close()
 
 # Robust retry for team experience
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
-def get_team_experience_pg(team_number, up_to_year):
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT COUNT(DISTINCT year) FROM team_epas
-        WHERE team_number = %s AND year <= %s
-    """, (team_number, up_to_year))
-    years = cur.fetchone()[0]
-    cur.close()
-    conn.close()
-    return years if years else 1
+def get_team_experience(team_number: int, up_to_year: int) -> tuple[int, float]:
+   # Determine how many years a team has competed up to and including up_to_year, and calculate the veteran boost based on years of experience
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT COUNT(DISTINCT year) FROM team_epas
+                WHERE team_number = %s AND year <= %s
+            """, (team_number, up_to_year))
+            years = cur.fetchone()[0]
+            cur.close()
+        years = years if years else 1
+        
+        # Calculate veteran boost based on years of experience
+        if years <= 1:
+            veteran_boost = 0.2
+        elif years == 2:
+            veteran_boost = 0.4
+        elif years == 3:
+            veteran_boost = 0.6
+        else:
+            veteran_boost = 1.0
+            
+        return years, veteran_boost
+    except Exception as e:
+        print(f"Failed to get team experience: {e}")
+        return 1, 0.2  # Default to first year if we can't determine
 
 # Robust retry for team events
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
 def get_team_events(team_number, year):
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT event_key FROM event_teams
-        WHERE team_number = %s AND LEFT(event_key, 4) = %s
-    """, (team_number, str(year)))
-    events = [row[0] for row in cur.fetchall()]
-    cur.close()
-    conn.close()
+    with DatabaseConnection() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT event_key FROM event_teams
+            WHERE team_number = %s AND LEFT(event_key, 4) = %s
+        """, (team_number, str(year)))
+        events = [row[0] for row in cur.fetchall()]
+        cur.close()
     return events
 
 def get_teams_for_year(year):
-    """Return a list of all teams that played in a given year, including website from team_epas if available."""
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT DISTINCT et.team_number, et.nickname, et.city, et.state_prov, et.country, te.website
-        FROM event_teams et
-        LEFT JOIN team_epas te ON et.team_number = te.team_number AND te.year = %s
-        WHERE LEFT(et.event_key, 4) = %s
-    """, (year, str(year)))
-    teams = []
-    for row in cur.fetchall():
-        teams.append({
-            "team_number": row[0],
-            "nickname": row[1],
-            "city": row[2],
-            "state_prov": row[3],
-            "country": row[4],
-            "website": row[5] if row[5] else "N/A",
-            "key": f"frc{row[0]}"
-        })
-    cur.close()
-    conn.close()
+    # Return a list of all teams that played in a given year, including website from team_epas if available
+    with DatabaseConnection() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT DISTINCT et.team_number, et.nickname, et.city, et.state_prov, et.country, te.website
+            FROM event_teams et
+            LEFT JOIN team_epas te ON et.team_number = te.team_number AND te.year = %s
+            WHERE LEFT(et.event_key, 4) = %s
+        """, (year, str(year)))
+        teams = []
+        for row in cur.fetchall():
+            teams.append({
+                "team_number": row[0],
+                "nickname": row[1],
+                "city": row[2],
+                "state_prov": row[3],
+                "country": row[4],
+                "website": row[5] if row[5] else "N/A",
+                "key": f"frc{row[0]}"
+            })
+        cur.close()
     return teams
 
 def get_existing_event_data(event_key):
-    """Get existing event data from database for comparison."""
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    
-    # Get event
-    cur.execute("SELECT name, year, start_date, end_date, event_type, city, state_prov, country, website FROM events WHERE event_key = %s", (event_key,))
-    event_row = cur.fetchone()
-    
-    # Get teams
-    cur.execute("SELECT team_number, nickname, city, state_prov, country FROM event_teams WHERE event_key = %s", (event_key,))
-    teams = {row[0]: {"nickname": row[1], "city": row[2], "state_prov": row[3], "country": row[4]} for row in cur.fetchall()}
-    
-    # Get rankings
-    cur.execute("SELECT team_number, rank, wins, losses, ties, dq FROM event_rankings WHERE event_key = %s", (event_key,))
-    rankings = {row[0]: {"rank": row[1], "wins": row[2], "losses": row[3], "ties": row[4], "dq": row[5]} for row in cur.fetchall()}
-    
-    # Get matches
-    cur.execute("SELECT match_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key FROM event_matches WHERE event_key = %s", (event_key,))
-    matches = {row[0]: {"comp_level": row[1], "match_number": row[2], "set_number": row[3], "red_teams": row[4], "blue_teams": row[5], "red_score": row[6], "blue_score": row[7], "winning_alliance": row[8], "youtube_key": row[9]} for row in cur.fetchall()}
-    
-    # Get awards
-    cur.execute("SELECT team_number, award_name FROM event_awards WHERE event_key = %s", (event_key,))
-    awards = set((row[0], row[1]) for row in cur.fetchall())
-    
-    cur.close()
-    conn.close()
+    # Get existing event data from database for comparison
+    with DatabaseConnection() as conn:
+        cur = conn.cursor()
+        
+        # Get event
+        cur.execute("SELECT name, year, start_date, end_date, event_type, city, state_prov, country, website FROM events WHERE event_key = %s", (event_key,))
+        event_row = cur.fetchone()
+        
+        # Get teams
+        cur.execute("SELECT team_number, nickname, city, state_prov, country FROM event_teams WHERE event_key = %s", (event_key,))
+        teams = {row[0]: {"nickname": row[1], "city": row[2], "state_prov": row[3], "country": row[4]} for row in cur.fetchall()}
+        
+        # Get rankings
+        cur.execute("SELECT team_number, rank, wins, losses, ties, dq FROM event_rankings WHERE event_key = %s", (event_key,))
+        rankings = {row[0]: {"rank": row[1], "wins": row[2], "losses": row[3], "ties": row[4], "dq": row[5]} for row in cur.fetchall()}
+        
+        # Get matches
+        cur.execute("SELECT match_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key FROM event_matches WHERE event_key = %s", (event_key,))
+        matches = {row[0]: {"comp_level": row[1], "match_number": row[2], "set_number": row[3], "red_teams": row[4], "blue_teams": row[5], "red_score": row[6], "blue_score": row[7], "winning_alliance": row[8], "youtube_key": row[9]} for row in cur.fetchall()}
+        
+        # Get awards
+        cur.execute("SELECT team_number, award_name FROM event_awards WHERE event_key = %s", (event_key,))
+        awards = set((row[0], row[1]) for row in cur.fetchall())
+        
+        cur.close()
     
     return {
         "event": event_row,
@@ -409,19 +307,18 @@ def get_existing_event_data(event_key):
     }
 
 def get_existing_team_epa(team_number, year):
-    """Get existing team EPA data from database for comparison."""
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    
-    cur.execute("""
-        SELECT nickname, city, state_prov, country, website, normal_epa, epa, confidence, 
-               auto_epa, teleop_epa, endgame_epa, wins, losses, event_epas
-        FROM team_epas WHERE team_number = %s AND year = %s
-    """, (team_number, year))
-    
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
+    # Get existing team EPA data from database for comparison
+    with DatabaseConnection() as conn:
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT nickname, city, state_prov, country, website, normal_epa, epa, confidence, 
+                   auto_epa, teleop_epa, endgame_epa, wins, losses, event_epas
+            FROM team_epas WHERE team_number = %s AND year = %s
+        """, (team_number, year))
+        
+        row = cur.fetchone()
+        cur.close()
     
     if row:
         # Handle event_epas field - it might be a JSON string or already parsed list
@@ -460,7 +357,7 @@ def get_existing_team_epa(team_number, year):
     return None
 
 def data_has_changed(existing, new_data, data_type):
-    """Compare existing data with new data to determine if an update is needed."""
+    # Compare existing data with new data to determine if an update is needed
     if not existing:
         return True  # No existing data, needs to be inserted
     
@@ -638,12 +535,9 @@ def data_has_changed(existing, new_data, data_type):
     
     return True  # Default to updating if we don't know
 
-def optimized_create_event_db(year):
-    """Create and populate the events database for the specified year, only updating what's changed."""
-    print(f"\nOptimized events database update for {year}...")
-    
-    # Create PostgreSQL tables if they don't exist
-    create_epa_tables()
+def create_event_db(year):
+    # Create and populate the events database for the specified year, only updating what's changed
+    print(f"\nevents database update for {year}...")
     
     try:
         events = tba_get(f"events/{year}")
@@ -842,6 +736,11 @@ def optimized_create_event_db(year):
                         # Normal team number extraction
                         blue_teams.append(str(int(team_key[3:])))
                 
+                # Get first YouTube video if available
+                videos = m.get("videos", [])
+                youtube_videos = [v for v in videos if v.get("type") == "youtube"]
+                first_video = youtube_videos[0]["key"] if youtube_videos else None
+                
                 new_data["matches"].append((
                     m["key"], key, m["comp_level"], m["match_number"],
                     m["set_number"],
@@ -849,7 +748,7 @@ def optimized_create_event_db(year):
                     ",".join(blue_teams),
                     m["alliances"]["red"]["score"], m["alliances"]["blue"]["score"],
                     m.get("winning_alliance"),
-                    select_best_youtube_video(m.get("videos", []))
+                    first_video
                 ))
         except:
             pass
@@ -953,98 +852,97 @@ def optimized_create_event_db(year):
 
     # Only update what's changed
     if events_with_changes > 0:
-        optimized_insert_event_data(all_results, year)
-        print(f"\n{year} events optimized update complete")
+        insert_event_data(all_results, year)
+        print(f"\n{year} events update complete")
     else:
         print(f"\nNo updates needed for {year} events")
 
-def optimized_insert_event_data(results, year):
-    """Insert only the changed data into PostgreSQL."""
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    
-    for result in tqdm(results, desc="Updating changed data"):
-        if not result["has_changes"]:
-            continue
+def insert_event_data(results, year):
+    # Insert only the changed data into PostgreSQL
+    with DatabaseConnection() as conn:
+        cur = conn.cursor()
+        
+        for result in tqdm(results, desc="Updating changed data"):
+            if not result["has_changes"]:
+                continue
+                
+            data = result["data"]
+            updates = result["updates_needed"]
             
-        data = result["data"]
-        updates = result["updates_needed"]
+            # Update event if needed
+            if updates["event"]:
+                cur.execute("""
+                    INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (event_key) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        year = EXCLUDED.year,
+                        start_date = EXCLUDED.start_date,
+                        end_date = EXCLUDED.end_date,
+                        event_type = EXCLUDED.event_type,
+                        city = EXCLUDED.city,
+                        state_prov = EXCLUDED.state_prov,
+                        country = EXCLUDED.country,
+                        website = EXCLUDED.website
+                """, data["event"])
+            
+            # Update teams if needed
+            if updates["teams"] and data["teams"]:
+                # Delete existing teams for this event and reinsert
+                cur.execute("DELETE FROM event_teams WHERE event_key = %s", (data["event"][0],))
+                cur.executemany("""
+                    INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, data["teams"])
+            
+            # Update rankings if needed
+            if updates["rankings"] and data["rankings"]:
+                # Delete existing rankings for this event and reinsert
+                cur.execute("DELETE FROM event_rankings WHERE event_key = %s", (data["event"][0],))
+                cur.executemany("""
+                    INSERT INTO event_rankings (event_key, team_number, rank, wins, losses, ties, dq)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, data["rankings"])
+            
+            # Update matches if needed
+            if updates["matches"] and data["matches"]:
+                # Delete existing matches for this event and reinsert
+                cur.execute("DELETE FROM event_matches WHERE event_key = %s", (data["event"][0],))
+                cur.executemany("""
+                    INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, data["matches"])
+            
+            # Update awards if needed
+            if updates["awards"] and data["awards"]:
+                # Delete existing awards for this event and reinsert
+                cur.execute("DELETE FROM event_awards WHERE event_key = %s", (data["event"][0],))
+                # Deduplicate awards
+                seen = set()
+                deduped_awards = []
+                for award in data["awards"]:
+                    key = (award[0], award[1], award[2])
+                    if key not in seen:
+                        seen.add(key)
+                        deduped_awards.append(award)
+                cur.executemany("""
+                    INSERT INTO event_awards (event_key, team_number, award_name, year)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (event_key, team_number, award_name) DO NOTHING
+                """, deduped_awards)
         
-        # Update event if needed
-        if updates["event"]:
-            cur.execute("""
-                INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (event_key) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    year = EXCLUDED.year,
-                    start_date = EXCLUDED.start_date,
-                    end_date = EXCLUDED.end_date,
-                    event_type = EXCLUDED.event_type,
-                    city = EXCLUDED.city,
-                    state_prov = EXCLUDED.state_prov,
-                    country = EXCLUDED.country,
-                    website = EXCLUDED.website
-            """, data["event"])
-        
-        # Update teams if needed
-        if updates["teams"] and data["teams"]:
-            # Delete existing teams for this event and reinsert
-            cur.execute("DELETE FROM event_teams WHERE event_key = %s", (data["event"][0],))
-            cur.executemany("""
-                INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, data["teams"])
-        
-        # Update rankings if needed
-        if updates["rankings"] and data["rankings"]:
-            # Delete existing rankings for this event and reinsert
-            cur.execute("DELETE FROM event_rankings WHERE event_key = %s", (data["event"][0],))
-            cur.executemany("""
-                INSERT INTO event_rankings (event_key, team_number, rank, wins, losses, ties, dq)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, data["rankings"])
-        
-        # Update matches if needed
-        if updates["matches"] and data["matches"]:
-            # Delete existing matches for this event and reinsert
-            cur.execute("DELETE FROM event_matches WHERE event_key = %s", (data["event"][0],))
-            cur.executemany("""
-                INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, data["matches"])
-        
-        # Update awards if needed
-        if updates["awards"] and data["awards"]:
-            # Delete existing awards for this event and reinsert
-            cur.execute("DELETE FROM event_awards WHERE event_key = %s", (data["event"][0],))
-            # Deduplicate awards
-            seen = set()
-            deduped_awards = []
-            for award in data["awards"]:
-                key = (award[0], award[1], award[2])
-                if key not in seen:
-                    seen.add(key)
-                    deduped_awards.append(award)
-            cur.executemany("""
-                INSERT INTO event_awards (event_key, team_number, award_name, year)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (event_key, team_number, award_name) DO NOTHING
-            """, deduped_awards)
-    
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
 
-def optimized_fetch_and_store_team_data(year):
-    """Fetch and store team data, only updating what's changed."""
-    optimized_create_event_db(year)
+def fetch_and_store_team_data(year):
+    # Fetch and store team data, only updating what's changed
+    create_event_db(year)
     
     if shutdown_event.is_set():
         print("Shutdown requested, stopping team data processing...")
         return
         
-    print(f"\nProcessing year {year} teams...")
+    print(f"\nProcessing {year} teams...")
 
     # Get all teams directly from PostgreSQL
     all_teams = get_teams_for_year(year)
@@ -1139,10 +1037,7 @@ def optimized_fetch_and_store_team_data(year):
             print(f"  - {failed}")
         if len(failed_teams) > 10:
             print(f"  ... and {len(failed_teams) - 10} more")
-    
-# Replace the old functions with the optimized versions
-create_event_db = optimized_create_event_db
-fetch_and_store_team_data = optimized_fetch_and_store_team_data
+
 
 # Confidence calculation constants
 CONFIDENCE_WEIGHTS = {
@@ -1191,41 +1086,13 @@ def tba_get(endpoint: str):
         print(f"Unexpected error for {endpoint}: {e}")
         raise  # Let retry handle it
 
-def get_team_experience(team_number: int, up_to_year: int) -> int:
-    """
-    Determine how many years a team has competed up to and including up_to_year.
-    Returns the number of years of experience (1 for first year, 2 for second year, etc.)
-    """
-    try:
-        return get_team_experience_pg(team_number, up_to_year)
-    except Exception as e:
-        print(f"Failed to get team experience: {e}")
-        return 1  # Default to first year if we can't determine
 
-def get_veteran_boost(years: int) -> float:
-    """
-    Calculate veteran boost based on years of experience.
-    First year: 0.2
-    Second year: 0.4
-    Third year: 0.6
-    Fourth year and beyond: 1.0
-    """
-    if years <= 1:
-        return 0.2
-    elif years == 2:
-        return 0.4
-    elif years == 3:
-        return 0.6
-    else:
-        return 1.0
+
+
 
 def calculate_confidence(consistency: float, dominance: float, event_boost: float, team_number: int, wins: int = 0, losses: int = 0, year: int = None) -> tuple[float, float, float]:
-    """
-    Calculate confidence score using universal parameters.
-    Returns (raw_confidence, capped_confidence, record_alignment)
-    """
-    years = get_team_experience(team_number, year) if year is not None else get_team_experience(team_number, 2025)
-    veteran_boost = get_veteran_boost(years)
+    # Calculate confidence score using universal parameters.
+    years, veteran_boost = get_team_experience(team_number, year) if year is not None else get_team_experience(team_number, 2025)
     
     # Calculate record alignment based on win-loss record
     total_matches = wins + losses
@@ -1259,12 +1126,6 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         # --- BEGIN FUNCTION BODY ---
         importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
         matches = sorted(matches, key=lambda m: m.get("time") or 0)
-
-        # DEBUG: Print team and year
-        if matches:
-            print(f"EPA DEBUG: Processing team {team_key} for year {matches[0]['event_key'][:4]}")
-        else:
-            print(f"EPA DEBUG: Processing team {team_key} (no matches)")
 
         match_count = 0
         overall_epa = 0.0
@@ -1465,9 +1326,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         raw_confidence, confidence, record_alignment = calculate_confidence(consistency, dominance, event_boost, team_number, event_wins, event_losses, int(year))
         actual_epa = (overall_epa * confidence) if overall_epa is not None else 0.0
 
-        # Get years of experience for display
-        years = get_team_experience(team_number, int(year))
-        veteran_boost = get_veteran_boost(years)
+        # Get years of experience and veteran boost
+        years, veteran_boost = get_team_experience(team_number, int(year))
 
         return {
             "overall": round(overall_epa, 2) if overall_epa is not None else 0.0,
@@ -1504,13 +1364,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         }
 
 def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, str]:
-    """
-    Calculate chronological weight for an event based on its timing in the season.
-    
-    Returns:
-        tuple: (weight, event_type) where weight is 0.0-1.0 and event_type is:
-               'preseason', 'regular', 'postseason', 'offseason', or 'unknown'
-    """
+    # Calculate chronological weight for an event based on its timing in the season
+
     try:
         # Load week ranges for the year - try multiple possible paths
         week_ranges = None
@@ -1592,9 +1447,7 @@ def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, st
         return 1.0, 'unknown'
 
 def sort_events_chronologically(event_epas: List[Dict], year: int) -> List[Dict]:
-    """
-    Sort events chronologically and add timing information.
-    """
+    # Sort events chronologically and add timing information
     for event_epa in event_epas:
         event_key = event_epa.get('event_key', '')
         if event_key:
@@ -1619,37 +1472,6 @@ def sort_events_chronologically(event_epas: List[Dict], year: int) -> List[Dict]
         return datetime.max  # Put events without dates at the end
     
     return sorted(event_epas, key=sort_key)
-
-def log_chronological_weighting(event_epas: List[Dict], team_number: int, year: int):
-    """
-    Log chronological weighting information for debugging and monitoring.
-    """
-    if not event_epas:
-        return
-    
-    #print(f"\n📊 Chronological Weighting for Team {team_number} ({year}):")
-    #print(f"{'Event':<20} {'Type':<12} {'Weight':<8} {'EPA':<8} {'Matches':<8}")
-    #print("-" * 60)
-    
-    total_weighted_epa = 0.0
-    total_weight = 0.0
-    
-    for event_epa in event_epas:
-        event_key = event_epa.get('event_key', 'Unknown')
-        event_type = event_epa.get('event_type', 'unknown')
-        weight = event_epa.get('chronological_weight', 1.0)
-        epa = event_epa.get('overall', 0.0)
-        matches = event_epa.get('match_count', 0)
-        
-        #print(f"{event_key:<20} {event_type:<12} {weight:<8.3f} {epa:<8.1f} {matches:<8}")
-        
-        total_weighted_epa += epa * weight
-        total_weight += weight
-    
-    if total_weight > 0:
-        avg_weighted_epa = total_weighted_epa / total_weight
-        #print(f"\n📈 Average Weighted EPA: {avg_weighted_epa:.2f}")
-        #print(f"📊 Total Weight: {total_weight:.3f}")
 
 def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number: int = None) -> Dict:
     try:
@@ -1874,28 +1696,8 @@ def retry_team_fetch(max_attempts=3):
         return wrapper
     return decorator
 
-def select_best_youtube_video(videos):
-    """
-    Select the best YouTube video from a list of videos.
-    Since TBA API doesn't provide channel information, we return the first YouTube video.
-    """
-    if not videos:
-        return None
-    
-    youtube_videos = [v for v in videos if v.get("type") == "youtube"]
-    if not youtube_videos:
-        return None
-    
-    # TBA API only provides video key and type, not channel information
-    # So we can't determine if it's an official video without additional API calls
-    # For now, return the first YouTube video
-    return youtube_videos[0]["key"]
-
 def detect_b_bot_mapping(event_key, team_number):
-    """
-    Detect if this is a California event with B bot mapping issues.
-    Returns a mapping dict if needed, None otherwise.
-    """
+    # Detect if this is a California event with B bot mapping issues.
     if not (9970 <= team_number <= 9999):
         return None
     
@@ -2080,14 +1882,9 @@ def fetch_team_components(team, year):
     # Aggregate overall EPA from full event-specific EPAs
     overall_epa_data = aggregate_overall_epa(event_epa_full, year, team_number)
     
-    # Log chronological weighting for teams with multiple events (but not for demo teams)
-    if len(event_epa_full) > 1 and not (9970 <= team_number <= 9999):
-        log_chronological_weighting(event_epa_full, team_number, year)
     overall_epa_data["wins"] = total_wins
     overall_epa_data["losses"] = total_losses
     overall_epa_data["ties"] = total_ties
-
-
 
     return {
         "team_number": team.get("team_number"),
@@ -2108,195 +1905,11 @@ def fetch_team_components(team, year):
         "event_epas": event_epa_results, # List of event-specific EPA results
     }
 
-def analyze_single_team(team_key: str, year: int):
-    # Get team events from PostgreSQL
-    team_number = int(team_key[3:])
-    event_keys = get_team_events(team_number, year)
-
-    event_epa_results = []
-    total_wins = 0
-    total_losses = 0
-    total_ties = 0
-
-    for event_key in event_keys:
-        try:
-            # Check if this is a B bot that needs special handling
-            b_bot_mapping = detect_b_bot_mapping(event_key, team_number)
-            
-            if b_bot_mapping:
-                # This is a California event with B bot mapping issues
-                # Fetch all matches from the event and filter for this team
-                all_matches = tba_get(f"event/{event_key}/matches")
-                if all_matches:
-                    # Find which base number this B bot maps to
-                    # Get all B bot team keys from the event teams
-                    event_teams = tba_get(f"event/{event_key}/teams")
-                    b_bots_in_event = [t for t in event_teams if 9970 <= t.get("team_number", 0) <= 9999]
-                    
-                    # Sort B bots by team number to get consistent mapping
-                    b_bots_in_event.sort(key=lambda x: x.get("team_number", 0))
-                    
-                    # Find this team's position in the sorted list
-                    team_position = None
-                    for i, bot in enumerate(b_bots_in_event):
-                        if bot.get("team_number") == team_number:
-                            team_position = i
-                            break
-                    
-                    if team_position is not None and team_position < len(b_bot_mapping):
-                        # Get the corresponding base number and B bot key
-                        base_numbers = sorted(b_bot_mapping.keys())
-                        if team_position < len(base_numbers):
-                            base_num = base_numbers[team_position]
-                            b_bot_key = b_bot_mapping[base_num]
-                            
-                            # Filter matches to only include those where this B bot appears
-                            matches = []
-                            for match in all_matches:
-                                for alliance in ["red", "blue"]:
-                                    if b_bot_key in match["alliances"][alliance]["team_keys"]:
-                                        matches.append(match)
-                                        break
-                        else:
-                            matches = []
-                    else:
-                        matches = []
-                else:
-                    matches = []
-            else:
-                # Normal case - fetch matches directly for this team
-                matches = tba_get(f"team/{team_key}/event/{event_key}/matches")
-            
-            if matches:
-                # Calculate overall wins/losses/ties from matches
-                for match in matches:
-                    # For B bots in California events, we need to check the B bot key, not the original team key
-                    if b_bot_mapping:
-                        # Find the B bot key for this team
-                        event_teams = tba_get(f"event/{event_key}/teams")
-                        b_bots_in_event = [t for t in event_teams if 9970 <= t.get("team_number", 0) <= 9999]
-                        b_bots_in_event.sort(key=lambda x: x.get("team_number", 0))
-                        
-                        team_position = None
-                        for i, bot in enumerate(b_bots_in_event):
-                            if bot.get("team_number") == team_number:
-                                team_position = i
-                                break
-                        
-                        if team_position is not None:
-                            base_numbers = sorted(b_bot_mapping.keys())
-                            if team_position < len(base_numbers):
-                                base_num = base_numbers[team_position]
-                                b_bot_key = b_bot_mapping[base_num]
-                                
-                                # Check if the B bot key is in the alliances
-                                if b_bot_key not in match["alliances"]["red"]["team_keys"] and b_bot_key not in match["alliances"]["blue"]["team_keys"]:
-                                    continue
-                                alliance = "red" if b_bot_key in match["alliances"]["red"]["team_keys"] else "blue"
-                            else:
-                                continue
-                    else:
-                        # Normal case - check the original team key
-                        if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
-                            continue
-                        alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
-                    # 2015: Use scores, not winning_alliance
-                    event_year = str(match["event_key"])[:4] if "event_key" in match else str(year)
-                    if event_year == "2015":
-                        red_score = match["alliances"]["red"]["score"]
-                        blue_score = match["alliances"]["blue"]["score"]
-                        if alliance == "red":
-                            if red_score > blue_score:
-                                total_wins += 1
-                            elif red_score < blue_score:
-                                total_losses += 1
-                            else:
-                                total_ties += 1
-                        else:
-                            if blue_score > red_score:
-                                total_wins += 1
-                            elif blue_score < red_score:
-                                total_losses += 1
-                            else:
-                                total_ties += 1
-                    else:
-                        winning_alliance = match.get("winning_alliance", "")
-                        if winning_alliance == alliance:
-                            total_wins += 1
-                        elif winning_alliance and winning_alliance != alliance:
-                            total_losses += 1
-                        elif not winning_alliance:  # Tie
-                            total_ties += 1
-
-                event_epa = calculate_event_epa(matches, team_key, team_number)
-                event_epa["event_key"] = event_key  # Ensure event_key is included
-                event_epa_results.append(event_epa)
-        except Exception as e:
-            print(f"Failed to fetch matches for team {team_key} at event {event_key}: {e}")
-
-    overall_epa_data = aggregate_overall_epa(event_epa_results, year, team_number)
-    overall_epa_data["wins"] = total_wins
-    overall_epa_data["losses"] = total_losses
-    overall_epa_data["ties"] = total_ties
-
-    print(f"\n{'='*50}")
-    print(f"EPA Analysis for Team {team_key} ({year})")
-    print(f"{'='*50}")
-    print(f"\nOverall EPA: {overall_epa_data['overall']}")
-    print(f"Overall Confidence: {overall_epa_data['confidence']}")
-    print(f"Actual Overall EPA: {overall_epa_data['actual_epa']}")
-    print(f"Overall Record: {overall_epa_data['wins']}-{overall_epa_data['losses']}-{overall_epa_data['ties']}")
-    
-    # Add note for demo teams
-    if 9970 <= team_number <= 9999:
-        print(f"\n⚠️  NOTE: Team {team_number} is a demo team (9970-9999). Overall stats are zeroed out, but event-specific stats are retained below.")
-
-    if event_epa_results:
-        print(f"\n{'='*50}")
-        print("Event-Specific EPA Breakdowns")
-        print(f"{'='*50}")
-        for event_epa in event_epa_results:
-            print(f"\nEvent: {event_epa['event_key']}")
-            print(f"  Overall: {event_epa['overall']}")
-            print(f"  Auto: {event_epa['auto']}")
-            print(f"  Teleop: {event_epa['teleop']}")
-            print(f"  Endgame: {event_epa['endgame']}")
-            print(f"  Confidence: {event_epa['confidence']}")
-            print(f"  Actual EPA: {event_epa['actual_epa']}")
-            print(f"  Record: {event_epa['wins']}-{event_epa['losses']}-{event_epa['ties']}")
-            print("  Confidence Breakdown:")
-            weights = event_epa["weights"]
-            print(f"    → Consistency:     {round(event_epa['consistency'], 3)} × {weights['consistency']} = {round(weights['consistency'] * event_epa['consistency'], 4)}")
-            print(f"    → Record Align:    {round(event_epa['record_alignment'], 3)} × {weights['record_alignment']} = {round(weights['record_alignment'] * event_epa['record_alignment'], 4)}")
-            print(f"    → Veteran Boost:   {round(event_epa['veteran_boost'], 3)} ({event_epa['years_experience']} years) × {weights['veteran']} = {round(weights['veteran'] * event_epa['veteran_boost'], 4)}")
-            print(f"    → Dominance:       {round(event_epa['dominance'], 3)} × {weights['dominance']} = {round(weights['dominance'] * event_epa['dominance'], 4)}")
-            print(f"    → Event Boost:     {round(event_epa['event_boost'], 3)} × {weights['events']} = {round(weights['events'] * event_epa['event_boost'], 4)}")
-            print(f"    → Confidence Total: {round(event_epa['raw_confidence'], 4)} → Capped: {round(event_epa['confidence'], 3)}")
-    else:
-        print("\nNo event-specific EPA data found for this team.")
-
-    # Calculate and print overall confidence breakdown
-    if event_epa_results:
-        weights = event_epa_results[0]["weights"]  # Weights are constant across events
-        components = overall_epa_data["confidence_components"]
-        
-        print(f"\n{'='*50}")
-        print("Overall Confidence Breakdown (Weighted Average)")
-        print(f"{'='*50}")
-        
-        # Add note for demo teams in confidence breakdown
-        if 9970 <= team_number <= 9999:
-            print("⚠️  NOTE: Overall confidence breakdown is zeroed for demo teams.")
-        else:
-            print(f"→ Consistency:     {round(overall_epa_data['avg_consistency'], 3)} × {weights['consistency']} = {round(components['consistency'], 4)}")
-            print(f"→ Record Align:    {round(overall_epa_data['avg_record_alignment'], 3)} × {weights['record_alignment']} = {round(components['record'], 4)}")
-            print(f"→ Veteran Boost:   {round(overall_epa_data['avg_veteran_boost'], 3)} × {weights['veteran']} = {round(components['veteran'], 4)}")
-            print(f"→ Dominance:       {round(overall_epa_data['avg_dominance'], 3)} × {weights['dominance']} = {round(components['dominance'], 4)}")
-            print(f"→ Event Boost:     {round(overall_epa_data['avg_event_boost'], 3)} × {weights['events']} = {round(components['event'], 4)}")
-            print(f"→ Confidence Total: {round(components['raw'], 4)} → Capped: {round(overall_epa_data['confidence'], 3)}")
+# Single team analysis functionality has been moved to analyze_single_team.py
+# Import and use: from analyze_single_team import analyze_single_team
 
 def restart_heroku_app():
-    """Restart the Heroku app to reload updated data."""
+    # Restart the Heroku app to reload updated data
     
     app_name = os.environ.get("HEROKU_APP_NAME")
     api_key = os.environ.get("HEROKU_API_KEY")
@@ -2323,16 +1936,10 @@ def restart_heroku_app():
         print(f"Error restarting app: {e}")
 
 def main():
-    print("\nEPA Calculator")
-    print("="*20)
+    print("\nEPA Calculator - All Teams Processing")
+    print("="*40)
     
     try:
-        mode = input("\nSelect mode:\n1. Single Team Analysis\n2. Process Entire JSON\nEnter choice (1 or 2): ").strip()
-        
-        if mode not in ['1', '2']:
-            print("Invalid choice. Please enter 1 or 2.")
-            return
-            
         year = input("Enter year (e.g., 2025): ").strip()
         try:
             year = int(year)
@@ -2340,16 +1947,9 @@ def main():
             print("Invalid year. Please enter a valid year.")
             return
             
-        if mode == '1':
-            team_key = input("Enter team key (e.g., frc254): ").strip().lower()
-            if not team_key.startswith('frc'):
-                team_key = f"frc{team_key}"
-            analyze_single_team(team_key, year)
-        else:
-            #clear_year_data(year)
-            fetch_and_store_team_data(year)
-            # Restart the app after successful data update
-            restart_heroku_app()
+        fetch_and_store_team_data(year)
+        # Restart the app after successful data update
+        restart_heroku_app()
             
     except KeyboardInterrupt:
         print("\nInterrupted by user (Ctrl+C)")
@@ -2360,8 +1960,6 @@ def main():
         print("\nPerforming final cleanup...")
         for executor in active_executors:
             cleanup_executor(executor)
-        for conn in active_connections:
-            cleanup_connection(conn)
         print("Cleanup complete.")
         elapsed = time.time() - start_time
         print(f"\nScript runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
@@ -2369,38 +1967,18 @@ def main():
 if __name__ == "__main__":
     try:
         if len(sys.argv) > 1:
-            # Command-line mode
-            mode = sys.argv[1]
-            if mode == '1':
-                # Single team analysis: python epa.py 1 2025 frc254
-                if len(sys.argv) < 4:
-                    print("Usage: python epa.py 1 <year> <team_key>")
-                    sys.exit(1)
-                try:
-                    year = int(sys.argv[2])
-                except ValueError:
-                    print("Year must be an integer.")
-                    sys.exit(1)
-                team_key = sys.argv[3].strip().lower()
-                if not team_key.startswith('frc'):
-                    team_key = f"frc{team_key}"
-                analyze_single_team(team_key, year)
-            elif mode == '2':
-                # Process all teams: python epa.py 2 2025
-                if len(sys.argv) < 3:
-                    print("Usage: python epa.py 2 <year>")
-                    sys.exit(1)
-                try:
-                    year = int(sys.argv[2])
-                except ValueError:
-                    print("Year must be an integer.")
-                    sys.exit(1)
-                fetch_and_store_team_data(year)
-                # Restart the app after successful data update
-                restart_heroku_app()
-            else:
-                print("Unknown mode. Use '1' for single team or '2' for all teams.")
+            # Command-line mode: python run.py <year>
+            if len(sys.argv) < 2:
+                print("Usage: python run.py <year>")
                 sys.exit(1)
+            try:
+                year = int(sys.argv[1])
+            except ValueError:
+                print("Year must be an integer.")
+                sys.exit(1)
+            fetch_and_store_team_data(year)
+            # Restart the app after successful data update
+            restart_heroku_app()
         else:
             main()
     except KeyboardInterrupt:
@@ -2412,9 +1990,6 @@ if __name__ == "__main__":
         print("\nPerforming final cleanup...")
         for executor in active_executors:
             cleanup_executor(executor)
-        for conn in active_connections:
-            cleanup_connection(conn)
         print("Cleanup complete.")
         elapsed = time.time() - start_time
         print(f"\nScript runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
-
