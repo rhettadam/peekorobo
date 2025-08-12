@@ -176,14 +176,14 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
     }
 
 
-    epa_values = [data.get("normal_epa", 0) for data in year_data.values()]
+    raw_values = [data.get("normal_epa", 0) for data in year_data.values()]
     auto_values = [data.get("auto_epa", 0) for data in year_data.values()]
     teleop_values = [data.get("teleop_epa", 0) for data in year_data.values()]
     endgame_values = [data.get("endgame_epa", 0) for data in year_data.values()]
     ace_values = [data.get("epa", 0) for data in year_data.values()]
 
     percentiles_dict = {
-        "epa": compute_percentiles(epa_values),
+        "epa": compute_percentiles(raw_values),
         "auto_epa": compute_percentiles(auto_values),
         "teleop_epa": compute_percentiles(teleop_values),
         "endgame_epa": compute_percentiles(endgame_values),
@@ -453,7 +453,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                         ])
                         
                         if district_teams > 0:
-                            # Sort teams in this district by EPA and find team's rank
+                            # Sort teams in this district by ACE and find team's rank
                             district_team_list = [
                                 team for team in year_data.values() 
                                 if (team.get("state_prov", "").upper() in district_states or 
@@ -576,7 +576,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         endgame_color = "#388e3c"  # Green
         norm_color = "#d32f2f"    # Red
         conf_color = "#555"        # Gray for confidence
-        total_color = "#673ab7"     # Deep Purple for normal EPA
+        total_color = "#673ab7"     # Deep Purple for ACE
     
         total = selected_team.get("epa", 0)
         normal_epa = selected_team.get("normal_epa", 0)
@@ -604,7 +604,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                 pill("Auto", f"{auto:.1f}", auto_color),
                 pill("Teleop", f"{teleop:.1f}", teleop_color),
                 pill("Endgame", f"{endgame:.1f}", endgame_color),
-                pill("EPA", f"{normal_epa:.1f}", norm_color),
+                pill("RAW", f"{normal_epa:.1f}", norm_color),
                 pill("Confidence", f"{confidence:.2f}", conf_color),
                 pill("ACE", f"{total:.1f}", total_color),
             ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
@@ -1137,7 +1137,7 @@ blog_layout = html.Div([
     dbc.Container([
         html.H2("ACE (Adjusted Contribution Estimate) Algorithm", className="text-center my-4"),
 
-        html.P("The EPA (Estimated Points Added) model estimates a team's contribution to a match based on scoring breakdowns and trends. ACE (Adjusted Contribution Estimate) extends this by incorporating consistency, dominance, and statistical reliability.", style={"fontSize": "1.1rem"}),
+        html.P("The ACE model estimates a team's contribution to a match based on scoring breakdowns and trends. ACE (Adjusted Contribution Estimate) extends this by incorporating consistency, dominance, and statistical reliability.", style={"fontSize": "1.1rem"}),
 
         html.H4("Core Model", className="mt-4"),
         html.P("EPA updates are done incrementally after each match. Auto, Teleop, and Endgame contributions are calculated separately, then EPA is updated using a weighted delta with decay."),
@@ -1868,7 +1868,7 @@ def create_team_card_spotlight(team, year_team_database, event_year):
         country = team_data.get("country", "")
         location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
 
-        # === EPA & Rank Calculation (standalone) ===
+        # === Rank Calculation (standalone) ===
         team_epas = [
             (tnum, data.get("epa", 0))
             for tnum, data in all_teams.items()
@@ -2254,12 +2254,12 @@ def teams_layout(default_year=current_year):
         columns=[
             {"name": "ACE Rank", "id": "epa_rank", "type": "numeric"},
             {"name": "Team", "id": "team_display", "presentation": "markdown"},
-            {"name": "EPA", "id": "epa", "type": "numeric"},
+            {"name": "RAW", "id": "epa", "type": "numeric"},
             {"name": "Confidence", "id": "confidence", "type": "numeric"},
             {"name": "ACE", "id": "ace", "type": "numeric"},
-            {"name": "Auto ACE", "id": "auto_epa", "type": "numeric"},
-            {"name": "Teleop ACE", "id": "teleop_epa", "type": "numeric"},
-            {"name": "Endgame ACE", "id": "endgame_epa", "type": "numeric"},
+            {"name": "Auto", "id": "auto_epa", "type": "numeric"},
+            {"name": "Teleop", "id": "teleop_epa", "type": "numeric"},
+            {"name": "Endgame", "id": "endgame_epa", "type": "numeric"},
             {"name": "Favorites", "id": "favorites", "type": "numeric"},
             {"name": "Record", "id": "record"},
         ],
@@ -2796,18 +2796,10 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         else:
             rank_str = f"Rank: {rank_val}/{total_teams}"
 
-        wins = ranking.get("w", "N/A")
-        losses = ranking.get("l", "N/A")
-        ties = ranking.get("t", "N/A")
-        record = html.Span([
-            html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
-            html.Span("-", style={"color": "#777"}),
-            html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
-            html.Span("-", style={"color": "#777"}),
-            html.Span(str(ties), style={"color": "gray", "fontWeight": "bold"})
-        ])
+        # Placeholder for record - will be calculated after all_event_matches is defined
+        record = None
 
-        # Get event-specific EPA data for 2025 events
+        # Get event-specific data for 2025 events
         event_epa_pills = None
         if year >= 2015:
             # Access event_epas from the specific team's data within the epa_data dictionary
@@ -2820,15 +2812,15 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 auto_color = "#1976d2"     # Blue
                 teleop_color = "#fb8c00"   # Orange
                 endgame_color = "#388e3c"  # Green
-                norm_color = "#d32f2f"    # Red (for overall EPA)
-                conf_color = "#555"   # Gray for confidence
-                total_color = "#673ab7"
+                norm_color = "#d32f2f"    # Red 
+                conf_color = "#555"   # Gray
+                total_color = "#673ab7" # Purple
                 event_epa_pills = html.Div([
                     html.Div([
                         pill("Auto", f"{event_epa['auto']:.1f}", auto_color),
                         pill("Teleop", f"{event_epa['teleop']:.1f}", teleop_color),
                         pill("Endgame", f"{event_epa['endgame']:.1f}", endgame_color),
-                        pill("EPA", f"{event_epa['overall']:.1f}", norm_color),
+                        pill("RAW", f"{event_epa['overall']:.1f}", norm_color),
                         pill("Conf", f"{event_epa['confidence']:.2f}", conf_color),
                         pill("ACE", f"{event_epa['actual_epa']:.1f}", total_color),
                         
@@ -2840,7 +2832,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     }),
                 ], style={"marginBottom": "10px"})
             else:
-                print(f"No event EPA found for {event_key}")
+                print(f"No event stats found for {event_key}")
         else:
             event_epa_pills = html.Div() # Ensure it's an empty div if no data, not None
 
@@ -2864,11 +2856,57 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         # Get ALL matches for this event for learning purposes
         all_event_matches = [m for m in year_matches if m.get("ek") == event_key]
         
+        # Calculate record from match data instead of rankings
+        wins = 0
+        losses = 0
+        ties = 0
+        
+        # Get matches for this team in this event
+        team_matches = [
+            m for m in all_event_matches
+            if str(team_number) in m.get("rt", "").split(",") or str(team_number) in m.get("bt", "").split(",")
+        ]
+        
+        for match in team_matches:
+            red_score = match.get("rs", 0)
+            blue_score = match.get("bs", 0)
+            winner = match.get("wa", "Tie").lower()
+            
+            # Handle disqualifications (score of 0) as ties
+            if red_score == 0 or blue_score == 0:
+                ties += 1
+                continue
+                
+            # Determine team's alliance
+            team_alliance = None
+            if str(team_number) in match.get("rt", "").split(","):
+                team_alliance = "red"
+            elif str(team_number) in match.get("bt", "").split(","):
+                team_alliance = "blue"
+            else:
+                continue  # Team not in this match
+            
+            # Count wins, losses, ties
+            if winner == "tie" or winner == "" or red_score == blue_score:
+                ties += 1
+            elif winner == team_alliance:
+                wins += 1
+            else:
+                losses += 1
+        
+        record = html.Span([
+            html.Span(str(wins), style={"color": "green", "fontWeight": "bold"}),
+            html.Span("-", style={"color": "#777"}),
+            html.Span(str(losses), style={"color": "red", "fontWeight": "bold"}),
+            html.Span("-", style={"color": "#777"}),
+            html.Span(str(ties), style={"color": "gray", "fontWeight": "bold"})
+        ])
+        
         # Reset learning state for this event to prevent accumulation across page refreshes
         reset_event_learning(event_key)
         
         def get_team_epa_info(t_key):
-            # First try to get event-specific EPA data for this team
+            # First try to get event-specific stats for this team
             t_data = epa_data.get(t_key.strip(), {})
             # Handle both event key formats (with and without "frc" prefix)
             event_key_clean = event_key.replace("frc", "") if event_key.startswith("frc") else event_key
@@ -2881,7 +2919,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     "consistency": event_epa.get("consistency", 0)
                 }
             
-            # If no event-specific EPA, try to get team's overall EPA
+            # If no event-specific stats, try to get team's overall stats
             if t_data.get("epa") not in (None, ""):
                 epa_val = t_data.get("epa", 0)
                 conf_val = t_data.get("confidence", 0.7)
@@ -2969,7 +3007,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 if red_team_info and blue_team_info:
                     p_red, p_blue = predict_win_probability_adaptive(red_team_info, blue_team_info, event_key, match.get("k", ""))
                     
-                    if winner == "tie":
+                    if winner == "tie" or winner == "":
                         # Only count as correct if prediction is 50%
                         team_prediction = p_red if team_alliance == "red" else p_blue
                         if abs(team_prediction - 0.5) < 0.01:  # Within 1% of 50%
@@ -3273,7 +3311,7 @@ def match_layout(event_key, match_key):
     except Exception:
         return dbc.Alert("Invalid event key.", color="danger")
     
-     # Get EPA data for teams (prefer event-specific EPA)
+     # Get data for teams (prefer event-specific)
     if year == current_year:
         from peekorobo import TEAM_DATABASE, EVENT_MATCHES, EVENT_DATABASE
         team_db = TEAM_DATABASE.get(year, {})
@@ -3363,7 +3401,7 @@ def match_layout(event_key, match_key):
     pred_red_score = sum(t["epa"] for t in red_epas)
     pred_blue_score = sum(t["epa"] for t in blue_epas)
 
-    # Percentile coloring for EPA/ACE using app-wide logic
+    # Percentile coloring for ACE using app-wide logic
     all_epas = [t.get("epa", 0) for t in team_db.values() if t.get("epa") is not None]
     percentiles_dict = {"epa": compute_percentiles(all_epas)}
 
@@ -3372,7 +3410,7 @@ def match_layout(event_key, match_key):
         ("Auto", "auto_epa"),
         ("Teleop", "teleop_epa"),
         ("Endgame", "endgame_epa"),
-        ("EPA", "normal_epa"),
+        ("RAW", "normal_epa"),
         ("Confidence", "confidence"),
     ]
     # Build columns for red and blue tables
@@ -3710,11 +3748,11 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
         
         # Performance-based scoring (considering ALL favorite teams)
         if favorite_team_epas:
-            # Check if team fits within the EPA range of favorite teams
+            # Check if team fits within the range of favorite teams
             if min_favorite_epa <= team_epa <= max_favorite_epa:
                 score += 50  # High score for teams within favorite range
             else:
-                # Calculate distance from favorite EPA range
+                # Calculate distance from favorite range
                 if team_epa < min_favorite_epa:
                     epa_distance = min_favorite_epa - team_epa
                 else:
@@ -4471,7 +4509,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                 pill("Auto", f"{auto:.1f}", auto_color),
                 pill("Teleop", f"{teleop:.1f}", teleop_color),
                 pill("Endgame", f"{endgame:.1f}", endgame_color),
-                pill("EPA", f"{normal_epa:.1f}", norm_color),
+                pill("RAW", f"{normal_epa:.1f}", norm_color),
                 pill("Confidence", f"{confidence:.2f}", conf_color),
                 pill("ACE", f"{epa:.1f}", total_color),
             ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
@@ -4830,12 +4868,12 @@ def event_layout(event_key):
                         event_epas = json.loads(event_epas)
                     except json.JSONDecodeError:
                         event_epas = []
-                # Find event-specific EPA data for this team at this event
+                # Find event-specific data for this team at this event
                 event_specific_epa = next(
                     (e for e in event_epas if e.get("event_key") == event_key),
                     None
                 )
-                # Fallback to overall EPA/confidence/consistency if event-specific is missing
+                # Fallback to overall data if event-specific is missing
                 if event_specific_epa and event_specific_epa.get("actual_epa", 0) != 0:
                     event_epa_data[str(team_num)] = {
                         "normal_epa": event_specific_epa.get("overall", 0),
@@ -4846,7 +4884,7 @@ def event_layout(event_key):
                         "confidence": event_specific_epa.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
                     }
                 else:
-                    # Use overall EPA/confidence/consistency from TEAM_DATABASE
+                    # Use overall data from TEAM_DATABASE
                     event_epa_data[str(team_num)] = {
                         "epa": team_data.get("epa", 0),
                         "normal_epa": team_data.get("normal_epa"),
@@ -4856,7 +4894,7 @@ def event_layout(event_key):
                         "confidence": team_data.get("confidence", 0.7),
                     }
         
-        # Calculate rankings based on event-specific EPA
+        # Calculate rankings based on event-specific data
         rankings = EVENT_RANKINGS.get(parsed_year, {}).get(event_key, {})
         
         # Get event matches
@@ -4880,12 +4918,12 @@ def event_layout(event_key):
                             event_epas = json.loads(event_epas)
                         except json.JSONDecodeError:
                             event_epas = []
-                    # Find event-specific EPA data for this team at this event
+                    # Find event-specific data for this team at this event
                     event_specific_epa = next(
                         (e for e in event_epas if e.get("event_key") == event_key),
                         None
                     )
-                    # Fallback to overall EPA/confidence/consistency if event-specific is missing
+                    # Fallback to overall data if event-specific is missing
                     if event_specific_epa and event_specific_epa.get("actual_epa", 0) != 0:
                         event_epa_data[str(team_num)] = {
                             "normal_epa": event_specific_epa.get("overall", 0),
@@ -4896,7 +4934,7 @@ def event_layout(event_key):
                             "confidence": event_specific_epa.get("confidence", 0.7),
                         }
                     else:
-                        # Use overall EPA/confidence/consistency from year_team_data
+                        # Use overall performance metrics from year_team_data
                         event_epa_data[str(team_num)] = {
                             "epa": team_data.get("epa", 0),
                             "normal_epa": team_data.get("normal_epa"),
@@ -4906,7 +4944,7 @@ def event_layout(event_key):
                             "confidence": team_data.get("confidence", 0.7),
                         }
             
-            # Calculate rankings based on event-specific EPA
+            # Calculate rankings based on event-specific ACE
             rankings = year_event_rankings.get(event_key, {})
             
             # Get event matches
@@ -5112,7 +5150,7 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
         teleop_values = [max(0.0, event.get("teleop", 0)) for event in sorted_events]
         endgame_values = [max(0.0, event.get("endgame", 0)) for event in sorted_events]
         confidence_values = [min(1.0, max(0.0, event.get("confidence", 0))) for event in sorted_events]
-        epa_values = [max(0.0, event.get("overall", event.get("normal_epa", 0))) for event in sorted_events]
+        raw_values = [max(0.0, event.get("overall", event.get("normal_epa", 0))) for event in sorted_events]
         if not ace_values:
             return html.Div("No valid event data found.")
         # Linear extrapolation for 2 predicted points using all events
@@ -5132,21 +5170,21 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
             y_teleop = np.array(teleop_values)
             y_endgame = np.array(endgame_values)
             y_confidence = np.array(confidence_values)
-            y_epa = np.array(epa_values)
+            y_raw = np.array(raw_values)
             # Fit lines
             ace_fit = np.polyfit(x, y_ace, 1)
             auto_fit = np.polyfit(x, y_auto, 1)
             teleop_fit = np.polyfit(x, y_teleop, 1)
             endgame_fit = np.polyfit(x, y_endgame, 1)
             confidence_fit = np.polyfit(x, y_confidence, 1)
-            epa_fit = np.polyfit(x, y_epa, 1)
+            raw_fit = np.polyfit(x, y_raw, 1)
             
             # Calculate trend strength and apply conservative adjustments
             ace_slope = ace_fit[0]
             auto_slope = auto_fit[0]
             teleop_slope = teleop_fit[0]
             endgame_slope = endgame_fit[0]
-            epa_slope = epa_fit[0]
+            raw_slope = raw_fit[0]
             
             # Apply conservative adjustments based on trend strength
             # Strong positive trends get reduced, but teams maintain some improvement
@@ -5171,14 +5209,14 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
             auto_fit[0] = apply_conservative_adjustment(auto_slope, np.mean(y_auto))
             teleop_fit[0] = apply_conservative_adjustment(teleop_slope, np.mean(y_teleop))
             endgame_fit[0] = apply_conservative_adjustment(endgame_slope, np.mean(y_endgame))
-            epa_fit[0] = apply_conservative_adjustment(epa_slope, np.mean(y_epa))
+            raw_fit[0] = apply_conservative_adjustment(raw_slope, np.mean(y_raw))
             pred_x = np.arange(n_events, n_events + n_pred)
             predicted_ace = np.polyval(ace_fit, pred_x) if n_pred > 0 else []
             predicted_auto = np.polyval(auto_fit, pred_x) if n_pred > 0 else []
             predicted_teleop = np.polyval(teleop_fit, pred_x) if n_pred > 0 else []
             predicted_endgame = np.polyval(endgame_fit, pred_x) if n_pred > 0 else []
             predicted_confidence = np.polyval(confidence_fit, pred_x) if n_pred > 0 else []
-            predicted_epa = np.polyval(epa_fit, pred_x) if n_pred > 0 else []
+            predicted_raw = np.polyval(raw_fit, pred_x) if n_pred > 0 else []
             
             # Apply bounds to predictions
             if n_pred > 0:
@@ -5199,17 +5237,17 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
                 predicted_auto = np.maximum(predicted_auto, 0.0)
                 predicted_teleop = np.maximum(predicted_teleop, 0.0)
                 predicted_endgame = np.maximum(predicted_endgame, 0.0)
-                predicted_epa = np.maximum(predicted_epa, 0.0)
+                predicted_raw = np.maximum(predicted_raw, 0.0)
                 
                 # Calculate ACE correctly: ACE = EPA * confidence
-                predicted_ace = predicted_epa * predicted_confidence
+                predicted_ace = predicted_raw * predicted_confidence
         else:
             predicted_ace = []
             predicted_auto = []
             predicted_teleop = []
             predicted_endgame = []
             predicted_confidence = []
-            predicted_epa = []
+            predicted_raw = []
         predicted_event_codes = [f'{year}pred{i+1}' for i in range(n_pred)]
         # Main trace (actual)
         fig = go.Figure()
@@ -5247,13 +5285,13 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
             fill='tozeroy',
             fillcolor='rgba(255, 221, 0, 0.15)',
             name='Actual',
-            customdata=list(zip(event_codes, auto_values, teleop_values, endgame_values, epa_values, confidence_values, ace_values)),
+            customdata=list(zip(event_codes, auto_values, teleop_values, endgame_values, raw_values, confidence_values, ace_values)),
             hovertemplate=(
                 '<b><a href="/event/%{customdata[0]}" target="_blank">%{customdata[0]}</a></b><br><br>'
                 'Auto: %{customdata[1]:.2f}<br>'
                 'Teleop: %{customdata[2]:.2f}<br>'
                 'Endgame: %{customdata[3]:.2f}<br>'
-                'EPA: %{customdata[4]:.2f}<br>'
+                'RAW: %{customdata[4]:.2f}<br>'
                 'Confidence: %{customdata[5]:.2f}<br>'
                 'ACE: %{customdata[6]:.2f}<extra></extra>'
             ),
@@ -5294,15 +5332,15 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
                 fillcolor='rgba(33,150,243,0.15)',
                 name='Pred',
                 customdata=[
-                    (event_codes[-1], auto_values[-1], teleop_values[-1], endgame_values[-1], epa_values[-1], confidence_values[-1], ace_values[-1], 'Actual'),
-                    *[(predicted_event_codes[i], predicted_auto[i], predicted_teleop[i], predicted_endgame[i], predicted_epa[i], predicted_confidence[i], predicted_ace[i], 'Predicted') for i in range(n_pred)]
+                    (event_codes[-1], auto_values[-1], teleop_values[-1], endgame_values[-1], raw_values[-1], confidence_values[-1], ace_values[-1], 'Actual'),
+                    *[(predicted_event_codes[i], predicted_auto[i], predicted_teleop[i], predicted_endgame[i], predicted_raw[i], predicted_confidence[i], predicted_ace[i], 'Predicted') for i in range(n_pred)]
                 ],
                 hovertemplate=(
                     '<b>%{customdata[0]}</b><br>'
                     'Auto: %{customdata[1]:.2f}<br>'
                     'Teleop: %{customdata[2]:.2f}<br>'
                     'Endgame: %{customdata[3]:.2f}<br>'
-                    'EPA: %{customdata[4]:.2f}<br>'
+                    'RAW: %{customdata[4]:.2f}<br>'
                     'Confidence: %{customdata[5]:.2f}<br>'
                     'ACE: %{customdata[6]:.2f}<br>'
                     '<i>%{customdata[7]}</i><extra></extra>'
@@ -5440,7 +5478,7 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
                 'Auto: %{customdata[1]:.2f}<br>'
                 'Teleop: %{customdata[2]:.2f}<br>'
                 'Endgame: %{customdata[3]:.2f}<br>'
-                'EPA: %{customdata[4]:.2f}<br>'
+                'RAW: %{customdata[4]:.2f}<br>'
                 'Confidence: %{customdata[5]:.2f}<br>'
                 'ACE: %{customdata[6]:.2f}<br>'
                 '<b>ACE Percentile: %{customdata[7]:.1f}</b><extra></extra>'

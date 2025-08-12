@@ -1142,13 +1142,27 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                     else:
                         event_ties += 1
             else:
-                winning_alliance = match.get("winning_alliance", "")
-                if winning_alliance == alliance:
-                    event_wins += 1
-                elif winning_alliance and winning_alliance != alliance:
-                    event_losses += 1
-                elif not winning_alliance:  # Tie
+                # Determine win/loss/tie based on scores instead of winning_alliance
+                red_score = match["alliances"]["red"]["score"]
+                blue_score = match["alliances"]["blue"]["score"]
+                
+                # Handle disqualifications (score of 0) as ties
+                if red_score == 0 or blue_score == 0:
                     event_ties += 1
+                elif alliance == "red":
+                    if red_score > blue_score:
+                        event_wins += 1
+                    elif red_score < blue_score:
+                        event_losses += 1
+                    else:  # Equal scores = tie
+                        event_ties += 1
+                else:  # alliance == "blue"
+                    if blue_score > red_score:
+                        event_wins += 1
+                    elif blue_score < red_score:
+                        event_losses += 1
+                    else:  # Equal scores = tie
+                        event_ties += 1
 
             team_keys = match["alliances"][alliance].get("team_keys", [])
             team_count = len(team_keys)
@@ -1718,13 +1732,27 @@ def fetch_team_components(team, year):
                             else:
                                 total_ties += 1
                     else:
-                        winning_alliance = match.get("winning_alliance", "")
-                        if winning_alliance == alliance:
-                            total_wins += 1
-                        elif winning_alliance and winning_alliance != alliance:
-                            total_losses += 1
-                        elif not winning_alliance:
+                        # Determine win/loss/tie based on scores instead of winning_alliance
+                        red_score = match["alliances"]["red"]["score"]
+                        blue_score = match["alliances"]["blue"]["score"]
+                        
+                        # Handle disqualifications (score of 0) as ties
+                        if red_score == 0 or blue_score == 0:
                             total_ties += 1
+                        elif alliance == "red":
+                            if red_score > blue_score:
+                                total_wins += 1
+                            elif red_score < blue_score:
+                                total_losses += 1
+                            else:  # Equal scores = tie
+                                total_ties += 1
+                        else:  # alliance == "blue"
+                            if blue_score > red_score:
+                                total_wins += 1
+                            elif blue_score < red_score:
+                                total_losses += 1
+                            else:  # Equal scores = tie
+                                total_ties += 1
 
                 # Calculate EPA after processing all matches
                 event_epa = calculate_event_epa(matches, team_key, team_number)

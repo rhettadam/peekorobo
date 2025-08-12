@@ -137,7 +137,8 @@ def tba_get(endpoint: str):
 def load_data():
     def compress_dict(d):
         """Remove any None or empty string values. Keep empty lists and dictionaries."""
-        return {k: v for k, v in d.items() if v not in (None, "")}
+        # Special case: preserve empty string for winning_alliance (wa) as it indicates ties
+        return {k: v for k, v in d.items() if v not in (None, "") or k == "wa"}
 
     # === Load team EPA data from PostgreSQL ===
     with DatabaseConnection() as conn:
@@ -328,7 +329,8 @@ def load_data_2025():
     """Load only 2025 data for better performance."""
     def compress_dict(d):
         """Remove any None or empty string values. Keep empty lists and dictionaries."""
-        return {k: v for k, v in d.items() if v not in (None, "")}
+        # Special case: preserve empty string for winning_alliance (wa) as it indicates ties
+        return {k: v for k, v in d.items() if v not in (None, "") or k == "wa"}
 
     # === Load team EPA data from PostgreSQL for 2025 only ===
     with DatabaseConnection() as conn:
@@ -543,7 +545,8 @@ def load_year_data(year):
     """Load data for a specific year on-demand."""
     def compress_dict(d):
         """Remove any None or empty string values. Keep empty lists and dictionaries."""
-        return {k: v for k, v in d.items() if v not in (None, "")}
+        # Special case: preserve empty string for winning_alliance (wa) as it indicates ties
+        return {k: v for k, v in d.items() if v not in (None, "") or k == "wa"}
 
     def safe_json_load(value):
         if isinstance(value, str):

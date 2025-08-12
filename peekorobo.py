@@ -1347,7 +1347,7 @@ def update_events_tab_content(
         # Sort by "Top 8 ACE"
         df = df.sort_values(by="Top 8 ACE", ascending=False).reset_index(drop=True)
     
-        # Use standard EPA styling for the ACE columns
+        # Use standard styling for the ACE columns
         ace_values = df["Top 8 ACE"].dropna().values
         percentiles_dict = {
             "Top 8 ACE": compute_percentiles(ace_values),
@@ -1551,19 +1551,19 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         except Exception as e:
             return dbc.Alert(f"Error loading team data for year {event_year}: {str(e)}", color="danger"), query_string
         
-    # Sort by EPA to calculate ranks
+    # Sort by ACE to calculate ranks
     team_epas.sort(key=lambda x: x[1], reverse=True)
     rank_map = {tnum: i+1 for i, (tnum, _) in enumerate(team_epas)}
 
-    # Get all EPA values for percentile calculations
-    epa_values = [data.get("epa", 0) for data in epa_data.values()]
+    # Get all performance values for percentile calculations
+    ace_values = [data.get("epa", 0) for data in epa_data.values()]
     confidence_values = [data.get("confidence", 0) for data in epa_data.values()]
     auto_values = [data.get("auto_epa", 0) for data in epa_data.values()]
     teleop_values = [data.get("teleop_epa", 0) for data in epa_data.values()]
     endgame_values = [data.get("endgame_epa", 0) for data in epa_data.values()]
 
     percentiles_dict = {
-        "ACE": compute_percentiles(epa_values),
+        "ACE": compute_percentiles(ace_values),
         "Confidence": compute_percentiles(confidence_values),
         "Auto": compute_percentiles(auto_values),
         "Teleop": compute_percentiles(teleop_values),
@@ -1655,7 +1655,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             ], md=9)
         ], className="mb-4 align-items-center", align="center")
 
-        # Sort teams by overall EPA from year_team_database for spotlight cards
+        # Sort teams by overall ACE from year_team_database for spotlight cards
         sorted_teams = sorted(
             event_teams,
             key=lambda t: year_team_data.get(event_year, {}).get(int(t.get("tk")), {}).get("epa", 0),
@@ -1724,7 +1724,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
     # === Strength of Schedule (SoS) Tab ===
     elif active_tab == "sos":
         # Build a table of SoS metrics for each team
-        # For each team, get their matches, compute average predicted opponent EPA, avg win prob, hardest/easiest match
+        # For each team, get their matches, compute average predicted opponent ACE, avg win prob, hardest/easiest match
         team_sos_rows = []
         team_numbers = [t["tk"] for t in event_teams]
         matches = [m for m in (event_matches or []) if m.get("cl") == "qm"]  # Only consider qualification matches
@@ -1751,7 +1751,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 else:
                     alliance = "blue"
                     opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
-                # Opponent EPA
+                # Opponent ACE
                 opp_ace = 0
                 opp_count = 0
                 for opp in opp_teams:
@@ -1839,7 +1839,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             {"label": f"{t['tk']} - {t.get('nn', '')}", "value": str(t["tk"])}
             for t in event_teams
         ]
-        # Default: top 2 teams by EPA
+        # Default: top 2 teams by ACE
         sorted_teams = sorted(event_teams, key=lambda t: epa_data.get(str(t["tk"]), {}).get("epa", 0), reverse=True)
         default_team_values = [str(t["tk"]) for t in sorted_teams[:2]]
         # Use a Store to keep selection in sync
@@ -1909,7 +1909,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
     
     # Calculate ranks based on selected stats type
     if stats_type == "overall":
-        # Use overall EPA for ranking
+        # Use overall ACE for ranking
         team_epas = []
         for tnum, team_data in year_team_data.get(event_year, {}).items():
             if team_data:
@@ -1917,7 +1917,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         team_epas.sort(key=lambda x: x[1], reverse=True)
         rank_map = {tnum: i+1 for i, (tnum, _) in enumerate(team_epas)}
         
-        # Sort teams by overall EPA for spotlight cards
+        # Sort teams by overall ACE for spotlight cards
         sorted_teams = sorted(
             event_teams,
             key=lambda t: year_team_data.get(event_year, {}).get(int(t.get("tk")), {}).get("epa", 0),
@@ -1933,7 +1933,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             
             rows.append({
                 "ACE Rank": rank_map.get(int(tnum), None),
-                "EPA": team_data.get('normal_epa', 0),
+                "RAW": team_data.get('normal_epa', 0),
                 "Confidence": team_data.get('confidence', 0),
                 "ACE": team_data.get('epa', 0),
                 "Auto": team_data.get('auto_epa', 0),
@@ -1943,7 +1943,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
         
-        # Sort by overall EPA value
+        # Sort by overall ACE value
         rows.sort(key=lambda r: r["ACE"] if r["ACE"] is not None else 0, reverse=True)
         
         # Use global percentiles for coloring
@@ -1958,7 +1958,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
         
     else:  # stats_type == "event"
-        # Use event-specific EPA for ranking within the event
+        # Use event-specific data for ranking within the event
         event_epa_values = [data.get("epa", 0) for data in epa_data.values()]
         event_epa_values.sort(reverse=True)
         event_rank_map = {epa_val: i+1 for i, epa_val in enumerate(event_epa_values)}
@@ -2017,7 +2017,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             for team_num in team_numbers:
                 team_sos[team_num] = 0.5  # Default to 50% win probability
         
-        # Sort teams by event-specific EPA for spotlight cards
+        # Sort teams by event-specific ACE  for spotlight cards
         sorted_teams = sorted(
             event_teams,
             key=lambda t: epa_data.get(str(t.get("tk")), {}).get("epa", 0),
@@ -2031,7 +2031,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             tstr = str(tnum)
             event_team_data = epa_data.get(tstr, {})
             
-            # Find rank for this team's event EPA
+            # Find rank for this team's event ACE 
             team_event_epa = event_team_data.get("epa", 0)
             event_rank = event_rank_map.get(team_event_epa, None)
             
@@ -2050,7 +2050,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             rows.append({
                 "Event Rank": event_rank,
                 "ACE Rank": overall_ace_rank,
-                "EPA": event_team_data.get('normal_epa', 0),
+                "RAW": event_team_data.get('normal_epa', 0),
                 "Confidence": event_team_data.get('confidence', 0),
                 "ACE": event_team_data.get('epa', 0),
                 "Auto": event_team_data.get('auto_epa', 0),
@@ -2062,7 +2062,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
         
-        # Sort by event EPA value
+        # Sort by event ACE value
         rows.sort(key=lambda r: r["ACE"] if r["ACE"] is not None else 0, reverse=True)
         
         # Use event-specific percentiles for coloring
@@ -2134,7 +2134,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         columns = [
             {"name": "ACE Rank", "id": "ACE Rank", "type": "numeric"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
-            {"name": "EPA", "id": "EPA", "type": "numeric"},
+            {"name": "RAW", "id": "RAW", "type": "numeric"},
             {"name": "Confidence", "id": "Confidence", "type": "numeric"},
             {"name": "ACE", "id": "ACE", "type": "numeric"},
             {"name": "Auto", "id": "Auto", "type": "numeric"},
@@ -2147,7 +2147,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             {"name": "Event Rank", "id": "Event Rank", "type": "numeric"},
             {"name": "ACE Rank", "id": "ACE Rank", "type": "numeric"},
             {"name": "Team", "id": "Team", "presentation": "markdown"},
-            {"name": "EPA", "id": "EPA", "type": "numeric"},
+            {"name": "RAW", "id": "RAW", "type": "numeric"},
             {"name": "Confidence", "id": "Confidence", "type": "numeric"},
             {"name": "ACE", "id": "ACE", "type": "numeric"},
             {"name": "Auto", "id": "Auto", "type": "numeric"},
@@ -2253,7 +2253,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
     def get_team_epa_info(t_key):
         info = epa_data.get(str(t_key.strip()), {})
         
-        # If event_epa_data is missing or EPA is 0 (even if confidence exists), fallback to team database
+        # If event_epa_data is missing (even if confidence exists), fallback to team database
         if not info or info.get("epa", 0) == 0:
             # Fallback to team database for the specific year
             if event_year == current_year:
@@ -2269,7 +2269,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
                 "epa": team_data.get("epa", 0),
                 "confidence": team_data.get("confidence", 0.7),
             }
-        # Use event-specific EPA data, but ensure confidence has a reasonable fallback
+        # Use event-specific data, but ensure confidence has a reasonable fallback
         return {
             "team_number": int(t_key.strip()),
             "epa": info.get("epa", 0),
@@ -2537,7 +2537,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         excluded_ties = 0
         for match_data in build_match_rows(matches, table_style):
             winner = match_data.get("Winner", "").lower()
-            if winner == "tie":
+            if winner == "tie" or winner == "":
                 # Only count as correct if prediction is 50%
                 if table_style == "both":
                     pred_red = match_data.get("Red Prediction %", 50)
@@ -2922,10 +2922,10 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
             "Rank": rank_info.get("rk", "N/A"),
             "W-L-T": f"{rank_info.get('w', 'N/A')}-{rank_info.get('l', 'N/A')}-{rank_info.get('t', 'N/A')}",
             "SoS": sos_map.get(str(tnum), 0),
-            "EPA": float(epa.get('normal_epa', 0)),
-            "Auto EPA": float(epa.get('auto_epa', 0)),
-            "Teleop EPA": float(epa.get('teleop_epa', 0)),
-            "Endgame EPA": float(epa.get('endgame_epa', 0)),
+            "RAW": float(epa.get('normal_epa', 0)),
+            "Auto": float(epa.get('auto_epa', 0)),
+            "Teleop": float(epa.get('teleop_epa', 0)),
+            "Endgame": float(epa.get('endgame_epa', 0)),
             "Confidence": float(epa.get('confidence', 0)),
             "ACE": float(epa.get('epa', 0)),
         })
@@ -2941,9 +2941,9 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
     global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
     global_confidence_values = [t.get("confidence", 0) for t in global_teams]
     percentiles_dict = {
-        "Auto EPA": compute_percentiles(global_auto_values),
-        "Teleop EPA": compute_percentiles(global_teleop_values),
-        "Endgame EPA": compute_percentiles(global_endgame_values),
+        "Auto": compute_percentiles(global_auto_values),
+        "Teleop": compute_percentiles(global_teleop_values),
+        "Endgame": compute_percentiles(global_endgame_values),
         "Confidence": compute_percentiles(global_confidence_values),
         "ACE": compute_percentiles(global_ace_values),
     }
@@ -2953,26 +2953,26 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
         {"name": "Rank", "id": "Rank"},
         {"name": "W-L-T", "id": "W-L-T"},
         {"name": "SoS", "id": "SoS"},
-        {"name": "EPA", "id": "EPA"},
-        {"name": "Auto EPA", "id": "Auto EPA"},
-        {"name": "Teleop EPA", "id": "Teleop EPA"},
-        {"name": "Endgame EPA", "id": "Endgame EPA"},
+        {"name": "RAW", "id": "RAW"},
+        {"name": "Auto", "id": "Auto"},
+        {"name": "Teleop", "id": "Teleop"},
+        {"name": "Endgame", "id": "Endgame"},
         {"name": "Confidence", "id": "Confidence"},
         {"name": "ACE", "id": "ACE"},
     ]
     # Radar chart for visual comparison
     
-    radar_stats = ["Auto EPA", "Teleop EPA", "Endgame EPA", "Confidence", "EPA", "ACE", "Avg Score", "SoS"]
+    radar_stats = ["Auto", "Teleop", "Endgame", "Confidence", "RAW", "ACE", "Avg Score", "SoS"]
     # Gather all event teams' stats for normalization
     all_team_stats = {stat: [] for stat in radar_stats}
     for t in event_teams:
         tnum = str(t["tk"])
         epa = epa_data.get(tnum, {})
-        all_team_stats["Auto EPA"].append(float(epa.get("auto_epa", 0)))
-        all_team_stats["Teleop EPA"].append(float(epa.get("teleop_epa", 0)))
-        all_team_stats["Endgame EPA"].append(float(epa.get("endgame_epa", 0)))
+        all_team_stats["Auto"].append(float(epa.get("auto_epa", 0)))
+        all_team_stats["Teleop"].append(float(epa.get("teleop_epa", 0)))
+        all_team_stats["Endgame"].append(float(epa.get("endgame_epa", 0)))
         all_team_stats["Confidence"].append(float(epa.get("confidence", 0)))
-        all_team_stats["EPA"].append(float(epa.get("normal_epa", 0)))
+        all_team_stats["RAW"].append(float(epa.get("normal_epa", 0)))
         all_team_stats["ACE"].append(float(epa.get("epa", 0)))
         all_team_stats["Avg Score"].append(avg_score_map.get(tnum, 0))
         all_team_stats["SoS"].append(sos_map.get(tnum, 0))
@@ -2992,11 +2992,11 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
         tnum = row["Team"].split("|")[0].replace("[", "").strip()
         tnum_key = tnum
         values = [
-            row["Auto EPA"],
-            row["Teleop EPA"],
-            row["Endgame EPA"],
+            row["Auto"],
+            row["Teleop"],
+            row["Endgame"],
             row["Confidence"],
-            row["EPA"],
+            row["RAW"],
             row["ACE"],
             avg_score_map.get(tnum_key, 0),
             sos_map.get(tnum_key, 0),
@@ -3618,7 +3618,7 @@ def load_teams(
         df["is_match"] = df["team"].str.lower().str.contains(q) if q else False
         
         # Improved hover text with better formatting
-        df["hover"] = df.apply(lambda r: f"<b>{r['team']}</b><br>{x_axis.replace('_epa', ' ACE').replace('epa', 'Total EPA').replace('+', ' + ')}: {r['x']:.2f}<br>{y_axis.replace('_epa', ' ACE').replace('epa', 'Total EPA').replace('+', ' + ')}: {r['y']:.2f}<br>ACE: {r['epa']:.2f}", axis=1)
+        df["hover"] = df.apply(lambda r: f"<b>{r['team']}</b><br>{x_axis.replace('_epa', ' ACE').replace('epa', 'Total ACE').replace('+', ' + ')}: {r['x']:.2f}<br>{y_axis.replace('_epa', ' ACE').replace('epa', 'Total ACE').replace('+', ' + ')}: {r['y']:.2f}<br>ACE: {r['epa']:.2f}", axis=1)
 
         # Create figure with improved styling
         fig = go.Figure()
@@ -3681,11 +3681,11 @@ def load_teams(
         # Improved layout with better mobile responsiveness
         fig.update_layout(
             xaxis_title=dict(
-                text=x_axis.replace("_epa", " ACE").replace("epa", "Total EPA").replace("+", " + "),
+                text=x_axis.replace("_epa", " ACE").replace("epa", "Total ACE").replace("+", " + "),
                 font=dict(size=14, color="#777")
             ),
             yaxis_title=dict(
-                text=y_axis.replace("_epa", " ACE").replace("epa", "Total EPA").replace("+", " + "),
+                text=y_axis.replace("_epa", " ACE").replace("epa", "Total ACE").replace("+", " + "),
                 font=dict(size=14, color="#777")
             ),
             margin=dict(l=60, r=80, t=60, b=60),  # Increased margins for mobile
@@ -4042,7 +4042,7 @@ def compare_multiple_teams(team_ids, year): # Update function signature
     # Color palette for pills
     colors = {
         "ACE": "#673ab7",
-        "EPA": "#d32f2f",
+        "RAW": "#d32f2f",
         "Auto": "#1976d2",
         "Teleop": "#fb8c00",
         "Endgame": "#388e3c",
@@ -4112,7 +4112,7 @@ def compare_multiple_teams(team_ids, year): # Update function signature
         })
 
     # Radar chart - NORMALIZED SPIDER WEB
-    categories = ["ACE", "Auto", "Teleop", "Endgame", "Confidence", "EPA", "Avg Score"]
+    categories = ["ACE", "Auto", "Teleop", "Endgame", "Confidence", "RAW", "Avg Score"]
     stat_keys = ["epa", "auto_epa", "teleop_epa", "endgame_epa", "confidence", "normal_epa", "average_match_score"]
 
     # Compute min/max for each stat across selected teams
@@ -4372,7 +4372,7 @@ def update_team_insights(active_tab, store_data):
     
     # Create performance trends chart based on URL type
     if year:  # Specific year view - show event-by-event ACE
-        # Get team's event EPAs for the specific year
+        # Get team's event data for the specific year
         event_epas = team_data.get("event_epas", [])
         if isinstance(event_epas, str):
             try:
