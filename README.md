@@ -232,18 +232,41 @@ late       → 0.80 → 1.00
 
 All component averages, margins, and confidence contributors use these weights. The same non-linear confidence scaling is applied after aggregation.
 
-### Key Components
+## Confidence Components
 
 Each confidence component measures a different aspect of team performance:
 
-*   **Consistency (35%)**: Stability of per-match contributions relative to peak performance. \( \text{Consistency} = 1 - \frac{\text{stdev}}{\text{peak}} \)
-*   **Dominance (35%)**: Mean of normalized margins versus the opposing alliance, per team.
-*   **Record Alignment (10%)**: Alignment of actual win rate to a simple record-based target. \(0.7 + 0.3\times\text{win\_rate}\)
-*   **Veteran Status (10%)**: Experience-based boost: ≤1y 0.2, 2y 0.4, 3y 0.6, ≥4y 1.0.
-*   **Event Count (10%)**: More events increase reliability: 1→0.5, 2→0.9, ≥3→1.0.
-*   **Base Confidence (5%)**: Provides a minimum confidence floor to prevent extreme penalties from other factors.
+- **Consistency (35%)**  
+  Stability of per-match contributions relative to peak performance.  
+  Formula:  
+  \[
+  \text{Consistency} = 1 - \frac{\text{stdev}}{\text{peak}}
+  \]
 
-The full model is continuously evolving and improving. To contribute, test ideas, or file issues, visit the GitHub repository.
+- **Dominance (35%)**  
+  Mean of normalized margins versus the opposing alliance, per team.
+
+- **Record Alignment (10%)**  
+  Alignment of actual win rate to a simple record-based target:  
+  \[
+  0.7 + 0.3 \times \text{win\_rate}
+  \]
+
+- **Veteran Status (10%)**  
+  Experience-based boost:  
+  - ≤ 1 year → **0.2**  
+  - 2 years → **0.4**  
+  - 3 years → **0.6**  
+  - ≥ 4 years → **1.0**
+
+- **Event Count (10%)**  
+  More events increase reliability:  
+  - 1 event → **0.5**  
+  - 2 events → **0.9**  
+  - ≥ 3 events → **1.0**
+
+- **Base Confidence (5%)**  
+  Provides a minimum confidence floor to prevent extreme penalties from other factors.
 
 ---
 
