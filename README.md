@@ -234,41 +234,39 @@ All component averages, margins, and confidence contributors use these weights. 
 
 ## Confidence Components
 
-Each confidence component measures a different aspect of team performance:
+Each component measures a different aspect of team performance:
 
 - **Consistency (35%)**  
   Stability of per-match contributions relative to peak performance.  
-  Formula:  
-  \[
-  \text{Consistency} = 1 - \frac{\text{stdev}}{\text{peak}}
-  \]
+  Formula: `Consistency = 1 - stdev/peak`
 
 - **Dominance (35%)**  
   Mean of normalized margins versus the opposing alliance, per team.
 
 - **Record Alignment (10%)**  
   Alignment of actual win rate to a simple record-based target:  
-  \[
-  0.7 + 0.3 \times \text{win\_rate}
-  \]
+  `0.7 + 0.3 * win_rate`
 
 - **Veteran Status (10%)**  
   Experience-based boost:  
-  - ≤ 1 year → **0.2**  
-  - 2 years → **0.4**  
-  - 3 years → **0.6**  
-  - ≥ 4 years → **1.0**
+  - `<= 1 year` → **0.2**  
+  - `2 years` → **0.4**  
+  - `3 years` → **0.6**  
+  - `>= 4 years` → **1.0**
 
 - **Event Count (10%)**  
   More events increase reliability:  
-  - 1 event → **0.5**  
-  - 2 events → **0.9**  
-  - ≥ 3 events → **1.0**
+  - `1 event` → **0.5**  
+  - `2 events` → **0.9**  
+  - `>= 3 events` → **1.0**
 
 - **Base Confidence (5%)**  
-  Provides a minimum confidence floor to prevent extreme penalties from other factors.
+  Minimum confidence floor to prevent extreme penalties from other factors.
 
 ---
+
+The full model is continuously evolving and improving.  
+To contribute, test ideas, or file issues, visit the GitHub repository.
 
 You can visit Peekorobo here:
 
