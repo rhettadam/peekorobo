@@ -1,6 +1,6 @@
 ![logo](assets/logo.png)
 
-### **Peekorobo is a comprehensive web application for analyzing FRC team performance, leveraging data from The Blue Alliance (TBA) and a custom contribution estimation model called the ACE algorithm. It offers insights into team rankings, match performance, historical trends, and event dynamics.**
+### **Peekorobo is a comprehensive web application for analyzing FRC team performance, leveraging data from The Blue Alliance (TBA) and a contribution estimation model called the ACE algorithm. It offers rich insights into team rankings, match performance and predictions, strength of schedule, historical trends, and event dynamics.**
 
 ---
 
@@ -18,6 +18,7 @@
     *   [Core Model](#core-model)
     *   [Component Estimation](#component-estimation)
     *   [Confidence Calculation](#confidence-calculation)
+    *   [Season Aggregation & Weighting](#season-aggregation--weighting)
     *   [Key Components](#key-components)
 5.  [License](#license)
 
@@ -27,7 +28,9 @@
 
 ### Home Page
 
-The landing page provides a brief introduction to Peekorobo and a central search bar to quickly find teams or events.
+The landing page provides a brief introduction to Peekorobo and a central search bar to quickly find teams, events, or users.
+
+- **Global search preview**: As you type, you’ll see categorized suggestions for Teams, Events, and Users with smart highlighting of closest matches, recent years, and quick links.
 
 ![Screenshot: Home Page](assets/readme/homepage.png)
 
@@ -38,7 +41,7 @@ Each team has a dedicated profile page displaying detailed information for a sel
 *   **General Info**: Team number, nickname, location (city, state, country), rookie year, and website. Notable achievements like Hall of Fame or World Championships are highlighted.
 *   **Years Participated**: Links to view the team's profile for specific past seasons.
 *   **Performance Metrics**: Detailed breakdown of the team's performance based on the ACE model, including:
-    *   Overall ACE and EPA (Estimated Points Added)
+    *   Overall ACE and RAW
     *   Component breakdown: Auto ACE, Teleop ACE, Endgame ACE
     *   Global, Country, and State/Province ranks (clickable links to the Teams insights filtered view)
     *   Season win/loss/tie record.
@@ -58,7 +61,8 @@ Explore and compare all teams within a given year.
 *   **Filtering**: Filter teams by year, country, state/province, and district.
 *   **Search**: Interactive search bar to filter teams by number, name, or location.
 *   **Top 3 Spotlight**: Highlights the top 3 teams based on ACE with dedicated cards.
-*   **Main Table**: A detailed table displaying teams with columns for ACE Rank, ACE, EPA (unweighted), Confidence, and the component breakdowns (Auto ACE, Teleop ACE, Endgame ACE), Location, and Record.
+*   **Main Table**: A detailed table displaying teams with columns for ACE Rank, ACE, RAW (unweighted), Confidence, and the component breakdowns (Auto ACE, Teleop ACE, Endgame ACE), Location, and Record. Favorite counts are also shown with subtle highlighting at configurable thresholds.
+*   **Exports**: Download the current or selected rows as CSV, TSV, Excel, JSON, HTML, or LaTeX.
 *   **ACE Color Key**: A legend explaining the color coding used for ACE and its components, based on percentiles. Users can toggle between global percentiles (all teams) and filtered percentiles (teams matching current filters).
 *   **Avatars Gallery**: A separate tab displaying all team avatars for the filtered set of teams.
 *   **Bubble Chart**: A visual representation of team performance plotting two chosen ACE components against each other, with bubble size potentially representing overall ACE. Useful for identifying specialists (high on one axis) or well-rounded teams (balanced on both axes). Users can select which components to plot on the X and Y axes.
@@ -86,16 +90,20 @@ A dedicated page for each FRC event providing in-depth information.
 
 *   **Header**: Event name, year, location, dates, type, website link, and a favorite button. Includes a thumbnail link to the event's YouTube match video if available.
 *   **Data Tabs**: Switch between different views of event data:
-    *   **Teams**: Lists all teams participating in the event, sorted by ACE Rank, with ACE and component breakdowns. Includes a spotlight of the top teams at the event.
+    *   **Teams**: Lists all teams participating in the event, sorted by ACE Rank, with ACE and component breakdowns. Includes a spotlight of the top teams at the event. A Stats Type selector lets you switch between Overall season metrics and Event-specific metrics; event stats include SoS and ACE Δ versus season baselines.
     *   **Rankings**: Displays the official event rankings (Rank, Wins, Losses, Ties, DQ) alongside ACE Rank and ACE for comparison.
-    *   **OPRs**: Shows OPR (Offensive Power Rating) for teams at the event, alongside their ACE Rank and ACE.
-    *   **Matches**: Lists all matches played at the event, including Red/Blue alliances, scores, winner, and a calculated win prediction based on ACE. Includes links to match videos and can be filtered by a specific team.
-    *   **Alliances**: Displays the alliance selection results for the event in a table and a tree graph, showing alliance captains and their picks.
+    *   **Matches**: Lists all matches played at the event, including Red/Blue alliances, scores, winner, and adaptive win predictions based on ACE and confidence. Toggle between Both Alliances and Team Focus views, filter by team, and create a YouTube playlist of selected matches with one click. Inline accuracy badges summarize prediction performance, and an Event Insights card surfaces high/low scores, win margins, and handy match links.
+    *   **SoS**: Strength of Schedule table per team using average opponent ACE and per-match win probabilities.
+    *   **Compare**: Select multiple teams and compare event stats side-by-side, plus a radar chart normalized to the event field.
+    *   **Metrics**: Explore TBA metrics via a dropdown (OPRs, DPRs, CCWMs, COPRs variants). Results are sortable and link back to team pages.
+    *   **Alliances**: Visual bracket-style cards that show alliance captains/picks and playoff progression/status pulled from TBA.
 
 ![Screenshot: Event Details Teams Tab](assets/readme/event_teams.png)
 ![Screenshot: Event Details Ranks Tab](assets/readme/event_ranks.png)
-![Screenshot: Event Details oprs Tab](assets/readme/event_oprs.png)
 ![Screenshot: Event Details Matches Tab](assets/readme/event_matches.png)
+![Screenshot: Event Details SoS Tab](assets/readme/event_sos.png)
+![Screenshot: Event Details Compare Tab](assets/readme/event_compare.png)
+![Screenshot: Event Details Metrics Tab](assets/readme/event_metrics.png)
 ![Screenshot: Event Details Alliances Tab](assets/readme/event_alliances.png)
 
 ### Challenges
@@ -122,10 +130,10 @@ Users can register for a new account or log in to save favorite teams and events
 
 Authenticated users have a profile page.
 
-*   **My Profile**: Displays user information (username, role, team affiliation, bio, avatar, card background color), favorite team and event counts, and lists of followers and following. Allows editing profile details and selecting an avatar from a gallery.
+*   **My Profile**: Displays user information (username, role, team affiliation, bio, avatar, card background color), favorite team and event counts, and lists of followers and following. Edit your profile (including picking an avatar from a gallery and a background color with automatic contrast adjustment).
 *   **Favorite Teams/Events**: Lists the teams and events the user has favorited, with direct links and an option to remove them.
-*   **Other User Profiles**: View profiles of other users, see their favorited teams/events, and follow/unfollow them.
-*   **User Search**: Search for other users by username.
+*   **Other User Profiles**: View profiles of other users, see their favorited teams/events, and follow/unfollow them with one click.
+*   **User Search**: Search for other users by username. Results appear in a compact overlay with follow/unfollow actions and quick links.
 
 ![Screenshot: My User Profile](assets/readme/user_profile.png)
 ![Screenshot: Other User Profile](assets/readme/other_user_profile.png)
@@ -146,87 +154,99 @@ A search bar is available in the top navigation bar on most pages, allowing quic
 
 ## ACE (Adjusted Contribution Estimate) Algorithm
 
-The core of Peekorobo's statistical analysis is the ACE model, which builds upon the traditional EPA (Estimated Points Added) concept. It aims to provide a more robust measure of a team's expected contribution to a match by incorporating factors beyond just raw scoring potential.
+The core of Peekorobo's statistical analysis is the ACE model. It aims to provide a more robust measure of a team's expected contribution to a match by incorporating factors beyond just raw scoring potential.
 
-The EPA model is an incremental update system, similar to Elo rating systems, where a team's EPA changes after each match based on the difference between their actual contribution and their expected contribution. ACE refines this by introducing a Confidence score.
+The RAW model is an incremental update system, similar to Elo rating systems, where a team's RAW contribution changes after each match based on the difference between their actual contribution and their expected contribution. ACE refines this by introducing a Confidence score.
 
 ### Core Model
 
-EPA updates are done incrementally after each match. Auto, Teleop, and Endgame contributions are calculated separately, then EPA is updated using a weighted delta with decay.
+RAW updates are done incrementally after each match. Auto, Teleop, and Endgame are computed per match, and each component RAW output is nudged toward the observed value using a constant learning rate scaled by match importance. The first observed match initializes the component RAW outputs to the observed values.
 
 ```
-# For each component (auto, teleop, endgame):
-delta = decay * K * (actual - epa)
-
-# Where:
-decay = world_champ_penalty * (match_count / total_matches)²
-K = 0.4 * match_importance * world_champ_penalty
-
-# World Championship penalties:
-Einstein: 0.95
-Division: 0.85
-Regular: 1.0
-
-# Match importance weights:
+# For each component c ∈ {auto, teleop, endgame}
+delta_c = K * importance[comp_level] * (actual_c - raw_c)
+K = 0.4
 importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
+
+# Overall RAW is the sum of component RAW outputs after the update
+overall_raw = auto_raw + teleop_raw + endgame_raw
 ```
 
-The decay factor ensures that recent matches have a stronger influence on EPA updates. The square of the `match_count / total_matches` term accelerates this decay as a team plays more matches. World Championship penalties slightly dampen the impact of matches at those high-level events. The `K` factor is a constant learning rate, adjusted by match importance (Quals are slightly more weighted to reduce alliance bias introduced in playoffs).
+No separate time-decay or championship penalties are applied in the current implementation.
 
 ### Component Estimation
 
-Each component (Auto, Teleop, Endgame) score for a match is estimated separately from the score breakdown data. To mitigate the impact of outlier "hot" matches or anomalies, an adaptive trimming method is applied to the history of a team's component scores.
-
-```
-# Trimming percentages based on match count:
-< 12 matches: 0%
-< 25 matches: 3%
-< 40 matches: 5%
-< 60 matches: 8%
-< 100 matches: 10%
-≥ 100 matches: 12%
-
-# Trim from low end only:
-trimmed_scores = sorted(scores)[k:]  # k = n * trim_pct
-```
-
-This method trims a percentage of the lowest scores from the team's history, with the percentage increasing with the number of matches played. This provides a more stable estimate of a team's consistent performance for that component.
+- **Modern seasons (with `score_breakdown`)**: Component values are derived via year-specific scoring functions (from `data/yearmodels.py`). Auto and Teleop are computed from the match breakdowns; Endgame uses either the alliance breakdown or team index depending on the year’s scoring model. Opponent strength is normalized on a per-team basis to build a margin signal.
+- **Legacy seasons (≤ 2014, no `score_breakdown`)**: Falls back to alliance score, scaled by alliance size using a logarithmic factor to approximate per-team contribution. This path also computes a normalized margin versus the opponent alliance.
 
 ### Confidence Calculation
 
-ACE = EPA × Confidence. The Confidence score is a weighted average of several components designed to measure the reliability and context of a team's performance.
+ACE is defined as Season/Event Overall × Confidence. Confidence blends stability, competitive dominance, record alignment, veteran status, and event count, with a mild non-linear scaling at extremes.
 
 ```
+# Weights (from implementation)
 weights = {
-    "consistency": 0.4,
-    "dominance": 0.25,
-    "record_alignment": 0.15,
-    "veteran": 0.1,
-    "events": 0.05,
-    "base": 0.05
+  "consistency": 0.35,
+  "dominance": 0.35,
+  "record_alignment": 0.10,
+  "veteran": 0.10,
+  "events": 0.10,
 }
 
-# Components:
-consistency = 1 - (stdev / peak_score)
-dominance = mean(normalized_margin_scores)
-record_alignment = 1 - |expected_win_rate - actual_win_rate|
-veteran_bonus = 1.0 if veteran else 0.6
-event_boost = 1.0 if events ≥ 2 else 0.60
+# Components
+consistency = 1 - stdev(contributions) / max(contributions)
+dominance = mean(normalized_margins)
+# Record alignment from W/L only (ties excluded):
+#  win_rate = wins / (wins + losses)
+record_alignment = 0.7 + 0.3 * win_rate   # ∈ [0.7, 1.0]
 
-confidence = min(1.0, sum(weight * component))
+# Veteran boost from years of participation up to the given year
+#   years ≤ 1 → 0.2, 2 → 0.4, 3 → 0.6, ≥4 → 1.0
+veteran_boost ∈ {0.2, 0.4, 0.6, 1.0}
+
+# Event boost from number of events in-season
+#   1 event → 0.5, 2 events → 0.9, ≥3 events → 1.0
+event_boost ∈ {0.5, 0.9, 1.0}
+
+raw_confidence = Σ weights[k] * component_k
+
+# Non-linear scaling (soften extremes)
+if raw_confidence > 0.85:  raw_confidence = 0.85 + 1.1 * (raw_confidence - 0.85)
+elif raw_confidence < 0.65: raw_confidence = 0.90 * raw_confidence
+confidence = clamp(raw_confidence, 0.0, 1.0)
+
+# Final ACE (a.k.a. displayed season/event contribution)
+ACE = overall_raw * confidence
 ```
 
-The raw confidence score is a sum of weighted component scores, capped at 1.0.
+Wins/losses are determined directly from alliance scores; matches with a 0 score on either side are treated as ties. (2015 is handled with score-only logic.)
+
+### Season Aggregation & Weighting
+
+When aggregating across multiple events, contributions are weighted by both event timing and match volume:
+
+```
+effective_weight(event) = chronological_weight(event_date) * match_count(event)
+
+# chronological_weight (piecewise over the regular season)
+preseason  → ≈ 0.05
+offseason  → ≈ 0.10
+early      → 0.20 → 0.40
+midseason  → 0.40 → 0.80
+late       → 0.80 → 1.00
+```
+
+All component averages, margins, and confidence contributors use these weights. The same non-linear confidence scaling is applied after aggregation.
 
 ### Key Components
 
 Each confidence component measures a different aspect of team performance:
 
-*   **Consistency (40%)**: Measures stability of match-to-match performance. Higher when scores are more consistent relative to peak performance. \( \text{Consistency} = 1 - \frac{\text{standard deviation of scores}}{\text{peak score}} \)
-*   **Dominance (25%)**: Measures how much a team outperforms opponents. Calculated from the mean of normalized margin scores across matches.
-*   **Record Alignment (15%)**: How well the actual win rate matches the expected win rate derived from dominance scores. \( \text{Record Alignment} = 1 - |\text{expected win rate} - \text{actual win rate}| \)
-*   **Veteran Status (10%)**: Veteran teams start with higher confidence (1.0 vs 0.6 for rookies) due to historical predictability.
-*   **Event Count (5%)**: Teams participating in two or more events receive a confidence boost (1.0 vs 0.6).
+*   **Consistency (35%)**: Stability of per-match contributions relative to peak performance. \( \text{Consistency} = 1 - \frac{\text{stdev}}{\text{peak}} \)
+*   **Dominance (35%)**: Mean of normalized margins versus the opposing alliance, per team.
+*   **Record Alignment (10%)**: Alignment of actual win rate to a simple record-based target. \(0.7 + 0.3\times\text{win\_rate}\)
+*   **Veteran Status (10%)**: Experience-based boost: ≤1y 0.2, 2y 0.4, 3y 0.6, ≥4y 1.0.
+*   **Event Count (10%)**: More events increase reliability: 1→0.5, 2→0.9, ≥3→1.0.
 *   **Base Confidence (5%)**: Provides a minimum confidence floor to prevent extreme penalties from other factors.
 
 The full model is continuously evolving and improving. To contribute, test ideas, or file issues, visit the GitHub repository.
@@ -243,6 +263,6 @@ https://www.peekorobo.com/
 
 Peekorobo is licensed under the **MIT License**. See the LICENSE file for details.
 
-Copyright (c) 2024 Rhett R. Adam
+Copyright (c) 2025 Rhett R. Adam
 
 ---
