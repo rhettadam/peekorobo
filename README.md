@@ -28,8 +28,6 @@
 
 ### Home Page
 
-The landing page provides a brief introduction to Peekorobo and a central search bar to quickly find teams, events, or users.
-
 - **Global search preview**: As you type, you’ll see categorized suggestions for Teams, Events, and Users with smart highlighting of closest matches, recent years, and quick links.
 
 ![Screenshot: Home Page](assets/readme/homepage.png)
@@ -145,10 +143,6 @@ Switch between light and dark mode for a personalized viewing experience.
 ### Universal Profile Icon/Toast
 
 A small icon is shown in the bottom right for logged-in users, linking to their profile. For logged-out users, a dismissible toast encourages registration/login to use favorite features.
-
-### Global Search
-
-A search bar is available in the top navigation bar on most pages, allowing quick searches for teams, events, or users.
 
 ---
 
