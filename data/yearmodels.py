@@ -1321,3 +1321,77 @@ def teleop_2015(breakdowns, team_count):
 def endgame_2015(breakdown, index):
     # No endgame in 2015
     return 0.0
+
+def auto_2026(breakdowns, team_count):
+    """Calculate auto score for 2026 matches - placeholder implementation."""
+    def score_per_breakdown(b):
+        # Placeholder: return 0 until 2026 game details are released
+        # This will be updated when the 2026 FRC game is announced
+        return 0.0
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Placeholder trimming - will be updated based on 2026 match distribution
+    if n < 10:
+        trim_pct = 0.0
+    elif n < 20:
+        trim_pct = 0.05
+    elif n < 30:
+        trim_pct = 0.08
+    elif n < 40:
+        trim_pct = 0.10
+    elif n < 60:
+        trim_pct = 0.12
+    elif n < 100:
+        trim_pct = 0.15
+    else:
+        trim_pct = 0.18
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def teleop_2026(breakdowns, team_count):
+    """Calculate teleop score for 2026 matches - placeholder implementation."""
+    def score_per_breakdown(b):
+        # Placeholder: return 0 until 2026 game details are released
+        # This will be updated when the 2026 FRC game is announced
+        return 0.0
+
+    scores = [score_per_breakdown(b) for b in breakdowns]
+    n = len(scores)
+
+    if n < 6:
+        return round(statistics.mean(scores), 2)
+
+    # Placeholder trimming - will be updated based on 2026 match distribution
+    if n < 10:
+        trim_pct = 0.0
+    elif n < 20:
+        trim_pct = 0.05
+    elif n < 30:
+        trim_pct = 0.08
+    elif n < 40:
+        trim_pct = 0.10
+    elif n < 60:
+        trim_pct = 0.12
+    elif n < 100:
+        trim_pct = 0.15
+    else:
+        trim_pct = 0.18
+
+    k = int(n * trim_pct)
+    trimmed_scores = sorted(scores)[k:]
+
+    return round(statistics.mean(trimmed_scores), 2)
+
+def endgame_2026(breakdown, index):
+    """Calculate endgame score for 2026 matches - placeholder implementation."""
+    # Placeholder: return 0 until 2026 game details are released
+    # This will be updated when the 2026 FRC game is announced
+    return 0.0
