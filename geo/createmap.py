@@ -1,6 +1,6 @@
 import folium
 from folium.plugins import (
-    MarkerCluster, Search, HeatMap, MiniMap, MousePosition, 
+    MarkerCluster, Search, HeatMap, MousePosition, 
     LocateControl, MeasureControl
 )
 import json
@@ -472,10 +472,11 @@ def generate_team_event_map(output_file="teams_map.html"):
         tiles=None  # Don't add default tiles
     )
     
-    # Add dark tile layer
+    # Add custom lighter dark matter tile layer
     folium.TileLayer(
-        tiles='CartoDB dark_matter',
-        name='Dark Theme',
+        tiles='https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+        name='Custom Dark Matter (Lighter)',
+        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attributions">CARTO</a>',
         min_zoom=3,  # Match map min zoom
         max_zoom=18,  # Match map max zoom
         control=False  # Don't show in layer control since it's the only option
@@ -502,15 +503,17 @@ def generate_team_event_map(output_file="teams_map.html"):
     team_cluster = MarkerCluster(
         name="Team Clusters",
         options={
-            'maxClusterRadius': 100,  # Much larger radius - cluster teams over a wider area
+            'maxClusterRadius': 80,  # Optimized radius for better performance
             'spiderfyOnMaxZoom': True,
             'showCoverageOnHover': True,
             'zoomToBoundsOnClick': True,
-            'disableClusteringAtZoom': 8,  # Stop clustering at zoom level 8 (later)
+            'disableClusteringAtZoom': 8,  # Stop clustering at zoom level 8
             'chunkedLoading': True,
-            'minClusterSize': 5,  # Cluster when 2 or more markers are close
+            'minClusterSize': 3,  # Cluster when 3 or more markers are close
             'spiderfyDistanceMultiplier': 1.5,  # Spread out overlapping markers more
-            'spiderfyShapePositions': 'circle'  # Arrange overlapping markers in a circle
+            'spiderfyShapePositions': 'circle',  # Arrange overlapping markers in a circle
+            'animate': True,  # Re-enable animations
+            'removeOutsideVisibleBounds': True  # Remove markers outside viewport
         }
     ).add_to(teams_layer)
 
@@ -570,7 +573,6 @@ def generate_team_event_map(output_file="teams_map.html"):
         team_marker = folium.Marker(
             location=[lat, lng],
             popup=popup,
-            tooltip=label,
             icon=icon
         )
         team_marker.options.update({"name": f"Team {team['team_number']}: {team.get('nickname', '')} - {team.get('city', '')}, {team.get('state_prov', '')}"})
@@ -581,7 +583,7 @@ def generate_team_event_map(output_file="teams_map.html"):
     event_cluster = MarkerCluster(
         name="Event Clusters",
         options={
-            'maxClusterRadius': 80,  # Much larger radius for events
+            'maxClusterRadius': 60,  # Optimized radius for events
             'spiderfyOnMaxZoom': True,
             'showCoverageOnHover': True,
             'zoomToBoundsOnClick': True,
@@ -589,7 +591,9 @@ def generate_team_event_map(output_file="teams_map.html"):
             'chunkedLoading': True,
             'minClusterSize': 2,  # Cluster when 2 or more events are close
             'spiderfyDistanceMultiplier': 1.5,  # Spread out overlapping markers more
-            'spiderfyShapePositions': 'circle'  # Arrange overlapping markers in a circle
+            'spiderfyShapePositions': 'circle',  # Arrange overlapping markers in a circle
+            'animate': True,  # Re-enable animations
+            'removeOutsideVisibleBounds': True  # Remove markers outside viewport
         }
     ).add_to(events_layer)
     
@@ -632,7 +636,6 @@ def generate_team_event_map(output_file="teams_map.html"):
         marker = folium.Marker(
             location=[lat, lng],
             popup=popup,
-            tooltip=event['name'],
             icon=folium.Icon(color=color, icon="star")
         )
         
@@ -706,7 +709,6 @@ def generate_team_event_map(output_file="teams_map.html"):
     .leaflet-control-layers,
     .leaflet-control-measure,
     .leaflet-control-locate,
-    .leaflet-control-minimap,
     .leaflet-control-mouseposition {
         opacity: 0 !important;
         visibility: hidden !important;
@@ -724,8 +726,7 @@ def generate_team_event_map(output_file="teams_map.html"):
         pointer-events: auto !important;
     }
     
-    /* Keep minimap and mouse position visible on map (not in sidebar) */
-    .leaflet-control-minimap,
+    /* Keep mouse position visible on map (not in sidebar) */
     .leaflet-control-mouseposition {
         opacity: 1 !important;
         visibility: visible !important;
@@ -939,23 +940,35 @@ def generate_team_event_map(output_file="teams_map.html"):
         background: transparent !important;
     }
     
-    /* Ensure map background stays dark during tile loading */
+    /* Dark background for loading tiles */
+    .leaflet-tile {
+        background: #2a2a2a !important;
+    }
+    
+    /* Custom CSS filters for CartoDB Dark Matter to make it much lighter and more readable */
+    .leaflet-tile {
+        filter: brightness(1.8) contrast(1.3) saturate(0.6) hue-rotate(10deg) !important;
+        opacity: 0.9 !important;
+        transition: filter 0.3s ease, opacity 0.3s ease !important;
+    }
+    
+    /* Hover effect for tiles to make them even lighter on interaction */
+    .leaflet-tile:hover {
+        filter: brightness(2.0) contrast(1.4) saturate(0.7) hue-rotate(15deg) !important;
+        opacity: 0.95 !important;
+    }
+    
+    /* Additional styling to make the map background lighter */
     .leaflet-container {
-        background: #1a1a1a !important;
+        background: #2a2a2a !important;
     }
     
     .leaflet-tile-pane {
-        background: #1a1a1a !important;
+        background: #2a2a2a !important;
     }
     
-    /* Dark background for loading tiles */
-    .leaflet-tile {
-        background: #1a1a1a !important;
-    }
-    
-    /* Ensure map container background is dark */
     .leaflet-map-pane {
-        background: #1a1a1a !important;
+        background: #2a2a2a !important;
     }
     
     #search-container .leaflet-control-search .search-result-item:hover {
@@ -1167,28 +1180,6 @@ def generate_team_event_map(output_file="teams_map.html"):
         left: 300px !important;
     }
     
-    /* Style minimap */
-    .leaflet-control-minimap {
-        border: 2px solid #444 !important;
-        border-radius: 6px !important;
-        background: #2A2A2A !important;
-    }
-    
-    .leaflet-control-minimap .leaflet-control-minimap-toggle-display {
-        background: #333 !important;
-        border: 1px solid #444 !important;
-        color: #fff !important;
-    }
-    
-    .leaflet-control-minimap .leaflet-control-minimap-toggle-display:hover {
-        background: #444 !important;
-    }
-    
-    /* Change minimap viewport box color to yellow */
-    .leaflet-control-minimap .leaflet-control-minimap-viewport {
-        border: 2px solid #FFDD00 !important;
-        background: rgba(255, 221, 0, 0.1) !important;
-    }
     
     /* Style mouse position control */
     .leaflet-control-mouseposition {
@@ -1427,6 +1418,71 @@ def generate_team_event_map(output_file="teams_map.html"):
         
         // Also hide after a short delay as backup
         setTimeout(hideLoadingSpinner, 800);
+        
+        // Viewport-based clustering optimization
+        function optimizeClustering() {
+            if (window.map) {
+                // Only process clusters when map is idle (not being dragged/zoomed)
+                window.map.on('moveend zoomend', function() {
+                    // Debounce the clustering optimization
+                    clearTimeout(window.clusteringTimeout);
+                    window.clusteringTimeout = setTimeout(function() {
+                        optimizeVisibleClusters();
+                    }, 300);
+                });
+            }
+        }
+        
+        function optimizeVisibleClusters() {
+            if (!window.map) return;
+            
+            const bounds = window.map.getBounds();
+            const zoom = window.map.getZoom();
+            
+            // Only optimize if we're at a high zoom level where clustering is disabled
+            if (zoom >= 8) {
+                // Find all marker clusters
+                const clusters = document.querySelectorAll('.marker-cluster');
+                clusters.forEach(cluster => {
+                    const clusterElement = cluster;
+                    const lat = parseFloat(clusterElement.getAttribute('data-lat'));
+                    const lng = parseFloat(clusterElement.getAttribute('data-lng'));
+                    
+                    if (lat && lng) {
+                        const isVisible = bounds.contains([lat, lng]);
+                        
+                        // Hide clusters that are outside the viewport
+                        if (!isVisible) {
+                            clusterElement.style.display = 'none';
+                        } else {
+                            clusterElement.style.display = '';
+                        }
+                    }
+                });
+                
+                // Also optimize individual markers
+                const markers = document.querySelectorAll('.leaflet-marker-icon');
+                markers.forEach(marker => {
+                    const markerElement = marker;
+                    const lat = parseFloat(markerElement.getAttribute('data-lat'));
+                    const lng = parseFloat(markerElement.getAttribute('data-lng'));
+                    
+                    if (lat && lng) {
+                        const isVisible = bounds.contains([lat, lng]);
+                        
+                        // Hide markers that are outside the viewport
+                        if (!isVisible) {
+                            markerElement.style.display = 'none';
+                        } else {
+                            markerElement.style.display = '';
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Initialize clustering optimization
+        setTimeout(optimizeClustering, 1000);
     });
     </script>
     '''
@@ -1478,17 +1534,6 @@ def generate_team_event_map(output_file="teams_map.html"):
     MeasureControl(primary_length_unit='kilometers').add_to(m)
     
     # Add comprehensive Folium tools and plugins
-    # MiniMap for overview navigation
-    MiniMap(
-        tile_layer="CartoDB dark_matter",
-        position="bottomright",
-        width=150,
-        height=150,
-        collapsed_width=25,
-        collapsed_height=25,
-        zoom_level_offset=-5,
-        toggle_display=True
-    ).add_to(m)
     
     # Mouse position coordinates display
     MousePosition(
@@ -1592,25 +1637,14 @@ html, body {
     compressed_size = len(compressed_html)
     compression_ratio = (1 - compressed_size / original_size) * 100
     
-    print(f"✅ Map saved with optimizations:")
-    print(f"   📁 Original: {original_size:,} bytes")
-    print(f"   📦 Compressed: {compressed_size:,} bytes")
-    print(f"   📊 Compression: {compression_ratio:.1f}% smaller")
-    print(f"   🗂️ Files: {output_file}, {compressed_file}")
+    print(f"Map saved:")
+    print(f"   Original: {original_size:,} bytes")
+    print(f"   Compressed: {compressed_size:,} bytes")
+    print(f"   Compression: {compression_ratio:.1f}% smaller")
+    print(f"   Files: {output_file}, {compressed_file}")
     
-    # Performance tips
-    print(f"💡 Performance tips:")
     print(f"   • Use the compressed file for faster loading")
     print(f"   • Cache is stored in {CACHE_DIR}")
-    print(f"   • Data is cached for 24 hours")
-    print(f"   • New features added:")
-    print(f"     🗺️ MiniMap for navigation overview")
-    print(f"     📍 Mouse position coordinates")
-    print(f"     🔍 Geocoder for address search")
-    print(f"     ✏️ Drawing tools for annotations")
-    print(f"     📏 Enhanced measurement tools")
-    print(f"     🎮 Fullscreen and scroll zoom controls")
-    print(f"     📍 Location finder")
 
 if __name__ == "__main__":
     generate_team_event_map()
