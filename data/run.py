@@ -165,8 +165,8 @@ def insert_event_data(all_data, year):
     for i, data in enumerate(tqdm(all_data, desc=f'Inserting {year} events')):
         # Insert event
         cur.execute("""
-            INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (event_key) DO UPDATE SET
                 name = EXCLUDED.name,
                 year = EXCLUDED.year,
@@ -176,7 +176,9 @@ def insert_event_data(all_data, year):
                 city = EXCLUDED.city,
                 state_prov = EXCLUDED.state_prov,
                 country = EXCLUDED.country,
-                website = EXCLUDED.website
+                website = EXCLUDED.website,
+                webcast_type = EXCLUDED.webcast_type,
+                webcast_channel = EXCLUDED.webcast_channel
         """, data["event"])
         # Insert teams
         if data["teams"]:
@@ -333,8 +335,8 @@ def get_existing_event_data(event_key):
     conn = get_pg_connection()
     cur = conn.cursor()
     
-    # Get event
-    cur.execute("SELECT name, year, start_date, end_date, event_type, city, state_prov, country, website FROM events WHERE event_key = %s", (event_key,))
+    # Get event (including webcast info)
+    cur.execute("SELECT name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel FROM events WHERE event_key = %s", (event_key,))
     event_row = cur.fetchone()
     
     # Get teams
@@ -428,14 +430,16 @@ def data_has_changed(existing, new_data, data_type):
         new_event = new_data["event"]
         return (
             existing_event[0] != new_event[1] or  # name
-            existing_event[2] != new_event[2] or  # year
-            existing_event[3] != new_event[3] or  # start_date
-            existing_event[4] != new_event[4] or  # end_date
-            existing_event[5] != new_event[5] or  # event_type
-            existing_event[6] != new_event[6] or  # city
-            existing_event[7] != new_event[7] or  # state_prov
-            existing_event[8] != new_event[8] or  # country
-            existing_event[9] != new_event[9]     # website
+            existing_event[1] != new_event[2] or  # year
+            existing_event[2] != new_event[3] or  # start_date
+            existing_event[3] != new_event[4] or  # end_date
+            existing_event[4] != new_event[5] or  # event_type
+            existing_event[5] != new_event[6] or  # city
+            existing_event[6] != new_event[7] or  # state_prov
+            existing_event[7] != new_event[8] or  # country
+            existing_event[8] != new_event[9] or  # website
+            existing_event[9] != new_event[10] or # webcast_type
+            existing_event[10] != new_event[11]   # webcast_channel
         )
     
     elif data_type == "teams":
@@ -657,7 +661,10 @@ def create_event_db(year):
                 event.get("start_date"), event.get("end_date"),
                 event.get("event_type_string"), event.get("city"),
                 event.get("state_prov"), event.get("country"),
-                event.get("website")
+                event.get("website"),
+                # Webcast info (store first webcast if available)
+                (event.get("webcasts", [{}]) or [{}])[0].get("type"),
+                (event.get("webcasts", [{}]) or [{}])[0].get("channel")
             ),
             "teams": [], "rankings": [], "matches": [], "awards": []
         }
@@ -854,8 +861,8 @@ def insert_event_data(results, year):
         # Update event if needed
         if updates["event"]:
             cur.execute("""
-                INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (event_key) DO UPDATE SET
                     name = EXCLUDED.name,
                     year = EXCLUDED.year,
@@ -865,7 +872,9 @@ def insert_event_data(results, year):
                     city = EXCLUDED.city,
                     state_prov = EXCLUDED.state_prov,
                     country = EXCLUDED.country,
-                    website = EXCLUDED.website
+                    website = EXCLUDED.website,
+                    webcast_type = EXCLUDED.webcast_type,
+                    webcast_channel = EXCLUDED.webcast_channel
             """, data["event"])
         
         # Update teams if needed
