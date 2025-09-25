@@ -195,14 +195,14 @@ def load_data():
         # Events
         event_cursor = conn.cursor()
         event_cursor.execute("""
-            SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website
+            SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
             FROM events
             ORDER BY year, event_key
         """)
         
         event_data = {}
         for row in event_cursor.fetchall():
-            event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website = row
+            event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
             ev = compress_dict({
                 "k": event_key,
                 "n": name,
@@ -213,7 +213,9 @@ def load_data():
                 "c": city,
                 "s": state_prov,
                 "co": country,
-                "w": website
+                "w": website,
+                "wt": webcast_type,
+                "wc": webcast_channel
             })
             event_data.setdefault(year, {})[event_key] = ev
 
@@ -388,7 +390,7 @@ def load_data_2025():
         # Events
         event_cursor = conn.cursor()
         event_cursor.execute("""
-            SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website
+            SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
             FROM events
             WHERE year = 2025
             ORDER BY event_key
@@ -396,7 +398,7 @@ def load_data_2025():
         
         event_data = {2025: {}}
         for row in event_cursor.fetchall():
-            event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website = row
+            event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
             ev = compress_dict({
                 "k": event_key,
                 "n": name,
@@ -407,7 +409,9 @@ def load_data_2025():
                 "c": city,
                 "s": state_prov,
                 "co": country,
-                "w": website
+                "w": website,
+                "wt": webcast_type,
+                "wc": webcast_channel
             })
             event_data[2025][event_key] = ev
 
@@ -600,13 +604,13 @@ def load_year_data(year):
         event_data = {}
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website
+                SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
                 FROM events
                 WHERE year = %s
                 ORDER BY event_key
             """, (year,))
             for row in cursor.fetchall():
-                event_key, name, y, start_date, end_date, event_type, city, state_prov, country, website = row
+                event_key, name, y, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
                 event_data[event_key] = compress_dict({
                     "k": event_key,
                     "n": name,
@@ -617,7 +621,9 @@ def load_year_data(year):
                     "c": city,
                     "s": state_prov,
                     "co": country,
-                    "w": website
+                    "w": website,
+                    "wt": webcast_type,
+                    "wc": webcast_channel
                 })
 
         # === Load event teams for specific year ===

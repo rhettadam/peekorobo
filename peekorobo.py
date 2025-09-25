@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peeklive_layout,build_peeklive_grid
 
 from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
@@ -111,6 +111,157 @@ app.clientside_callback(
     Input('url', 'pathname'),
     prevent_initial_call=True
 )
+
+# PeekLive filters and refresh
+@app.callback(
+    Output("peeklive-grid", "children"),
+    Output("peeklive-title", "children"),
+    Input("peeklive-refresh", "n_intervals"),
+    # Events page filters
+    Input("year-dropdown", "value"),
+    Input("event-type-dropdown", "value"),
+    Input("week-dropdown", "value"),
+    Input("search-input", "value"),
+    Input("district-dropdown", "value"),
+)
+def update_peeklive_grid(_, selected_year, selected_event_types, selected_week, search_query, selected_district):
+    # Import locally to avoid circulars
+    from layouts import get_peeklive_events, build_peeklive_grid
+    # If the Events search contains a team (e.g., "frc123" or "123"), treat it as the team filter
+    detected_team = None
+    try:
+        if search_query:
+            s = str(search_query).lower().strip()
+            # Only detect team if it's explicitly "frc" prefixed or a standalone number
+            import re as _re
+            frc_match = _re.search(r"frc(\d{1,5})", s)
+            if frc_match:
+                detected_team = frc_match.group(1)
+            else:
+                # Only treat as team if it's a standalone number (not part of a larger string)
+                # This prevents years like "2024" from being treated as team 2024
+                if _re.fullmatch(r"\d{1,5}", s):
+                    detected_team = s
+    except Exception:
+        detected_team = None
+
+    effective_team = detected_team
+
+    # Build baseline PeekLive events; if a team filter is active OR there's a search query, do not cap
+    events = get_peeklive_events(include_all=bool(effective_team) or bool(search_query))
+
+    # Apply Events page filters to PeekLive list
+    # Year filter
+    if selected_year:
+        events = [ev for ev in events if ev.get("year") == selected_year]
+
+    # Event type filter uses EVENT_DATABASE to lookup type by key
+    if selected_event_types:
+        if not isinstance(selected_event_types, list):
+            selected_event_types = [selected_event_types]
+        try:
+            from peekorobo import EVENT_DATABASE, current_year as _cy
+            # EVENT_DATABASE is keyed by year; when year filter missing, assume current
+            lookup_year = selected_year or _cy
+            ev_by_key = {e.get("k"): e for e in EVENT_DATABASE.get(lookup_year, {}).values()}
+            def ev_type_ok(ev):
+                ek = ev.get("event_key")
+                meta = ev_by_key.get(ek, {})
+                return meta.get("et") in selected_event_types
+            events = [ev for ev in events if ev_type_ok(ev)]
+        except Exception:
+            # If lookup fails, skip type filter
+            pass
+
+    # Week filter: compute week from start_date using shared util get_week_number
+    if selected_week != "all":
+        try:
+            from utils import get_week_number
+            def compute_week(ev):
+                try:
+                    sd = ev.get("start_date")
+                    if not sd:
+                        return None
+                    return get_week_number(datetime.strptime(sd, "%Y-%m-%d").date())
+                except Exception:
+                    return None
+            events = [ev for ev in events if compute_week(ev) == selected_week]
+        except Exception:
+            pass
+
+    # District filter uses DISTRICT_STATES_COMBINED like events tab
+    if selected_district and selected_district != "all":
+        try:
+            from utils import is_western_pennsylvania_city
+            from peekorobo import DISTRICT_STATES_COMBINED
+            def get_event_district_from_ev(ev):
+                state = ev.get("state", "")
+                country = ev.get("country", "")
+                city = ev.get("city", "")
+                if country == "Israel":
+                    return "ISR"
+                if country == "Canada":
+                    return "ONT"
+                for district_acronym, states in DISTRICT_STATES_COMBINED.items():
+                    if state in states.get('abbreviations', []):
+                        if district_acronym == "FMA" and is_western_pennsylvania_city(city):
+                            return None
+                        return district_acronym
+                return None
+            events = [ev for ev in events if get_event_district_from_ev(ev) == selected_district]
+        except Exception:
+            pass
+
+    # Text search on name/city (applied first, before team filtering)
+    if search_query:
+        q = str(search_query).lower()
+        # Apply text search unless it's clearly just a team number
+        should_apply_text_search = True
+        try:
+            import re as _re
+            q_clean = q.strip()
+            # Only skip text search if it's purely a team number (frc123 or standalone digits)
+            if _re.fullmatch(r"frc\d{1,5}|\d{1,5}", q_clean):
+                should_apply_text_search = False
+        except Exception:
+            should_apply_text_search = True
+        
+        if should_apply_text_search:
+            original_count = len(events)
+            events = [
+                ev for ev in events
+                if q in (ev.get("name", "").lower()) or q in (ev.get("location", "").lower())
+            ]
+
+    # If a team was detected (from dropdown or search), filter events by team across all years
+    if effective_team:
+        try:
+            from peekorobo import EVENT_TEAMS
+            t_str = str(effective_team)
+            filtered = []
+            for ev in events:
+                evk = ev.get("event_key")
+                found = False
+                for _, year_map in (EVENT_TEAMS or {}).items():
+                    teams = (year_map or {}).get(evk, [])
+                    if any(str(t.get("tk")) == t_str for t in teams):
+                        found = True
+                        break
+                if found:
+                    filtered.append(ev)
+            events = filtered
+        except Exception:
+            pass
+
+    # Title
+    title = "Upcoming Events"
+    if effective_team:
+        title = f"Events for Team {effective_team}"
+    elif search_query:
+        title = f"Events matching '{search_query}'"
+
+    # Build grid using prefiltered events and effective team value
+    return build_peeklive_grid(team_value=effective_team, prefiltered_events=events), title
 
 # Set dark mode immediately on first page render
 app.index_string = '''
@@ -280,6 +431,9 @@ def display_page(pathname):
         event_key = pathname.split("/")[-1]
         return event_layout(event_key)
     
+    if pathname == "/peeklive":
+        return peeklive_layout()
+    
     if pathname == "/teams":
         return teams_layout()
     
@@ -288,6 +442,12 @@ def display_page(pathname):
     
     if pathname == "/events":
         return events_layout()
+    
+    if pathname == "/events/peeklive":
+        return events_layout(active_tab="peeklive-tab")
+    
+    if pathname == "/events/insights":
+        return events_layout(active_tab="table-tab")
     
     if pathname == "/blog":
         return blog_layout
@@ -358,6 +518,8 @@ def update_tab_title(pathname):
         return 'Compare - Peekorobo'
     elif pathname.startswith('/blog'):
         return 'Blog - Peekorobo'
+    elif pathname.startswith('/peeklive'):
+        return 'PeekLive - Peekorobo'
     else:
         return 'Peekorobo'
 
@@ -1142,6 +1304,20 @@ def save_favorite_team(n_clicks, pathname):
     except Exception as e:
         return "Error favoriting team.", True
 
+# Callback to update URL when tabs are clicked
+@app.callback(
+    Output("url", "pathname", allow_duplicate=True),
+    Input("events-tabs", "active_tab"),
+    prevent_initial_call=True
+)
+def update_events_url(active_tab):
+    if active_tab == "peeklive-tab":
+        return "/events/peeklive"
+    elif active_tab == "table-tab":
+        return "/events/insights"
+    else:  # cards-tab
+        return "/events"
+
 @app.callback(
     [
         Output("events-tab-content", "children"),
@@ -1172,6 +1348,8 @@ def update_events_tab_content(
     sort_direction_clicks,
     store_data,
 ):
+    if active_tab == "peeklive-tab":
+        return peeklive_layout(), dash.no_update, dash.no_update
     user_favorites = set(store_data or [])
     
     # Load data for the selected year
@@ -1187,10 +1365,10 @@ def update_events_tab_content(
             events_data = list(year_event_data.values())
             year_team_database = {selected_year: year_team_data}
         except Exception as e:
-            return html.Div(f"Error loading data for year {selected_year}: {str(e)}"), []
+            return html.Div(f"Error loading data for year {selected_year}: {str(e)}"), [], "▼"
     
     if not events_data:
-        return html.Div("No events available."), []
+        return html.Div("No events available."), [], "▼"
 
     if not isinstance(selected_event_types, list):
         selected_event_types = [selected_event_types]
@@ -3490,7 +3668,6 @@ def load_teams(
         }.get(axis, 0)
 
     # Get favorites counts for all teams
-    from datagather import get_all_team_favorites_counts
     favorites_counts = get_all_team_favorites_counts()
     
     table_rows = []
@@ -4462,7 +4639,6 @@ def update_team_insights(active_tab, store_data):
             
             if team_number in year_team_data:
                 team_year_data = year_team_data[team_number]
-                from utils import calculate_single_rank
                 global_rank, _, _ = calculate_single_rank(list(year_team_data.values()), team_year_data)
                 years_data.append({
                     'year': year_key,
@@ -4602,7 +4778,7 @@ def update_team_events(active_tab, store_data):
         if ev.get("week") is not None:
             return f"Week {ev['week']}"
         elif ev.get("week") is None and is_history:
-            return "Off-season"
+            return ""
         
         # For local data, calculate week from start date
         start_date = ev.get("start_date")
@@ -4621,7 +4797,7 @@ def update_team_events(active_tab, store_data):
             if week_num is not None:
                 return f"Week {week_num + 1}"  # Add 1 since get_week_number returns 0-based index
             else:
-                return "Off-season"
+                return ""
         except:
             return "N/A"
 

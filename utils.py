@@ -29,7 +29,7 @@ def get_event_week_label(event_start_date):
     if week_ranges:
         first_start = date.fromisoformat(week_ranges[0][0])
         if event_start_date < first_start:
-            return "Pre-Season"
+            return ""
     
     # Check if date is within any week range
     for i, (start, end) in enumerate(week_ranges):
@@ -42,7 +42,7 @@ def get_event_week_label(event_start_date):
                 return f"Week {i+1}"
     
     # If we get here, the date is after all week ranges (off-season)
-    return "Off-Season"
+    return ""
 
 def apply_simple_filter(df, filter_query):
     # Only supports simple "{"col"} op value" and "and"/"or"

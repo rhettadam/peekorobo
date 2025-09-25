@@ -2,7 +2,7 @@ import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
 from datagather import load_year_data,get_team_avatar,get_team_years_participated
 from flask import session
-from datetime import datetime
+from datetime import datetime, date
 from utils import format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, compute_percentiles, pill, get_event_week_label, reset_event_learning, is_western_pennsylvania_city
 import json
 import os
@@ -11,6 +11,8 @@ import plotly.graph_objs as go
 import dash_mantine_components as dmc
 from utils import WEEK_RANGES_BY_YEAR
 from datagather import TEAM_COLORS
+from flask import request as _flask_request
+import colorsys
 
 current_year = 2025
 
@@ -39,7 +41,6 @@ def get_team_card_colors_with_text(team_number):
         
         # Create a more subtle gradient with softer colors
         # Use the primary color as base but make it lighter and more muted
-        import colorsys
         
         def hex_to_rgb(hex_color):
             hex_color = hex_color.lstrip('#')
@@ -2101,7 +2102,7 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
 def teams_layout(default_year=current_year):
     teams_year_dropdown = dcc.Dropdown(
         id="teams-year-dropdown",
-        options=[{"label": str(y), "value": y} for y in range(1992, 2026)],
+        options=[{"label": str(y), "value": y} for y in range(1992, 2027)],
         value=default_year,
         clearable=False,
         placeholder="Select Year",
@@ -2499,10 +2500,10 @@ def teams_layout(default_year=current_year):
         }
     )
 
-def events_layout(year=current_year):
+def events_layout(year=current_year, active_tab="cards-tab"):
     year_dropdown = dcc.Dropdown(
         id="year-dropdown",
-        options=[{"label": str(yr), "value": yr} for yr in range(2000, 2026)],
+        options=[{"label": str(yr), "value": yr} for yr in range(2000, 2027)],
         value=year,
         placeholder="Year",
         clearable=False
@@ -2643,10 +2644,11 @@ def events_layout(year=current_year):
                     filters_row,
                     dbc.Tabs(
                         id="events-tabs",
-                        active_tab="cards-tab",
+                        active_tab=active_tab,
                         children=[
                             dbc.Tab(label="Cards", tab_id="cards-tab", active_label_style=tab_style),
                             dbc.Tab(label="Event Insights", tab_id="table-tab", active_label_style=tab_style),
+                            dbc.Tab(label="PeekLive", tab_id="peeklive-tab", active_label_style=tab_style),
                         ],
                         className="mb-4",
                     ),
@@ -3276,7 +3278,7 @@ def compare_layout():
 
     year_dropdown = dcc.Dropdown(
         id="compare-year",
-        options=[{"label": str(y), "value": y} for y in range(1992, 2026)],
+        options=[{"label": str(y), "value": y} for y in range(1992, 2027)],
         value=current_year,
         clearable=False,
         placeholder="Select Year",
@@ -3303,6 +3305,252 @@ def compare_layout():
         ], style={"maxWidth": "1000px", "margin": "0 auto", "padding": "20px", "flexGrow": "1"}),
         footer
     ])
+
+def get_peeklive_events(include_all: bool = False):
+    today = date.today()
+    events = []
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT event_key, name, start_date, end_date, webcast_type, webcast_channel, year, city, state_prov, country
+                FROM events
+                WHERE webcast_type IS NOT NULL AND webcast_channel IS NOT NULL
+                ORDER BY start_date NULLS LAST
+                """
+            )
+            rows = cur.fetchall()
+            force_all = include_all or (os.environ.get("REDZONE_SHOW_ALL", "").strip() in ("1", "true", "True"))
+            for row in rows:
+                ek, name, sd, ed, wtype, wchan, y, city, state, country = row
+                try:
+                    sd_d = datetime.strptime(sd, "%Y-%m-%d").date() if sd else None
+                    ed_d = datetime.strptime(ed, "%Y-%m-%d").date() if ed else None
+                except Exception:
+                    sd_d, ed_d = None, None
+                is_ongoing = False
+                if sd_d and ed_d:
+                    is_ongoing = sd_d <= today <= ed_d
+                elif sd_d and not ed_d:
+                    is_ongoing = sd_d == today
+                elif not sd_d and ed_d:
+                    is_ongoing = ed_d == today
+                if include_all or is_ongoing or force_all:
+                    events.append({
+                        "event_key": ek,
+                        "name": name,
+                        "webcast_type": (wtype or "").lower(),
+                        "webcast_channel": wchan,
+                        "start_date": sd,
+                        "end_date": ed,
+                        "year": y,
+                        "location": ", ".join([v for v in [city, state, country] if v])
+                    })
+            cur.close()
+    except Exception:
+        events = []
+
+    # Cap to most recent 9 when not explicitly showing all
+    import os as _os
+    if not include_all and events and (_os.environ.get("REDZONE_SHOW_ALL", "").strip() in ("1", "true", "True")):
+        def sort_key(ev):
+            try:
+                return datetime.strptime(ev.get("start_date") or "0001-01-01", "%Y-%m-%d")
+            except Exception:
+                return datetime.min
+        events = sorted(events, key=sort_key, reverse=True)[:9]
+    return events
+
+def peeklive_embed_for(ev):
+    wtype = ev.get("webcast_type", "").lower()
+    channel = (ev.get("webcast_channel") or "").strip()
+    title = f"{ev.get('event_key')} | {ev.get('name', '')}"
+    if not channel:
+        return html.Div(title)
+    if wtype == "youtube":
+        src = f"https://www.youtube.com/embed/{channel}?autoplay=1&mute=1&rel=0"
+        return html.Iframe(
+            src=src,
+            style={"width": "100%", "aspectRatio": "16 / 9", "border": "0"},
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share",
+            title=title,
+        )
+    if wtype == "twitch":
+        # Build Twitch parent list: env list + current request host + default
+        try:
+            req_host = (_flask_request.host or "").split(":")[0]
+        except Exception:
+            req_host = ""
+        env_parents = os.environ.get("PEEKLIVE_TWITCH_PARENTS", "").strip()
+        parent_list = [p.strip() for p in env_parents.split(",") if p.strip()]
+        if req_host:
+            parent_list.append(req_host)
+        # Sensible defaults for dev/prod
+        parent_list += [
+            os.environ.get("PEEKLIVE_TWITCH_PARENT", "www.peekorobo.com").strip() or "www.peekorobo.com",
+            "localhost",
+            "127.0.0.1",
+        ]
+        # De-duplicate and drop empties
+        uniq_parents = []
+        for p in parent_list:
+            if p and p not in uniq_parents:
+                uniq_parents.append(p)
+        parent_qs = "".join([f"&parent={p}" for p in uniq_parents])
+        src = f"https://player.twitch.tv/?channel={channel}{parent_qs}&muted=true&autoplay=true"
+        return html.Iframe(
+            src=src,
+            style={"width": "100%", "aspectRatio": "16 / 9", "border": "0"},
+            allow="autoplay; fullscreen",
+            title=title,
+        )
+    # Fallback: show link
+    return html.A(f"{wtype}: {channel}", href=f"/event/{ev.get('event_key')}")
+
+def peeklive_layout():
+    events = get_peeklive_events()
+
+    if not events:
+        return html.Div([
+            topbar(),
+            dbc.Container([
+                html.Img(src="/assets/peeklive.png", style={"height": "60px", "margin": "20px auto", "display": "block"}),
+                html.Div("No live events right now.", className="text-center"),
+            ], style={"maxWidth": "1200px"}),
+            footer
+        ])
+
+    cards = []
+    for ev in events:
+        cards.append(
+            dbc.Card([
+                dbc.CardHeader([
+                    html.Div([
+                        html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={"fontWeight": "bold", "color": "var(--primary-color)", "textDecoration": "none"}),
+                        html.Span(" · "),
+                        html.Span(ev.get("name", "")),
+                    ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap"}),
+                    html.Div(ev.get("location", ""), style={"fontSize": "0.85rem", "color": "var(--text-secondary)"}),
+                    html.Div([
+                        html.Span(ev.get("start_date", "TBD")),
+                        html.Span(" - "),
+                        html.Span(ev.get("end_date", "TBD")),
+                    ], style={"fontSize": "0.85rem", "color": "var(--text-secondary)", "marginTop": "4px"}),
+                ], style={"backgroundColor": "var(--card-bg)"}),
+                dbc.CardBody([
+                    peeklive_embed_for(ev)
+                ], style={"padding": 0})
+            ], style={"backgroundColor": "var(--card-bg)"})
+        )
+
+    def build_grid(filtered_events):
+        filtered_cards = []
+        for ev in filtered_events:
+            # reuse embed_for and header
+            filtered_cards.append(
+                dbc.Card([
+                    dbc.CardHeader([
+                        html.Div([
+                            html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={"fontWeight": "bold", "color": "var(--primary-color)", "textDecoration": "none"}),
+                            html.Span(" · "),
+                            html.Span(ev.get("name", "")),
+                        ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap"}),
+                        html.Div(ev.get("location", ""), style={"fontSize": "0.85rem", "color": "var(--text-secondary)"}),
+                        html.Div([
+                            html.Span(ev.get("start_date", "TBD")),
+                            html.Span(" - "),
+                            html.Span(ev.get("end_date", "TBD")),
+                        ], style={"fontSize": "0.85rem", "color": "var(--text-secondary)", "marginTop": "4px"}),
+                    ], style={"backgroundColor": "var(--card-bg)"}),
+                    dbc.CardBody([
+                        peeklive_embed_for(ev)
+                    ], style={"padding": 0})
+                ], style={"backgroundColor": "var(--card-bg)"})
+            )
+        return dbc.Row([
+            dbc.Col(c, md=6, xl=4, className="mb-3") for c in filtered_cards
+        ], className="justify-content-center")
+
+    grid = build_grid(events)
+
+    # Team filter options from global EVENT_TEAMS (aggregate across all years/events)
+    try:
+        from peekorobo import EVENT_TEAMS
+        team_set = set()
+        for _, year_map in (EVENT_TEAMS or {}).items():
+            for _, teams in (year_map or {}).items():
+                for t in teams:
+                    tk = t.get("tk")
+                    if isinstance(tk, int):
+                        team_set.add(tk)
+        team_options = [{"label": str(t), "value": str(t)} for t in sorted(team_set)]
+    except Exception:
+        team_options = []
+
+    return html.Div([
+        dbc.Container([
+            html.Img(src="/assets/peeklive.png", style={"height": "60px", "margin": "20px auto", "display": "block"}),
+            html.Div(id="peeklive-title", className="text-center mb-3", children="Upcoming Events"),
+            dcc.Interval(id='peeklive-refresh', interval=120000, n_intervals=0),
+            html.Div(id="peeklive-grid", children=grid)
+        ], style={"maxWidth": "1400px"}),
+    ])
+
+def build_peeklive_grid(team_value=None, prefiltered_events=None):
+    """Helper to build PeekLive grid children filtered by optional team string.
+
+    If prefiltered_events is provided, uses that list directly; otherwise fetches
+    events via get_peeklive_events (respecting include_all when team filter is set).
+    """
+    # If a team filter is set, show all events that match that team (do not cap)
+    events = prefiltered_events if prefiltered_events is not None else get_peeklive_events(include_all=bool(team_value))
+    if not team_value or team_value is None:
+        filtered = events
+    else:
+        try:
+            from peekorobo import EVENT_TEAMS
+            t_str = str(team_value)
+            filtered = []
+            for ev in events:
+                evk = ev.get("event_key")
+                found = False
+                # Search across all years for the event key
+                for y, year_map in (EVENT_TEAMS or {}).items():
+                    teams = (year_map or {}).get(evk, [])
+                    if any(str(t.get("tk")) == t_str for t in teams):
+                        found = True
+                        break
+                if found:
+                    filtered.append(ev)
+        except Exception:
+            filtered = events
+    # Build grid rows
+    cards = []
+    for ev in filtered:
+        cards.append(
+            dbc.Card([
+                dbc.CardHeader([
+                    html.Div([
+                        html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={"fontWeight": "bold", "color": "var(--primary-color)", "textDecoration": "none"}),
+                        html.Span(" · "),
+                        html.Span(ev.get("name", "")),
+                    ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap"}),
+                    html.Div(ev.get("location", ""), style={"fontSize": "0.85rem", "color": "var(--text-secondary)"}),
+                    html.Div([
+                        html.Span(ev.get("start_date", "TBD")),
+                        html.Span(" - "),
+                        html.Span(ev.get("end_date", "TBD")),
+                    ], style={"fontSize": "0.85rem", "color": "var(--text-secondary)", "marginTop": "4px"}),
+                ], style={"backgroundColor": "var(--card-bg)"}),
+                dbc.CardBody([
+                    peeklive_embed_for(ev)
+                ], style={"padding": 0})
+            ], style={"backgroundColor": "var(--card-bg)"})
+        )
+    return dbc.Row([
+        dbc.Col(c, md=6, xl=4, className="mb-3") for c in cards
+    ], className="justify-content-center")
 
 def match_layout(event_key, match_key):
     # Parse year from event_key
@@ -3937,7 +4185,6 @@ def generate_event_recommendations(event_database, favorite_teams, favorite_even
         return [html.Div("No 2025 event data available", style={"color": text_color})]
     
     # Get upcoming events (events that haven't started yet)
-    from datetime import datetime
     current_date = datetime.now()
     
     upcoming_events = []
@@ -5154,7 +5401,6 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
         if not ace_values:
             return html.Div("No valid event data found.")
         # Linear extrapolation for 2 predicted points using all events
-        import numpy as np
         n_events = len(ace_values)
         # Determine number of predicted points based on number of events
         if n_events <= 1:
