@@ -190,11 +190,11 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         event_ties = 0
 
         # Get the year from the first match's event key
-        year = matches[0]["event_key"][:4] if matches else "2025"
+        year = matches[0]["event_key"][:4] if matches else "2026"
         try:
             year_int = int(year)
         except Exception:
-            year_int = 2025
+            year_int = 2026
 
         # Get the appropriate scoring functions for this year
         try:

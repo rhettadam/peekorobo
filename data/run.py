@@ -1108,11 +1108,11 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         event_ties = 0  # Add tie counter
 
         # Get the year from the first match's event key
-        year = matches[0]["event_key"][:4] if matches else "2025"
+        year = matches[0]["event_key"][:4] if matches else "2026"
         try:
             year_int = int(year)
         except Exception:
-            year_int = 2025
+            year_int = 2026
 
         # Get the appropriate scoring functions for this year
         try:
@@ -1120,9 +1120,9 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             teleop_func = globals()[f"teleop_{year}"]
             endgame_func = globals()[f"endgame_{year}"]
         except KeyError:
-            auto_func = auto_2025
-            teleop_func = teleop_2025
-            endgame_func = endgame_2025
+            auto_func = auto_2026
+            teleop_func = teleop_2026
+            endgame_func = endgame_2026
 
         for match in matches:
             if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
