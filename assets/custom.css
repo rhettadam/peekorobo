@@ -1086,6 +1086,7 @@ html body div div .dash-table-container tr:hover * {
     -moz-background-color: transparent !important;
     -o-background-color: transparent !important;
     -ms-background-color: transparent !important;
+    background: transparent !important;
     -webkit-background: transparent !important;
     -moz-background: transparent !important;
     -o-background: transparent !important;
@@ -1275,6 +1276,17 @@ html body div div .dash-table-container tr:hover * {
     color: black !important;
 }
 
+/* Insights Game Link Hover Effects */
+.insights-game-link:hover {
+    color: var(--navbar-hover) !important;
+    text-decoration: underline !important;
+}
+
+/* Peeklive Navigation Link Hover Effects */
+.peeklive-nav-link:hover {
+    color: var(--navbar-hover) !important;
+}
+
 /* Event status indicators */
 .ongoing-indicator {
     position: absolute;
@@ -1331,4 +1343,98 @@ html body div div .dash-table-container tr:hover * {
         opacity: 0.4;
         transform: scale(0.9);
     }
+}
+
+/* Peekolive Card Enhancements */
+.peekolive-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    cursor: pointer;
+}
+
+.peekolive-card:hover {
+    transform: translateY(-8px) !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.15) !important;
+    border-color: var(--primary-color) !important;
+}
+
+.peekolive-card:hover .card-header a {
+    color: var(--navbar-hover) !important;
+}
+
+/* Enhanced status indicators */
+.ongoing-indicator {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 16px;
+    height: 16px;
+    background: linear-gradient(135deg, #28a745, #20c997);
+    border-radius: 50%;
+    animation: pulse-glow 2s infinite;
+    z-index: 10;
+    box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+}
+
+.upcoming-indicator {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 16px;
+    height: 16px;
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+    border-radius: 50%;
+    animation: slow-pulse 3s infinite;
+    z-index: 10;
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+}
+
+.completed-indicator {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 16px;
+    height: 16px;
+    background: linear-gradient(135deg, #dc3545, #e83e8c);
+    border-radius: 50%;
+    z-index: 10;
+    box-shadow: 0 0 10px rgba(220, 53, 69, 0.3);
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.1);
+        box-shadow: 0 0 20px rgba(40, 167, 69, 0.8);
+    }
+}
+
+@keyframes slow-pulse {
+    0%, 80% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+    }
+    40% {
+        opacity: 0.6;
+        transform: scale(1.05);
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.7);
+    }
+}
+
+
+/* Peekolive responsive improvements */
+@media (max-width: 768px) {
+    .peekolive-card {
+        height: 320px !important;
+    }
+    
+    .peekolive-card:hover {
+        transform: translateY(-4px) !important;
+    }
+    
 }

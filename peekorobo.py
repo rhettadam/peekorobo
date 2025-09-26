@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peeklive_layout,build_peeklive_grid,build_peeklive_layout_with_events
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events
 
 from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
@@ -114,9 +114,9 @@ app.clientside_callback(
 
 # PeekLive filters and refresh
 @app.callback(
-    Output("peeklive-grid", "children"),
-    Output("peeklive-title", "children"),
-    Input("peeklive-refresh", "n_intervals"),
+    Output("peekolive-grid", "children"),
+    Output("peekolive-title", "children"),
+    Input("peekolive-refresh", "n_intervals"),
     # Events page filters
     Input("year-dropdown", "value"),
     Input("event-type-dropdown", "value"),
@@ -124,9 +124,9 @@ app.clientside_callback(
     Input("search-input", "value"),
     Input("district-dropdown", "value"),
 )
-def update_peeklive_grid(_, selected_year, selected_event_types, selected_week, search_query, selected_district):
+def update_peekolive_grid(_, selected_year, selected_event_types, selected_week, search_query, selected_district):
     # Import locally to avoid circulars
-    from layouts import get_peeklive_events, build_peeklive_grid
+    from layouts import get_peekolive_events, build_peekolive_grid
     
     # If the Events search contains a team (e.g., "frc123" or "123"), treat it as the team filter
     detected_team = None
@@ -149,7 +149,7 @@ def update_peeklive_grid(_, selected_year, selected_event_types, selected_week, 
     effective_team = detected_team
 
     # Build baseline PeekLive events; if a team filter is active OR there's a search query, do not cap
-    events = get_peeklive_events(include_all=bool(effective_team) or bool(search_query))
+    events = get_peekolive_events(include_all=bool(effective_team) or bool(search_query))
     
 
     # Apply Events page filters to PeekLive list
@@ -263,7 +263,7 @@ def update_peeklive_grid(_, selected_year, selected_event_types, selected_week, 
         title = f"Events matching '{search_query}'"
 
     # Build grid using prefiltered events and effective team value
-    return build_peeklive_grid(team_value=effective_team, prefiltered_events=events), title
+    return build_peekolive_grid(team_value=effective_team, prefiltered_events=events), title
 
 # Set dark mode immediately on first page render
 app.index_string = '''
@@ -442,8 +442,8 @@ def display_page(pathname):
     if pathname == "/events":
         return events_layout()
     
-    if pathname == "/events/peeklive":
-        return events_layout(active_tab="peeklive-tab")
+    if pathname == "/events/peekolive":
+        return events_layout(active_tab="peekolive-tab")
     
     if pathname == "/events/insights":
         return events_layout(active_tab="table-tab")
@@ -517,8 +517,6 @@ def update_tab_title(pathname):
         return 'Compare - Peekorobo'
     elif pathname.startswith('/blog'):
         return 'Blog - Peekorobo'
-    elif pathname.startswith('/peeklive'):
-        return 'PeekLive - Peekorobo'
     else:
         return 'Peekorobo'
 
@@ -1310,8 +1308,8 @@ def save_favorite_team(n_clicks, pathname):
     prevent_initial_call=True
 )
 def update_events_url(active_tab):
-    if active_tab == "peeklive-tab":
-        return "/events/peeklive"
+    if active_tab == "peekolive-tab":
+        return "/events/peekolive"
     elif active_tab == "table-tab":
         return "/events/insights"
     else:  # cards-tab
@@ -1347,9 +1345,9 @@ def update_events_tab_content(
     sort_direction_clicks,
     store_data,
 ):
-    if active_tab == "peeklive-tab":
+    if active_tab == "peekolive-tab":
         # Handle search filtering for PeekLive tab
-        from layouts import get_peeklive_events_categorized, build_peeklive_grid
+        from layouts import get_peekolive_events_categorized, build_peekolive_grid
         
         # Detect team from search query
         detected_team = None
@@ -1370,7 +1368,7 @@ def update_events_tab_content(
             detected_team = None
         
         # Get categorized events
-        events_data = get_peeklive_events_categorized(include_all=bool(search_query) or bool(detected_team))
+        events_data = get_peekolive_events_categorized(include_all=bool(search_query) or bool(detected_team))
         
         # Apply team filtering if a team was detected
         if detected_team:
@@ -1404,7 +1402,7 @@ def update_events_tab_content(
                 ]
         
         # Build the PeekLive layout with filtered events
-        return build_peeklive_layout_with_events(events_data, detected_team), dash.no_update, dash.no_update
+        return build_peekolive_layout_with_events(events_data, detected_team), dash.no_update, dash.no_update
     user_favorites = set(store_data or [])
     
     # Load data for the selected year

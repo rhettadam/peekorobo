@@ -859,6 +859,35 @@ def topbar():
                                         ),
                                         className="d-md-none"  # Only show on mobile
                                     ),
+                                    # Peeklive link - mobile version
+                                    dbc.NavItem(
+                                        html.A(
+                                            [
+                                                html.Span("Try", style={
+                                                    "fontWeight": "600",
+                                                    "fontSize": "0.9rem",
+                                                    "letterSpacing": "0.5px"
+                                                }),
+                                                " ",
+                                                html.Img(
+                                                    src="/assets/peeklive.png",
+                                                    style={"height": "20px", "width": "auto", "marginLeft": "4px", "marginRight": "4px"}
+                                                )
+                                            ],
+                                            href="/events?tab=peekolive-tab",
+                                            style={
+                                                "color": "var(--navbar-text)",
+                                                "textDecoration": "none",
+                                                "display": "flex",
+                                                "alignItems": "center",
+                                                "justifyContent": "center",
+                                                "padding": "0.5rem 1rem",
+                                                "transition": "color 0.2s ease"
+                                            },
+                                            className="peeklive-nav-link"
+                                        ),
+                                        className="d-md-none"  # Only show on mobile
+                                    ),
                                 ],
                                 navbar=True,
                                 className="justify-content-center",
@@ -869,6 +898,37 @@ def topbar():
                     id="navbar-collapse",
                     is_open=False,
                     navbar=True,
+                ),
+
+                # Peeklive link - desktop version
+                dbc.Col(
+                    html.A(
+                        [
+                            html.Span("Try", style={
+                                "fontWeight": "600",
+                                "fontSize": "0.95rem",
+                                "letterSpacing": "0.5px"
+                            }),
+                            " ",
+                            html.Img(
+                                src="/assets/peeklive.png",
+                                style={"height": "24px", "width": "auto", "marginLeft": "6px", "marginRight": "6px"}
+                            )
+                        ],
+                        href="/events?tab=peekolive-tab",
+                        style={
+                            "color": "var(--navbar-text)",
+                            "textDecoration": "none",
+                            "display": "flex",
+                            "alignItems": "center",
+                            "padding": "0.5rem 1rem",
+                            "transition": "color 0.2s ease",
+                            "whiteSpace": "nowrap"
+                        },
+                        className="peeklive-nav-link"
+                    ),
+                    width="auto",
+                    className="d-none d-md-block align-self-center",
                 ),
 
                 dbc.Col(
@@ -1278,7 +1338,8 @@ def insights_layout():
                                         html.A(
                                             f"{game['name']} ({year})",
                                             href=f"/insights/{year}",
-                                            style={"textDecoration": "none", "color": "var(--text-primary)"},
+                                            style={"textDecoration": "none", "color": "var(--text-primary)", "transition": "all 0.3s ease"},
+                                            className="insights-game-link"
                                         ),
                                         className="mb-1",
                                     ),
@@ -2649,7 +2710,7 @@ def events_layout(year=current_year, active_tab="cards-tab"):
                         children=[
                             dbc.Tab(label="Cards", tab_id="cards-tab", active_label_style=tab_style),
                             dbc.Tab(label="Event Insights", tab_id="table-tab", active_label_style=tab_style),
-                            dbc.Tab(label="PeekLive", tab_id="peeklive-tab", active_label_style=tab_style),
+                            dbc.Tab(label="Peekolive", tab_id="peekolive-tab", active_label_style=tab_style),
                         ],
                         className="mb-4",
                     ),
@@ -3312,8 +3373,8 @@ def compare_layout():
         footer
     ])
 
-def get_peeklive_events_categorized(include_all: bool = False):
-    """Get peeklive events categorized into completed, ongoing, and upcoming."""
+def get_peekolive_events_categorized(include_all: bool = False):
+    """Get peekolive events categorized into completed, ongoing, and upcoming."""
     today = date.today()
     completed_events = []
     ongoing_events = []
@@ -3396,13 +3457,13 @@ def get_peeklive_events_categorized(include_all: bool = False):
         "upcoming": upcoming_events
     }
 
-def get_peeklive_events(include_all: bool = False):
-    """Get peeklive events as a flat list (for search callback compatibility)."""
-    categorized = get_peeklive_events_categorized(include_all)
+def get_peekolive_events(include_all: bool = False):
+    """Get peekolive events as a flat list (for search callback compatibility)."""
+    categorized = get_peekolive_events_categorized(include_all)
     # Return all events as a flat list for search functionality
     return categorized["completed"] + categorized["ongoing"] + categorized["upcoming"]
 
-def peeklive_embed_for(ev):
+def peekolive_embed_for(ev):
     wtype = ev.get("webcast_type", "").lower()
     channel = (ev.get("webcast_channel") or "").strip()
     title = f"{ev.get('event_key')} | {ev.get('name', '')}"
@@ -3447,16 +3508,63 @@ def peeklive_embed_for(ev):
     # Fallback: show link
     return html.A(f"{wtype}: {channel}", href=f"/event/{ev.get('event_key')}")
 
-def build_peeklive_layout_with_events(events_data, detected_team=None):
+def build_peekolive_layout_with_events(events_data, detected_team=None):
     """Build PeekLive layout with pre-filtered events data."""
     # Check if any events exist
     total_events = len(events_data["completed"]) + len(events_data["ongoing"]) + len(events_data["upcoming"])
     if total_events == 0:
         return html.Div([
             dbc.Container([
-                html.Img(src="/assets/peeklive.png", style={"height": "60px", "margin": "20px auto", "display": "block"}),
-                html.Div("No live events right now.", className="text-center"),
-            ], style={"maxWidth": "1500px"}),
+                # Enhanced logo section
+                html.Div([
+                    html.Img(src="/assets/peeklive.png", style={
+                        "height": "100px", 
+                        "margin": "0 auto 20px", 
+                        "display": "block"
+                    })
+                ], className="mb-4"),
+                
+                # Enhanced empty state
+                html.Div([
+                    html.Div([
+                        html.I(className="fas fa-video-slash", style={
+                            "fontSize": "4rem",
+                            "color": "var(--text-secondary)",
+                            "marginBottom": "20px",
+                            "opacity": "0.6"
+                        }),
+                        html.H3("No Live Events", style={
+                            "color": "var(--text-primary)",
+                            "fontWeight": "600",
+                            "fontSize": "1.8rem",
+                            "marginBottom": "15px"
+                        }),
+                        html.P("There are currently no live FRC events streaming. Check back later for upcoming competitions!", style={
+                            "color": "var(--text-secondary)",
+                            "fontSize": "1.1rem",
+                            "lineHeight": "1.6",
+                            "marginBottom": "25px",
+                            "maxWidth": "500px",
+                            "margin": "0 auto 25px"
+                        }),
+                        html.Div([
+                            html.I(className="fas fa-clock", style={"marginRight": "8px", "color": "var(--text-secondary)"}),
+                            html.Span("Events typically stream during competition weekends", style={
+                                "color": "var(--text-secondary)",
+                                "fontSize": "0.95rem",
+                                "fontStyle": "italic"
+                            })
+                        ], style={"textAlign": "center"})
+                    ], style={
+                        "textAlign": "center",
+                        "padding": "60px 20px",
+                        "background": "var(--card-bg)",
+                        "borderRadius": "16px",
+                        "border": "1px solid var(--border-color)",
+                        "boxShadow": "0 4px 20px rgba(0,0,0,0.08)"
+                    })
+                ], style={"maxWidth": "600px", "margin": "0 auto"})
+            ], style={"maxWidth": "1400px", "padding": "20px"}),
         ])
 
     def build_event_card(ev, event_status="ongoing"):
@@ -3464,9 +3572,14 @@ def build_peeklive_layout_with_events(events_data, detected_team=None):
         card_style = {
             "backgroundColor": "var(--card-bg)", 
             "position": "relative",
-            "height": "300px",
+            "height": "350px",
             "display": "flex",
-            "flexDirection": "column"
+            "flexDirection": "column",
+            "borderRadius": "16px",
+            "boxShadow": "0 4px 20px rgba(0,0,0,0.08)",
+            "border": "1px solid var(--border-color)",
+            "transition": "all 0.3s ease",
+            "overflow": "hidden"
         }
         
         # Add appropriate indicator based on event status
@@ -3480,40 +3593,92 @@ def build_peeklive_layout_with_events(events_data, detected_team=None):
         
         # Truncate event name if too long
         event_name = ev.get("name", "")
-        if len(event_name) > 30:
-            event_name = event_name[:27] + "..."
+        if len(event_name) > 35:
+            event_name = event_name[:32] + "..."
         
         return dbc.Card([
             indicator,
             dbc.CardHeader([
                 html.Div([
-                    html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={"fontWeight": "bold", "color": "var(--primary-color)", "textDecoration": "none"}),
-                    html.Span(" · "),
-                    html.Span(event_name, title=ev.get("name", "")),  # Show full name on hover
-                ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap"}),
-                html.Div(ev.get("location", ""), style={"fontSize": "0.85rem", "color": "var(--text-secondary)"}),
+                    html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={
+                        "fontWeight": "700", 
+                        "color": "var(--primary-color)", 
+                        "textDecoration": "none",
+                        "fontSize": "1.1rem",
+                        "transition": "color 0.2s ease"
+                    }),
+                    html.Span(" · ", style={"color": "var(--text-secondary)", "fontWeight": "500"}),
+                    html.Span(event_name, title=ev.get("name", ""), style={
+                        "fontWeight": "600",
+                        "color": "var(--text-primary)"
+                    }),  # Show full name on hover
+                ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap", "marginBottom": "8px"}),
                 html.Div([
-                    html.Span(ev.get("start_date", "TBD")),
-                    html.Span(" - "),
-                    html.Span(ev.get("end_date", "TBD")),
-                ], style={"fontSize": "0.85rem", "color": "var(--text-secondary)", "marginTop": "4px"}),
-            ], style={"backgroundColor": "var(--card-bg)", "flexShrink": 0}),
+                    html.I(className="fas fa-map-marker-alt", style={"marginRight": "6px", "color": "var(--text-secondary)"}),
+                    html.Span(ev.get("location", ""), style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
+                ], style={"display": "flex", "alignItems": "center", "marginBottom": "6px"}),
+                html.Div([
+                    html.I(className="fas fa-calendar-alt", style={"marginRight": "6px", "color": "var(--text-secondary)"}),
+                    html.Span(ev.get("start_date", "TBD"), style={"fontSize": "0.9rem", "color": "var(--text-secondary)"}),
+                    html.Span(" - ", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"}),
+                    html.Span(ev.get("end_date", "TBD"), style={"fontSize": "0.9rem", "color": "var(--text-secondary)"}),
+                ], style={"display": "flex", "alignItems": "center"}),
+            ], style={
+                "backgroundColor": "var(--bg-secondary)", 
+                "flexShrink": 0,
+                "borderBottom": "1px solid var(--border-color)",
+                "padding": "16px"
+            }),
             dbc.CardBody([
-                peeklive_embed_for(ev)
+                peekolive_embed_for(ev)
             ], style={"padding": 0, "flex": 1, "display": "flex", "flexDirection": "column"})
-        ], style=card_style)
+        ], style=card_style, className="peekolive-card")
 
     def build_section(title, events_list, section_id, event_status="ongoing"):
         if not events_list:
             return html.Div()
         
+        # Determine icon and color based on status
+        status_config = {
+            "ongoing": {"icon": "fas fa-play-circle", "color": "#28a745", "bg": "rgba(40, 167, 69, 0.1)"},
+            "upcoming": {"icon": "fas fa-clock", "color": "#ffc107", "bg": "rgba(255, 193, 7, 0.1)"},
+            "completed": {"icon": "fas fa-check-circle", "color": "#dc3545", "bg": "rgba(220, 53, 69, 0.1)"}
+        }
+        config = status_config.get(event_status, status_config["ongoing"])
+        
         cards = [build_event_card(ev, event_status=event_status) for ev in events_list]
         return html.Div([
-            html.H4(title, className="text-center mb-3", style={"color": "var(--primary-color)"}),
+            html.Div([
+                html.Div([
+                    html.I(className=config["icon"], style={
+                        "color": config["color"],
+                        "fontSize": "1.5rem",
+                        "marginRight": "12px"
+                    }),
+                    html.H4(title, style={
+                        "color": "var(--text-primary)",
+                        "fontWeight": "700",
+                        "fontSize": "1.8rem",
+                        "margin": "0",
+                        "display": "inline-block"
+                    })
+                ], style={
+                    "display": "flex",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "marginBottom": "25px"
+                })
+            ], style={
+                "background": f"linear-gradient(135deg, {config['bg']} 0%, transparent 100%)",
+                "borderRadius": "12px",
+                "padding": "20px 20px 10px 20px",
+                "marginBottom": "25px",
+                "border": f"1px solid {config['color']}20"
+            }),
             dbc.Row([
-                dbc.Col(card, md=6, xl=4, className="mb-3") for card in cards
+                dbc.Col(card, md=6, xl=4, className="mb-4") for card in cards
             ], className="justify-content-center", id=section_id)
-        ], className="mb-5")
+        ], className="mb-3")
 
     # Build sections
     ongoing_section = build_section("Ongoing Events", events_data["ongoing"], "ongoing-events", event_status="ongoing") 
@@ -3522,23 +3687,31 @@ def build_peeklive_layout_with_events(events_data, detected_team=None):
     
     return html.Div([
         dbc.Container([
-            html.Img(src="/assets/peeklive.png", style={"height": "100px", "margin": "20px auto", "display": "block"}),
-            dcc.Interval(id='peeklive-refresh', interval=120000, n_intervals=0),
+            # Enhanced logo section
+            html.Div([
+                html.Img(src="/assets/peeklive.png", style={
+                    "height": "100px", 
+                    "margin": "0 auto 20px", 
+                    "display": "block"
+                })
+            ], className="mb-4"),
+            
+            dcc.Interval(id='peekolive-refresh', interval=120000, n_intervals=0),
             ongoing_section,
             upcoming_section,
             completed_section
-        ], style={"maxWidth": "1400px"}),
+        ], style={"maxWidth": "1400px", "padding": "20px"}),
     ])
 
-def peeklive_layout():
-    events_data = get_peeklive_events_categorized()
-    return build_peeklive_layout_with_events(events_data)
+def peekolive_layout():
+    events_data = get_peekolive_events_categorized()
+    return build_peekolive_layout_with_events(events_data)
 
-def build_peeklive_grid(team_value=None, prefiltered_events=None):
-    """Helper to build PeekLive grid children filtered by optional team string.
+def build_peekolive_grid(team_value=None, prefiltered_events=None):
+    """Helper to build PeekoLive grid children filtered by optional team string.
 
     If prefiltered_events is provided, uses that list directly; otherwise fetches
-    events via get_peeklive_events (respecting include_all when team filter is set).
+    events via get_peekolive_events (respecting include_all when team filter is set).
     """
     # Get events data
     if prefiltered_events is not None:
@@ -3546,7 +3719,7 @@ def build_peeklive_grid(team_value=None, prefiltered_events=None):
         events_to_display = prefiltered_events
     else:
         # Get categorized events for normal display
-        events_data = get_peeklive_events_categorized(include_all=bool(team_value))
+        events_data = get_peekolive_events_categorized(include_all=bool(team_value))
         if not team_value or team_value is None:
             # Combine all events for display
             events_to_display = events_data["completed"] + events_data["ongoing"] + events_data["upcoming"]
@@ -3599,7 +3772,7 @@ def build_peeklive_grid(team_value=None, prefiltered_events=None):
                     ], style={"fontSize": "0.85rem", "color": "var(--text-secondary)", "marginTop": "4px"}),
                 ], style={"backgroundColor": "var(--card-bg)", "flexShrink": 0}),
                 dbc.CardBody([
-                    peeklive_embed_for(ev)
+                    peekolive_embed_for(ev)
                 ], style={"padding": 0, "flex": 1, "display": "flex", "flexDirection": "column"})
             ], style={
                 "backgroundColor": "var(--card-bg)",
