@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peeklive_layout,build_peeklive_grid
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peeklive_layout,build_peeklive_grid,build_peeklive_layout_with_events
 
 from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
@@ -127,6 +127,7 @@ app.clientside_callback(
 def update_peeklive_grid(_, selected_year, selected_event_types, selected_week, search_query, selected_district):
     # Import locally to avoid circulars
     from layouts import get_peeklive_events, build_peeklive_grid
+    
     # If the Events search contains a team (e.g., "frc123" or "123"), treat it as the team filter
     detected_team = None
     try:
@@ -149,6 +150,7 @@ def update_peeklive_grid(_, selected_year, selected_event_types, selected_week, 
 
     # Build baseline PeekLive events; if a team filter is active OR there's a search query, do not cap
     events = get_peeklive_events(include_all=bool(effective_team) or bool(search_query))
+    
 
     # Apply Events page filters to PeekLive list
     # Year filter
@@ -430,9 +432,6 @@ def display_page(pathname):
     if pathname.startswith("/event/"):
         event_key = pathname.split("/")[-1]
         return event_layout(event_key)
-    
-    if pathname == "/peeklive":
-        return peeklive_layout()
     
     if pathname == "/teams":
         return teams_layout()
@@ -1349,7 +1348,63 @@ def update_events_tab_content(
     store_data,
 ):
     if active_tab == "peeklive-tab":
-        return peeklive_layout(), dash.no_update, dash.no_update
+        # Handle search filtering for PeekLive tab
+        from layouts import get_peeklive_events_categorized, build_peeklive_grid
+        
+        # Detect team from search query
+        detected_team = None
+        try:
+            if search_query:
+                s = str(search_query).lower().strip()
+                # Only detect team if it's explicitly "frc" prefixed or a standalone number
+                import re as _re
+                frc_match = _re.search(r"frc(\d{1,5})", s)
+                if frc_match:
+                    detected_team = frc_match.group(1)
+                else:
+                    # Only treat as team if it's a standalone number (not part of a larger string)
+                    # This prevents years like "2024" from being treated as team 2024
+                    if _re.fullmatch(r"\d{1,5}", s):
+                        detected_team = s
+        except Exception:
+            detected_team = None
+        
+        # Get categorized events
+        events_data = get_peeklive_events_categorized(include_all=bool(search_query) or bool(detected_team))
+        
+        # Apply team filtering if a team was detected
+        if detected_team:
+            try:
+                t_str = str(detected_team)
+                # Filter each category by team participation
+                for category in ["completed", "ongoing", "upcoming"]:
+                    filtered_events = []
+                    for ev in events_data[category]:
+                        evk = ev.get("event_key")
+                        found = False
+                        # Search across all years for the event key
+                        for _, year_map in (EVENT_TEAMS or {}).items():
+                            teams = (year_map or {}).get(evk, [])
+                            if any(str(t.get("tk")) == t_str for t in teams):
+                                found = True
+                                break
+                        if found:
+                            filtered_events.append(ev)
+                    events_data[category] = filtered_events
+            except Exception:
+                pass
+        # Apply text search if no team was detected and there's a search query
+        elif search_query:
+            q = str(search_query).lower()
+            # Filter each category by text search
+            for category in ["completed", "ongoing", "upcoming"]:
+                events_data[category] = [
+                    ev for ev in events_data[category]
+                    if q in (ev.get("name", "").lower()) or q in (ev.get("location", "").lower())
+                ]
+        
+        # Build the PeekLive layout with filtered events
+        return build_peeklive_layout_with_events(events_data, detected_team), dash.no_update, dash.no_update
     user_favorites = set(store_data or [])
     
     # Load data for the selected year
@@ -1421,11 +1476,11 @@ def update_events_tab_content(
         except:
             return datetime.date(1900, 1, 1)
 
-    def compute_event_insights_from_data(EVENT_TEAMS, EVENT_DATABASE, TEAM_DATABASE, selected_year, filtered_event_keys=None):
+    def compute_event_insights_from_data(event_teams, event_database, team_database, selected_year, filtered_event_keys=None):
         rows = []
     
-        teams_by_event = EVENT_TEAMS
-        events = EVENT_DATABASE
+        teams_by_event = event_teams
+        events = event_database
     
         for event_key, team_entries in teams_by_event.items():
             if filtered_event_keys and event_key not in filtered_event_keys:
@@ -1461,7 +1516,7 @@ def update_events_tab_content(
             epa_values = []
             for t in team_entries:
                 team_number = t["tk"]
-                team_data = TEAM_DATABASE.get(selected_year, {}).get(team_number)
+                team_data = team_database.get(selected_year, {}).get(team_number)
                 if team_data and team_data.get("epa") is not None:
                     epa_values.append(team_data["epa"])
     
@@ -2480,7 +2535,8 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, event_key, match.get("k", ""))
             
             # Learn from completed matches
-            winner = match.get("wa", "Tie").lower()
+            winner = match.get("wa") or "Tie"
+            winner = winner.lower() if winner else "tie"
             if winner in ["red", "blue"]:
                 learn_from_match_outcome(event_key, match.get("k", ""), winner, red_score, blue_score)
             
@@ -3667,6 +3723,7 @@ def load_teams(
             "epa": total,
         }.get(axis, 0)
 
+    from datagather import get_all_team_favorites_counts
     # Get favorites counts for all teams
     favorites_counts = get_all_team_favorites_counts()
     
@@ -5538,6 +5595,47 @@ def toggle_team_card_collapse(n_clicks, current_style):
         arrow = "▲"
     
     return arrow, new_style
+
+@app.callback(
+    Output('peeklive-notifications', 'children'),
+    [Input('peeklive-refresh', 'n_intervals')],
+    [State('search-input', 'value')]
+)
+def update_peeklive_notifications(n_intervals, search_query):
+    """Update match notifications based on search query."""
+    print(f"DEBUG: update_peeklive_notifications called with search_query: {search_query}")
+    
+    if not search_query:
+        print("DEBUG: No search query, returning empty div")
+        return html.Div()
+    
+    # Detect team from search query
+    detected_team = None
+    try:
+        if search_query:
+            s = str(search_query).lower().strip()
+            import re as _re
+            frc_match = _re.search(r"frc(\d{1,5})", s)
+            if frc_match:
+                detected_team = frc_match.group(1)
+            else:
+                if _re.fullmatch(r"\d{1,5}", s):
+                    detected_team = s
+    except Exception as e:
+        print(f"DEBUG: Exception in team detection: {e}")
+        detected_team = None
+    
+    print(f"DEBUG: Detected team: {detected_team}")
+    
+    if not detected_team:
+        print("DEBUG: No team detected, returning empty div")
+        return html.Div()
+    
+    # Build notifications for the detected team
+    from layouts import build_match_notifications
+    result = build_match_notifications(detected_team)
+    print(f"DEBUG: Built notifications: {result}")
+    return result
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  

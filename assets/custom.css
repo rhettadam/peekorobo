@@ -1274,3 +1274,27 @@ html body div div .dash-table-container tr:hover * {
     background-color: white !important;
     color: black !important;
 }
+
+/* Flashing green dot for ongoing events */
+.ongoing-indicator {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 12px;
+    height: 12px;
+    background-color: #28a745;
+    border-radius: 50%;
+    animation: flash 1.5s infinite;
+    z-index: 10;
+}
+
+@keyframes flash {
+    0%, 50% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    25%, 75% {
+        opacity: 0.3;
+        transform: scale(0.8);
+    }
+}

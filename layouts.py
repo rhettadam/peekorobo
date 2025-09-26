@@ -13,6 +13,7 @@ from utils import WEEK_RANGES_BY_YEAR
 from datagather import TEAM_COLORS
 from flask import request as _flask_request
 import colorsys
+import numpy as np
 
 current_year = 2025
 
@@ -2872,7 +2873,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         for match in team_matches:
             red_score = match.get("rs", 0)
             blue_score = match.get("bs", 0)
-            winner = match.get("wa", "Tie").lower()
+            winner = match.get("wa") or "Tie"
+            winner = winner.lower() if winner else "tie"
             
             # Handle disqualifications (score of 0) as ties
             if red_score == 0 or blue_score == 0:
@@ -2966,7 +2968,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 
                 if red_team_info and blue_team_info:
                     # Learn from completed matches
-                    winner = match.get("wa", "Tie").lower()
+                    winner = match.get("wa") or "Tie"
+                    winner = winner.lower() if winner else "tie"
                     if winner in ["red", "blue"]:
                         learn_from_match_outcome(event_key, match.get("k", ""), winner, red_score, blue_score)
         
@@ -2985,7 +2988,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             for match in team_matches:
                 red_score = match.get("rs", 0)
                 blue_score = match.get("bs", 0)
-                winner = match.get("wa", "Tie").lower()
+                winner = match.get("wa") or "Tie"
+                winner = winner.lower() if winner else "tie"
                 
                 # Only count completed matches
                 if red_score <= 0 or blue_score <= 0:
@@ -3111,7 +3115,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     # Use adaptive prediction that learns from previous matches
                     p_red, p_blue = predict_win_probability_adaptive(red_team_info, blue_team_info, event_key, match.get("k", ""))
                     # Learn from completed matches
-                    winner = match.get("wa", "Tie").lower()
+                    winner = match.get("wa") or "Tie"
+                    winner = winner.lower() if winner else "tie"
                     if winner in ["red", "blue"]:
                         learn_from_match_outcome(event_key, match.get("k", ""), winner, red_score, blue_score)
                     
@@ -3121,7 +3126,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     prediction = "N/A"
                     prediction_percent = None
         
-                winner = match.get("wa", "Tie").title()
+                winner = match.get("wa") or "Tie"
+                winner = winner.title() if winner else "Tie"
                 youtube_id = match.get("yt")
                 video_link = f"[▶](https://youtube.com/watch?v={youtube_id})" if youtube_id else "N/A"
                 
@@ -3306,9 +3312,13 @@ def compare_layout():
         footer
     ])
 
-def get_peeklive_events(include_all: bool = False):
+def get_peeklive_events_categorized(include_all: bool = False):
+    """Get peeklive events categorized into completed, ongoing, and upcoming."""
     today = date.today()
-    events = []
+    completed_events = []
+    ongoing_events = []
+    upcoming_events = []
+    
     try:
         with DatabaseConnection() as conn:
             cur = conn.cursor()
@@ -3321,7 +3331,6 @@ def get_peeklive_events(include_all: bool = False):
                 """
             )
             rows = cur.fetchall()
-            force_all = include_all or (os.environ.get("REDZONE_SHOW_ALL", "").strip() in ("1", "true", "True"))
             for row in rows:
                 ek, name, sd, ed, wtype, wchan, y, city, state, country = row
                 try:
@@ -3329,38 +3338,69 @@ def get_peeklive_events(include_all: bool = False):
                     ed_d = datetime.strptime(ed, "%Y-%m-%d").date() if ed else None
                 except Exception:
                     sd_d, ed_d = None, None
-                is_ongoing = False
+                
+                event_data = {
+                    "event_key": ek,
+                    "name": name,
+                    "webcast_type": (wtype or "").lower(),
+                    "webcast_channel": wchan,
+                    "start_date": sd,
+                    "end_date": ed,
+                    "year": y,
+                    "location": ", ".join([v for v in [city, state, country] if v])
+                }
+                
+                # Categorize events
                 if sd_d and ed_d:
-                    is_ongoing = sd_d <= today <= ed_d
+                    if ed_d < today:
+                        completed_events.append(event_data)
+                    elif sd_d <= today <= ed_d:
+                        ongoing_events.append(event_data)
+                    elif sd_d > today:
+                        upcoming_events.append(event_data)
                 elif sd_d and not ed_d:
-                    is_ongoing = sd_d == today
+                    if sd_d < today:
+                        completed_events.append(event_data)
+                    elif sd_d == today:
+                        ongoing_events.append(event_data)
+                    elif sd_d > today:
+                        upcoming_events.append(event_data)
                 elif not sd_d and ed_d:
-                    is_ongoing = ed_d == today
-                if include_all or is_ongoing or force_all:
-                    events.append({
-                        "event_key": ek,
-                        "name": name,
-                        "webcast_type": (wtype or "").lower(),
-                        "webcast_channel": wchan,
-                        "start_date": sd,
-                        "end_date": ed,
-                        "year": y,
-                        "location": ", ".join([v for v in [city, state, country] if v])
-                    })
+                    if ed_d < today:
+                        completed_events.append(event_data)
+                    elif ed_d == today:
+                        ongoing_events.append(event_data)
+                else:
+                    # No date info, treat as upcoming
+                    upcoming_events.append(event_data)
             cur.close()
     except Exception:
-        events = []
+        pass
 
-    # Cap to most recent 9 when not explicitly showing all
-    import os as _os
-    if not include_all and events and (_os.environ.get("REDZONE_SHOW_ALL", "").strip() in ("1", "true", "True")):
+    # Limit events per category when not showing all
+    if not include_all:
         def sort_key(ev):
             try:
                 return datetime.strptime(ev.get("start_date") or "0001-01-01", "%Y-%m-%d")
             except Exception:
                 return datetime.min
-        events = sorted(events, key=sort_key, reverse=True)[:9]
-    return events
+        
+        # Sort and limit each category
+        completed_events = sorted(completed_events, key=sort_key, reverse=True)[:9]  # Most recent completed
+        ongoing_events = sorted(ongoing_events, key=sort_key)[:9]  # Current ongoing
+        upcoming_events = sorted(upcoming_events, key=sort_key)[:9]  # Nearest upcoming
+    
+    return {
+        "completed": completed_events,
+        "ongoing": ongoing_events,
+        "upcoming": upcoming_events
+    }
+
+def get_peeklive_events(include_all: bool = False):
+    """Get peeklive events as a flat list (for search callback compatibility)."""
+    categorized = get_peeklive_events_categorized(include_all)
+    # Return all events as a flat list for search functionality
+    return categorized["completed"] + categorized["ongoing"] + categorized["upcoming"]
 
 def peeklive_embed_for(ev):
     wtype = ev.get("webcast_type", "").lower()
@@ -3377,18 +3417,17 @@ def peeklive_embed_for(ev):
             title=title,
         )
     if wtype == "twitch":
-        # Build Twitch parent list: env list + current request host + default
+        # Build Twitch parent list: current request host + defaults
         try:
             req_host = (_flask_request.host or "").split(":")[0]
         except Exception:
             req_host = ""
-        env_parents = os.environ.get("PEEKLIVE_TWITCH_PARENTS", "").strip()
-        parent_list = [p.strip() for p in env_parents.split(",") if p.strip()]
+        parent_list = []
         if req_host:
             parent_list.append(req_host)
         # Sensible defaults for dev/prod
         parent_list += [
-            os.environ.get("PEEKLIVE_TWITCH_PARENT", "www.peekorobo.com").strip() or "www.peekorobo.com",
+            "www.peekorobo.com",
             "localhost",
             "127.0.0.1",
         ]
@@ -3408,94 +3447,196 @@ def peeklive_embed_for(ev):
     # Fallback: show link
     return html.A(f"{wtype}: {channel}", href=f"/event/{ev.get('event_key')}")
 
-def peeklive_layout():
-    events = get_peeklive_events()
-
-    if not events:
+def build_peeklive_layout_with_events(events_data, detected_team=None):
+    """Build PeekLive layout with pre-filtered events data."""
+    # Check if any events exist
+    total_events = len(events_data["completed"]) + len(events_data["ongoing"]) + len(events_data["upcoming"])
+    if total_events == 0:
         return html.Div([
-            topbar(),
             dbc.Container([
                 html.Img(src="/assets/peeklive.png", style={"height": "60px", "margin": "20px auto", "display": "block"}),
                 html.Div("No live events right now.", className="text-center"),
-            ], style={"maxWidth": "1200px"}),
-            footer
+            ], style={"maxWidth": "1500px"}),
         ])
 
-    cards = []
-    for ev in events:
-        cards.append(
-            dbc.Card([
-                dbc.CardHeader([
-                    html.Div([
-                        html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={"fontWeight": "bold", "color": "var(--primary-color)", "textDecoration": "none"}),
-                        html.Span(" · "),
-                        html.Span(ev.get("name", "")),
-                    ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap"}),
-                    html.Div(ev.get("location", ""), style={"fontSize": "0.85rem", "color": "var(--text-secondary)"}),
-                    html.Div([
-                        html.Span(ev.get("start_date", "TBD")),
-                        html.Span(" - "),
-                        html.Span(ev.get("end_date", "TBD")),
-                    ], style={"fontSize": "0.85rem", "color": "var(--text-secondary)", "marginTop": "4px"}),
-                ], style={"backgroundColor": "var(--card-bg)"}),
-                dbc.CardBody([
-                    peeklive_embed_for(ev)
-                ], style={"padding": 0})
-            ], style={"backgroundColor": "var(--card-bg)"})
-        )
+    def build_event_card(ev, is_ongoing=False):
+        # Create the card with relative positioning for the indicator
+        card_style = {"backgroundColor": "var(--card-bg)", "position": "relative"}
+        
+        # Add ongoing indicator if the event is ongoing
+        ongoing_dot = html.Div(className="ongoing-indicator") if is_ongoing else None
+        
+        return dbc.Card([
+            ongoing_dot,
+            dbc.CardHeader([
+                html.Div([
+                    html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={"fontWeight": "bold", "color": "var(--primary-color)", "textDecoration": "none"}),
+                    html.Span(" · "),
+                    html.Span(ev.get("name", "")),
+                ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap"}),
+                html.Div(ev.get("location", ""), style={"fontSize": "0.85rem", "color": "var(--text-secondary)"}),
+                html.Div([
+                    html.Span(ev.get("start_date", "TBD")),
+                    html.Span(" - "),
+                    html.Span(ev.get("end_date", "TBD")),
+                ], style={"fontSize": "0.85rem", "color": "var(--text-secondary)", "marginTop": "4px"}),
+            ], style={"backgroundColor": "var(--card-bg)"}),
+            dbc.CardBody([
+                peeklive_embed_for(ev)
+            ], style={"padding": 0})
+        ], style=card_style)
 
-    def build_grid(filtered_events):
-        filtered_cards = []
-        for ev in filtered_events:
-            # reuse embed_for and header
-            filtered_cards.append(
-                dbc.Card([
-                    dbc.CardHeader([
-                        html.Div([
-                            html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={"fontWeight": "bold", "color": "var(--primary-color)", "textDecoration": "none"}),
-                            html.Span(" · "),
-                            html.Span(ev.get("name", "")),
-                        ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap"}),
-                        html.Div(ev.get("location", ""), style={"fontSize": "0.85rem", "color": "var(--text-secondary)"}),
-                        html.Div([
-                            html.Span(ev.get("start_date", "TBD")),
-                            html.Span(" - "),
-                            html.Span(ev.get("end_date", "TBD")),
-                        ], style={"fontSize": "0.85rem", "color": "var(--text-secondary)", "marginTop": "4px"}),
-                    ], style={"backgroundColor": "var(--card-bg)"}),
-                    dbc.CardBody([
-                        peeklive_embed_for(ev)
-                    ], style={"padding": 0})
-                ], style={"backgroundColor": "var(--card-bg)"})
-            )
-        return dbc.Row([
-            dbc.Col(c, md=6, xl=4, className="mb-3") for c in filtered_cards
-        ], className="justify-content-center")
+    def build_section(title, events_list, section_id, is_ongoing_section=False):
+        if not events_list:
+            return html.Div()
+        
+        cards = [build_event_card(ev, is_ongoing=is_ongoing_section) for ev in events_list]
+        return html.Div([
+            html.H4(title, className="text-center mb-3", style={"color": "var(--primary-color)"}),
+            dbc.Row([
+                dbc.Col(card, md=6, xl=4, className="mb-3") for card in cards
+            ], className="justify-content-center", id=section_id)
+        ], className="mb-5")
 
-    grid = build_grid(events)
+    # Build sections
+    ongoing_section = build_section("Ongoing Events", events_data["ongoing"], "ongoing-events", is_ongoing_section=True) 
+    upcoming_section = build_section("Upcoming Events", events_data["upcoming"], "upcoming-events")
+    completed_section = build_section("Completed Events", events_data["completed"], "completed-events")
 
-    # Team filter options from global EVENT_TEAMS (aggregate across all years/events)
-    try:
-        from peekorobo import EVENT_TEAMS
-        team_set = set()
-        for _, year_map in (EVENT_TEAMS or {}).items():
-            for _, teams in (year_map or {}).items():
-                for t in teams:
-                    tk = t.get("tk")
-                    if isinstance(tk, int):
-                        team_set.add(tk)
-        team_options = [{"label": str(t), "value": str(t)} for t in sorted(team_set)]
-    except Exception:
-        team_options = []
-
+    # Build notifications if a team was detected
+    notifications = build_match_notifications(detected_team) if detected_team else html.Div()
+    
     return html.Div([
         dbc.Container([
-            html.Img(src="/assets/peeklive.png", style={"height": "60px", "margin": "20px auto", "display": "block"}),
-            html.Div(id="peeklive-title", className="text-center mb-3", children="Upcoming Events"),
+            html.Img(src="/assets/peeklive.png", style={"height": "100px", "margin": "20px auto", "display": "block"}),
             dcc.Interval(id='peeklive-refresh', interval=120000, n_intervals=0),
-            html.Div(id="peeklive-grid", children=grid)
+            notifications,
+            ongoing_section,
+            upcoming_section,
+            completed_section
         ], style={"maxWidth": "1400px"}),
     ])
+
+def get_upcoming_matches_for_team(team_number, max_matches=3):
+    """Get upcoming matches for a specific team based on predicted times."""
+    import time
+    from datetime import datetime, timedelta
+    
+    current_time = int(time.time())
+    upcoming_matches = []
+    
+    print(f"DEBUG: get_upcoming_matches_for_team called with team_number: {team_number}")
+    print(f"DEBUG: Current time: {current_time}")
+    
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            # Get matches for the team that are scheduled in the future
+            query = """
+                SELECT em.match_key, em.event_key, em.comp_level, em.match_number, 
+                       em.red_teams, em.blue_teams, em.predicted_time, e.name as event_name
+                FROM event_matches em
+                JOIN events e ON em.event_key = e.event_key
+                WHERE (em.red_teams LIKE %s OR em.blue_teams LIKE %s)
+                AND em.predicted_time IS NOT NULL
+                AND em.predicted_time > %s
+                ORDER BY em.predicted_time ASC
+                LIMIT %s
+            """
+            params = (f"%,{team_number},%", f"%,{team_number},%", current_time, max_matches)
+            print(f"DEBUG: Executing query with params: {params}")
+            
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            print(f"DEBUG: Query returned {len(rows)} rows")
+            
+            for row in rows:
+                match_key, event_key, comp_level, match_number, red_teams, blue_teams, predicted_time, event_name = row
+                print(f"DEBUG: Found match: {match_key}, predicted_time: {predicted_time}")
+                
+                # Calculate time until match
+                time_until = predicted_time - current_time
+                minutes_until = time_until // 60
+                print(f"DEBUG: Time until match: {minutes_until} minutes")
+                
+                # Only show matches within the next 2 hours
+                if minutes_until <= 120:
+                    upcoming_matches.append({
+                        "match_key": match_key,
+                        "event_key": event_key,
+                        "event_name": event_name,
+                        "comp_level": comp_level,
+                        "match_number": match_number,
+                        "red_teams": red_teams,
+                        "blue_teams": blue_teams,
+                        "predicted_time": predicted_time,
+                        "minutes_until": minutes_until,
+                        "time_until": time_until
+                    })
+                    print(f"DEBUG: Added match to upcoming_matches")
+                else:
+                    print(f"DEBUG: Match too far in future ({minutes_until} minutes), skipping")
+            
+            cur.close()
+    except Exception as e:
+        print(f"Error getting upcoming matches: {e}")
+    
+    print(f"DEBUG: Returning {len(upcoming_matches)} upcoming matches")
+    return upcoming_matches
+
+def build_match_notifications(team_number):
+    """Build notification components for upcoming matches."""
+    print(f"DEBUG: build_match_notifications called with team_number: {team_number}")
+    
+    if not team_number:
+        print("DEBUG: No team number provided")
+        return html.Div()
+    
+    upcoming_matches = get_upcoming_matches_for_team(team_number)
+    print(f"DEBUG: Found {len(upcoming_matches)} upcoming matches")
+    
+    if not upcoming_matches:
+        print("DEBUG: No upcoming matches found")
+        return html.Div()
+    
+    notifications = []
+    for match in upcoming_matches:
+        minutes = match["minutes_until"]
+        if minutes <= 0:
+            time_text = "Starting now!"
+            alert_color = "danger"
+        elif minutes == 1:
+            time_text = "1 minute"
+            alert_color = "warning"
+        elif minutes <= 5:
+            time_text = f"{minutes} minutes"
+            alert_color = "warning"
+        else:
+            time_text = f"{minutes} minutes"
+            alert_color = "info"
+        
+        # Determine if team is on red or blue alliance
+        team_str = str(team_number)
+        alliance = "Red" if team_str in match["red_teams"] else "Blue"
+        
+        notification = dbc.Alert([
+            html.Strong(f"Match {match['match_number']} in {time_text}"),
+            html.Br(),
+            html.Small([
+                f"{match['event_name']} - {alliance} Alliance"
+            ])
+        ], color=alert_color, className="mb-2", style={"fontSize": "0.9rem"})
+        
+        notifications.append(notification)
+    
+    return html.Div([
+        html.H5(f"Upcoming Matches for Team {team_number}", className="mb-3", style={"color": "var(--primary-color)"}),
+        html.Div(notifications)
+    ], className="mb-4", id="peeklive-notifications")
+
+def peeklive_layout():
+    events_data = get_peeklive_events_categorized()
+    return build_peeklive_layout_with_events(events_data)
 
 def build_peeklive_grid(team_value=None, prefiltered_events=None):
     """Helper to build PeekLive grid children filtered by optional team string.
@@ -3503,31 +3644,44 @@ def build_peeklive_grid(team_value=None, prefiltered_events=None):
     If prefiltered_events is provided, uses that list directly; otherwise fetches
     events via get_peeklive_events (respecting include_all when team filter is set).
     """
-    # If a team filter is set, show all events that match that team (do not cap)
-    events = prefiltered_events if prefiltered_events is not None else get_peeklive_events(include_all=bool(team_value))
-    if not team_value or team_value is None:
-        filtered = events
+    # Get events data
+    if prefiltered_events is not None:
+        # prefiltered_events is a flat list from search callback
+        events_to_display = prefiltered_events
     else:
-        try:
-            from peekorobo import EVENT_TEAMS
-            t_str = str(team_value)
-            filtered = []
-            for ev in events:
-                evk = ev.get("event_key")
-                found = False
-                # Search across all years for the event key
-                for y, year_map in (EVENT_TEAMS or {}).items():
-                    teams = (year_map or {}).get(evk, [])
-                    if any(str(t.get("tk")) == t_str for t in teams):
-                        found = True
-                        break
-                if found:
-                    filtered.append(ev)
-        except Exception:
-            filtered = events
-    # Build grid rows
+        # Get categorized events for normal display
+        events_data = get_peeklive_events_categorized(include_all=bool(team_value))
+        if not team_value or team_value is None:
+            # Combine all events for display
+            events_to_display = events_data["completed"] + events_data["ongoing"] + events_data["upcoming"]
+        else:
+            # Team filtering logic for categorized events
+            try:
+                from peekorobo import EVENT_TEAMS
+                t_str = str(team_value)
+                filtered_events = []
+                
+                # Filter each category
+                for category in ["completed", "ongoing", "upcoming"]:
+                    for ev in events_data[category]:
+                        evk = ev.get("event_key")
+                        found = False
+                        # Search across all years for the event key
+                        for y, year_map in (EVENT_TEAMS or {}).items():
+                            teams = (year_map or {}).get(evk, [])
+                            if any(str(t.get("tk")) == t_str for t in teams):
+                                found = True
+                                break
+                        if found:
+                            filtered_events.append(ev)
+                events_to_display = filtered_events
+            except Exception:
+                # Fallback to all events if filtering fails
+                events_to_display = events_data["completed"] + events_data["ongoing"] + events_data["upcoming"]
+    
+    # Build grid rows for events
     cards = []
-    for ev in filtered:
+    for ev in events_to_display:
         cards.append(
             dbc.Card([
                 dbc.CardHeader([
@@ -3601,7 +3755,8 @@ def match_layout(event_key, match_key):
     blue_teams = [t for t in match.get("bt", "").split(",") if t.strip().isdigit()]
     red_score = match.get("rs", "N/A")
     blue_score = match.get("bs", "N/A")
-    winner = match.get("wa", "Tie").title()
+    winner = match.get("wa") or "Tie"
+    winner = winner.title() if winner else "Tie"
     match_label = match.get("k", "").split("_", 1)[-1].upper()
     yid = match.get("yt")
     video_embed = html.Iframe(
