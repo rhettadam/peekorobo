@@ -206,8 +206,8 @@ def insert_event_data(all_data, year):
         # Insert matches
         if data["matches"]:
             cur.executemany("""
-                INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (match_key) DO UPDATE SET
                     event_key = EXCLUDED.event_key,
                     comp_level = EXCLUDED.comp_level,
@@ -218,7 +218,8 @@ def insert_event_data(all_data, year):
                     red_score = EXCLUDED.red_score,
                     blue_score = EXCLUDED.blue_score,
                     winning_alliance = EXCLUDED.winning_alliance,
-                    youtube_key = EXCLUDED.youtube_key
+                    youtube_key = EXCLUDED.youtube_key,
+                    predicted_time = EXCLUDED.predicted_time
             """, data["matches"])
         # Insert awards
         if data["awards"]:
@@ -758,7 +759,8 @@ def create_event_db(year):
                         ",".join(blue_teams),
                         m["alliances"]["red"]["score"], m["alliances"]["blue"]["score"],
                         m.get("winning_alliance"),
-                        best_video
+                        best_video,
+                        m.get("predicted_time")
                     ))
         except:
             pass
@@ -909,8 +911,8 @@ def insert_event_data(results, year):
             # Delete existing matches for this event and reinsert
             cur.execute("DELETE FROM event_matches WHERE event_key = %s", (data["event"][0],))
             cur.executemany("""
-                INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, data["matches"])
         
         # Update awards if needed
