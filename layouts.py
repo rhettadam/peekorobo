@@ -874,7 +874,7 @@ def topbar():
                                                     style={"height": "20px", "width": "auto", "marginLeft": "4px", "marginRight": "4px"}
                                                 )
                                             ],
-                                            href="/events?tab=peekolive-tab",
+                                            href="/events/peekolive",
                                             style={
                                                 "color": "var(--navbar-text)",
                                                 "textDecoration": "none",
@@ -915,7 +915,7 @@ def topbar():
                                 style={"height": "24px", "width": "auto", "marginLeft": "6px", "marginRight": "6px"}
                             )
                         ],
-                        href="/events?tab=peekolive-tab",
+                        href="/events/peekolive",
                         style={
                             "color": "var(--navbar-text)",
                             "textDecoration": "none",
