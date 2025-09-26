@@ -646,6 +646,7 @@ def create_event_db(year):
         events_to_process.append(event)
 
     print(f"Processing {len(events_to_process)} events, skipping {events_skipped} completed events")
+    print(f"DEBUG: Events to process: {[e['key'] for e in events_to_process[:5]]}")  # Show first 5 event keys
 
     def fetch_and_compare(event):
         if shutdown_event.is_set():
@@ -673,107 +674,112 @@ def create_event_db(year):
         try:
             teams = tba_get(f"event/{key}/teams")
             if not teams:
-                return None
+                print(f"DEBUG: No teams found for event {key} - continuing with event data only")
+                # Don't return None - continue processing the event even without teams
+            else:
+                # Skip events with B in team numbers
+                has_b_teams = any(f"frc{t.get('team_number')}".endswith("B") for t in teams)
+                if has_b_teams:
+                    print(f"DEBUG: Skipping event {key} due to B teams")
+                    return None  # Skip this event entirely
 
-            # Skip events with B in team numbers
-            has_b_teams = any(f"frc{t.get('team_number')}".endswith("B") for t in teams)
-            if has_b_teams:
-                return None  # Skip this event entirely
-
-            # Append team data
-            for t in teams:
-                new_data["teams"].append((
-                    key,
-                    t.get("team_number"),
-                    t.get("nickname"),
-                    t.get("city"),
-                    t.get("state_prov"),
-                    t.get("country")
-                ))
+                # Append team data
+                for t in teams:
+                    new_data["teams"].append((
+                        key,
+                        t.get("team_number"),
+                        t.get("nickname"),
+                        t.get("city"),
+                        t.get("state_prov"),
+                        t.get("country")
+                    ))
         except Exception as e:
-            print(f"Error processing teams for event {key}: {e}")
-            return None
+            print(f"DEBUG: Error processing teams for event {key}: {e}")
+            # Don't return None on team fetch error - continue with event data
 
         
         # Fetch rankings
         try:
             ranks = tba_get(f"event/{key}/rankings")
-            for r in ranks.get("rankings", []):
-                team_key = r.get("team_key", "frc0")
-                
-                # Skip B teams
-                if team_key.endswith("B"):
-                    continue
-                
-                # Normal team number extraction
-                t_num = int(team_key[3:])
-                
-                if str(year) == "2015":
-                    qual_avg = r.get("qual_average")
-                    new_data["rankings"].append((key, t_num, r.get("rank"),
-                                                 qual_avg, None, None, r.get("dq")))
-                else:
-                    record = r.get("record", {})
-                    new_data["rankings"].append((key, t_num, r.get("rank"),
-                                                 record.get("wins"), record.get("losses"),
-                                                 record.get("ties"), r.get("dq")))
+            if ranks and ranks.get("rankings"):
+                for r in ranks.get("rankings", []):
+                    team_key = r.get("team_key", "frc0")
+                    
+                    # Skip B teams
+                    if team_key.endswith("B"):
+                        continue
+                    
+                    # Normal team number extraction
+                    t_num = int(team_key[3:])
+                    
+                    if str(year) == "2015":
+                        qual_avg = r.get("qual_average")
+                        new_data["rankings"].append((key, t_num, r.get("rank"),
+                                                     qual_avg, None, None, r.get("dq")))
+                    else:
+                        record = r.get("record", {})
+                        new_data["rankings"].append((key, t_num, r.get("rank"),
+                                                     record.get("wins"), record.get("losses"),
+                                                     record.get("ties"), r.get("dq")))
         except:
             pass
         
         # Fetch matches
         try:
             matches = tba_get(f"event/{key}/matches")
-            # Store raw matches in cache for team processing
-            match_cache[key] = matches
-            for m in matches:
-                # Skip matches with B teams
-                red_teams = []
-                blue_teams = []
-                
-                # Check if any B teams in this match
-                has_b_teams = any(team_key.endswith("B") for team_key in m["alliances"]["red"]["team_keys"] + m["alliances"]["blue"]["team_keys"])
-                if has_b_teams:
-                    continue  # Skip this match
-                
-                for team_key in m["alliances"]["red"]["team_keys"]:
-                    red_teams.append(str(int(team_key[3:])))
-                
-                for team_key in m["alliances"]["blue"]["team_keys"]:
-                    blue_teams.append(str(int(team_key[3:])))
-                
-                # Get first YouTube video if available
-                videos = m.get("videos", [])
-                youtube_videos = [v for v in videos if v.get("type") == "youtube"]
-                best_video = youtube_videos[0]["key"] if youtube_videos else None
-                
-                new_data["matches"].append((
-                    m["key"], key, m["comp_level"], m["match_number"],
-                    m["set_number"],
-                    ",".join(red_teams),
-                    ",".join(blue_teams),
-                    m["alliances"]["red"]["score"], m["alliances"]["blue"]["score"],
-                    m.get("winning_alliance"),
-                    best_video
-                ))
+            if matches:
+                # Store raw matches in cache for team processing
+                match_cache[key] = matches
+                for m in matches:
+                    # Skip matches with B teams
+                    red_teams = []
+                    blue_teams = []
+                    
+                    # Check if any B teams in this match
+                    has_b_teams = any(team_key.endswith("B") for team_key in m["alliances"]["red"]["team_keys"] + m["alliances"]["blue"]["team_keys"])
+                    if has_b_teams:
+                        continue  # Skip this match
+                    
+                    for team_key in m["alliances"]["red"]["team_keys"]:
+                        red_teams.append(str(int(team_key[3:])))
+                    
+                    for team_key in m["alliances"]["blue"]["team_keys"]:
+                        blue_teams.append(str(int(team_key[3:])))
+                    
+                    # Get first YouTube video if available
+                    videos = m.get("videos", [])
+                    youtube_videos = [v for v in videos if v.get("type") == "youtube"]
+                    best_video = youtube_videos[0]["key"] if youtube_videos else None
+                    
+                    new_data["matches"].append((
+                        m["key"], key, m["comp_level"], m["match_number"],
+                        m["set_number"],
+                        ",".join(red_teams),
+                        ",".join(blue_teams),
+                        m["alliances"]["red"]["score"], m["alliances"]["blue"]["score"],
+                        m.get("winning_alliance"),
+                        best_video
+                    ))
         except:
             pass
         
         # Fetch awards
         try:
             awards = tba_get(f"event/{key}/awards")
-            for aw in awards:
-                for r in aw.get("recipient_list", []):
-                    if r.get("team_key"):
-                        team_key = r["team_key"]
-                        
-                        # Skip B teams
-                        if team_key.endswith("B"):
-                            continue
-                        
-                        # Normal team number extraction
-                        t_num = int(team_key[3:])
-                        
-                        new_data["awards"].append((key, t_num, aw.get("name"), year))
+            if awards:
+                for aw in awards:
+                    for r in aw.get("recipient_list", []):
+                        if r.get("team_key"):
+                            team_key = r["team_key"]
+                            
+                            # Skip B teams
+                            if team_key.endswith("B"):
+                                continue
+                            
+                            # Normal team number extraction
+                            t_num = int(team_key[3:])
+                            
+                            new_data["awards"].append((key, t_num, aw.get("name"), year))
         except:
             pass
         
@@ -809,8 +815,11 @@ def create_event_db(year):
                 result = f.result()
                 if result:
                     all_results.append(result)
+                    print(f"DEBUG: Successfully processed event {result.get('event_key', 'unknown')}")
+                else:
+                    print(f"DEBUG: Event processing returned None")
             except Exception as e:
-                print(f"Error processing event: {e}")
+                print(f"DEBUG: Error processing event: {e}")
     finally:
         if executor:
             cleanup_executor(executor)
@@ -1108,11 +1117,11 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         event_ties = 0  # Add tie counter
 
         # Get the year from the first match's event key
-        year = matches[0]["event_key"][:4] if matches else "2026"
+        year = matches[0]["event_key"][:4] if matches else "2025"
         try:
             year_int = int(year)
         except Exception:
-            year_int = 2026
+            year_int = 2025
 
         # Get the appropriate scoring functions for this year
         try:
@@ -1120,9 +1129,9 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             teleop_func = globals()[f"teleop_{year}"]
             endgame_func = globals()[f"endgame_{year}"]
         except KeyError:
-            auto_func = auto_2026
-            teleop_func = teleop_2026
-            endgame_func = endgame_2026
+            auto_func = auto_2025
+            teleop_func = teleop_2025
+            endgame_func = endgame_2025
 
         for match in matches:
             if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
