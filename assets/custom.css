@@ -1275,7 +1275,7 @@ html body div div .dash-table-container tr:hover * {
     color: black !important;
 }
 
-/* Flashing green dot for ongoing events */
+/* Event status indicators */
 .ongoing-indicator {
     position: absolute;
     top: 8px;
@@ -1288,6 +1288,29 @@ html body div div .dash-table-container tr:hover * {
     z-index: 10;
 }
 
+.upcoming-indicator {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 12px;
+    height: 12px;
+    background-color: #ffc107;
+    border-radius: 50%;
+    animation: slow-flash 3s infinite;
+    z-index: 10;
+}
+
+.completed-indicator {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 12px;
+    height: 12px;
+    background-color: #dc3545;
+    border-radius: 50%;
+    z-index: 10;
+}
+
 @keyframes flash {
     0%, 50% {
         opacity: 1;
@@ -1296,5 +1319,16 @@ html body div div .dash-table-container tr:hover * {
     25%, 75% {
         opacity: 0.3;
         transform: scale(0.8);
+    }
+}
+
+@keyframes slow-flash {
+    0%, 70% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    35% {
+        opacity: 0.4;
+        transform: scale(0.9);
     }
 }

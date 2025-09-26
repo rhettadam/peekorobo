@@ -5595,48 +5595,7 @@ def toggle_team_card_collapse(n_clicks, current_style):
         arrow = "▲"
     
     return arrow, new_style
-
-@app.callback(
-    Output('peeklive-notifications', 'children'),
-    [Input('peeklive-refresh', 'n_intervals')],
-    [State('search-input', 'value')]
-)
-def update_peeklive_notifications(n_intervals, search_query):
-    """Update match notifications based on search query."""
-    print(f"DEBUG: update_peeklive_notifications called with search_query: {search_query}")
     
-    if not search_query:
-        print("DEBUG: No search query, returning empty div")
-        return html.Div()
-    
-    # Detect team from search query
-    detected_team = None
-    try:
-        if search_query:
-            s = str(search_query).lower().strip()
-            import re as _re
-            frc_match = _re.search(r"frc(\d{1,5})", s)
-            if frc_match:
-                detected_team = frc_match.group(1)
-            else:
-                if _re.fullmatch(r"\d{1,5}", s):
-                    detected_team = s
-    except Exception as e:
-        print(f"DEBUG: Exception in team detection: {e}")
-        detected_team = None
-    
-    print(f"DEBUG: Detected team: {detected_team}")
-    
-    if not detected_team:
-        print("DEBUG: No team detected, returning empty div")
-        return html.Div()
-    
-    # Build notifications for the detected team
-    from layouts import build_match_notifications
-    result = build_match_notifications(detected_team)
-    print(f"DEBUG: Built notifications: {result}")
-    return result
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
     app.run(host="0.0.0.0", port=port, debug=False)

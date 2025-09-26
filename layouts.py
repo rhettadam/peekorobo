@@ -3459,20 +3459,37 @@ def build_peeklive_layout_with_events(events_data, detected_team=None):
             ], style={"maxWidth": "1500px"}),
         ])
 
-    def build_event_card(ev, is_ongoing=False):
-        # Create the card with relative positioning for the indicator
-        card_style = {"backgroundColor": "var(--card-bg)", "position": "relative"}
+    def build_event_card(ev, event_status="ongoing"):
+        # Create the card with relative positioning for the indicator and fixed height
+        card_style = {
+            "backgroundColor": "var(--card-bg)", 
+            "position": "relative",
+            "height": "300px",
+            "display": "flex",
+            "flexDirection": "column"
+        }
         
-        # Add ongoing indicator if the event is ongoing
-        ongoing_dot = html.Div(className="ongoing-indicator") if is_ongoing else None
+        # Add appropriate indicator based on event status
+        indicator = None
+        if event_status == "ongoing":
+            indicator = html.Div(className="ongoing-indicator")
+        elif event_status == "upcoming":
+            indicator = html.Div(className="upcoming-indicator")
+        elif event_status == "completed":
+            indicator = html.Div(className="completed-indicator")
+        
+        # Truncate event name if too long
+        event_name = ev.get("name", "")
+        if len(event_name) > 30:
+            event_name = event_name[:27] + "..."
         
         return dbc.Card([
-            ongoing_dot,
+            indicator,
             dbc.CardHeader([
                 html.Div([
                     html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={"fontWeight": "bold", "color": "var(--primary-color)", "textDecoration": "none"}),
                     html.Span(" · "),
-                    html.Span(ev.get("name", "")),
+                    html.Span(event_name, title=ev.get("name", "")),  # Show full name on hover
                 ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap"}),
                 html.Div(ev.get("location", ""), style={"fontSize": "0.85rem", "color": "var(--text-secondary)"}),
                 html.Div([
@@ -3480,17 +3497,17 @@ def build_peeklive_layout_with_events(events_data, detected_team=None):
                     html.Span(" - "),
                     html.Span(ev.get("end_date", "TBD")),
                 ], style={"fontSize": "0.85rem", "color": "var(--text-secondary)", "marginTop": "4px"}),
-            ], style={"backgroundColor": "var(--card-bg)"}),
+            ], style={"backgroundColor": "var(--card-bg)", "flexShrink": 0}),
             dbc.CardBody([
                 peeklive_embed_for(ev)
-            ], style={"padding": 0})
+            ], style={"padding": 0, "flex": 1, "display": "flex", "flexDirection": "column"})
         ], style=card_style)
 
-    def build_section(title, events_list, section_id, is_ongoing_section=False):
+    def build_section(title, events_list, section_id, event_status="ongoing"):
         if not events_list:
             return html.Div()
         
-        cards = [build_event_card(ev, is_ongoing=is_ongoing_section) for ev in events_list]
+        cards = [build_event_card(ev, event_status=event_status) for ev in events_list]
         return html.Div([
             html.H4(title, className="text-center mb-3", style={"color": "var(--primary-color)"}),
             dbc.Row([
@@ -3499,140 +3516,19 @@ def build_peeklive_layout_with_events(events_data, detected_team=None):
         ], className="mb-5")
 
     # Build sections
-    ongoing_section = build_section("Ongoing Events", events_data["ongoing"], "ongoing-events", is_ongoing_section=True) 
-    upcoming_section = build_section("Upcoming Events", events_data["upcoming"], "upcoming-events")
-    completed_section = build_section("Completed Events", events_data["completed"], "completed-events")
-
-    # Build notifications if a team was detected
-    notifications = build_match_notifications(detected_team) if detected_team else html.Div()
+    ongoing_section = build_section("Ongoing Events", events_data["ongoing"], "ongoing-events", event_status="ongoing") 
+    upcoming_section = build_section("Upcoming Events", events_data["upcoming"], "upcoming-events", event_status="upcoming")
+    completed_section = build_section("Completed Events", events_data["completed"], "completed-events", event_status="completed")
     
     return html.Div([
         dbc.Container([
             html.Img(src="/assets/peeklive.png", style={"height": "100px", "margin": "20px auto", "display": "block"}),
             dcc.Interval(id='peeklive-refresh', interval=120000, n_intervals=0),
-            notifications,
             ongoing_section,
             upcoming_section,
             completed_section
         ], style={"maxWidth": "1400px"}),
     ])
-
-def get_upcoming_matches_for_team(team_number, max_matches=3):
-    """Get upcoming matches for a specific team based on predicted times."""
-    import time
-    from datetime import datetime, timedelta
-    
-    current_time = int(time.time())
-    upcoming_matches = []
-    
-    print(f"DEBUG: get_upcoming_matches_for_team called with team_number: {team_number}")
-    print(f"DEBUG: Current time: {current_time}")
-    
-    try:
-        with DatabaseConnection() as conn:
-            cur = conn.cursor()
-            # Get matches for the team that are scheduled in the future
-            query = """
-                SELECT em.match_key, em.event_key, em.comp_level, em.match_number, 
-                       em.red_teams, em.blue_teams, em.predicted_time, e.name as event_name
-                FROM event_matches em
-                JOIN events e ON em.event_key = e.event_key
-                WHERE (em.red_teams LIKE %s OR em.blue_teams LIKE %s)
-                AND em.predicted_time IS NOT NULL
-                AND em.predicted_time > %s
-                ORDER BY em.predicted_time ASC
-                LIMIT %s
-            """
-            params = (f"%,{team_number},%", f"%,{team_number},%", current_time, max_matches)
-            print(f"DEBUG: Executing query with params: {params}")
-            
-            cur.execute(query, params)
-            rows = cur.fetchall()
-            print(f"DEBUG: Query returned {len(rows)} rows")
-            
-            for row in rows:
-                match_key, event_key, comp_level, match_number, red_teams, blue_teams, predicted_time, event_name = row
-                print(f"DEBUG: Found match: {match_key}, predicted_time: {predicted_time}")
-                
-                # Calculate time until match
-                time_until = predicted_time - current_time
-                minutes_until = time_until // 60
-                print(f"DEBUG: Time until match: {minutes_until} minutes")
-                
-                # Only show matches within the next 2 hours
-                if minutes_until <= 120:
-                    upcoming_matches.append({
-                        "match_key": match_key,
-                        "event_key": event_key,
-                        "event_name": event_name,
-                        "comp_level": comp_level,
-                        "match_number": match_number,
-                        "red_teams": red_teams,
-                        "blue_teams": blue_teams,
-                        "predicted_time": predicted_time,
-                        "minutes_until": minutes_until,
-                        "time_until": time_until
-                    })
-                    print(f"DEBUG: Added match to upcoming_matches")
-                else:
-                    print(f"DEBUG: Match too far in future ({minutes_until} minutes), skipping")
-            
-            cur.close()
-    except Exception as e:
-        print(f"Error getting upcoming matches: {e}")
-    
-    print(f"DEBUG: Returning {len(upcoming_matches)} upcoming matches")
-    return upcoming_matches
-
-def build_match_notifications(team_number):
-    """Build notification components for upcoming matches."""
-    print(f"DEBUG: build_match_notifications called with team_number: {team_number}")
-    
-    if not team_number:
-        print("DEBUG: No team number provided")
-        return html.Div()
-    
-    upcoming_matches = get_upcoming_matches_for_team(team_number)
-    print(f"DEBUG: Found {len(upcoming_matches)} upcoming matches")
-    
-    if not upcoming_matches:
-        print("DEBUG: No upcoming matches found")
-        return html.Div()
-    
-    notifications = []
-    for match in upcoming_matches:
-        minutes = match["minutes_until"]
-        if minutes <= 0:
-            time_text = "Starting now!"
-            alert_color = "danger"
-        elif minutes == 1:
-            time_text = "1 minute"
-            alert_color = "warning"
-        elif minutes <= 5:
-            time_text = f"{minutes} minutes"
-            alert_color = "warning"
-        else:
-            time_text = f"{minutes} minutes"
-            alert_color = "info"
-        
-        # Determine if team is on red or blue alliance
-        team_str = str(team_number)
-        alliance = "Red" if team_str in match["red_teams"] else "Blue"
-        
-        notification = dbc.Alert([
-            html.Strong(f"Match {match['match_number']} in {time_text}"),
-            html.Br(),
-            html.Small([
-                f"{match['event_name']} - {alliance} Alliance"
-            ])
-        ], color=alert_color, className="mb-2", style={"fontSize": "0.9rem"})
-        
-        notifications.append(notification)
-    
-    return html.Div([
-        html.H5(f"Upcoming Matches for Team {team_number}", className="mb-3", style={"color": "var(--primary-color)"}),
-        html.Div(notifications)
-    ], className="mb-4", id="peeklive-notifications")
 
 def peeklive_layout():
     events_data = get_peeklive_events_categorized()
@@ -3682,13 +3578,18 @@ def build_peeklive_grid(team_value=None, prefiltered_events=None):
     # Build grid rows for events
     cards = []
     for ev in events_to_display:
+        # Truncate event name if too long
+        event_name = ev.get("name", "")
+        if len(event_name) > 30:
+            event_name = event_name[:27] + "..."
+        
         cards.append(
             dbc.Card([
                 dbc.CardHeader([
                     html.Div([
                         html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={"fontWeight": "bold", "color": "var(--primary-color)", "textDecoration": "none"}),
                         html.Span(" · "),
-                        html.Span(ev.get("name", "")),
+                        html.Span(event_name, title=ev.get("name", "")),  # Show full name on hover
                     ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap"}),
                     html.Div(ev.get("location", ""), style={"fontSize": "0.85rem", "color": "var(--text-secondary)"}),
                     html.Div([
@@ -3696,11 +3597,16 @@ def build_peeklive_grid(team_value=None, prefiltered_events=None):
                         html.Span(" - "),
                         html.Span(ev.get("end_date", "TBD")),
                     ], style={"fontSize": "0.85rem", "color": "var(--text-secondary)", "marginTop": "4px"}),
-                ], style={"backgroundColor": "var(--card-bg)"}),
+                ], style={"backgroundColor": "var(--card-bg)", "flexShrink": 0}),
                 dbc.CardBody([
                     peeklive_embed_for(ev)
-                ], style={"padding": 0})
-            ], style={"backgroundColor": "var(--card-bg)"})
+                ], style={"padding": 0, "flex": 1, "display": "flex", "flexDirection": "column"})
+            ], style={
+                "backgroundColor": "var(--card-bg)",
+                "height": "300px",
+                "display": "flex",
+                "flexDirection": "column"
+            })
         )
     return dbc.Row([
         dbc.Col(c, md=6, xl=4, className="mb-3") for c in cards
