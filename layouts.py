@@ -1,4 +1,8 @@
 import dash_bootstrap_components as dbc
+
+# Timezone configuration - set this to your desired timezone
+# Common options: 'America/Chicago', 'America/New_York', 'America/Los_Angeles', 'UTC'
+DEFAULT_TIMEZONE = 'America/Chicago'  # Central Time
 from dash import html, dcc, dash_table
 from datagather import load_year_data,get_team_avatar,get_team_years_participated
 from flask import session
@@ -6547,16 +6551,18 @@ def get_time_until_match(predicted_time):
         else:
             return "Time TBD"
         
-        # Get user's local timezone
+        # Get user's local timezone - use configured timezone
         try:
-            # Try to get timezone from browser (if available)
-            user_tz = timezone.utc  # Default to UTC
-            # In a real implementation, you'd get this from the user's browser
-            # For now, we'll use the system timezone
-            offset = time.timezone if (time.daylight == 0) else time.altzone
-            user_tz = timezone(timedelta(seconds=-offset))
+            import pytz
+            user_tz = pytz.timezone(DEFAULT_TIMEZONE)
         except:
-            user_tz = timezone.utc
+            try:
+                # Fallback to system timezone
+                offset = time.timezone if (time.daylight == 0) else time.altzone
+                user_tz = timezone(timedelta(seconds=-offset))
+            except:
+                # Final fallback to UTC
+                user_tz = timezone.utc
         
         # Convert to user's timezone
         match_time_local = match_time.astimezone(user_tz)
@@ -6603,12 +6609,18 @@ def format_predicted_time_display(predicted_time):
         else:
             return "TBD"
         
-        # Get user's local timezone
+        # Get user's local timezone - use configured timezone
         try:
-            offset = time.timezone if (time.daylight == 0) else time.altzone
-            user_tz = timezone(timedelta(seconds=-offset))
+            import pytz
+            user_tz = pytz.timezone(DEFAULT_TIMEZONE)
         except:
-            user_tz = timezone.utc
+            try:
+                # Fallback to system timezone
+                offset = time.timezone if (time.daylight == 0) else time.altzone
+                user_tz = timezone(timedelta(seconds=-offset))
+            except:
+                # Final fallback to UTC
+                user_tz = timezone.utc
         
         # Convert to user's timezone
         match_time_local = match_time.astimezone(user_tz)
@@ -6794,12 +6806,18 @@ def build_match_notifications(event_key, selected_team=None):
                     html.Span("No matches starting within the next hour", className="text-muted")
                 ], className="notification-item")
             ])
-    # Get user's local timezone
+    # Get user's local timezone - use configured timezone
     try:
-        offset = time.timezone if (time.daylight == 0) else time.altzone
-        user_tz = timezone(timedelta(seconds=-offset))
+        import pytz
+        user_tz = pytz.timezone(DEFAULT_TIMEZONE)
     except:
-        user_tz = timezone.utc
+        try:
+            # Fallback to system timezone
+            offset = time.timezone if (time.daylight == 0) else time.altzone
+            user_tz = timezone(timedelta(seconds=-offset))
+        except:
+            # Final fallback to UTC
+            user_tz = timezone.utc
     
     now = datetime.now(user_tz)
     one_hour_from_now = now + timedelta(hours=1)
