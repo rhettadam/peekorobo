@@ -1438,3 +1438,269 @@ html body div div .dash-table-container tr:hover * {
     }
     
 }
+
+/* Focused Peekolive Notifications */
+.notification-item {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+
+.notification-item:hover {
+    background-color: var(--bg-secondary);
+    border-color: var(--primary-color);
+}
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.notification-teams {
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+}
+
+.notification-score {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.notification-item.completed {
+    border-left: 4px solid var(--success-color);
+}
+
+.notification-item.upcoming {
+    border-left: 4px solid var(--warning-color);
+}
+
+/* Focused Peekolive Stream Container */
+#event-stream {
+    position: relative;
+    overflow: hidden;
+}
+
+#event-stream iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* Match Notifications Scrolling */
+#match-notifications {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+#match-notifications::-webkit-scrollbar {
+    width: 6px;
+}
+
+#match-notifications::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#match-notifications::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 3px;
+}
+
+#match-notifications::-webkit-scrollbar-thumb:hover {
+    background-color: var(--text-secondary);
+}
+
+/* Notification Items */
+.notification-item {
+    transition: all 0.2s ease;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.notification-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.notification-header {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.notification-teams {
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.notification-score {
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+/* Stream Status Dot */
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+    animation: pulse 2s infinite;
+}
+
+.status-dot.status-ongoing {
+    background-color: #28a745;
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+}
+
+.status-dot.status-upcoming {
+    background-color: #ffc107;
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+}
+
+.status-dot.status-completed {
+    background-color: #dc3545;
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+}
+
+.status-dot.status-unknown {
+    background-color: #6c757d;
+    box-shadow: 0 0 0 0 rgba(108, 117, 125, 0.7);
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.7);
+    }
+    
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(0, 0, 0, 0);
+    }
+    
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+    }
+}
+
+/* Team list styles */
+.team-card {
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.team-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.team-card:hover::before {
+    opacity: 1;
+}
+
+.team-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15) !important;
+}
+
+.team-card img {
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+}
+
+.team-card:hover img {
+    transform: scale(1.08);
+}
+
+.team-card .card-body {
+    position: relative;
+    z-index: 1;
+}
+
+/* Team list scrollbar */
+#team-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+#team-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#team-list::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+#team-list::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* All matches styles */
+.match-card {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.match-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+
+/* All matches scrollbar */
+#all-matches::-webkit-scrollbar {
+    width: 6px;
+}
+
+#all-matches::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#all-matches::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+#all-matches::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Match notifications container */
+#match-notifications {
+    overflow: hidden;
+    position: relative;
+}
+
+#match-notifications .notification-item {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+}
+
+/* Team avatar fallback */
+.team-card img {
+    background-image: url('/assets/stock.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}

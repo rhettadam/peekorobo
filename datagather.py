@@ -283,7 +283,7 @@ def load_data():
         # Matches
         event_cursor.execute("""
             SELECT match_key, event_key, comp_level, match_number, set_number, 
-                   red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key
+                   red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time
             FROM event_matches
             ORDER BY event_key, match_number
         """)
@@ -291,7 +291,7 @@ def load_data():
         EVENT_MATCHES = {}
         for row in event_cursor.fetchall():
             match_key, event_key, comp_level, match_number, set_number, \
-            red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key = row
+            red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time = row
             year = int(event_key[:4])
             match_data = compress_dict({
                 "k": match_key,
@@ -304,7 +304,8 @@ def load_data():
                 "rs": red_score,
                 "bs": blue_score,
                 "wa": winning_alliance,
-                "yt": youtube_key
+                "yt": youtube_key,
+                "pt": predicted_time
             })
             EVENT_MATCHES.setdefault(year, []).append(match_data)
 
@@ -480,7 +481,7 @@ def load_data_2025():
         # Matches for 2025
         event_cursor.execute("""
             SELECT match_key, event_key, comp_level, match_number, set_number, 
-                   red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key
+                   red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time
             FROM event_matches
             WHERE event_key LIKE '2025%'
             ORDER BY event_key, match_number
@@ -489,7 +490,7 @@ def load_data_2025():
         EVENT_MATCHES = {2025: []}
         for row in event_cursor.fetchall():
             match_key, event_key, comp_level, match_number, set_number, \
-            red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key = row
+            red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time = row
             match_data = compress_dict({
                 "k": match_key,
                 "ek": event_key,
@@ -501,7 +502,8 @@ def load_data_2025():
                 "rs": red_score,
                 "bs": blue_score,
                 "wa": winning_alliance,
-                "yt": youtube_key
+                "yt": youtube_key,
+                "pt": predicted_time
             })
             EVENT_MATCHES[2025].append(match_data)
 
@@ -687,7 +689,7 @@ def load_year_data(year):
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT match_key, event_key, comp_level, match_number, set_number, 
-                       red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key
+                       red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time
                 FROM event_matches
                 WHERE event_key LIKE %s
                 ORDER BY event_key, match_number
@@ -695,7 +697,7 @@ def load_year_data(year):
             for row in cursor.fetchall():
                 (
                     match_key, event_key, comp_level, match_number, set_number,
-                    red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key
+                    red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time
                 ) = row
                 EVENT_MATCHES.append(compress_dict({
                     "k": match_key,
@@ -708,7 +710,8 @@ def load_year_data(year):
                     "rs": red_score,
                     "bs": blue_score,
                     "wa": winning_alliance,
-                    "yt": youtube_key
+                    "yt": youtube_key,
+                    "pt": predicted_time
                 }))
 
     return team_data, event_data, dict(EVENT_TEAMS), dict(EVENT_RANKINGS), EVENTS_AWARDS, EVENT_MATCHES

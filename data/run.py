@@ -349,8 +349,8 @@ def get_existing_event_data(event_key):
     rankings = {row[0]: {"rank": row[1], "wins": row[2], "losses": row[3], "ties": row[4], "dq": row[5]} for row in cur.fetchall()}
     
     # Get matches
-    cur.execute("SELECT match_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key FROM event_matches WHERE event_key = %s", (event_key,))
-    matches = {row[0]: {"comp_level": row[1], "match_number": row[2], "set_number": row[3], "red_teams": row[4], "blue_teams": row[5], "red_score": row[6], "blue_score": row[7], "winning_alliance": row[8], "youtube_key": row[9]} for row in cur.fetchall()}
+    cur.execute("SELECT match_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time FROM event_matches WHERE event_key = %s", (event_key,))
+    matches = {row[0]: {"comp_level": row[1], "match_number": row[2], "set_number": row[3], "red_teams": row[4], "blue_teams": row[5], "red_score": row[6], "blue_score": row[7], "winning_alliance": row[8], "youtube_key": row[9], "predicted_time": row[10]} for row in cur.fetchall()}
     
     # Get awards
     cur.execute("SELECT team_number, award_name FROM event_awards WHERE event_key = %s", (event_key,))
@@ -527,7 +527,8 @@ def data_has_changed(existing, new_data, data_type):
                 existing_match["red_score"] != match_data[7] or
                 existing_match["blue_score"] != match_data[8] or
                 existing_match["winning_alliance"] != match_data[9] or
-                existing_match["youtube_key"] != match_data[10]
+                existing_match["youtube_key"] != match_data[10] or
+                existing_match["predicted_time"] != match_data[11]
             ):
                 return True
         

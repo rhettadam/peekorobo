@@ -2,7 +2,7 @@ import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
 from datagather import load_year_data,get_team_avatar,get_team_years_participated
 from flask import session
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, timezone
 from utils import format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, compute_percentiles, pill, get_event_week_label, reset_event_learning, is_western_pennsylvania_city
 import json
 import os
@@ -14,6 +14,7 @@ from datagather import TEAM_COLORS
 from flask import request as _flask_request
 import colorsys
 import numpy as np
+import time
 
 current_year = 2025
 
@@ -1873,7 +1874,7 @@ def create_team_card(team, year, avatar_url, epa_ranks):
                         "fontWeight": "500"
                     }),
                     dbc.Button(
-                        "View Team",
+                        f"Peek",
                         href=f"/team/{team_number}/{year}",
                         color="warning",
                         outline=False,
@@ -1979,7 +1980,7 @@ def create_team_card_spotlight(team, year_team_database, event_year):
                     "fontWeight": "500"
                 }),
                 dbc.Button(
-                    "View Team",
+                    "Peek",
                     href=team_url,
                     color="warning",
                     outline=False,
@@ -2095,7 +2096,7 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
                 "fontWeight": "500"
             }),
             dbc.Button(
-                "View Team",
+                "Peek",
                 href=team_url,
                 color="warning",
                 outline=False,
@@ -3473,8 +3474,14 @@ def peekolive_embed_for(ev):
         src = f"https://www.youtube.com/embed/{channel}?autoplay=1&mute=1&rel=0"
         return html.Iframe(
             src=src,
-            style={"width": "100%", "aspectRatio": "16 / 9", "border": "0"},
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share",
+            style={
+                "width": "100%",
+                "height": "100%",
+                "border": "0",
+                "maxHeight": "500px",
+                "objectFit": "cover"
+            },
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen",
             title=title,
         )
     if wtype == "twitch":
@@ -3501,7 +3508,13 @@ def peekolive_embed_for(ev):
         src = f"https://player.twitch.tv/?channel={channel}{parent_qs}&muted=true&autoplay=true"
         return html.Iframe(
             src=src,
-            style={"width": "100%", "aspectRatio": "16 / 9", "border": "0"},
+            style={
+                "width": "100%",
+                "height": "100%",
+                "border": "0",
+                "maxHeight": "500px",
+                "objectFit": "cover"
+            },
             allow="autoplay; fullscreen",
             title=title,
         )
@@ -3600,29 +3613,49 @@ def build_peekolive_layout_with_events(events_data, detected_team=None):
             indicator,
             dbc.CardHeader([
                 html.Div([
-                    html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={
-                        "fontWeight": "700", 
-                        "color": "var(--primary-color)", 
-                        "textDecoration": "none",
-                        "fontSize": "1.1rem",
-                        "transition": "color 0.2s ease"
-                    }),
-                    html.Span(" · ", style={"color": "var(--text-secondary)", "fontWeight": "500"}),
-                    html.Span(event_name, title=ev.get("name", ""), style={
-                        "fontWeight": "600",
-                        "color": "var(--text-primary)"
-                    }),  # Show full name on hover
-                ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap", "marginBottom": "8px"}),
+                    html.Div([
+                        html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={
+                            "fontWeight": "700", 
+                            "color": "var(--primary-color)", 
+                            "textDecoration": "none",
+                            "fontSize": "1.1rem",
+                            "transition": "color 0.2s ease"
+                        }),
+                        html.Span(" · ", style={"color": "var(--text-secondary)", "fontWeight": "500"}),
+                        html.Span(event_name, title=ev.get("name", ""), style={
+                            "fontWeight": "600",
+                            "color": "var(--text-primary)"
+                        }),  # Show full name on hover
+                    ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap", "flex": 1})
+                ], style={"display": "flex", "justifyContent": "flex-start", "alignItems": "flex-start", "gap": "12px", "marginBottom": "8px"}),
                 html.Div([
                     html.I(className="fas fa-map-marker-alt", style={"marginRight": "6px", "color": "var(--text-secondary)"}),
                     html.Span(ev.get("location", ""), style={"fontSize": "0.9rem", "color": "var(--text-secondary)"})
                 ], style={"display": "flex", "alignItems": "center", "marginBottom": "6px"}),
                 html.Div([
-                    html.I(className="fas fa-calendar-alt", style={"marginRight": "6px", "color": "var(--text-secondary)"}),
-                    html.Span(ev.get("start_date", "TBD"), style={"fontSize": "0.9rem", "color": "var(--text-secondary)"}),
-                    html.Span(" - ", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"}),
-                    html.Span(ev.get("end_date", "TBD"), style={"fontSize": "0.9rem", "color": "var(--text-secondary)"}),
-                ], style={"display": "flex", "alignItems": "center"}),
+                    html.Div([
+                        html.I(className="fas fa-calendar-alt", style={"marginRight": "6px", "color": "var(--text-secondary)"}),
+                        html.Span(ev.get("start_date", "TBD"), style={"fontSize": "0.9rem", "color": "var(--text-secondary)"}),
+                        html.Span(" - ", style={"fontSize": "0.9rem", "color": "var(--text-secondary)"}),
+                        html.Span(ev.get("end_date", "TBD"), style={"fontSize": "0.9rem", "color": "var(--text-secondary)"}),
+                    ], style={"display": "flex", "alignItems": "center", "flex": 1}),
+                    dbc.Button(
+                        "Peek",
+                        id={"type": "focus-button", "event_key": ev.get("event_key")},
+                        size="sm",
+                        color="light",
+                        outline=False,
+                        style={
+                            "fontSize": "0.8rem",
+                            "padding": "4px 12px",
+                            "borderRadius": "6px",
+                            "fontWeight": "500",
+                            "backgroundColor": "#ffffff",
+                            "borderColor": "#dee2e6",
+                            "color": "#212529"
+                        }
+                    )
+                ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between"}),
             ], style={
                 "backgroundColor": "var(--bg-secondary)", 
                 "flexShrink": 0,
@@ -3760,10 +3793,28 @@ def build_peekolive_grid(team_value=None, prefiltered_events=None):
             dbc.Card([
                 dbc.CardHeader([
                     html.Div([
-                        html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={"fontWeight": "bold", "color": "var(--primary-color)", "textDecoration": "none"}),
-                        html.Span(" · "),
-                        html.Span(event_name, title=ev.get("name", "")),  # Show full name on hover
-                    ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap"}),
+                        html.Div([
+                            html.A(ev.get("event_key"), href=f"/event/{ev.get('event_key')}", style={"fontWeight": "bold", "color": "var(--primary-color)", "textDecoration": "none"}),
+                            html.Span(" · "),
+                            html.Span(event_name, title=ev.get("name", "")),  # Show full name on hover
+                        ], style={"display": "flex", "gap": "6px", "flexWrap": "wrap", "flex": 1}),
+                        dbc.Button(
+                            "Peek",
+                            id={"type": "focus-button", "event_key": ev.get("event_key")},
+                            size="sm",
+                            color="warning",
+                            outline=False,
+                            style={
+                                "fontSize": "0.7rem",
+                                "padding": "3px 10px",
+                                "borderRadius": "5px",
+                                "fontWeight": "500",
+                                "backgroundColor": "#ffc107",
+                                "borderColor": "#ffc107",
+                                "color": "#000"
+                            }
+                        )
+                    ], style={"display": "flex", "justifyContent": "flex-start", "alignItems": "flex-start", "gap": "12px", "marginBottom": "6px"}),
                     html.Div(ev.get("location", ""), style={"fontSize": "0.85rem", "color": "var(--text-secondary)"}),
                     html.Div([
                         html.Span(ev.get("start_date", "TBD")),
@@ -4374,7 +4425,7 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
             
             # Modern button
             html.A(
-                "View Team",
+                "Peek",
                 href=f"/team/{team_num}/2025",
                 style={
                     "display": "block",
@@ -4580,7 +4631,7 @@ def generate_event_recommendations(event_database, favorite_teams, favorite_even
             
             # Modern button
             html.A(
-                "View Event",
+                "Peek",
                 href=f"/event/{event_key}",
                 style={
                     "display": "block",
@@ -5994,3 +6045,863 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
         html.Div(trends_chart, className="trends-chart-container"),
         html.Hr(style={"margin": "30px 0"})
     ])
+
+def focused_peekolive_layout(event_key):
+    """Create a focused peekolive layout for a specific event with stream on right and notifications on left"""
+    
+    # Get event data from database like the main peekolive page does
+    event_data = None
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT event_key, name, start_date, end_date, webcast_type, webcast_channel, year, city, state_prov, country
+                FROM events
+                WHERE event_key = %s
+                """,
+                (event_key,)
+            )
+            row = cur.fetchone()
+            if row:
+                ek, name, sd, ed, wtype, wchan, y, city, state, country = row
+                event_data = {
+                    "event_key": ek,
+                    "name": name,
+                    "webcast_type": (wtype or "").lower(),
+                    "webcast_channel": wchan,
+                    "start_date": sd,
+                    "end_date": ed,
+                    "year": y,
+                    "location": ", ".join([v for v in [city, state, country] if v])
+                }
+    except Exception as e:
+        print(f"Error fetching event data: {e}")
+    
+    if not event_data:
+        return html.Div([
+            dbc.Alert(f"Event {event_key} not found", color="danger"),
+            html.A("← Back to PeekoLive", href="/events/peekolive", className="btn btn-primary")
+        ])
+    
+    event_name = event_data.get("name", "Unknown Event")
+    event_location = event_data.get("location", "")
+    start_date = event_data.get("start_date", "N/A")
+    end_date = event_data.get("end_date", "N/A")
+    
+    # Format dates
+    start_display = format_human_date(start_date) if start_date and start_date != "N/A" else start_date
+    end_display = format_human_date(end_date) if end_date and end_date != "N/A" else end_date
+    
+    return html.Div([
+        # Add header and footer
+        topbar(),
+        # Header
+        dbc.Container([
+            dbc.Row([
+                dbc.Col([
+                    html.A("← Back to PeekoLive", href="/events/peekolive", style={
+                        "color": "var(--primary-color)", 
+                        "textDecoration": "none",
+                        "fontWeight": "500"
+                    }),
+                    html.H2(f"{event_name}", className="mt-3 mb-2"),
+                    html.P(f"{event_location}", className="text-muted mb-1"),
+                    html.P(f"{start_display} - {end_display}", className="text-muted mb-0"),
+                ], width=12)
+            ], className="mb-4")
+        ]),
+        
+        # Main content area
+        dbc.Container([
+            dbc.Row([
+                # Left side - Stream
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardHeader([
+                            html.Div([
+                                html.Div([
+                                    html.H5("Live Stream", className="mb-0"),
+                                    html.Small("Event broadcast", className="text-muted")
+                                ], style={"flex": "1"}),
+                                html.Div(id="stream-status-dot", children=get_stream_status_dot(event_data), style={"marginLeft": "10px"})
+                            ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between"})
+                        ]),
+                        dbc.CardBody([
+                            html.Div(id="event-stream", children=[
+                                # This will be populated by the stream component
+                                peekolive_embed_for(event_data) if event_data.get("webcast_channel") else html.Div([
+                                    html.I(className="fas fa-video text-muted", style={"fontSize": "3rem", "marginBottom": "1rem"}),
+                                    html.H5("No Live Stream Available", className="text-muted"),
+                                    html.P("This event doesn't have a live stream configured.", className="text-muted")
+                                ], style={"textAlign": "center", "padding": "2rem"})
+                            ], style={
+                                "height": "500px", 
+                                "maxHeight": "500px",
+                                "overflow": "hidden",
+                                "display": "flex", 
+                                "alignItems": "center", 
+                                "justifyContent": "center"
+                            })
+                        ], style={"padding": "0", "height": "100%", "overflow": "hidden"})
+                    ], style={"height": "600px"})
+                ], width={"size": 12, "sm": 6}, style={"marginBottom": "20px"}),
+                
+                # Right side - Notifications
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardHeader([
+                            html.H5("Match Notifications", className="mb-0"),
+                            html.Small("Live updates from matches", className="text-muted")
+                        ]),
+                        dbc.CardBody([
+                            # Team filter dropdown
+                            html.Div([
+                                html.Label("Filter by Team:", style={"fontWeight": "bold", "marginBottom": "8px", "color": "var(--primary-color)"}),
+                                dcc.Dropdown(
+                                    id={"type": "team-filter", "event_key": event_key},
+                                    options=[{"label": "All Teams", "value": "all"}] + get_event_teams(event_key),
+                                    value="all",
+                                    placeholder="Select a team to filter matches...",
+                                    style={"marginBottom": "15px"}
+                                )
+                            ]),
+                            html.Div(id="match-notifications", children=build_match_notifications(event_key), style={
+                                "maxHeight": "400px",
+                                "overflowY": "auto",
+                                "overflowX": "hidden",
+                                "paddingRight": "10px",
+                                "paddingBottom": "15px",
+                                "flex": "1",
+                                "minHeight": "0"
+                            })
+                        ], style={"padding": "1rem", "height": "100%", "display": "flex", "flexDirection": "column"})
+                    ], style={"height": "600px", "display": "flex", "flexDirection": "column"}, className="match-notifications-card")
+                ], width={"size": 12, "sm": 6}, style={"marginBottom": "20px"})
+            ]),
+            
+            # Team list and matches section
+            dbc.Row([
+                # Left side - Teams
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardHeader([
+                            html.H5("Participating Teams", className="mb-0"),
+                            html.Small("Teams competing in this event", className="text-muted")
+                        ]),
+                        dbc.CardBody([
+                            html.Div(id="team-list", children=build_team_list(event_key), style={
+                                "maxHeight": "400px",
+                                "overflowY": "auto",
+                                "paddingRight": "10px"
+                            })
+                        ], style={"padding": "1rem"})
+                    ], style={"marginTop": "20px"})
+                ], width={"size": 12, "sm": 6}, style={"marginBottom": "20px"}),
+                
+                # Right side - All Matches
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardHeader([
+                            html.H5("All Matches", className="mb-0"),
+                            html.Small("Complete match schedule", className="text-muted")
+                        ]),
+                        dbc.CardBody([
+                            html.Div(id="all-matches", children=build_all_matches(event_key), style={
+                                "maxHeight": "400px",
+                                "overflowY": "auto",
+                                "paddingRight": "10px"
+                            })
+                        ], style={"padding": "1rem"})
+                    ], style={"marginTop": "20px"})
+                ], width={"size": 12, "sm": 6}, style={"marginBottom": "20px"})
+            ])
+        ]),
+        footer
+    ])
+
+def get_event_teams(event_key):
+    """Get list of teams participating in the event"""
+    
+    teams = []
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT DISTINCT team_number, nickname
+                FROM event_teams
+                WHERE event_key = %s
+                ORDER BY team_number
+                """,
+                (event_key,)
+            )
+            rows = cur.fetchall()
+            for row in rows:
+                team_number, nickname = row
+                teams.append({
+                    "label": f"{team_number} - {nickname or 'Unknown'}",
+                    "value": str(team_number)
+                })
+    except Exception as e:
+        print(f"Error fetching event teams: {e}")
+    
+    return teams
+
+def build_team_list(event_key):
+    """Build team list with avatars for the focused peekolive page"""
+    
+    teams = []
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT DISTINCT team_number, nickname, city, state_prov, country
+                FROM event_teams
+                WHERE event_key = %s
+                ORDER BY team_number
+                """,
+                (event_key,)
+            )
+            rows = cur.fetchall()
+            
+            for row in rows:
+                team_number, nickname, city, state, country = row
+                
+                # Build location string
+                location_parts = [part for part in [city, state, country] if part]
+                location = ", ".join(location_parts) if location_parts else "Unknown"
+                
+                # Get team colors if available
+                team_colors = get_team_colors(team_number)
+                primary_color = team_colors.get("primary", "#6c757d")
+                secondary_color = team_colors.get("secondary", "#ffffff")
+                
+                # Create team card
+                team_card = dbc.Card([
+                    dbc.CardBody([
+                        html.Div([
+                            # Team avatar
+                            html.Div([
+                                html.Img(
+                                    src=f"/assets/avatars/{team_number}.png",
+                                    alt=f"Team {team_number}",
+                                    style={
+                                        "width": "60px",
+                                        "height": "60px",
+                                        "borderRadius": "50%",
+                                        "objectFit": "cover",
+                                        "border": f"3px solid {primary_color}",
+                                        "boxShadow": f"0 2px 8px rgba(0,0,0,0.1)"
+                                    }
+                                )
+                            ], style={"marginRight": "15px"}),
+                            
+                            # Team info
+                            html.Div([
+                                html.Div([
+                                    html.H6(f"Team {team_number}", className="mb-1"),
+                                    html.P(nickname or "Unknown Team", className="mb-1 text-muted", style={"fontSize": "14px"}),
+                                    html.Small(location, className="text-muted", style={"fontSize": "12px"})
+                                ], style={"flex": "1"}),
+                                
+                                # Team links
+                                html.Div([
+                                    html.A(
+                                        html.I(className="fas fa-external-link-alt"),
+                                        href=f"/team/{team_number}",
+                                        target="_blank",
+                                        style={"textDecoration": "none", "marginLeft": "10px", "color": "var(--bs-primary)"}
+                                    ) if team_number else None
+                                ], style={"textAlign": "right"})
+                            ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "flex": "1"})
+                        ], style={"display": "flex", "alignItems": "center"})
+                    ], style={"padding": "12px"})
+                ], style={
+                    "marginBottom": "10px",
+                    "border": f"1px solid {primary_color}60",
+                    "borderRadius": "8px",
+                    "background": f"linear-gradient(135deg, {primary_color}30, {secondary_color}20)",
+                    "transition": "all 0.2s ease"
+                }, className="team-card")
+                
+                teams.append(team_card)
+                
+    except Exception as e:
+        print(f"Error building team list: {e}")
+        return html.Div([
+            html.I(className="fas fa-exclamation-triangle text-warning", style={"marginRight": "8px"}),
+            "Error loading teams"
+        ], className="text-muted")
+    
+    if not teams:
+        return html.Div([
+            html.I(className="fas fa-users text-muted", style={"fontSize": "2rem", "marginBottom": "1rem"}),
+            html.H6("No Teams Found", className="text-muted"),
+            html.P("No teams are registered for this event.", className="text-muted")
+        ], style={"textAlign": "center", "padding": "2rem"})
+    
+    return html.Div(teams)
+
+def get_team_colors(team_number):
+    """Get team colors from the team_colors.json file"""
+    try:
+        colors_file = os.path.join(os.path.dirname(__file__), "data", "team_colors.json")
+        if os.path.exists(colors_file):
+            with open(colors_file, 'r') as f:
+                team_colors = json.load(f)
+                return team_colors.get(str(team_number), {"primary": "#6c757d", "secondary": "#ffffff"})
+    except Exception as e:
+        print(f"Error loading team colors: {e}")
+    
+    return {"primary": "#6c757d", "secondary": "#ffffff"}
+
+def get_sf_bracket_position(match_key, predicted_time, all_sf_matches):
+    """Determine the actual bracket position for semifinal matches based on predicted time"""
+    if not predicted_time or not all_sf_matches:
+        return 1
+    
+    try:
+        # Sort all SF matches by predicted time to get the actual bracket order
+        sorted_sf_matches = sorted(all_sf_matches, key=lambda x: x.get('predicted_time', 0) or 0)
+        
+        # Find this match's position in the sorted list using match_key
+        for i, match in enumerate(sorted_sf_matches):
+            if match.get('match_key') == match_key:
+                return i + 1  # Return actual position (1, 2, 3, 4, etc.)
+        
+        return 1
+    except Exception as e:
+        print(f"Error calculating SF bracket position: {e}")
+        return 1
+
+def build_all_matches(event_key):
+    """Build all matches list for the focused peekolive page"""
+    
+    matches = []
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT match_key, comp_level, match_number, red_score, blue_score, 
+                       predicted_time, red_teams, blue_teams, winning_alliance
+                FROM event_matches
+                WHERE event_key = %s
+                ORDER BY 
+                    CASE comp_level 
+                        WHEN 'qm' THEN 1 
+                        WHEN 'qf' THEN 2 
+                        WHEN 'sf' THEN 3 
+                        WHEN 'f' THEN 4 
+                        ELSE 5 
+                    END,
+                    match_number
+                """,
+                (event_key,)
+            )
+            rows = cur.fetchall()
+            
+            # Collect all SF matches for bracket position calculation
+            sf_matches = []
+            for row in rows:
+                match_key, comp_level, match_number, red_score, blue_score, predicted_time, red_teams, blue_teams, winning_alliance = row
+                if comp_level == 'sf':
+                    sf_matches.append({
+                        'match_key': match_key,
+                        'predicted_time': predicted_time
+                    })
+            
+            # Sort all matches by predicted time for proper display order
+            sorted_rows = sorted(rows, key=lambda x: x[5] or 0)  # x[5] is predicted_time
+            
+            for row in sorted_rows:
+                match_key, comp_level, match_number, red_score, blue_score, predicted_time, red_teams, blue_teams, winning_alliance = row
+                
+                # Determine match status
+                is_completed = red_score > 0 or blue_score > 0
+                status = "completed" if is_completed else "upcoming"
+                
+                # Format predicted time
+                time_display = format_predicted_time_display(predicted_time) if predicted_time else "TBD"
+                
+                # Parse alliances from team strings
+                red_team_list = red_teams.split(',') if red_teams else []
+                blue_team_list = blue_teams.split(',') if blue_teams else []
+                
+                # Determine background color based on winning alliance
+                if is_completed:
+                    if winning_alliance == 'red':
+                        bg_color = "var(--table-row-red)"  # Light red for red alliance win
+                    elif winning_alliance == 'blue':
+                        bg_color = "var(--table-row-blue)"  # Light blue for blue alliance win
+                    else:
+                        bg_color = "var(--bg-secondary)"  # Light gray for no winner/tie
+                else:  # upcoming matches
+                    if comp_level == 'f':
+                        bg_color = "var(--table-row-yellow)"  # Light yellow for finals
+                    elif comp_level == 'sf':
+                        bg_color = "var(--table-row-green)"  # Light green for semifinals
+                    elif comp_level == 'qf':
+                        bg_color = "var(--table-row-pink)"  # Light pink for quarterfinals
+                    else:  # qm
+                        bg_color = "var(--bg-secondary)"  # Light gray for qualifiers
+                
+                # Create match card
+                match_card = dbc.Card([
+                    dbc.CardBody([
+                        html.Div([
+                            # Match header
+                            html.Div([
+                                html.H6(
+                                    f"{comp_level.upper()} {match_number}" if comp_level != 'sf' else 
+                                    f"SF {get_sf_bracket_position(match_key, predicted_time, sf_matches)}", 
+                                    className="mb-1"
+                                ),
+                                html.Small(time_display, className="text-muted")
+                            ], style={"flex": "1"}),
+                            
+                            # Match status indicator
+                            html.Div([
+                                html.Span(
+                                    "✓" if is_completed else "⏰",
+                                    style={
+                                        "color": "#28a745" if is_completed else "#ffc107",
+                                        "fontSize": "18px",
+                                        "fontWeight": "bold"
+                                    }
+                                )
+                            ], style={"marginLeft": "10px"})
+                        ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "10px"}),
+                        
+                        # Alliance info - side by side
+                        html.Div([
+                            # Red alliance
+                            html.Div([
+                                html.Small("Red Alliance", className="text-danger", style={"fontWeight": "bold"}),
+                                html.Div([
+                                    html.Span(f"Team {team}", className="badge bg-danger me-1", style={"fontSize": "10px"})
+                                    for team in red_team_list[:3]  # Show first 3 teams
+                                ]),
+                                html.Small(f"{red_score}", className="text-danger", style={"fontWeight": "bold", "marginLeft": "5px"}) if is_completed else None
+                            ], style={"flex": "1", "marginRight": "10px"}),
+                            
+                            # Blue alliance
+                            html.Div([
+                                html.Small("Blue Alliance", className="text-primary", style={"fontWeight": "bold"}),
+                                html.Div([
+                                    html.Span(f"Team {team}", className="badge bg-primary me-1", style={"fontSize": "10px"})
+                                    for team in blue_team_list[:3]  # Show first 3 teams
+                                ]),
+                                html.Small(f"{blue_score}", className="text-primary", style={"fontWeight": "bold", "marginLeft": "5px"}) if is_completed else None
+                            ], style={"flex": "1"})
+                        ], style={"display": "flex", "gap": "10px"})
+                    ], style={"padding": "12px"})
+                ], style={
+                    "marginBottom": "8px",
+                    "border": "1px solid var(--border-color)",
+                    "borderRadius": "6px",
+                    "backgroundColor": bg_color,
+                    "transition": "all 0.2s ease"
+                }, className="match-card")
+                
+                matches.append(match_card)
+                
+    except Exception as e:
+        print(f"Error building all matches: {e}")
+        return html.Div([
+            html.I(className="fas fa-exclamation-triangle text-warning", style={"marginRight": "8px"}),
+            "Error loading matches"
+        ], className="text-muted")
+    
+    if not matches:
+        return html.Div([
+            html.I(className="fas fa-calendar text-muted", style={"fontSize": "2rem", "marginBottom": "1rem"}),
+            html.H6("No Matches Found", className="text-muted"),
+            html.P("No matches are scheduled for this event.", className="text-muted")
+        ], style={"textAlign": "center", "padding": "2rem"})
+    
+    return html.Div(matches)
+
+def get_time_until_match(predicted_time):
+    """Calculate time until match and return formatted string"""
+    if not predicted_time:
+        return "Time TBD"
+    
+    try:
+        
+        # Handle different types of predicted_time
+        if isinstance(predicted_time, int):
+            # Unix timestamp - convert to datetime
+            match_time = datetime.fromtimestamp(predicted_time, tz=timezone.utc)
+        elif isinstance(predicted_time, str):
+            # ISO format string
+            match_time = datetime.fromisoformat(predicted_time.replace('Z', '+00:00'))
+        elif isinstance(predicted_time, datetime):
+            # Already a datetime object
+            match_time = predicted_time
+            # Ensure timezone aware
+            if match_time.tzinfo is None:
+                match_time = match_time.replace(tzinfo=timezone.utc)
+        else:
+            return "Time TBD"
+        
+        # Get user's local timezone
+        try:
+            # Try to get timezone from browser (if available)
+            user_tz = timezone.utc  # Default to UTC
+            # In a real implementation, you'd get this from the user's browser
+            # For now, we'll use the system timezone
+            offset = time.timezone if (time.daylight == 0) else time.altzone
+            user_tz = timezone(timedelta(seconds=-offset))
+        except:
+            user_tz = timezone.utc
+        
+        # Convert to user's timezone
+        match_time_local = match_time.astimezone(user_tz)
+        now_local = datetime.now(user_tz)
+        time_diff = match_time_local - now_local
+        
+        if time_diff.total_seconds() < 0:
+            return "Match in progress or completed"
+        elif time_diff.total_seconds() < 60:
+            return "Match starting now!"
+        elif time_diff.total_seconds() < 3600:  # Less than 1 hour
+            minutes = int(time_diff.total_seconds() / 60)
+            return f"Match in {minutes} minute{'s' if minutes != 1 else ''}"
+        else:  # More than 1 hour
+            hours = int(time_diff.total_seconds() / 3600)
+            minutes = int((time_diff.total_seconds() % 3600) / 60)
+            if minutes == 0:
+                return f"Match in {hours} hour{'s' if hours != 1 else ''}"
+            else:
+                return f"Match in {hours}h {minutes}m"
+    except Exception as e:
+        print(f"Error calculating time until match: {e}")
+        return "Time TBD"
+
+def format_predicted_time_display(predicted_time):
+    """Format predicted time for display"""
+    if not predicted_time:
+        return "TBD"
+    
+    try:
+        # Handle different types of predicted_time
+        if isinstance(predicted_time, int):
+            # Unix timestamp - convert to datetime
+            match_time = datetime.fromtimestamp(predicted_time, tz=timezone.utc)
+        elif isinstance(predicted_time, str):
+            # ISO format string
+            match_time = datetime.fromisoformat(predicted_time.replace('Z', '+00:00'))
+        elif isinstance(predicted_time, datetime):
+            # Already a datetime object
+            match_time = predicted_time
+            # Ensure timezone aware
+            if match_time.tzinfo is None:
+                match_time = match_time.replace(tzinfo=timezone.utc)
+        else:
+            return "TBD"
+        
+        # Get user's local timezone
+        try:
+            offset = time.timezone if (time.daylight == 0) else time.altzone
+            user_tz = timezone(timedelta(seconds=-offset))
+        except:
+            user_tz = timezone.utc
+        
+        # Convert to user's timezone
+        match_time_local = match_time.astimezone(user_tz)
+        
+        # Get timezone abbreviation and map to common names
+        offset_str = match_time_local.strftime('%z')
+        
+        # Try to get timezone name from system first
+        try:
+            if time.daylight:
+                tz_abbr = time.tzname[1]  # Daylight time name
+            else:
+                tz_abbr = time.tzname[0]  # Standard time name
+            
+            # If we got a proper timezone name, use it
+            if tz_abbr and tz_abbr != 'UTC':
+                # Extract abbreviation from full name
+                if 'Central' in tz_abbr:
+                    tz_abbr = "CDT" if time.daylight else "CST"
+                elif 'Eastern' in tz_abbr:
+                    tz_abbr = "EDT" if time.daylight else "EST"
+                elif 'Mountain' in tz_abbr:
+                    tz_abbr = "MDT" if time.daylight else "MST"
+                elif 'Pacific' in tz_abbr:
+                    tz_abbr = "PDT" if time.daylight else "PST"
+        except:
+            tz_abbr = None
+        
+        # Fallback to offset-based mapping if system names didn't work
+        if not tz_abbr or tz_abbr == 'UTC':
+            if offset_str:
+                offset_hours = int(offset_str[1:3])
+                offset_mins = int(offset_str[3:5])
+                
+                # Common US timezone mappings
+                if offset_str[0] == '-':  # Negative offset (behind UTC)
+                    if offset_hours == 5 and offset_mins == 0:
+                        tz_abbr = "CDT"  # Central Daylight Time
+                    elif offset_hours == 6 and offset_mins == 0:
+                        tz_abbr = "CST"  # Central Standard Time
+                    elif offset_hours == 4 and offset_mins == 0:
+                        tz_abbr = "EDT"  # Eastern Daylight Time
+                    elif offset_hours == 5 and offset_mins == 0:
+                        tz_abbr = "EST"  # Eastern Standard Time
+                    elif offset_hours == 7 and offset_mins == 0:
+                        tz_abbr = "MST"  # Mountain Standard Time
+                    elif offset_hours == 6 and offset_mins == 0:
+                        tz_abbr = "MDT"  # Mountain Daylight Time
+                    elif offset_hours == 8 and offset_mins == 0:
+                        tz_abbr = "PST"  # Pacific Standard Time
+                    elif offset_hours == 7 and offset_mins == 0:
+                        tz_abbr = "PDT"  # Pacific Daylight Time
+                    else:
+                        tz_abbr = f"UTC{offset_str}"
+                else:  # Positive offset (ahead of UTC)
+                    tz_abbr = f"UTC+{offset_hours:02d}:{offset_mins:02d}"
+            else:
+                tz_abbr = "Local"
+        
+        return match_time_local.strftime(f'%I:%M %p {tz_abbr}')
+    except Exception as e:
+        print(f"Error formatting predicted time: {e}")
+        return "TBD"
+
+def get_stream_status_dot(event_data):
+    """Get status indicator dot for the stream based on event timing"""
+    try:
+        start_date = event_data.get("start_date")
+        end_date = event_data.get("end_date")
+        
+        if not start_date or not end_date:
+            return html.Div([
+                html.Div(className="status-dot status-unknown", title="Event status unknown")
+            ])
+        
+        # Parse dates
+        if isinstance(start_date, str):
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        else:
+            start_dt = start_date
+            
+        if isinstance(end_date, str):
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        else:
+            end_dt = end_date
+        
+        # Make timezone aware
+        start_dt = start_dt.replace(tzinfo=timezone.utc)
+        end_dt = end_dt.replace(tzinfo=timezone.utc)
+        
+        now = datetime.now(timezone.utc)
+        
+        # Determine status
+        if now < start_dt:
+            # Event hasn't started yet
+            return html.Div([
+                html.Div(className="status-dot status-upcoming", title="Event upcoming")
+            ])
+        elif start_dt <= now <= end_dt:
+            # Event is ongoing
+            return html.Div([
+                html.Div(className="status-dot status-ongoing", title="Event ongoing")
+            ])
+        else:
+            # Event has ended
+            return html.Div([
+                html.Div(className="status-dot status-completed", title="Event completed")
+            ])
+            
+    except Exception as e:
+        print(f"Error determining event status: {e}")
+        return html.Div([
+            html.Div(className="status-dot status-unknown", title="Event status unknown")
+        ])
+
+def build_match_notifications(event_key, selected_team=None):
+    """Build match notifications for the focused peekolive page"""
+    # Get matches from database
+    matches = []
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT match_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, predicted_time
+                FROM event_matches
+                WHERE event_key = %s
+                ORDER BY predicted_time ASC NULLS LAST, comp_level, match_number
+                """,
+                (event_key,)
+            )
+            rows = cur.fetchall()
+            for row in rows:
+                match_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, predicted_time = row
+                matches.append({
+                    "k": match_key,
+                    "cl": comp_level,
+                    "mn": match_number,
+                    "sn": set_number,
+                    "rt": red_teams or "",
+                    "bt": blue_teams or "",
+                    "rs": red_score or 0,
+                    "bs": blue_score or 0,
+                    "wa": winning_alliance or "",
+                    "pt": predicted_time
+                })
+    except Exception as e:
+        print(f"Error fetching matches: {e}")
+    
+    # Filter matches by selected team if provided (and not "all")
+    if selected_team and selected_team != "all":
+        # Handle case where selected_team might be a list
+        if isinstance(selected_team, list):
+            selected_team = selected_team[0] if selected_team else None
+        
+        if selected_team and selected_team != "all":
+            print(f"Filtering for team: {selected_team}")
+            filtered_matches = []
+            for match in matches:
+                red_teams = match.get("rt", "").split(",") if match.get("rt") else []
+                blue_teams = match.get("bt", "").split(",") if match.get("bt") else []
+                # Convert team numbers to strings for comparison
+                red_teams = [str(team).strip() for team in red_teams if team.strip()]
+                blue_teams = [str(team).strip() for team in blue_teams if team.strip()]
+                print(f"Match {match.get('mn', '?')}: Red teams: {red_teams}, Blue teams: {blue_teams}")
+                if str(selected_team) in red_teams or str(selected_team) in blue_teams:
+                    filtered_matches.append(match)
+            matches = filtered_matches
+            print(f"Found {len(matches)} matches for team {selected_team}")
+    
+    if not matches:
+        if selected_team and selected_team != "all":
+            return html.Div([
+                html.Div([
+                    html.I(className="fas fa-info-circle text-info me-2"),
+                    html.Span(f"No matches starting within the next hour for team {selected_team}", className="text-muted")
+                ], className="notification-item")
+            ])
+        else:
+            return html.Div([
+                html.Div([
+                    html.I(className="fas fa-info-circle text-info me-2"),
+                    html.Span("No matches starting within the next hour", className="text-muted")
+                ], className="notification-item")
+            ])
+    # Get user's local timezone
+    try:
+        offset = time.timezone if (time.daylight == 0) else time.altzone
+        user_tz = timezone(timedelta(seconds=-offset))
+    except:
+        user_tz = timezone.utc
+    
+    now = datetime.now(user_tz)
+    one_hour_from_now = now + timedelta(hours=1)
+    
+    # Filter matches to only show upcoming matches within the next hour
+    upcoming_matches = []
+    for match in matches:
+        predicted_time = match.get("pt")
+        if predicted_time:
+            try:
+                # Convert predicted_time to datetime
+                if isinstance(predicted_time, int):
+                    match_time = datetime.fromtimestamp(predicted_time, tz=timezone.utc)
+                elif isinstance(predicted_time, str):
+                    match_time = datetime.fromisoformat(predicted_time.replace('Z', '+00:00'))
+                elif isinstance(predicted_time, datetime):
+                    match_time = predicted_time
+                    if match_time.tzinfo is None:
+                        match_time = match_time.replace(tzinfo=timezone.utc)
+                else:
+                    continue
+                
+                # Convert to user's timezone for comparison
+                match_time_local = match_time.astimezone(user_tz)
+                
+                # Only include matches that are:
+                # 1. Not yet started (match_time > now)
+                # 2. Starting within the next hour (match_time <= one_hour_from_now)
+                if now < match_time_local <= one_hour_from_now:
+                    upcoming_matches.append(match)
+            except Exception as e:
+                print(f"Error processing match time: {e}")
+                continue
+    
+    # Use filtered matches
+    matches = upcoming_matches
+    
+    notifications = []
+    for match in matches:
+        match_key = match.get("k", "")
+        match_number = match.get("mn", 0)
+        comp_level = match.get("cl", "qm")
+        red_teams = match.get("rt", "")
+        blue_teams = match.get("bt", "")
+        red_score = match.get("rs", 0)
+        blue_score = match.get("bs", 0)
+        winning_alliance = match.get("wa", "")
+        predicted_time = match.get("pt")
+        
+        # Get time until match
+        time_until = get_time_until_match(predicted_time)
+        
+        # Determine match status
+        if red_score > 0 or blue_score > 0:
+            status = "completed"
+            status_icon = "fas fa-check-circle text-success"
+            status_text = "Completed"
+        else:
+            status = "upcoming"
+            status_icon = "fas fa-clock text-warning"
+            status_text = time_until
+        
+        # Format teams
+        red_team_list = red_teams.split(",") if red_teams else []
+        blue_team_list = blue_teams.split(",") if blue_teams else []
+        
+        # Format match label
+        if comp_level == "qm":
+            match_label = f"Q{match_number}"
+        elif comp_level == "qf":
+            match_label = f"QF{match_number}"
+        elif comp_level == "sf":
+            match_label = f"SF{match_number}"
+        elif comp_level == "f":
+            match_label = f"F{match_number}"
+        else:
+            match_label = f"{comp_level.upper()}{match_number}"
+        
+        notification = html.Div([
+            html.Div([
+                html.I(className=status_icon),
+                html.Span(f" {match_label}", className="fw-bold ms-2"),
+                html.Span(f" - {status_text}", className="text-muted ms-1")
+            ], className="notification-header"),
+            html.Div([
+                html.Div([
+                    html.Span("Red: ", className="text-danger fw-bold"),
+                    html.Span(", ".join(red_team_list), className="me-3")
+                ]),
+                html.Div([
+                    html.Span("Blue: ", className="text-primary fw-bold"),
+                    html.Span(", ".join(blue_team_list))
+                ])
+            ], className="notification-teams mt-2"),
+            html.Div([
+                html.Span(f"Score: {red_score} - {blue_score}", className="fw-bold"),
+                html.Span(f" | Winner: {winning_alliance.title()}", className="text-success ms-2") if winning_alliance else ""
+            ], className="notification-score mt-2") if status == "completed" else html.Div([
+                html.Span(f"Predicted time: {format_predicted_time_display(predicted_time)}", className="text-info")
+            ], className="notification-score mt-2")
+        ], className="notification-item mb-3 p-3 border rounded")
+        
+        notifications.append(notification)
+    
+    return html.Div(notifications)

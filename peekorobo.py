@@ -125,8 +125,6 @@ app.clientside_callback(
     Input("district-dropdown", "value"),
 )
 def update_peekolive_grid(_, selected_year, selected_event_types, selected_week, search_query, selected_district):
-    # Import locally to avoid circulars
-    from layouts import get_peekolive_events, build_peekolive_grid
     
     # If the Events search contains a team (e.g., "frc123" or "123"), treat it as the team filter
     detected_team = None
@@ -134,14 +132,13 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
         if search_query:
             s = str(search_query).lower().strip()
             # Only detect team if it's explicitly "frc" prefixed or a standalone number
-            import re as _re
-            frc_match = _re.search(r"frc(\d{1,5})", s)
+            frc_match = re.search(r"frc(\d{1,5})", s)
             if frc_match:
                 detected_team = frc_match.group(1)
             else:
                 # Only treat as team if it's a standalone number (not part of a larger string)
                 # This prevents years like "2024" from being treated as team 2024
-                if _re.fullmatch(r"\d{1,5}", s):
+                if re.fullmatch(r"\d{1,5}", s):
                     detected_team = s
     except Exception:
         detected_team = None
@@ -162,9 +159,8 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
         if not isinstance(selected_event_types, list):
             selected_event_types = [selected_event_types]
         try:
-            from peekorobo import EVENT_DATABASE, current_year as _cy
             # EVENT_DATABASE is keyed by year; when year filter missing, assume current
-            lookup_year = selected_year or _cy
+            lookup_year = selected_year or current_year
             ev_by_key = {e.get("k"): e for e in EVENT_DATABASE.get(lookup_year, {}).values()}
             def ev_type_ok(ev):
                 ek = ev.get("event_key")
@@ -178,7 +174,6 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
     # Week filter: compute week from start_date using shared util get_week_number
     if selected_week != "all":
         try:
-            from utils import get_week_number
             def compute_week(ev):
                 try:
                     sd = ev.get("start_date")
@@ -194,8 +189,6 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
     # District filter uses DISTRICT_STATES_COMBINED like events tab
     if selected_district and selected_district != "all":
         try:
-            from utils import is_western_pennsylvania_city
-            from peekorobo import DISTRICT_STATES_COMBINED
             def get_event_district_from_ev(ev):
                 state = ev.get("state", "")
                 country = ev.get("country", "")
@@ -220,10 +213,9 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
         # Apply text search unless it's clearly just a team number
         should_apply_text_search = True
         try:
-            import re as _re
             q_clean = q.strip()
             # Only skip text search if it's purely a team number (frc123 or standalone digits)
-            if _re.fullmatch(r"frc\d{1,5}|\d{1,5}", q_clean):
+            if re.fullmatch(r"frc\d{1,5}|\d{1,5}", q_clean):
                 should_apply_text_search = False
         except Exception:
             should_apply_text_search = True
@@ -238,7 +230,6 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
     # If a team was detected (from dropdown or search), filter events by team across all years
     if effective_team:
         try:
-            from peekorobo import EVENT_TEAMS
             t_str = str(effective_team)
             filtered = []
             for ev in events:
@@ -444,6 +435,12 @@ def display_page(pathname):
     
     if pathname == "/events/peekolive":
         return events_layout(active_tab="peekolive-tab")
+    
+    if pathname.startswith("/events/peekolive/"):
+        # Extract event_key from pathname
+        event_key = pathname.split("/events/peekolive/")[-1]
+        from layouts import focused_peekolive_layout
+        return focused_peekolive_layout(event_key)
     
     if pathname == "/events/insights":
         return events_layout(active_tab="table-tab")
@@ -1347,7 +1344,7 @@ def update_events_tab_content(
 ):
     if active_tab == "peekolive-tab":
         # Handle search filtering for PeekoLive tab
-        from layouts import get_peekolive_events_categorized, build_peekolive_grid
+        from layouts import get_peekolive_events_categorized
         
         # Detect team from search query
         detected_team = None
@@ -1355,14 +1352,14 @@ def update_events_tab_content(
             if search_query:
                 s = str(search_query).lower().strip()
                 # Only detect team if it's explicitly "frc" prefixed or a standalone number
-                import re as _re
-                frc_match = _re.search(r"frc(\d{1,5})", s)
+            
+                frc_match = re.search(r"frc(\d{1,5})", s)
                 if frc_match:
                     detected_team = frc_match.group(1)
                 else:
                     # Only treat as team if it's a standalone number (not part of a larger string)
                     # This prevents years like "2024" from being treated as team 2024
-                    if _re.fullmatch(r"\d{1,5}", s):
+                    if re.fullmatch(r"\d{1,5}", s):
                         detected_team = s
         except Exception:
             detected_team = None
@@ -5593,6 +5590,65 @@ def toggle_team_card_collapse(n_clicks, current_style):
         arrow = "▲"
     
     return arrow, new_style
+
+# Focus button callback for PeekoLive
+@app.callback(
+    Output("url", "pathname", allow_duplicate=True),
+    Input({"type": "focus-button", "event_key": dash.dependencies.ALL}, "n_clicks"),
+    prevent_initial_call=True
+)
+def handle_focus_button_click(n_clicks_list):
+    """Handle focus button clicks to navigate to event page"""
+    if not any(n_clicks_list):
+        return dash.no_update
+    
+    # Find which button was clicked
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return dash.no_update
+    
+    # Get the event_key from the triggered input
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    try:
+        button_id = json.loads(triggered_id)
+        event_key = button_id.get("event_key")
+        if event_key:
+            return f"/events/peekolive/{event_key}"
+    except (json.JSONDecodeError, KeyError):
+        pass
+    
+    return dash.no_update
+
+# Team filter callback for focused peekolive
+@app.callback(
+    Output("match-notifications", "children"),
+    Input({"type": "team-filter", "event_key": dash.dependencies.ALL}, "value"),
+    prevent_initial_call=True
+)
+def update_match_notifications(selected_team):
+    """Handle team filter changes for match notifications"""
+    if not selected_team:
+        return dash.no_update
+    
+    # Find which dropdown was changed
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return dash.no_update
+    
+    # Get the event_key from the triggered input
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    try:
+        button_id = json.loads(triggered_id)
+        event_key = button_id.get("event_key")
+        if event_key:
+            from layouts import build_match_notifications
+            # Handle case where selected_team might be a list
+            team_value = selected_team[0] if isinstance(selected_team, list) and selected_team else selected_team
+            return build_match_notifications(event_key, team_value)
+    except (json.JSONDecodeError, KeyError):
+        pass
+    
+    return dash.no_update
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
