@@ -112,7 +112,7 @@ app.clientside_callback(
     prevent_initial_call=True
 )
 
-# PeekLive filters and refresh
+# PeekoLive filters and refresh
 @app.callback(
     Output("peekolive-grid", "children"),
     Output("peekolive-title", "children"),
@@ -148,11 +148,11 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
 
     effective_team = detected_team
 
-    # Build baseline PeekLive events; if a team filter is active OR there's a search query, do not cap
+    # Build baseline PeekoLive events; if a team filter is active OR there's a search query, do not cap
     events = get_peekolive_events(include_all=bool(effective_team) or bool(search_query))
     
 
-    # Apply Events page filters to PeekLive list
+    # Apply Events page filters to PeekoLive list
     # Year filter
     if selected_year:
         events = [ev for ev in events if ev.get("year") == selected_year]
@@ -1346,7 +1346,7 @@ def update_events_tab_content(
     store_data,
 ):
     if active_tab == "peekolive-tab":
-        # Handle search filtering for PeekLive tab
+        # Handle search filtering for PeekoLive tab
         from layouts import get_peekolive_events_categorized, build_peekolive_grid
         
         # Detect team from search query
@@ -1401,7 +1401,7 @@ def update_events_tab_content(
                     if q in (ev.get("name", "").lower()) or q in (ev.get("location", "").lower())
                 ]
         
-        # Build the PeekLive layout with filtered events
+        # Build the PeekoLive layout with filtered events
         return build_peekolive_layout_with_events(events_data, detected_team), dash.no_update, dash.no_update
     user_favorites = set(store_data or [])
     

@@ -1282,8 +1282,8 @@ html body div div .dash-table-container tr:hover * {
     text-decoration: underline !important;
 }
 
-/* Peeklive Navigation Link Hover Effects */
-.peeklive-nav-link:hover {
+/* Peekolive Navigation Link Hover Effects */
+.peekolive-nav-link:hover {
     color: var(--navbar-hover) !important;
 }
 

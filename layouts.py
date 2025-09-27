@@ -859,7 +859,7 @@ def topbar():
                                         ),
                                         className="d-md-none"  # Only show on mobile
                                     ),
-                                    # Peeklive link - mobile version
+                                    # Peekolive link - mobile version
                                     dbc.NavItem(
                                         html.A(
                                             [
@@ -870,7 +870,7 @@ def topbar():
                                                 }),
                                                 " ",
                                                 html.Img(
-                                                    src="/assets/peeklive.png",
+                                                    src="/assets/peekolive.png",
                                                     style={"height": "20px", "width": "auto", "marginLeft": "4px", "marginRight": "4px"}
                                                 )
                                             ],
@@ -884,7 +884,7 @@ def topbar():
                                                 "padding": "0.5rem 1rem",
                                                 "transition": "color 0.2s ease"
                                             },
-                                            className="peeklive-nav-link"
+                                            className="peekolive-nav-link"
                                         ),
                                         className="d-md-none"  # Only show on mobile
                                     ),
@@ -900,7 +900,7 @@ def topbar():
                     navbar=True,
                 ),
 
-                # Peeklive link - desktop version
+                # Peekolive link - desktop version
                 dbc.Col(
                     html.A(
                         [
@@ -911,7 +911,7 @@ def topbar():
                             }),
                             " ",
                             html.Img(
-                                src="/assets/peeklive.png",
+                                src="/assets/peekolive.png",
                                 style={"height": "24px", "width": "auto", "marginLeft": "6px", "marginRight": "6px"}
                             )
                         ],
@@ -925,7 +925,7 @@ def topbar():
                             "transition": "color 0.2s ease",
                             "whiteSpace": "nowrap"
                         },
-                        className="peeklive-nav-link"
+                        className="peekolive-nav-link"
                     ),
                     width="auto",
                     className="d-none d-md-block align-self-center",
@@ -3509,7 +3509,7 @@ def peekolive_embed_for(ev):
     return html.A(f"{wtype}: {channel}", href=f"/event/{ev.get('event_key')}")
 
 def build_peekolive_layout_with_events(events_data, detected_team=None):
-    """Build PeekLive layout with pre-filtered events data."""
+    """Build PeekoLive layout with pre-filtered events data."""
     # Check if any events exist
     total_events = len(events_data["completed"]) + len(events_data["ongoing"]) + len(events_data["upcoming"])
     if total_events == 0:
@@ -3517,7 +3517,7 @@ def build_peekolive_layout_with_events(events_data, detected_team=None):
             dbc.Container([
                 # Enhanced logo section
                 html.Div([
-                    html.Img(src="/assets/peeklive.png", style={
+                    html.Img(src="/assets/peekolive.png", style={
                         "height": "100px", 
                         "margin": "0 auto 20px", 
                         "display": "block"
@@ -3689,7 +3689,7 @@ def build_peekolive_layout_with_events(events_data, detected_team=None):
         dbc.Container([
             # Enhanced logo section
             html.Div([
-                html.Img(src="/assets/peeklive.png", style={
+                html.Img(src="/assets/peekolive.png", style={
                     "height": "100px", 
                     "margin": "0 auto 20px", 
                     "display": "block"
