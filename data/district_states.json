@@ -97,14 +97,16 @@
       "Massachusetts",
       "Maine",
       "New Hampshire",
-      "Vermont"
+      "Vermont",
+      "Rhode Island"
     ],
     "abbreviations": [
       "CT",
       "MA",
       "ME",
       "NH",
-      "VT"
+      "VT",
+      "RI"
     ]
   },
   "FSC": {
