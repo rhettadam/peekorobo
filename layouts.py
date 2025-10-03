@@ -813,7 +813,6 @@ def topbar():
                                         in_navbar=True,
                                         className="custom-navlink",
                                         children=[
-                                            dbc.DropdownMenuItem("Blog", href="/blog"),
                                             dbc.DropdownMenuItem("Compare", href="/compare"),
                                             dbc.DropdownMenuItem("Account", href="/login", id="account-link"),
                                             dbc.DropdownMenuItem(divider=True),
@@ -1199,122 +1198,6 @@ home_layout = html.Div([
     "backgroundColor": "var(--bg-primary)"
 })
 
-blog_layout = html.Div([
-    topbar(),
-    dbc.Container([
-        html.H2("ACE (Adjusted Contribution Estimate) Algorithm", className="text-center my-4"),
-
-        html.P("The ACE model estimates a team's contribution to a match based on scoring breakdowns and trends. ACE (Adjusted Contribution Estimate) extends this by incorporating consistency, dominance, and statistical reliability.", style={"fontSize": "1.1rem"}),
-
-        html.H4("Core Model", className="mt-4"),
-        html.P("EPA updates are done incrementally after each match. Auto, Teleop, and Endgame contributions are calculated separately, then EPA is updated using a weighted delta with decay."),
-
-        dbc.Card([
-            dbc.CardHeader("EPA Update Formula"),
-            dbc.CardBody([
-                html.Pre("""
-# For each component (auto, teleop, endgame):
-delta = decay * K * (actual - epa) 
-
-# Where:
-decay = world_champ_penalty * (match_count / total_matches)²
-K = 0.4 * match_importance * world_champ_penalty
-
-# World Championship penalties:
-Einstein: 0.95
-Division: 0.85
-Regular: 1.0
-
-# Match importance weights:
-importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
-            ])
-        ], className="my-3"),
-
-        html.H4("Component Estimation", className="mt-4"),
-        html.P("Each component (Auto, Teleop, Endgame) is estimated separately with adaptive trimming based on match count:"),
-
-        dbc.Card([
-            dbc.CardHeader("Adaptive Trimming"),
-            dbc.CardBody([
-                html.Pre("""
-# Trimming percentages based on match count:
-< 12 matches: 0%
-< 25 matches: 3%
-< 40 matches: 5%
-< 60 matches: 8%
-< 100 matches: 10%
-≥ 100 matches: 12%
-
-# Trim from low end only:
-trimmed_scores = sorted(scores)[k:]  # k = n * trim_pct
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
-            ])
-        ], className="my-3"),
-
-        html.H4("Confidence Calculation", className="mt-4"),
-        html.P("ACE = EPA × Confidence. Confidence is computed from multiple weighted components:"),
-
-        dbc.Card([
-            dbc.CardHeader("Confidence Formula"),
-            dbc.CardBody([
-                html.Pre("""
-weights = {
-    "consistency": 0.4,
-    "dominance": 0.25,
-    "record_alignment": 0.15,
-    "veteran": 0.1,
-    "events": 0.05,
-    "base": 0.05
-}
-
-# Components:
-consistency = 1 - (stdev / peak_score)
-dominance = mean(normalized_margin_scores)
-record_alignment = 1 - |expected_win_rate - actual_win_rate|
-veteran_bonus = 1.0 if veteran else 0.6
-event_boost = 1.0 if events ≥ 2 else 0.60
-
-confidence = min(1.0, sum(weight * component))
-""", style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "backgroundColor": "var(--card-bg)", "padding": "10px"})
-            ])
-        ], className="my-3"),
-
-        html.H4("Key Components", className="mt-4"),
-        html.P("Each confidence component measures a different aspect of team performance:"),
-
-        dbc.Card([
-            dbc.CardBody([
-                html.H6("Consistency (40%)"),
-                html.P("Measures stability of match-to-match performance. Higher when scores are more consistent relative to peak performance."),
-                
-                html.H6("Dominance (25%)"),
-                html.P("Measures how much a team outperforms opponents. Calculated from normalized margin scores across matches."),
-                
-                html.H6("Record Alignment (15%)"),
-                html.P("How well actual win rate matches expected win rate based on dominance scores."),
-                
-                html.H6("Veteran Status (10%)"),
-                html.P("Veteran teams get higher confidence (1.0 vs 0.6) due to historical predictability."),
-                
-                html.H6("Event Count (5%)"),
-                html.P("Teams with multiple events get a confidence boost (1.0 vs 0.6)."),
-                
-                html.H6("Base Confidence (5%)"),
-                html.P("Minimum confidence floor to prevent extreme penalties.")
-            ])
-        ], className="my-3"),
-
-        html.Hr(),
-        html.P("The model is continuously evolving. To contribute, test ideas, or file issues, visit the GitHub repository:", className="mt-4"),
-        html.A("https://github.com/rhettadam/peekorobo", href="https://github.com/rhettadam/peekorobo", target="_blank")
-    ], style={
-        "maxWidth": "900px",
-        "flexGrow": "1" # Added flex-grow
-        }, className="py-4 mx-auto"),
-    footer
-])
-
 def insights_layout():
 
     with open('data/frc_games.json', 'r', encoding='utf-8') as f:
@@ -1693,7 +1576,7 @@ def insights_details_layout(year):
         ]
     )
 
-def teams_map_layout():
+def map_layout():
     # Generate and get the map file path
     map_path = "assets/teams_map_compressed.html.gz"
 

@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,blog_layout,teams_map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events
 
 from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
 
@@ -428,7 +428,7 @@ def display_page(pathname):
         return teams_layout()
     
     if pathname == "/map":
-        return teams_map_layout()
+        return map_layout()
     
     if pathname == "/events":
         return events_layout()
@@ -444,9 +444,6 @@ def display_page(pathname):
     
     if pathname == "/events/insights":
         return events_layout(active_tab="table-tab")
-    
-    if pathname == "/blog":
-        return blog_layout
 
     if pathname == "/login":
         return login_layout()
@@ -512,8 +509,6 @@ def update_tab_title(pathname):
         return 'Map - Peekorobo'
     elif pathname.startswith('/compare'):
         return 'Compare - Peekorobo'
-    elif pathname.startswith('/blog'):
-        return 'Blog - Peekorobo'
     else:
         return 'Peekorobo'
 
