@@ -837,7 +837,7 @@ def topbar():
                                     ),
                                     dbc.NavItem(
                                         dbc.Button(
-                                            html.I(className="fas fa-moon"),
+                                            html.I(className="fas fa-sun"),
                                             id="theme-toggle",
                                             className="custom-navlink",
                                             style={"background": "none", "border": "none", "padding": "0.5rem 1rem"},
