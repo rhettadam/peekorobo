@@ -281,65 +281,42 @@ app.index_string = '''
 </html>
 '''
 
-# Theme switching callbacks
+# SINGLE CALLBACK - NO CONFLICTS - THEME AND ICON UPDATE TOGETHER
 app.clientside_callback(
     """
-    function(n_clicks, current_theme) {
-        if (!n_clicks) {
-            return window.dash_clientside.no_update;
+    function(theme_clicks, page_load_clicks) {
+        // Handle page load - just return the current theme
+        if (page_load_clicks && !theme_clicks) {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            return savedTheme;
         }
         
-        const new_theme = current_theme === 'light' ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', new_theme);
-        
-        // Update theme toggle icon
-        const themeIcon = document.querySelector('#theme-toggle i');
-        if (themeIcon) {
-            themeIcon.className = new_theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+        // Handle theme toggle - update both theme AND icon in same operation
+        if (theme_clicks) {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            
+            // Update theme
+            document.documentElement.setAttribute('data-theme', newTheme);
+            
+            // Update icon IMMEDIATELY - no delays, no separate operations
+            const icon = document.querySelector('#theme-toggle i');
+            if (icon) {
+                icon.className = newTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('theme', newTheme);
+            
+            return newTheme;
         }
         
-        return new_theme;
-    }
-    """,
-    Output("theme-store", "data"),
-    Input("theme-toggle", "n_clicks"),
-    State("theme-store", "data"),
-    prevent_initial_call=True
-)
-
-# Initialize theme on page load
-app.clientside_callback(
-    """
-    function() {
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        
-        // Update theme toggle icon
-        const themeIcon = document.querySelector('#theme-toggle i');
-        if (themeIcon) {
-            themeIcon.className = savedTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
-        }
-        
-        return savedTheme;
-    }
-    """,
-    Output("theme-store", "data", allow_duplicate=True),
-    Input("page-load-trigger", "n_clicks"),
-    prevent_initial_call=True
-)
-
-# Save theme preference
-app.clientside_callback(
-    """
-    function(theme) {
-        if (theme) {
-            localStorage.setItem('theme', theme);
-        }
         return window.dash_clientside.no_update;
     }
     """,
-    Output("theme-store", "data", allow_duplicate=True),
-    Input("theme-store", "data"),
+    Output("theme-store", "data"),
+    [Input("theme-toggle", "n_clicks"),
+     Input("page-load-trigger", "n_clicks")],
     prevent_initial_call=True
 )
 

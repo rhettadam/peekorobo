@@ -816,32 +816,175 @@ def topbar():
                                             dbc.DropdownMenuItem("Compare", href="/compare"),
                                             dbc.DropdownMenuItem("Account", href="/login", id="account-link"),
                                             dbc.DropdownMenuItem(divider=True),
+                                            
+                                            # Resources Category - All resources organized under this main category
                                             dbc.DropdownMenu(
                                                 label="Resources",
-                                                nav=False,  # This is a nested dropdown, not a main nav item
-                                                in_navbar=False, # Not a main nav item
-                                                direction="end", # Open to the right
-                                                toggleClassName='nested-dropdown-toggle', # Added custom class
+                                                nav=False,
+                                                in_navbar=False,
+                                                direction="end",
+                                                toggleClassName='nested-dropdown-toggle',
                                                 children=[
-                                                    dbc.DropdownMenuItem("Chief Delphi", href="https://www.chiefdelphi.com/", target="_blank"),
-                                                    dbc.DropdownMenuItem("The Blue Alliance", href="https://www.thebluealliance.com/", target="_blank"),
-                                                    dbc.DropdownMenuItem("FRC Subreddit", href="https://www.reddit.com/r/FRC/", target="_blank"),
-                                                    dbc.DropdownMenuItem("FRC Discord", href="https://discord.com/invite/frc", target="_blank"),
-                                                    dbc.DropdownMenuItem(divider=True),
-                                                    dbc.DropdownMenuItem("FIRST Technical Resources", href="https://www.firstinspires.org/resource-library/frc/technical-resources", target="_blank"),
-                                                    dbc.DropdownMenuItem("FRCDesign", href="https://www.frcdesign.org/learning-course/", target="_blank"),
-                                                    dbc.DropdownMenuItem("FRCManual", href="https://www.frcmanual.com/", target="_blank"),
-                                                    dbc.DropdownMenuItem(divider=True),
-                                                    dbc.DropdownMenuItem("Statbotics", href="https://www.statbotics.io/", target="_blank"),
-                                                    dbc.DropdownMenuItem("ScoutRadioz", href="https://scoutradioz.com/", target="_blank"),
-                                                    dbc.DropdownMenuItem("Peekorobo", href="https://www.peekorobo.com/", target="_blank"),
+                                                    # Technical Resources Subcategory
+                                                    dbc.DropdownMenu(
+                                                        label="Technical Resources",
+                                                        nav=False,
+                                                        in_navbar=False,
+                                                        direction="end",
+                                                        toggleClassName='nested-dropdown-toggle',
+                                                        children=[
+                                                            dbc.DropdownMenuItem("Programming & Software", header=True),
+                                                            dbc.DropdownMenuItem("WPILib", href="https://docs.wpilib.org/", target="_blank"),
+                                                            dbc.DropdownMenuItem("YAGSL", href="https://github.com/FRC-5013-Park-Hill-Robotics/YAGSL", target="_blank"),
+                                                            dbc.DropdownMenuItem("YASS", href="https://github.com/FRC-5013-Park-Hill-Robotics/YASS", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Design & Engineering", header=True),
+                                                            dbc.DropdownMenuItem("Kitbot", href="https://github.com/FRC-5013-Park-Hill-Robotics/Kitbot", target="_blank"),
+                                                            dbc.DropdownMenuItem("Everybot", href="https://github.com/FRC-5013-Park-Hill-Robotics/Everybot", target="_blank"),
+                                                            dbc.DropdownMenuItem("NASA Robotics Alliance Project Design Guide", href="https://www.nasa.gov/robotics-alliance-project/", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Calculators & Tools", header=True),
+                                                            dbc.DropdownMenuItem("Recalc", href="https://recalc.robotpy.org/", target="_blank"),
+                                                            dbc.DropdownMenuItem("JVN Design Calculator", href="https://www.chiefdelphi.com/t/jvn-design-calculator/", target="_blank"),
+                                                            dbc.DropdownMenuItem("AMB Calculator", href="https://www.chiefdelphi.com/t/amb-calculator/", target="_blank"),
+                                                        ]
+                                                    ),
+                                                    
+                                                    # Scouting & Strategy Subcategory
+                                                    dbc.DropdownMenu(
+                                                        label="Scouting & Strategy",
+                                                        nav=False,
+                                                        in_navbar=False,
+                                                        direction="end",
+                                                        toggleClassName='nested-dropdown-toggle',
+                                                        children=[
+                                                            dbc.DropdownMenuItem("Scouting Tools", header=True),
+                                                            dbc.DropdownMenuItem("The Purple Warehouse", href="https://purplewarehouse.com/", target="_blank"),
+                                                            dbc.DropdownMenuItem("Super Scouter", href="https://www.chiefdelphi.com/t/super-scouter/", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Data & Analysis", header=True),
+                                                            dbc.DropdownMenuItem("Statbotics", href="https://www.statbotics.io/", target="_blank"),
+                                                            dbc.DropdownMenuItem("The Blue Alliance", href="https://www.thebluealliance.com/", target="_blank"),
+                                                            dbc.DropdownMenuItem("Peekorobo", href="https://www.peekorobo.com/", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Strategy Resources", header=True),
+                                                            dbc.DropdownMenuItem("Scouting Forum", href="https://www.chiefdelphi.com/c/competition/scouting", target="_blank"),
+                                                            dbc.DropdownMenuItem("Strategy Discussions", href="https://www.chiefdelphi.com/c/competition/strategy", target="_blank"),
+                                                        ]
+                                                    ),
+                                                    
+                                                    # Team Management Subcategory
+                                                    dbc.DropdownMenu(
+                                                        label="Team Management",
+                                                        nav=False,
+                                                        in_navbar=False,
+                                                        direction="end",
+                                                        toggleClassName='nested-dropdown-toggle',
+                                                        children=[
+                                                            dbc.DropdownMenuItem("Fundraising & Finance", header=True),
+                                                            dbc.DropdownMenuItem("Team 1511 Fundraising Guide", href="https://www.chiefdelphi.com/t/team-1511-fundraising-resources/", target="_blank"),
+                                                            dbc.DropdownMenuItem("FIRST Fundraising Resources", href="https://www.firstinspires.org/resource-library/frc/fundraising", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Mentorship & Leadership", header=True),
+                                                            dbc.DropdownMenuItem("FIRST NEMO Resources", href="https://www.chiefdelphi.com/t/first-nemo-resources/", target="_blank"),
+                                                            dbc.DropdownMenuItem("Mentorship Forum", href="https://www.chiefdelphi.com/c/other/mentorship", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Outreach & Community", header=True),
+                                                            dbc.DropdownMenuItem("Outreach Forum", href="https://www.chiefdelphi.com/c/other/outreach", target="_blank"),
+                                                            dbc.DropdownMenuItem("Team Management Forum", href="https://www.chiefdelphi.com/c/other/team-management", target="_blank"),
+                                                        ]
+                                                    ),
+                                                    
+                                                    # Educational Materials Subcategory
+                                                    dbc.DropdownMenu(
+                                                        label="Educational Materials",
+                                                        nav=False,
+                                                        in_navbar=False,
+                                                        direction="end",
+                                                        toggleClassName='nested-dropdown-toggle',
+                                                        children=[
+                                                            dbc.DropdownMenuItem("Workshops & Tutorials", header=True),
+                                                            dbc.DropdownMenuItem("Team 1114 Simbotics Workshops", href="https://www.chiefdelphi.com/t/team-1114-simbotics-workshops/", target="_blank"),
+                                                            dbc.DropdownMenuItem("Team 610 Design Tutorials", href="https://www.chiefdelphi.com/t/team-610-design-tutorials/", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Learning Resources", header=True),
+                                                            dbc.DropdownMenuItem("FIRST Technical Resources", href="https://www.firstinspires.org/resource-library/frc/technical-resources", target="_blank"),
+                                                            dbc.DropdownMenuItem("FRC Learning Resources", href="https://www.firstinspires.org/resource-library/frc/learning-resources", target="_blank"),
+                                                            dbc.DropdownMenuItem("Educational Forum", href="https://www.chiefdelphi.com/c/other/educational", target="_blank"),
+                                                        ]
+                                                    ),
+                                                    
+                                                    # Community & Forums Subcategory
+                                                    dbc.DropdownMenu(
+                                                        label="Community & Forums",
+                                                        nav=False,
+                                                        in_navbar=False,
+                                                        direction="end",
+                                                        toggleClassName='nested-dropdown-toggle',
+                                                        children=[
+                                                            dbc.DropdownMenuItem("Main Forums", header=True),
+                                                            dbc.DropdownMenuItem("Chief Delphi", href="https://www.chiefdelphi.com/", target="_blank"),
+                                                            dbc.DropdownMenuItem("FRC Subreddit", href="https://www.reddit.com/r/FRC/", target="_blank"),
+                                                            dbc.DropdownMenuItem("FRC Discord", href="https://discord.com/invite/frc", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Technical Forums", header=True),
+                                                            dbc.DropdownMenuItem("Technical Forum", href="https://www.chiefdelphi.com/c/technical", target="_blank"),
+                                                            dbc.DropdownMenuItem("Programming Forum", href="https://www.chiefdelphi.com/c/technical/programming", target="_blank"),
+                                                            dbc.DropdownMenuItem("Electronics Forum", href="https://www.chiefdelphi.com/c/technical/electronics", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Competition Forums", header=True),
+                                                            dbc.DropdownMenuItem("Competition Forum", href="https://www.chiefdelphi.com/c/competition", target="_blank"),
+                                                            dbc.DropdownMenuItem("Scouting Forum", href="https://www.chiefdelphi.com/c/competition/scouting", target="_blank"),
+                                                            dbc.DropdownMenuItem("Strategy Forum", href="https://www.chiefdelphi.com/c/competition/strategy", target="_blank"),
+                                                        ]
+                                                    ),
+                                                    
+                                                    # Competition Preparation Subcategory
+                                                    dbc.DropdownMenu(
+                                                        label="Competition Prep",
+                                                        nav=False,
+                                                        in_navbar=False,
+                                                        direction="end",
+                                                        toggleClassName='nested-dropdown-toggle',
+                                                        children=[
+                                                            dbc.DropdownMenuItem("Event Logistics", header=True),
+                                                            dbc.DropdownMenuItem("MOEmentum Guide", href="https://www.chiefdelphi.com/t/moementum-guide/", target="_blank"),
+                                                            dbc.DropdownMenuItem("Event Preparation Forum", href="https://www.chiefdelphi.com/c/competition/event-prep", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Rules & Updates", header=True),
+                                                            dbc.DropdownMenuItem("Official FIRST Updates", href="https://www.firstinspires.org/resource-library/frc/updates", target="_blank"),
+                                                            dbc.DropdownMenuItem("Rules Forum", href="https://www.chiefdelphi.com/c/competition/rules", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Historical Resources", header=True),
+                                                            dbc.DropdownMenuItem("Robot Showcase", href="https://www.chiefdelphi.com/c/other/robot-showcase", target="_blank"),
+                                                            dbc.DropdownMenuItem("Past Competitions Archive", href="https://www.thebluealliance.com/", target="_blank"),
+                                                        ]
+                                                    ),
+                                                    
+                                                    # Additional Resources Subcategory
+                                                    dbc.DropdownMenu(
+                                                        label="Additional Resources",
+                                                        nav=False,
+                                                        in_navbar=False,
+                                                        direction="end",
+                                                        toggleClassName='nested-dropdown-toggle',
+                                                        children=[
+                                                            dbc.DropdownMenuItem("Parts & Components", header=True),
+                                                            dbc.DropdownMenuItem("FRC Locks", href="https://frclocks.com/", target="_blank"),
+                                                            dbc.DropdownMenuItem("Find Robot Parts", href="https://findrobotparts.com/", target="_blank"),
+                                                            dbc.DropdownMenuItem(divider=True),
+                                                            dbc.DropdownMenuItem("Team Resources", header=True),
+                                                            dbc.DropdownMenuItem("FRC Divisions", href="https://frcdivisions.com/", target="_blank"),
+                                                            dbc.DropdownMenuItem("FRC Colors", href="https://frccolors.com/", target="_blank"),
+                                                        ]
+                                                    ),
                                                 ]
                                             ),
                                         ]
                                     ),
                                     dbc.NavItem(
                                         dbc.Button(
-                                            html.I(className="fas fa-moon"),
+                                            html.I(className="fas fa-sun"),
                                             id="theme-toggle",
                                             className="custom-navlink",
                                             style={"background": "none", "border": "none", "padding": "0.5rem 1rem"},
