@@ -43,6 +43,43 @@ APP_STARTUP_TIME = datetime.now()
 
 current_year = 2025
 
+def get_team_data_with_fallback(team_number, target_year, team_database):
+    """
+    Get team data for a specific year, falling back to previous year if current year data is missing or has zero stats.
+    
+    Args:
+        team_number: The team number to get data for
+        target_year: The year we want data for
+        team_database: The team database to search in
+    
+    Returns:
+        tuple: (team_data, actual_year_used) where team_data is the team data dict and actual_year_used is the year the data came from
+    """
+    # First try to get data for the target year
+    team_data = team_database.get(target_year, {}).get(team_number)
+    
+    # Check if we have valid data (not None and has meaningful stats)
+    if team_data and team_data.get("epa", 0) > 0:
+        return team_data, target_year
+    
+    # If no data or zero stats, try previous year
+    previous_year = target_year - 1
+    if previous_year >= 2020:  # Only go back to 2020 to avoid going too far back
+        try:
+            # Load previous year data if not already loaded
+            if previous_year not in team_database:
+                prev_team_data, _, _, _, _, _ = load_year_data(previous_year)
+                team_database[previous_year] = prev_team_data
+            
+            prev_team_data = team_database.get(previous_year, {}).get(team_number)
+            if prev_team_data and prev_team_data.get("epa", 0) > 0:
+                return prev_team_data, previous_year
+        except Exception:
+            pass  # If loading previous year fails, continue with current data
+    
+    # Return whatever data we have (even if it's None or has zero stats)
+    return team_data, target_year
+
 app = dash.Dash(
     __name__,
     meta_tags=[
@@ -1483,7 +1520,7 @@ def update_events_tab_content(
             epa_values = []
             for t in team_entries:
                 team_number = t["tk"]
-                team_data = team_database.get(selected_year, {}).get(team_number)
+                team_data, actual_year = get_team_data_with_fallback(team_number, selected_year, team_database)
                 if team_data and team_data.get("epa") is not None:
                     epa_values.append(team_data["epa"])
     
@@ -2109,27 +2146,31 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
     
     # Calculate ranks based on selected stats type
     if stats_type == "overall":
-        # Use overall ACE for ranking
+        # Use overall ACE for ranking (with fallback data)
         team_epas = []
         for tnum, team_data in year_team_data.get(event_year, {}).items():
             if team_data:
-                team_epas.append((tnum, team_data.get("epa", 0)))
+                # Use fallback data for ranking
+                fallback_team_data, _ = get_team_data_with_fallback(tnum, event_year, year_team_data)
+                epa_value = fallback_team_data.get("epa", 0) if fallback_team_data else 0
+                team_epas.append((tnum, epa_value))
         team_epas.sort(key=lambda x: x[1], reverse=True)
         rank_map = {tnum: i+1 for i, (tnum, _) in enumerate(team_epas)}
         
-        # Sort teams by overall ACE for spotlight cards
-        sorted_teams = sorted(
-            event_teams,
-            key=lambda t: year_team_data.get(event_year, {}).get(int(t.get("tk")), {}).get("epa", 0),
-            reverse=True
-        )
+        # Sort teams by overall ACE for spotlight cards (using fallback data)
+        def get_team_epa_for_sorting(t):
+            tnum = int(t.get("tk"))
+            team_data, _ = get_team_data_with_fallback(tnum, event_year, year_team_data)
+            return team_data.get("epa", 0) if team_data else 0
+        
+        sorted_teams = sorted(event_teams, key=get_team_epa_for_sorting, reverse=True)
         
         # Build rows with overall stats
         rows = []
         for t in event_teams:
             tnum = t.get("tk")
             tstr = str(tnum)
-            team_data = year_team_data.get(event_year, {}).get(int(tnum), {})
+            team_data, actual_year = get_team_data_with_fallback(int(tnum), event_year, year_team_data)
             
             rows.append({
                 "ACE Rank": rank_map.get(int(tnum), None),
@@ -2362,11 +2403,16 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
     top_3 = sorted_teams[:3]
     
     if stats_type == "overall":
-        # Use overall stats for spotlight cards
-        spotlight_cards = [
-            dbc.Col(create_team_card_spotlight(t, year_team_data, event_year), width="auto")
-            for t in top_3
-        ]
+        # Use overall stats for spotlight cards (with fallback data)
+        spotlight_cards = []
+        for t in top_3:
+            tnum = int(t.get("tk"))
+            team_data, actual_year = get_team_data_with_fallback(tnum, event_year, year_team_data)
+            # Create a modified team data dict with the fallback data
+            fallback_team_data = {event_year: {tnum: team_data}} if team_data else {event_year: {tnum: {}}}
+            spotlight_cards.append(
+                dbc.Col(create_team_card_spotlight(t, fallback_team_data, event_year), width="auto")
+            )
     else:
         # Use event-specific stats for spotlight cards
         spotlight_cards = []
