@@ -1412,7 +1412,7 @@ def update_events_tab_content(
         for district_acronym, states in DISTRICT_STATES_COMBINED.items():
             if state in states.get('abbreviations', []):
                 # Special handling for FMA district - exclude western Pennsylvania cities
-                if district_acronym == "FMA" and is_western_pennsylvania_city(city):
+                if district_acronym == "FMA" and is_western_pennsylvania_city(city, state):
                     return None  # Not in FMA district
                 return district_acronym
         

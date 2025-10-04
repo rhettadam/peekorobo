@@ -824,12 +824,16 @@ def format_human_date(date_str):
     except Exception:
         return ""
     
-def is_western_pennsylvania_city(city_name):
+def is_western_pennsylvania_city(city_name, state=None):
     """
     Check if a city is in western Pennsylvania (west of Harrisburg).
     Returns True if the city is in western Pennsylvania, False otherwise.
     """
     if not city_name:
+        return False
+    
+    # If state is provided and it's not PA, return False immediately
+    if state and state.upper() != 'PA':
         return False
     
     city_lower = city_name.lower().strip()
@@ -854,7 +858,7 @@ def is_western_pennsylvania_city(city_name):
         
         # Other western cities
         "butler", "indiana", "armstrong", "westmoreland", "fayette", "greene",
-        "lawrence", "mercer", "crawford", "warren", "mckean", "elk", "forest",
+        "lawrence", "mercer", "crawford", "mckean", "elk", "forest",
         "jefferson", "clarion", "venango", "butler county", "indiana county",
         
         # Additional cities that are clearly west of Harrisburg
@@ -873,7 +877,16 @@ def is_western_pennsylvania_city(city_name):
         "marion center", "emlenton"
     }
     
-    return city_lower in western_pa_cities
+    # Check for exact matches first
+    if city_lower in western_pa_cities:
+        return True
+    
+    # Special handling for "warren county" - only match if it's specifically "warren county"
+    # Don't match "warren hills" or other warren locations outside PA
+    if city_lower == "warren county":
+        return True
+    
+    return False
 
 def get_team_data_with_fallback(team_number, target_year, team_database):
     """
