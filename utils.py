@@ -874,3 +874,42 @@ def is_western_pennsylvania_city(city_name):
     }
     
     return city_lower in western_pa_cities
+
+def get_team_data_with_fallback(team_number, target_year, team_database):
+    """
+    Get team data for a specific year, falling back to previous year if current year data is missing or has zero stats.
+    
+    Args:
+        team_number: The team number to get data for
+        target_year: The year we want data for
+        team_database: The team database to search in
+    
+    Returns:
+        tuple: (team_data, actual_year_used) where team_data is the team data dict and actual_year_used is the year the data came from
+    """
+    from datagather import load_year_data
+    
+    # First try to get data for the target year
+    team_data = team_database.get(target_year, {}).get(team_number)
+    
+    # Check if we have valid data (not None and has meaningful stats)
+    if team_data and team_data.get("epa", 0) > 0:
+        return team_data, target_year
+    
+    # If no data or zero stats, try previous year
+    previous_year = target_year - 1
+    if previous_year >= 2020:  # Only go back to 2020 to avoid going too far back
+        try:
+            # Load previous year data if not already loaded
+            if previous_year not in team_database:
+                prev_team_data, _, _, _, _, _ = load_year_data(previous_year)
+                team_database[previous_year] = prev_team_data
+            
+            prev_team_data = team_database.get(previous_year, {}).get(team_number)
+            if prev_team_data and prev_team_data.get("epa", 0) > 0:
+                return prev_team_data, previous_year
+        except Exception:
+            pass  # If loading previous year fails, continue with current data
+    
+    # Return whatever data we have (even if it's None or has zero stats)
+    return team_data, target_year

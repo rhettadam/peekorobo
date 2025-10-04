@@ -26,7 +26,7 @@ from datagather import load_data_2025,load_search_data,load_year_data,get_team_a
 
 from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events
 
-from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name
+from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name,get_team_data_with_fallback
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -43,42 +43,6 @@ APP_STARTUP_TIME = datetime.now()
 
 current_year = 2025
 
-def get_team_data_with_fallback(team_number, target_year, team_database):
-    """
-    Get team data for a specific year, falling back to previous year if current year data is missing or has zero stats.
-    
-    Args:
-        team_number: The team number to get data for
-        target_year: The year we want data for
-        team_database: The team database to search in
-    
-    Returns:
-        tuple: (team_data, actual_year_used) where team_data is the team data dict and actual_year_used is the year the data came from
-    """
-    # First try to get data for the target year
-    team_data = team_database.get(target_year, {}).get(team_number)
-    
-    # Check if we have valid data (not None and has meaningful stats)
-    if team_data and team_data.get("epa", 0) > 0:
-        return team_data, target_year
-    
-    # If no data or zero stats, try previous year
-    previous_year = target_year - 1
-    if previous_year >= 2020:  # Only go back to 2020 to avoid going too far back
-        try:
-            # Load previous year data if not already loaded
-            if previous_year not in team_database:
-                prev_team_data, _, _, _, _, _ = load_year_data(previous_year)
-                team_database[previous_year] = prev_team_data
-            
-            prev_team_data = team_database.get(previous_year, {}).get(team_number)
-            if prev_team_data and prev_team_data.get("epa", 0) > 0:
-                return prev_team_data, previous_year
-        except Exception:
-            pass  # If loading previous year fails, continue with current data
-    
-    # Return whatever data we have (even if it's None or has zero stats)
-    return team_data, target_year
 
 app = dash.Dash(
     __name__,
@@ -2187,16 +2151,32 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         # Sort by overall ACE value
         rows.sort(key=lambda r: r["ACE"] if r["ACE"] is not None else 0, reverse=True)
         
-        # Use global percentiles for coloring
+        # Use global percentiles for coloring (with fallback data)
         if event_year == current_year:
             global_teams = TEAM_DATABASE.get(event_year, {}).values()
+            global_epa_values = [t.get("epa", 0) for t in global_teams]
+            global_confidence_values = [t.get("confidence", 0) for t in global_teams]
+            global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
+            global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
+            global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
         else:
-            global_teams = year_team_data.get(event_year, {}).values()
-        global_epa_values = [t.get("epa", 0) for t in global_teams]
-        global_confidence_values = [t.get("confidence", 0) for t in global_teams]
-        global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
-        global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
-        global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
+            # For non-current years, use fallback data for percentile calculations
+            global_epa_values = []
+            global_confidence_values = []
+            global_auto_values = []
+            global_teleop_values = []
+            global_endgame_values = []
+            
+            for tnum, team_data in year_team_data.get(event_year, {}).items():
+                if team_data:
+                    # Use fallback data for percentile calculations
+                    fallback_team_data, _ = get_team_data_with_fallback(tnum, event_year, year_team_data)
+                    if fallback_team_data:
+                        global_epa_values.append(fallback_team_data.get("epa", 0))
+                        global_confidence_values.append(fallback_team_data.get("confidence", 0))
+                        global_auto_values.append(fallback_team_data.get("auto_epa", 0))
+                        global_teleop_values.append(fallback_team_data.get("teleop_epa", 0))
+                        global_endgame_values.append(fallback_team_data.get("endgame_epa", 0))
         
     else:  # stats_type == "event"
         # Use event-specific data for ranking within the event

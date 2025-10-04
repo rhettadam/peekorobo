@@ -1,26 +1,22 @@
 import dash_bootstrap_components as dbc
-
-# Timezone configuration - set this to your desired timezone
-# Common options: 'America/Chicago', 'America/New_York', 'America/Los_Angeles', 'UTC'
-DEFAULT_TIMEZONE = 'America/Chicago'  # Central Time
 from dash import html, dcc, dash_table
-from datagather import load_year_data,get_team_avatar,get_team_years_participated
+from datagather import load_year_data,get_team_avatar,get_team_years_participated,TEAM_COLORS
 from flask import session
 from datetime import datetime, date, timedelta, timezone
-from utils import format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, compute_percentiles, pill, get_event_week_label, reset_event_learning, is_western_pennsylvania_city
+from utils import WEEK_RANGES_BY_YEAR,get_team_data_with_fallback,format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, compute_percentiles, pill, get_event_week_label, reset_event_learning, is_western_pennsylvania_city
 import json
 import os
 import re
 import plotly.graph_objs as go
 import dash_mantine_components as dmc
-from utils import WEEK_RANGES_BY_YEAR
-from datagather import TEAM_COLORS
 from flask import request as _flask_request
 import colorsys
 import numpy as np
 import time
+import pytz
 
 current_year = 2025
+DEFAULT_TIMEZONE = 'America/Chicago'  # Central Time
 
 with open('data/district_states.json', 'r', encoding='utf-8') as f:
     DISTRICT_STATES_COMBINED = json.load(f)
@@ -5303,15 +5299,27 @@ def event_layout(event_key):
                         "confidence": event_specific_epa.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
                     }
                 else:
-                    # Use overall data from TEAM_DATABASE
-                    event_epa_data[str(team_num)] = {
-                        "epa": team_data.get("epa", 0),
-                        "normal_epa": team_data.get("normal_epa"),
-                        "auto_epa": team_data.get("auto_epa", 0),
-                        "teleop_epa": team_data.get("teleop_epa", 0),
-                        "endgame_epa": team_data.get("endgame_epa", 0),
-                        "confidence": team_data.get("confidence", 0.7),
-                    }
+                    # Use overall data from TEAM_DATABASE with fallback
+                    fallback_team_data, actual_year = get_team_data_with_fallback(team_num, parsed_year, TEAM_DATABASE)
+                    if fallback_team_data:
+                        event_epa_data[str(team_num)] = {
+                            "epa": fallback_team_data.get("epa", 0),
+                            "normal_epa": fallback_team_data.get("normal_epa", 0),
+                            "auto_epa": fallback_team_data.get("auto_epa", 0),
+                            "teleop_epa": fallback_team_data.get("teleop_epa", 0),
+                            "endgame_epa": fallback_team_data.get("endgame_epa", 0),
+                            "confidence": fallback_team_data.get("confidence", 0.7),
+                        }
+                    else:
+                        # Final fallback to original data
+                        event_epa_data[str(team_num)] = {
+                            "epa": team_data.get("epa", 0),
+                            "normal_epa": team_data.get("normal_epa", 0),
+                            "auto_epa": team_data.get("auto_epa", 0),
+                            "teleop_epa": team_data.get("teleop_epa", 0),
+                            "endgame_epa": team_data.get("endgame_epa", 0),
+                            "confidence": team_data.get("confidence", 0.7),
+                        }
         
         # Calculate rankings based on event-specific data
         rankings = EVENT_RANKINGS.get(parsed_year, {}).get(event_key, {})
@@ -6436,7 +6444,6 @@ def get_time_until_match(predicted_time):
         
         # Get user's local timezone - use configured timezone
         try:
-            import pytz
             user_tz = pytz.timezone(DEFAULT_TIMEZONE)
         except:
             try:
@@ -6494,7 +6501,6 @@ def format_predicted_time_display(predicted_time):
         
         # Get user's local timezone - use configured timezone
         try:
-            import pytz
             user_tz = pytz.timezone(DEFAULT_TIMEZONE)
         except:
             try:
@@ -6691,7 +6697,6 @@ def build_match_notifications(event_key, selected_team=None):
             ])
     # Get user's local timezone - use configured timezone
     try:
-        import pytz
         user_tz = pytz.timezone(DEFAULT_TIMEZONE)
     except:
         try:
