@@ -3706,6 +3706,11 @@ def load_teams(
         teleop = abs(team.get("teleop_epa") or 0)
         endgame = abs(team.get("endgame_epa") or 0)
         total = abs(team.get("epa") or 0)
+        team_number = team.get("team_number", 0)
+        confidence = team.get("confidence", 0)
+        wins = team.get("wins", 0)
+        losses = team.get("losses", 0)
+        favorites = favorites_counts.get(team_number, 0)
         return {
             "auto_epa": auto,
             "teleop_epa": teleop,
@@ -3714,6 +3719,11 @@ def load_teams(
             "auto+endgame": auto + endgame,
             "teleop+endgame": teleop + endgame,
             "epa": total,
+            "team_number": team_number,
+            "confidence": confidence,
+            "wins": wins,
+            "losses": losses,
+            "favorites": favorites,
         }.get(axis, 0)
 
     from datagather import get_all_team_favorites_counts
@@ -3810,6 +3820,11 @@ def load_teams(
     elif active_tab == "bubble-chart-tab":
         chart_data = []
         for t in teams_data:
+            team_number = t.get("team_number", 0)
+            # Filter out test teams (9970-9999)
+            if 9970 <= team_number <= 9999:
+                continue
+                
             x_val = get_axis_value(t, x_axis)
             y_val = get_axis_value(t, y_axis)
             if x_val is not None and y_val is not None:
@@ -3845,7 +3860,24 @@ def load_teams(
         df["is_match"] = df["team"].str.lower().str.contains(q) if q else False
         
         # Improved hover text with better formatting
-        df["hover"] = df.apply(lambda r: f"<b>{r['team']}</b><br>{x_axis.replace('_epa', ' ACE').replace('epa', 'Total ACE').replace('+', ' + ')}: {r['x']:.2f}<br>{y_axis.replace('_epa', ' ACE').replace('epa', 'Total ACE').replace('+', ' + ')}: {r['y']:.2f}<br>ACE: {r['epa']:.2f}", axis=1)
+        def format_hover_value(axis, value):
+            if axis in ["team_number", "wins", "losses", "ties", "favorites"]:
+                return f"{int(value)}"
+            else:
+                return f"{value:.2f}"
+        
+        def format_axis_label(axis):
+            return (axis.replace('_epa', ' ACE')
+                       .replace('epa', 'Total ACE')
+                       .replace('+', ' + ')
+                       .replace('team_number', 'Team Number')
+                       .replace('confidence', 'Confidence')
+                       .replace('wins', 'Wins')
+                       .replace('losses', 'Losses')
+                       .replace('ties', 'Ties')
+                       .replace('favorites', 'Favorites'))
+        
+        df["hover"] = df.apply(lambda r: f"<b>{r['team']}</b><br>{format_axis_label(x_axis)}: {format_hover_value(x_axis, r['x'])}<br>{format_axis_label(y_axis)}: {format_hover_value(y_axis, r['y'])}<br>ACE: {r['epa']:.2f}", axis=1)
 
         # Create figure with improved styling
         fig = go.Figure()
@@ -3908,11 +3940,11 @@ def load_teams(
         # Improved layout with better mobile responsiveness
         fig.update_layout(
             xaxis_title=dict(
-                text=x_axis.replace("_epa", " ACE").replace("epa", "Total ACE").replace("+", " + "),
+                text=format_axis_label(x_axis),
                 font=dict(size=14, color="#777")
             ),
             yaxis_title=dict(
-                text=y_axis.replace("_epa", " ACE").replace("epa", "Total ACE").replace("+", " + "),
+                text=format_axis_label(y_axis),
                 font=dict(size=14, color="#777")
             ),
             margin=dict(l=60, r=80, t=60, b=60),  # Increased margins for mobile
