@@ -1815,18 +1815,22 @@ def create_team_card_spotlight(team, year_team_database, event_year):
         country = team_data.get("country", "")
         location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
 
-        # === Rank Calculation (standalone) ===
-        team_epas = [
-            (tnum, data.get("epa", 0))
-            for tnum, data in all_teams.items()
-            if isinstance(data, dict)
-        ]
-        team_epas.sort(key=lambda x: x[1], reverse=True)
-        rank_map = {tnum: i + 1 for i, (tnum, _) in enumerate(team_epas)}
+        # === Rank Calculation (use global ranking) ===
+        # Get global rank from the team data if available, otherwise calculate it
+        epa_rank = team_data.get("global_rank", "N/A")
+        if epa_rank == "N/A":
+            # Fallback: calculate rank from current year data
+            team_epas = [
+                (tnum, data.get("epa", 0))
+                for tnum, data in all_teams.items()
+                if isinstance(data, dict)
+            ]
+            team_epas.sort(key=lambda x: x[1], reverse=True)
+            rank_map = {tnum: i + 1 for i, (tnum, _) in enumerate(team_epas)}
+            epa_rank = rank_map.get(t_num, "N/A")
 
         team_epa = team_data.get("epa", 0)
         epa_display = f"{team_epa:.1f}"
-        epa_rank = rank_map.get(t_num, "N/A")
 
         # === Avatar and link ===
         avatar_url = get_team_avatar(t_num, event_year)

@@ -1856,6 +1856,23 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             ], md=9)
         ], className="mb-4 align-items-center", align="center")
 
+        # Calculate global rankings for teams in the event
+        if event_year == current_year:
+            # Use global database for current year
+            global_teams_data = list(TEAM_DATABASE.get(event_year, {}).values())
+        else:
+            # For other years, use the year_team_data
+            global_teams_data = list(year_team_data.get(event_year, {}).values())
+        
+        # Calculate global rankings
+        global_teams_data.sort(key=lambda t: t.get("epa", 0), reverse=True)
+        global_rank_map = {t.get("team_number"): i + 1 for i, t in enumerate(global_teams_data)}
+        
+        # Add global rankings to year_team_data
+        for team_num, team_data in year_team_data.get(event_year, {}).items():
+            if team_data:
+                team_data["global_rank"] = global_rank_map.get(team_num, "N/A")
+        
         # Sort teams by overall ACE from year_team_database for spotlight cards
         sorted_teams = sorted(
             event_teams,
