@@ -3722,7 +3722,8 @@ def load_teams(
         auto = abs(team.get("auto_epa") or 0)
         teleop = abs(team.get("teleop_epa") or 0)
         endgame = abs(team.get("endgame_epa") or 0)
-        total = abs(team.get("epa") or 0)
+        ace = abs(team.get("epa") or 0)
+        raw = abs(team.get("normal_epa") or 0)
         team_number = team.get("team_number", 0)
         confidence = team.get("confidence", 0)
         wins = team.get("wins", 0)
@@ -3735,7 +3736,8 @@ def load_teams(
             "auto+teleop": auto + teleop,
             "auto+endgame": auto + endgame,
             "teleop+endgame": teleop + endgame,
-            "epa": total,
+            "raw": raw,
+            "ace": ace,
             "team_number": team_number,
             "confidence": confidence,
             "wins": wins,
@@ -3760,7 +3762,7 @@ def load_teams(
         table_rows.append({
             "epa_rank": rank,
             "team_display": team_display,
-            "epa": round(abs(t.get("normal_epa") or 0), 2),
+            "raw": round(abs(t.get("normal_epa") or 0), 2),
             "confidence": t.get("confidence", 0),
             "ace": round(abs(t.get("epa") or 0), 2),
             "auto_epa": round(abs(t.get("auto_epa") or 0), 2),
@@ -3885,7 +3887,8 @@ def load_teams(
         
         def format_axis_label(axis):
             return (axis.replace('_epa', ' ACE')
-                       .replace('epa', 'Total ACE')
+                       .replace('raw', 'RAW')
+                       .replace('ace', 'ACE')
                        .replace('+', ' + ')
                        .replace('team_number', 'Team Number')
                        .replace('confidence', 'Confidence')

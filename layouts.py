@@ -2121,7 +2121,8 @@ def teams_layout(default_year=current_year):
             {"label": "Auto+Teleop", "value": "auto+teleop"},
             {"label": "Auto+Endgame", "value": "auto+endgame"},
             {"label": "Teleop+Endgame", "value": "teleop+endgame"},
-            {"label": "Total", "value": "epa"},
+            {"label": "RAW", "value": "raw"},
+            {"label": "ACE", "value": "ace"},
             {"label": "Team Number", "value": "team_number"},
             {"label": "Confidence", "value": "confidence"},
             {"label": "Wins", "value": "wins"},
@@ -2143,7 +2144,8 @@ def teams_layout(default_year=current_year):
             {"label": "Auto+Teleop", "value": "auto+teleop"},
             {"label": "Auto+Endgame", "value": "auto+endgame"},
             {"label": "Teleop+Endgame", "value": "teleop+endgame"},
-            {"label": "Total", "value": "epa"},
+            {"label": "RAW", "value": "raw"},
+            {"label": "ACE", "value": "ace"},
             {"label": "Team Number", "value": "team_number"},
             {"label": "Confidence", "value": "confidence"},
             {"label": "Wins", "value": "wins"},
@@ -5679,7 +5681,7 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
                 predicted_endgame = np.maximum(predicted_endgame, 0.0)
                 predicted_raw = np.maximum(predicted_raw, 0.0)
                 
-                # Calculate ACE correctly: ACE = EPA * confidence
+                # Calculate ACE correctly: ACE = RAW * confidence
                 predicted_ace = predicted_raw * predicted_confidence
         else:
             predicted_ace = []
