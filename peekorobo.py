@@ -3762,9 +3762,9 @@ def load_teams(
         table_rows.append({
             "epa_rank": rank,
             "team_display": team_display,
-            "raw": round(abs(t.get("normal_epa") or 0), 2),
+            "epa": round(abs(t.get("normal_epa") or 0), 2),  # RAW column shows normal_epa
             "confidence": t.get("confidence", 0),
-            "ace": round(abs(t.get("epa") or 0), 2),
+            "ace": round(abs(t.get("epa") or 0), 2),  # ACE column shows epa
             "auto_epa": round(abs(t.get("auto_epa") or 0), 2),
             "teleop_epa": round(abs(t.get("teleop_epa") or 0), 2),
             "endgame_epa": round(abs(t.get("endgame_epa") or 0), 2),
@@ -4677,7 +4677,7 @@ def update_team_insights(active_tab, store_data):
         
         sorted_events = sorted(event_epas, key=get_event_date)
         
-        # Extract data for plotting
+        # Extract data for plotting, filtering out events with 0 stats
         event_names = []
         event_keys = []
         ace_values = []
@@ -4685,13 +4685,21 @@ def update_team_insights(active_tab, store_data):
         for event in sorted_events:
             event_key = event.get("event_key", "")
             if event_key in event_database.get(performance_year, {}):
-                event_name = event_database[performance_year][event_key].get("n", event_key)
-                event_names.append(event_name)
-                event_keys.append(event_key)
-                ace_values.append(event.get("overall", 0))
+                ace_value = event.get("overall", 0)
+                auto_value = event.get("auto", 0)
+                teleop_value = event.get("teleop", 0)
+                endgame_value = event.get("endgame", 0)
+                raw_value = event.get("normal_epa", 0)
+                
+                # Only include events that have at least one non-zero stat
+                if ace_value > 0 or auto_value > 0 or teleop_value > 0 or endgame_value > 0 or raw_value > 0:
+                    event_name = event_database[performance_year][event_key].get("n", event_key)
+                    event_names.append(event_name)
+                    event_keys.append(event_key)
+                    ace_values.append(ace_value)
         
         if not ace_values:
-            return "No valid event data found."
+            return "No valid event data with non-zero stats found."
         
         # Create the chart
         fig = go.Figure()

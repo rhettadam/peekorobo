@@ -5587,13 +5587,30 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
                     return start_date
             return event_key  # fallback
         sorted_events = sorted(event_epas, key=get_event_date)
-        event_codes = [event.get("event_key", "") for event in sorted_events]
-        ace_values = [max(0.0, event.get("actual_epa", event.get("epa", 0))) for event in sorted_events]
-        auto_values = [max(0.0, event.get("auto", 0)) for event in sorted_events]
-        teleop_values = [max(0.0, event.get("teleop", 0)) for event in sorted_events]
-        endgame_values = [max(0.0, event.get("endgame", 0)) for event in sorted_events]
-        confidence_values = [min(1.0, max(0.0, event.get("confidence", 0))) for event in sorted_events]
-        raw_values = [max(0.0, event.get("overall", event.get("normal_epa", 0))) for event in sorted_events]
+        
+        # Filter out events with 0 stats (all components are 0)
+        filtered_events = []
+        for event in sorted_events:
+            ace = max(0.0, event.get("actual_epa", event.get("epa", 0)))
+            auto = max(0.0, event.get("auto", 0))
+            teleop = max(0.0, event.get("teleop", 0))
+            endgame = max(0.0, event.get("endgame", 0))
+            raw = max(0.0, event.get("overall", event.get("normal_epa", 0)))
+            
+            # Only include events that have at least one non-zero stat
+            if ace > 0 or auto > 0 or teleop > 0 or endgame > 0 or raw > 0:
+                filtered_events.append(event)
+        
+        if not filtered_events:
+            return html.Div("No event data with valid stats available for this team in this year.")
+        
+        event_codes = [event.get("event_key", "") for event in filtered_events]
+        ace_values = [max(0.0, event.get("actual_epa", event.get("epa", 0))) for event in filtered_events]
+        auto_values = [max(0.0, event.get("auto", 0)) for event in filtered_events]
+        teleop_values = [max(0.0, event.get("teleop", 0)) for event in filtered_events]
+        endgame_values = [max(0.0, event.get("endgame", 0)) for event in filtered_events]
+        confidence_values = [min(1.0, max(0.0, event.get("confidence", 0))) for event in filtered_events]
+        raw_values = [max(0.0, event.get("overall", event.get("normal_epa", 0))) for event in filtered_events]
         if not ace_values:
             return html.Div("No valid event data found.")
         # Linear extrapolation for 2 predicted points using all events
