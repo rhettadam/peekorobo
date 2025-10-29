@@ -768,7 +768,7 @@ def event_card(event, favorited=False):
                     html.P(f"{start_display} - {end_display}", className="card-text"),
                     html.P(f"{week_label} {event_type}" if week_label else f"{event_type}", className="card-text"),
                     dbc.Button(
-                        "View Details",
+                        "Peek",
                         href=event_url,
                         color="warning",
                         outline=True,
