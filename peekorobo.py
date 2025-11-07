@@ -176,9 +176,7 @@ app.clientside_callback(
     prevent_initial_call=True
 )
 
-
-
-# Add a callback to update the "Last Updated" text
+# Callback to update the "Last Updated" text
 @app.callback(
     [Output("last-updated-text", "children"),
      Output("last-updated-text-mobile", "children")],
@@ -198,7 +196,7 @@ def update_last_updated_text(n_clicks, n_intervals):
     
     return text, text
 
-# Add a callback to update navigation link styles based on current page
+# Callback to update navigation link styles based on current page
 @app.callback(
     [Output("nav-teams", "className"),
      Output("nav-map", "className"),
@@ -3652,10 +3650,13 @@ def load_teams(
         for t in teams_data:
             team_number = t.get("team_number")
             if isinstance(team_number, int):
-                path = f"assets/avatars/{team_number}.png"
+                # Use cached avatar lookup instead of os.path.exists
+                from datagather import _load_avatar_cache
+                available_avatars = _load_avatar_cache()
+                avatar_src = f"/assets/avatars/{team_number}.png?v=1" if team_number in available_avatars else "/assets/avatars/stock.png"
                 avatars.append(html.A(
                     html.Img(
-                        src=f"/assets/avatars/{team_number}.png?v=1" if os.path.exists(path) else "/assets/avatars/stock.png",
+                        src=avatar_src,
                         title=str(team_number),
                         style={"width": "64px", "height": "64px", "objectFit": "contain", "imageRendering": "pixelated", "border": "1px solid #ccc"},
                     ),

@@ -19,7 +19,7 @@ with open('data/week_ranges.json', 'r', encoding='utf-8') as f:
     WEEK_RANGES_BY_YEAR = json.load(f)
 
 def get_event_week_label(event_start_date):
-    """Return a string like 'Week 1', 'Week 6', 'Worlds', 'Pre-Season', or 'Off-Season' for the event date."""
+    """Return a string like 'Week 1', 'Week 6', etc. for the event date, or empty string for pre-season/off-season."""
     year = str(event_start_date.year)
     week_ranges = WEEK_RANGES_BY_YEAR.get(year)
     if not week_ranges:
@@ -36,10 +36,7 @@ def get_event_week_label(event_start_date):
         start_dt = date.fromisoformat(start)
         end_dt = date.fromisoformat(end)
         if start_dt <= event_start_date <= end_dt:
-            if i == len(week_ranges) - 1:
-                return "Worlds"
-            else:
-                return f"Week {i+1}"
+            return f"Week {i+1}"
     
     # If we get here, the date is after all week ranges (off-season)
     return ""
@@ -435,8 +432,11 @@ def get_username(user_id):
         return row[0].title() if row else f"USER {user_id}"
 
 def get_available_avatars():
-        avatar_dir = "assets/avatars"
-        return [f for f in os.listdir(avatar_dir) if f.endswith(".png")]
+    """Get list of available avatar filenames using cached data."""
+    from datagather import _load_avatar_cache
+    available_avatars = _load_avatar_cache()
+    # Return list of filenames (team_number.png format)
+    return [f"{team_num}.png" for team_num in sorted(available_avatars)]
 
 def get_contrast_text_color(hex_color):
     """Return black or white text color based on WCAG contrast ratio calculation."""
@@ -612,9 +612,14 @@ def team_link_with_avatar(team):
     team_number = team.get("team_number", "???")
     nickname = team.get("nickname", "")
     last_year = team.get("last_year", None)
-    # Construct avatar URL, ensuring default if not found
-    avatar_path = f"assets/avatars/{team_number}.png"
-    avatar_url = f"/assets/avatars/{team_number}.png?v=1" if os.path.exists(avatar_path) else "/assets/avatars/stock.png"
+    # Construct avatar URL using cached lookup (more efficient than os.path.exists)
+    from datagather import _load_avatar_cache
+    available_avatars = _load_avatar_cache()
+    try:
+        team_num = int(team_number)
+        avatar_url = f"/assets/avatars/{team_number}.png?v=1" if team_num in available_avatars else "/assets/avatars/stock.png"
+    except (ValueError, TypeError):
+        avatar_url = "/assets/avatars/stock.png"
 
     # Use last_year for the link, fallback to current_year if missing
     year_for_link = last_year if last_year is not None else current_year

@@ -20,6 +20,10 @@ API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 _connection_pool = None
 _pool_lock = threading.Lock()
 
+# Cached avatar set for efficient lookups (loaded once at startup)
+_available_avatars = None
+_avatar_cache_lock = threading.Lock()
+
 def get_connection_pool():
     """Get or create the database connection pool."""
     global _connection_pool
@@ -314,17 +318,51 @@ def load_data():
 
     return team_data, event_data, EVENT_TEAMS, EVENT_RANKINGS, EVENTS_AWARDS, EVENT_MATCHES
 
+def _load_avatar_cache():
+    """Load the set of available avatar team numbers (lazy initialization)."""
+    global _available_avatars
+    
+    if _available_avatars is None:
+        with _avatar_cache_lock:
+            if _available_avatars is None:  # Double-check pattern
+                avatar_dir = "assets/avatars"
+                if os.path.exists(avatar_dir):
+                    # Load all PNG files and extract team numbers (filename without .png)
+                    _available_avatars = set()
+                    try:
+                        for filename in os.listdir(avatar_dir):
+                            if filename.endswith(".png") and filename != "stock.png" and filename != "bbot.png":
+                                # Extract team number from filename (e.g., "1234.png" -> "1234")
+                                team_num_str = filename[:-4]  # Remove .png
+                                try:
+                                    # Only add if it's a valid integer (team number)
+                                    team_num = int(team_num_str)
+                                    _available_avatars.add(team_num)
+                                except ValueError:
+                                    # Skip non-numeric filenames
+                                    pass
+                    except OSError:
+                        # If directory doesn't exist or can't be read, use empty set
+                        _available_avatars = set()
+                else:
+                    _available_avatars = set()
+                print(f"✅ Loaded {len(_available_avatars)} team avatars into cache")
+    
+    return _available_avatars
+
 def get_team_avatar(team_number, year=2025):
     """
     Returns the relative URL path to a team's avatar image if it exists,
     otherwise returns the path to a stock avatar.
+    Uses cached avatar set for O(1) lookup instead of file system checks.
     """
     # Use bbot.png for team numbers 9970-9999
     if 9970 <= team_number <= 9999:
         return "/assets/avatars/bbot.png?v=1"
     
-    avatar_path = f"assets/avatars/{team_number}.png"
-    if os.path.exists(avatar_path):
+    # Use cached set for fast lookup
+    available_avatars = _load_avatar_cache()
+    if team_number in available_avatars:
         return f"/assets/avatars/{team_number}.png?v=1"
     return "/assets/avatars/stock.png"
 

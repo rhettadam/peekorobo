@@ -21,19 +21,6 @@ DEFAULT_TIMEZONE = 'America/Chicago'  # Central Time
 with open('data/district_states.json', 'r', encoding='utf-8') as f:
     DISTRICT_STATES_COMBINED = json.load(f)
 
-# Load team colors for dynamic backgrounds
-def get_team_card_colors(team_number):
-    """Get team colors for card background gradient."""
-    try:
-        colors = TEAM_COLORS.get(str(team_number), {})
-        primary = colors.get("primary", "#1e3a8a")
-        secondary = colors.get("secondary", "#3b82f6")
-        
-        return f"linear-gradient(135deg, {primary} 0%, {secondary} 100%)"
-    except Exception:
-        # Fallback gradient
-        return "linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)"
-
 def get_team_card_colors_with_text(team_number):
     """Get team colors and appropriate text color for card with cleaner, more subtle styling."""
     try:
@@ -299,6 +286,9 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
 
     badges = generate_notable_badges(team_number)
     
+    # Get team card colors with appropriate text color
+    background_gradient, text_color = get_team_card_colors_with_text(team_number)
+    
         # Team Info Card
     team_card = dbc.Card(
         html.Div([
@@ -408,8 +398,8 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             "marginBottom": "20px",
             "borderRadius": "10px",
             "boxShadow": "0px 4px 8px rgba(0,0,0,0.1)",
-            "background": get_team_card_colors(team_number),
-            "color": "white"
+            "background": background_gradient,
+            "color": text_color
         },
     )
     def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state, year_data, selected_team):
@@ -558,7 +548,6 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         return html.Div([
             html.Div(rank_cards, className="rank-card-container")
         ], className="mb-4")
-
 
     def build_performance_metrics_card(selected_team, performance_year, percentiles_dict):
         def pill(label, value, color):
@@ -2491,12 +2480,8 @@ def events_layout(year=current_year, active_tab="cards-tab"):
     # Dynamically generate week options based on year
     week_ranges = WEEK_RANGES_BY_YEAR.get(str(year), [])
     week_options = [{"label": "All Wks", "value": "all"}]
-    if len(week_ranges) > 1:
-        for i in range(len(week_ranges) - 1):
-            week_options.append({"label": f"Wk {i+1}", "value": i})
-        week_options.append({"label": "Champs", "value": len(week_ranges) - 1})
-    elif len(week_ranges) == 1:
-        week_options.append({"label": "Champs", "value": 0})
+    for i in range(len(week_ranges)):
+        week_options.append({"label": f"Wk {i+1}", "value": i})
     week_dropdown = dcc.Dropdown(
         id="week-dropdown",
         options=week_options,
@@ -4356,215 +4341,6 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
     
     return recommendations if recommendations else [html.Div("No recommendations available", style={"color": text_color})]
 
-def generate_event_recommendations(event_database, favorite_teams, favorite_events, text_color):
-    """Generate personalized event recommendations based on user preferences."""
-    recommendations = []
-    
-    if not event_database:
-        return [html.Div("No event data available", style={"color": text_color})]
-    
-    # Get current year data
-    current_year_events = event_database.get(2025, {})
-    if not current_year_events:
-        return [html.Div("No 2025 event data available", style={"color": text_color})]
-    
-    # Get upcoming events (events that haven't started yet)
-    current_date = datetime.now()
-    
-    upcoming_events = []
-    for event_key, event_data in current_year_events.items():
-        if event_data.get("start_date"):
-            try:
-                event_date = datetime.strptime(event_data["start_date"], "%Y-%m-%d")
-                if event_date > current_date:
-                    upcoming_events.append((event_key, event_data))
-            except ValueError:
-                continue
-    
-    # Sort by date
-    upcoming_events.sort(key=lambda x: x[1].get("start_date", ""))
-    
-    # Generate recommendations
-    candidate_events = []
-    
-    for event_key, event_data in upcoming_events[:20]:  # Look at next 20 events
-        event_name = event_data.get("name", "")
-        event_date = event_data.get("start_date", "")
-        event_city = event_data.get("city", "")
-        event_state = event_data.get("state_prov", "")
-        event_country = event_data.get("country", "")
-        
-        # Calculate recommendation score
-        score = 0
-        
-        # Check if favorite teams are participating
-        favorite_teams_participating = 0
-        for team_key in favorite_teams:
-            # This would need to be enhanced with actual event team data
-            # For now, we'll use a simple scoring system
-            pass
-        
-        # Location-based scoring (if user has location info)
-        # This would be enhanced with actual user location data
-        
-        # Event type scoring
-        if "Championship" in event_name or "Worlds" in event_name:
-            score += 50
-        elif "District" in event_name:
-            score += 30
-        elif "Regional" in event_name:
-            score += 25
-        
-        # Proximity to current date (sooner events get higher scores)
-        try:
-            days_until = (datetime.strptime(event_date, "%Y-%m-%d") - current_date).days
-            if days_until <= 7:
-                score += 40
-            elif days_until <= 14:
-                score += 30
-            elif days_until <= 30:
-                score += 20
-        except ValueError:
-            pass
-        
-        if score > 0:
-            candidate_events.append({
-                "event_key": event_key,
-                "event_data": event_data,
-                "score": score
-            })
-    
-    # Sort by score and take top 4
-    candidate_events.sort(key=lambda x: x["score"], reverse=True)
-    top_events = candidate_events[:4]
-    
-    # Create recommendation cards
-    for event_info in top_events:
-        event_key = event_info["event_key"]
-        event_data = event_info["event_data"]
-        
-        event_name = event_data.get("name", "")
-        event_date = event_data.get("start_date", "")
-        event_city = event_data.get("city", "")
-        event_state = event_data.get("state_prov", "")
-        event_country = event_data.get("country", "")
-        
-        # Format date
-        try:
-            formatted_date = datetime.strptime(event_date, "%Y-%m-%d").strftime("%B %d, %Y")
-        except ValueError:
-            formatted_date = event_date
-        
-        # Create location string
-        location_parts = [event_city, event_state, event_country]
-        location = ", ".join([part for part in location_parts if part])
-        
-        # Determine event type icon
-        event_icon = "🏆"
-        if "Championship" in event_name or "Worlds" in event_name:
-            event_icon = "👑"
-        elif "District" in event_name:
-            event_icon = "🏅"
-        elif "Regional" in event_name:
-            event_icon = "🎯"
-        
-        card = html.Div([
-            # Header with icon and event info
-            html.Div([
-                html.Div([
-                    html.Span(event_icon, style={
-                        "fontSize": "2.5rem", 
-                        "marginRight": "16px",
-                        "filter": "drop-shadow(0 2px 4px rgba(0,0,0,0.2))"
-                    }),
-                    html.Div([
-                        html.H4(event_name, style={
-                            "margin": "0 0 6px 0",
-                            "fontSize": "1.2rem",
-                            "fontWeight": "700",
-                            "color": text_color,
-                            "lineHeight": "1.3"
-                        }),
-                        html.P(location, style={
-                            "margin": "0",
-                            "fontSize": "0.9rem",
-                            "color": text_color,
-                            "opacity": "0.8",
-                            "fontWeight": "400",
-                            "lineHeight": "1.4"
-                        })
-                    ], style={"flex": "1"})
-                ], style={"display": "flex", "alignItems": "center"}),
-                
-                # Date badge
-                html.Div([
-                    html.Span("UPCOMING", style={
-                        "fontSize": "0.65rem",
-                        "fontWeight": "700",
-                        "color": text_color,
-                        "opacity": "0.7",
-                        "textTransform": "uppercase",
-                        "letterSpacing": "0.8px"
-                    }),
-                    html.Br(),
-                    html.Span(formatted_date, style={
-                        "fontSize": "0.9rem",
-                        "fontWeight": "600",
-                        "color": text_color,
-                        "lineHeight": "1.3"
-                    })
-                ], style={
-                    "textAlign": "center",
-                    "backgroundColor": "rgba(255, 255, 255, 0.1)",
-                    "padding": "10px 14px",
-                    "borderRadius": "10px",
-                    "minWidth": "80px",
-                    "border": "1px solid rgba(255, 255, 255, 0.15)"
-                })
-            ], style={
-                "display": "flex",
-                "justifyContent": "space-between",
-                "alignItems": "center",
-                "padding": "20px 20px 16px 20px"
-            }),
-            
-            # Modern button
-            html.A(
-                "Peek",
-                href=f"/event/{event_key}",
-                style={
-                    "display": "block",
-                    "textAlign": "center",
-                    "padding": "12px 20px",
-                    "backgroundColor": "rgba(255, 255, 255, 0.15)",
-                    "color": text_color,
-                    "textDecoration": "none",
-                    "borderRadius": "10px",
-                    "fontSize": "0.9rem",
-                    "fontWeight": "600",
-                    "transition": "all 0.2s ease",
-                    "margin": "0 20px 20px 20px",
-                    "border": "1px solid rgba(255, 255, 255, 0.2)",
-                    "backdropFilter": "blur(10px)",
-                    "textTransform": "uppercase",
-                    "letterSpacing": "0.5px"
-                }
-            )
-        ], style={
-            "background": "linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%)",
-            "borderRadius": "18px",
-            "overflow": "hidden",
-            "boxShadow": "0 10px 30px rgba(0, 0, 0, 0.15)",
-            "transition": "all 0.3s ease",
-            "cursor": "pointer",
-            "position": "relative",
-            "backdropFilter": "blur(10px)"
-        })
-        
-        recommendations.append(card)
-    
-    return recommendations if recommendations else [html.Div("No upcoming events available", style={"color": text_color})]
-
 def user_profile_layout(username=None, _user_id=None, deleted_items=None):
     """
     Combined layout for both current user profile and other user profiles.
@@ -5229,40 +5005,6 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                 "border": "1px solid rgba(255, 255, 255, 0.1)"
             }),
             
-            # Events to Watch Section
-            html.Div([
-                html.Div([
-                    html.H3("Events to Watch", className="mb-3", style={
-                        "color": "var(--text-primary)",
-                        "fontSize": "1.5rem",
-                        "fontWeight": "600",
-                        "display": "flex",
-                        "alignItems": "center",
-                        "gap": "8px"
-                    }),
-                    html.P("Upcoming events featuring your favorite teams and top performers", style={
-                        "color": "var(--text-secondary)",
-                        "opacity": "0.8",
-                        "fontSize": "0.9rem",
-                        "marginBottom": "20px"
-                    })
-                ]),
-                
-                # Generate event recommendations
-                html.Div([
-                    *generate_event_recommendations(EVENT_DATABASE, team_keys, event_keys, text_color)
-                ], style={
-                    "display": "grid",
-                    "gridTemplateColumns": "repeat(auto-fill, minmax(320px, 1fr))",
-                    "gap": "20px"
-                })
-            ], style={
-                "marginBottom": "30px",
-                "padding": "20px",
-                "backgroundColor": "rgba(255, 255, 255, 0.05)",
-                "borderRadius": "12px",
-                "border": "1px solid rgba(255, 255, 255, 0.1)"
-            }),
             html.Hr(),
             html.H3("Favorite Teams", className="mb-3"),
             *team_cards,
