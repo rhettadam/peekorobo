@@ -113,150 +113,6 @@ app.clientside_callback(
     prevent_initial_call=True
 )
 
-# PeekoLive filters and refresh
-@app.callback(
-    Output("peekolive-grid", "children"),
-    Output("peekolive-title", "children"),
-    Input("peekolive-refresh", "n_intervals"),
-    # Events page filters
-    Input("year-dropdown", "value"),
-    Input("event-type-dropdown", "value"),
-    Input("week-dropdown", "value"),
-    Input("search-input", "value"),
-    Input("district-dropdown", "value"),
-)
-def update_peekolive_grid(_, selected_year, selected_event_types, selected_week, search_query, selected_district):
-    
-    # If the Events search contains a team (e.g., "frc123" or "123"), treat it as the team filter
-    detected_team = None
-    try:
-        if search_query:
-            s = str(search_query).lower().strip()
-            # Only detect team if it's explicitly "frc" prefixed or a standalone number
-            frc_match = re.search(r"frc(\d{1,5})", s)
-            if frc_match:
-                detected_team = frc_match.group(1)
-            else:
-                # Only treat as team if it's a standalone number (not part of a larger string)
-                # This prevents years like "2024" from being treated as team 2024
-                if re.fullmatch(r"\d{1,5}", s):
-                    detected_team = s
-    except Exception:
-        detected_team = None
-
-    effective_team = detected_team
-
-    # Build baseline PeekoLive events; if a team filter is active OR there's a search query, do not cap
-    events = get_peekolive_events(include_all=bool(effective_team) or bool(search_query))
-    
-
-    # Apply Events page filters to PeekoLive list
-    # Year filter
-    if selected_year:
-        events = [ev for ev in events if ev.get("year") == selected_year]
-
-    # Event type filter uses EVENT_DATABASE to lookup type by key
-    if selected_event_types:
-        if not isinstance(selected_event_types, list):
-            selected_event_types = [selected_event_types]
-        try:
-            # EVENT_DATABASE is keyed by year; when year filter missing, assume current
-            lookup_year = selected_year or current_year
-            ev_by_key = {e.get("k"): e for e in EVENT_DATABASE.get(lookup_year, {}).values()}
-            def ev_type_ok(ev):
-                ek = ev.get("event_key")
-                meta = ev_by_key.get(ek, {})
-                return meta.get("et") in selected_event_types
-            events = [ev for ev in events if ev_type_ok(ev)]
-        except Exception:
-            # If lookup fails, skip type filter
-            pass
-
-    # Week filter: compute week from start_date using shared util get_week_number
-    if selected_week != "all":
-        try:
-            def compute_week(ev):
-                try:
-                    sd = ev.get("start_date")
-                    if not sd:
-                        return None
-                    return get_week_number(datetime.strptime(sd, "%Y-%m-%d").date())
-                except Exception:
-                    return None
-            events = [ev for ev in events if compute_week(ev) == selected_week]
-        except Exception:
-            pass
-
-    # District filter uses DISTRICT_STATES_COMBINED like events tab
-    if selected_district and selected_district != "all":
-        try:
-            def get_event_district_from_ev(ev):
-                state = ev.get("state", "")
-                country = ev.get("country", "")
-                city = ev.get("city", "")
-                if country == "Israel":
-                    return "ISR"
-                if country == "Canada":
-                    return "ONT"
-                for district_acronym, states in DISTRICT_STATES_COMBINED.items():
-                    if state in states.get('abbreviations', []):
-                        if district_acronym == "FMA" and is_western_pennsylvania_city(city):
-                            return None
-                        return district_acronym
-                return None
-            events = [ev for ev in events if get_event_district_from_ev(ev) == selected_district]
-        except Exception:
-            pass
-
-    # Text search on name/city (applied first, before team filtering)
-    if search_query:
-        q = str(search_query).lower()
-        # Apply text search unless it's clearly just a team number
-        should_apply_text_search = True
-        try:
-            q_clean = q.strip()
-            # Only skip text search if it's purely a team number (frc123 or standalone digits)
-            if re.fullmatch(r"frc\d{1,5}|\d{1,5}", q_clean):
-                should_apply_text_search = False
-        except Exception:
-            should_apply_text_search = True
-        
-        if should_apply_text_search:
-            original_count = len(events)
-            events = [
-                ev for ev in events
-                if q in (ev.get("name", "").lower()) or q in (ev.get("location", "").lower())
-            ]
-
-    # If a team was detected (from dropdown or search), filter events by team across all years
-    if effective_team:
-        try:
-            t_str = str(effective_team)
-            filtered = []
-            for ev in events:
-                evk = ev.get("event_key")
-                found = False
-                for _, year_map in (EVENT_TEAMS or {}).items():
-                    teams = (year_map or {}).get(evk, [])
-                    if any(str(t.get("tk")) == t_str for t in teams):
-                        found = True
-                        break
-                if found:
-                    filtered.append(ev)
-            events = filtered
-        except Exception:
-            pass
-
-    # Title
-    title = "Upcoming Events"
-    if effective_team:
-        title = f"Events for Team {effective_team}"
-    elif search_query:
-        title = f"Events matching '{search_query}'"
-
-    # Build grid using prefiltered events and effective team value
-    return build_peekolive_grid(team_value=effective_team, prefiltered_events=events), title
-
 # Set dark mode immediately on first page render
 app.index_string = '''
 <!DOCTYPE html>
@@ -282,7 +138,6 @@ app.index_string = '''
 </html>
 '''
 
-# SINGLE CALLBACK - NO CONFLICTS - THEME AND ICON UPDATE TOGETHER
 app.clientside_callback(
     """
     function(theme_clicks, page_load_clicks) {
@@ -3303,7 +3158,7 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
         ])
     ])
 
-# Add a client-side callback to handle opening the playlist in a new tab
+# client-side callback to handle opening the playlist in a new tab
 app.clientside_callback(
     """
     function(n_clicks, selected_team, event_matches, pathname) {
@@ -5648,6 +5503,150 @@ def toggle_team_card_collapse(n_clicks, current_style):
         arrow = "▲"
     
     return arrow, new_style
+
+# PeekoLive filters and refresh
+@app.callback(
+    Output("peekolive-grid", "children"),
+    Output("peekolive-title", "children"),
+    Input("peekolive-refresh", "n_intervals"),
+    # Events page filters
+    Input("year-dropdown", "value"),
+    Input("event-type-dropdown", "value"),
+    Input("week-dropdown", "value"),
+    Input("search-input", "value"),
+    Input("district-dropdown", "value"),
+)
+def update_peekolive_grid(_, selected_year, selected_event_types, selected_week, search_query, selected_district):
+    
+    # If the Events search contains a team (e.g., "frc123" or "123"), treat it as the team filter
+    detected_team = None
+    try:
+        if search_query:
+            s = str(search_query).lower().strip()
+            # Only detect team if it's explicitly "frc" prefixed or a standalone number
+            frc_match = re.search(r"frc(\d{1,5})", s)
+            if frc_match:
+                detected_team = frc_match.group(1)
+            else:
+                # Only treat as team if it's a standalone number (not part of a larger string)
+                # This prevents years like "2024" from being treated as team 2024
+                if re.fullmatch(r"\d{1,5}", s):
+                    detected_team = s
+    except Exception:
+        detected_team = None
+
+    effective_team = detected_team
+
+    # Build baseline PeekoLive events; if a team filter is active OR there's a search query, do not cap
+    events = get_peekolive_events(include_all=bool(effective_team) or bool(search_query))
+    
+
+    # Apply Events page filters to PeekoLive list
+    # Year filter
+    if selected_year:
+        events = [ev for ev in events if ev.get("year") == selected_year]
+
+    # Event type filter uses EVENT_DATABASE to lookup type by key
+    if selected_event_types:
+        if not isinstance(selected_event_types, list):
+            selected_event_types = [selected_event_types]
+        try:
+            # EVENT_DATABASE is keyed by year; when year filter missing, assume current
+            lookup_year = selected_year or current_year
+            ev_by_key = {e.get("k"): e for e in EVENT_DATABASE.get(lookup_year, {}).values()}
+            def ev_type_ok(ev):
+                ek = ev.get("event_key")
+                meta = ev_by_key.get(ek, {})
+                return meta.get("et") in selected_event_types
+            events = [ev for ev in events if ev_type_ok(ev)]
+        except Exception:
+            # If lookup fails, skip type filter
+            pass
+
+    # Week filter: compute week from start_date using shared util get_week_number
+    if selected_week != "all":
+        try:
+            def compute_week(ev):
+                try:
+                    sd = ev.get("start_date")
+                    if not sd:
+                        return None
+                    return get_week_number(datetime.strptime(sd, "%Y-%m-%d").date())
+                except Exception:
+                    return None
+            events = [ev for ev in events if compute_week(ev) == selected_week]
+        except Exception:
+            pass
+
+    # District filter uses DISTRICT_STATES_COMBINED like events tab
+    if selected_district and selected_district != "all":
+        try:
+            def get_event_district_from_ev(ev):
+                state = ev.get("state", "")
+                country = ev.get("country", "")
+                city = ev.get("city", "")
+                if country == "Israel":
+                    return "ISR"
+                if country == "Canada":
+                    return "ONT"
+                for district_acronym, states in DISTRICT_STATES_COMBINED.items():
+                    if state in states.get('abbreviations', []):
+                        if district_acronym == "FMA" and is_western_pennsylvania_city(city):
+                            return None
+                        return district_acronym
+                return None
+            events = [ev for ev in events if get_event_district_from_ev(ev) == selected_district]
+        except Exception:
+            pass
+
+    # Text search on name/city (applied first, before team filtering)
+    if search_query:
+        q = str(search_query).lower()
+        # Apply text search unless it's clearly just a team number
+        should_apply_text_search = True
+        try:
+            q_clean = q.strip()
+            # Only skip text search if it's purely a team number (frc123 or standalone digits)
+            if re.fullmatch(r"frc\d{1,5}|\d{1,5}", q_clean):
+                should_apply_text_search = False
+        except Exception:
+            should_apply_text_search = True
+        
+        if should_apply_text_search:
+            original_count = len(events)
+            events = [
+                ev for ev in events
+                if q in (ev.get("name", "").lower()) or q in (ev.get("location", "").lower())
+            ]
+
+    # If a team was detected (from dropdown or search), filter events by team across all years
+    if effective_team:
+        try:
+            t_str = str(effective_team)
+            filtered = []
+            for ev in events:
+                evk = ev.get("event_key")
+                found = False
+                for _, year_map in (EVENT_TEAMS or {}).items():
+                    teams = (year_map or {}).get(evk, [])
+                    if any(str(t.get("tk")) == t_str for t in teams):
+                        found = True
+                        break
+                if found:
+                    filtered.append(ev)
+            events = filtered
+        except Exception:
+            pass
+
+    # Title
+    title = "Upcoming Events"
+    if effective_team:
+        title = f"Events for Team {effective_team}"
+    elif search_query:
+        title = f"Events matching '{search_query}'"
+
+    # Build grid using prefiltered events and effective team value
+    return build_peekolive_grid(team_value=effective_team, prefiltered_events=events), title
 
 # Focus button callback for PeekoLive
 @app.callback(
