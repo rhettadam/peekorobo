@@ -765,6 +765,13 @@ def raw_vs_ace_blog_layout():
                             "It's calculated using an exponential moving average of match contributions over time."
                         ], style={"color": "var(--text-primary)"}),
                         
+                        html.H4("Calculation", style={"color": "var(--text-primary)", "marginTop": "25px"}),
+                        html.P("Using an Exponential Moving Average (EMA):", style={"color": "var(--text-primary)"}),
+                        html.Ul([
+                            html.Li("Calculate actual contribution per match (auto + teleop + endgame)"),
+                            html.Li(["Update RAW: ", html.Code("RAW_new = RAW_old + K × (actual_contribution - RAW_old)", style={"color": "#ffdd00"})]),
+                        ], style={"color": "var(--text-primary)"}),
+                        
                         html.Div([
                             html.Code("RAW = Auto RAW + Teleop RAW + Endgame RAW", 
                                 style={"fontSize": "1.2em", "fontWeight": "bold", "color": "#ffdd00"})
@@ -879,7 +886,7 @@ def raw_vs_ace_blog_layout():
                         
                         html.Div([
                             html.Div([
-                                html.Strong("Consistency (35%)", style={"color": "var(--text-primary)"}),
+                                html.Strong("Consistency", style={"color": "var(--text-primary)"}),
                                 html.Span("35%", style={"float": "right", "color": "var(--navbar-hover)", "fontWeight": "bold"})
                             ], style={"padding": "12px", "backgroundColor": "var(--bg-secondary)", "borderRadius": "6px", "marginBottom": "10px"}),
                             html.P([
@@ -910,7 +917,7 @@ def raw_vs_ace_blog_layout():
                         
                         html.Div([
                             html.Div([
-                                html.Strong("Dominance (35%)", style={"color": "var(--text-primary)"}),
+                                html.Strong("Dominance", style={"color": "var(--text-primary)"}),
                                 html.Span("35%", style={"float": "right", "color": "var(--navbar-hover)", "fontWeight": "bold"})
                             ], style={"padding": "12px", "backgroundColor": "var(--bg-secondary)", "borderRadius": "6px", "marginBottom": "10px"}),
                             html.P([
@@ -924,7 +931,7 @@ def raw_vs_ace_blog_layout():
                                     "scaled_margin = margin / (opponent_score + ε)", html.Br(),
                                     "norm_margin = (scaled_margin + 1) / 1.3", html.Br(),
                                     "dominance = mean(norm_margin) capped at [0.0, 1.0]"
-                                ], style={"fontSize": "1.0em", "fontWeight": "bold", "whiteSpace": "pre", "color": "#ffdd00"})
+                                ], style={"fontSize": "1.0em", "fontWeight": "bold", "whiteSpace": "pre-wrap", "wordBreak": "break-word","color": "#ffdd00"})
                             ], style={
                                 "backgroundColor": "var(--bg-secondary)",
                                 "border": "2px solid var(--border-color)",
@@ -939,7 +946,7 @@ def raw_vs_ace_blog_layout():
                         
                         html.Div([
                             html.Div([
-                                html.Strong("Record Alignment (10%)", style={"color": "var(--text-primary)"}),
+                                html.Strong("Record Alignment", style={"color": "var(--text-primary)"}),
                                 html.Span("10%", style={"float": "right", "color": "var(--navbar-hover)", "fontWeight": "bold"})
                             ], style={"padding": "12px", "backgroundColor": "var(--bg-secondary)", "borderRadius": "6px", "marginBottom": "10px"}),
                             html.P([
@@ -950,7 +957,7 @@ def raw_vs_ace_blog_layout():
                         
                         html.Div([
                             html.Div([
-                                html.Strong("Veteran Boost (10%)", style={"color": "var(--text-primary)"}),
+                                html.Strong("Veteran Boost", style={"color": "var(--text-primary)"}),
                                 html.Span("10%", style={"float": "right", "color": "var(--navbar-hover)", "fontWeight": "bold"})
                             ], style={"padding": "12px", "backgroundColor": "var(--bg-secondary)", "borderRadius": "6px", "marginBottom": "10px"}),
                             html.P("Based on years of competition:", style={"marginLeft": "15px", "color": "var(--text-primary)"}),
@@ -964,7 +971,7 @@ def raw_vs_ace_blog_layout():
                         
                         html.Div([
                             html.Div([
-                                html.Strong("Event Boost (10%)", style={"color": "var(--text-primary)"}),
+                                html.Strong("Event Boost", style={"color": "var(--text-primary)"}),
                                 html.Span("10%", style={"float": "right", "color": "var(--navbar-hover)", "fontWeight": "bold"})
                             ], style={"padding": "12px", "backgroundColor": "var(--bg-secondary)", "borderRadius": "6px", "marginBottom": "10px"}),
                             html.P("Based on number of events:", style={"marginLeft": "15px", "color": "var(--text-primary)"}),
@@ -1194,7 +1201,7 @@ def predictions_blog_layout():
                         "red_ace = sum(team.ace for team in red_alliance)", html.Br(),
                         "blue_ace = sum(team.ace for team in blue_alliance)", html.Br(),
                         "diff = red_ace - blue_ace"
-                    ], style={"fontSize": "1.1em", "fontWeight": "bold", "whiteSpace": "pre", "color": "#ffdd00"})
+                    ], style={"fontSize": "1.1em", "fontWeight": "bold", "whiteSpace": "pre-wrap", "wordBreak": "break-word", "color": "#ffdd00"})
                 ], style={
                     "backgroundColor": "var(--bg-secondary)",
                     "border": "2px solid var(--border-color)",
@@ -1214,7 +1221,7 @@ def predictions_blog_layout():
                         "scale = boost × (0.06 + 0.3 × (1 - avg_confidence))", html.Br(),
                         "p_red = 1 / (1 + exp(-scale × diff))", html.Br(),
                         "p_red = max(0.15, min(0.90, p_red))"
-                    ], style={"fontSize": "1.1em", "fontWeight": "bold", "whiteSpace": "pre", "color": "#ffdd00"})
+                    ], style={"fontSize": "1.1em", "fontWeight": "bold","whiteSpace": "pre-wrap", "wordBreak": "break-word", "color": "#ffdd00"})
                 ], style={
                     "backgroundColor": "var(--bg-secondary)",
                     "border": "2px solid var(--border-color)",
@@ -1245,7 +1252,7 @@ def predictions_blog_layout():
                                 "error = predicted_score - actual_score", html.Br(),
                                 "adjustment = learning_rate × error", html.Br(),
                                 "team_adjustment[event][team] += adjustment"
-                            ], style={"fontSize": "1.0em", "fontWeight": "bold", "whiteSpace": "pre", "color": "#ffdd00"})
+                            ], style={"fontSize": "1.0em", "fontWeight": "bold", "whiteSpace": "pre-wrap", "wordBreak": "break-word", "color": "#ffdd00"})
                         ], style={
                             "backgroundColor": "var(--bg-secondary)",
                             "border": "2px solid var(--border-color)",
