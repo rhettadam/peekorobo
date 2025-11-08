@@ -4354,6 +4354,7 @@ def export_event_cards_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, h
         outputs[5] = dict(content=df.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
     return outputs
 
+
 # Export callbacks for event rankings table
 @app.callback(
     [Output("download-event-rankings-csv", "data"),
@@ -4368,10 +4369,11 @@ def export_event_cards_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, h
      Input("event-rankings-export-json-dropdown", "n_clicks"),
      Input("event-rankings-export-html-dropdown", "n_clicks"),
      Input("event-rankings-export-latex-dropdown", "n_clicks")],
-    [State("event-rankings-data-store", "data")],
+    [State("event-rankings-data-store", "data"),
+     State("store-event-key", "data")],
     prevent_initial_call=True
 )
-def export_event_rankings_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+def export_event_rankings_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data, event_key):
     ctx = callback_context
     if not ctx.triggered:
         return [None] * 6
@@ -4383,7 +4385,8 @@ def export_event_rankings_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks
     if 'Team' in df_export.columns:
         df_export['Team'] = df_export['Team'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename_prefix = "event_rankings"
+    event_code = event_key or "unknown_event"
+    filename_prefix = f"{event_code}_rankings"
     outputs = [None] * 6
     if triggered_id == "event-rankings-export-csv-dropdown":
         outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
@@ -4413,10 +4416,11 @@ def export_event_rankings_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks
      Input("event-teams-export-json-dropdown", "n_clicks"),
      Input("event-teams-export-html-dropdown", "n_clicks"),
      Input("event-teams-export-latex-dropdown", "n_clicks")],
-    [State("event-teams-data-store", "data")],
+    [State("event-teams-data-store", "data"),
+     State("store-event-key", "data")],
     prevent_initial_call=True
 )
-def export_event_teams_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+def export_event_teams_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data, event_key):
     ctx = callback_context
     if not ctx.triggered:
         return [None] * 6
@@ -4428,7 +4432,8 @@ def export_event_teams_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, h
     if 'Team' in df_export.columns:
         df_export['Team'] = df_export['Team'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename_prefix = "event_teams"
+    event_code = event_key or "unknown_event"
+    filename_prefix = f"{event_code}_teams"
     outputs = [None] * 6
     if triggered_id == "event-teams-export-csv-dropdown":
         outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
@@ -4458,10 +4463,11 @@ def export_event_teams_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, h
      Input("event-sos-export-json-dropdown", "n_clicks"),
      Input("event-sos-export-html-dropdown", "n_clicks"),
      Input("event-sos-export-latex-dropdown", "n_clicks")],
-    [State("event-sos-data-store", "data")],
+    [State("event-sos-data-store", "data"),
+     State("store-event-key", "data")],
     prevent_initial_call=True
 )
-def export_event_sos_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+def export_event_sos_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data, event_key):
     ctx = callback_context
     if not ctx.triggered:
         return [None] * 6
@@ -4477,7 +4483,8 @@ def export_event_sos_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, htm
     if 'Easiest Match' in df_export.columns:
         df_export['Easiest Match'] = df_export['Easiest Match'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename_prefix = "event_sos"
+    event_code = event_key or "unknown_event"
+    filename_prefix = f"{event_code}_sos"
     outputs = [None] * 6
     if triggered_id == "event-sos-export-csv-dropdown":
         outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
@@ -4507,10 +4514,11 @@ def export_event_sos_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, htm
      Input("event-matches-export-json-dropdown", "n_clicks"),
      Input("event-matches-export-html-dropdown", "n_clicks"),
      Input("event-matches-export-latex-dropdown", "n_clicks")],
-    [State("event-matches-data-store", "data")],
+    [State("event-matches-data-store", "data"),
+     State("store-event-key", "data")],
     prevent_initial_call=True
 )
-def export_event_matches_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+def export_event_matches_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data, event_key):
     ctx = callback_context
     if not ctx.triggered:
         return [None] * 6
@@ -4526,7 +4534,8 @@ def export_event_matches_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks,
     # Remove hidden columns used for styling
     df_export = df_export.drop(columns=[col for col in df_export.columns if col.endswith(' Prediction %')], errors='ignore')
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename_prefix = "event_matches"
+    event_code = event_key or "unknown_event"
+    filename_prefix = f"{event_code}_matches"
     outputs = [None] * 6
     if triggered_id == "event-matches-export-csv-dropdown":
         outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
@@ -4556,10 +4565,11 @@ def export_event_matches_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks,
      Input("event-compare-export-json-dropdown", "n_clicks"),
      Input("event-compare-export-html-dropdown", "n_clicks"),
      Input("event-compare-export-latex-dropdown", "n_clicks")],
-    [State("event-compare-data-store", "data")],
+    [State("event-compare-data-store", "data"),
+     State("store-event-key", "data")],
     prevent_initial_call=True
 )
-def export_event_compare_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+def export_event_compare_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data, event_key):
     ctx = callback_context
     if not ctx.triggered:
         return [None] * 6
@@ -4571,7 +4581,8 @@ def export_event_compare_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks,
     if 'Team' in df_export.columns:
         df_export['Team'] = df_export['Team'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename_prefix = "event_compare"
+    event_code = event_key or "unknown_event"
+    filename_prefix = f"{event_code}_compare"
     outputs = [None] * 6
     if triggered_id == "event-compare-export-csv-dropdown":
         outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
@@ -4601,10 +4612,11 @@ def export_event_compare_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks,
      Input("event-metrics-export-json-dropdown", "n_clicks"),
      Input("event-metrics-export-html-dropdown", "n_clicks"),
      Input("event-metrics-export-latex-dropdown", "n_clicks")],
-    [State("event-metrics-data-store", "data")],
+    [State("event-metrics-data-store", "data"),
+     State("store-event-key", "data")],
     prevent_initial_call=True
 )
-def export_event_metrics_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+def export_event_metrics_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data, event_key):
     ctx = callback_context
     if not ctx.triggered:
         return [None] * 6
@@ -4616,7 +4628,8 @@ def export_event_metrics_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks,
     if 'Team' in df_export.columns:
         df_export['Team'] = df_export['Team'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename_prefix = "event_metrics"
+    event_code = event_key or "unknown_event"
+    filename_prefix = f"{event_code}_metrics"
     outputs = [None] * 6
     if triggered_id == "event-metrics-export-csv-dropdown":
         outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)

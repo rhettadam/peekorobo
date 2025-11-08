@@ -5281,6 +5281,7 @@ def event_layout(event_key):
                     dcc.Store(id="store-rankings", data=rankings),
                     dcc.Store(id="store-event-matches", data=event_matches),
                     dcc.Store(id="store-event-year", data=parsed_year),
+                    dcc.Store(id="store-event-key", data=event_key),
                     html.Div(id="data-display-container"),
                     html.Div(id="event-alliances-content"),
                     html.Div(id="event-metrics-content")
