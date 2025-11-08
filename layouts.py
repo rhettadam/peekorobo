@@ -765,14 +765,6 @@ def raw_vs_ace_blog_layout():
                             "It's calculated using an exponential moving average of match contributions over time."
                         ], style={"color": "var(--text-primary)"}),
                         
-                        html.H4("Calculation", style={"color": "var(--text-primary)", "marginTop": "25px"}),
-                        html.P("Using an Exponential Moving Average (EMA):", style={"color": "var(--text-primary)"}),
-                        html.Ul([
-                            html.Li("Calculate actual contribution per match (auto + teleop + endgame)"),
-                            html.Li(["Update RAW: ", html.Code("RAW_new = RAW_old + K × (actual_contribution - RAW_old)", style={"color": "#ffdd00"})]),
-                            html.Li(["Learning rate ", html.Code("K = 0.4", style={"color": "#ffdd00"}), " (adjusted for match importance)"])
-                        ], style={"color": "var(--text-primary)"}),
-                        
                         html.Div([
                             html.Code("RAW = Auto RAW + Teleop RAW + Endgame RAW", 
                                 style={"fontSize": "1.2em", "fontWeight": "bold", "color": "#ffdd00"})
@@ -810,7 +802,6 @@ def raw_vs_ace_blog_layout():
                         html.Ul([
                             html.Li([html.Strong("Match Importance:"), " Qualifying matches (1.1×), elimination matches (1.0×)"]),
                             html.Li([html.Strong("Chronological Weight:"), " Later-season events weighted more heavily"]),
-                            html.Li([html.Strong("Decay Factor:"), " Currently set to 1.0 (no decay)"])
                         ], style={"color": "var(--text-primary)"})
                     ])
                 ], style={"backgroundColor": "var(--card-bg)", "border": "1px solid var(--border-color)", "marginBottom": "20px"}),
@@ -851,13 +842,6 @@ def raw_vs_ace_blog_layout():
                             "fontFamily": "monospace",
                             "color": "var(--text-primary)"
                         }),
-                        
-                        html.P("Confidence score ranges from 0.0 to 1.0:", style={"color": "var(--text-primary)"}),
-                        html.Ul([
-                            html.Li([html.Strong("1.0"), " = Maximum confidence (ACE = RAW)"]),
-                            html.Li([html.Strong("0.5"), " = Low confidence (ACE = 50% of RAW)"]),
-                            html.Li([html.Strong("0.0"), " = No confidence (ACE = 0)"])
-                        ], style={"color": "var(--text-primary)"})
                     ])
                 ], style={"backgroundColor": "var(--card-bg)", "border": "1px solid var(--border-color)", "marginBottom": "30px"}),
                 
