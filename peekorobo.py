@@ -1511,7 +1511,40 @@ def update_events_tab_content(
     # Update direction button text
     direction_text = "▲" if is_reverse else "▼"
     
+    # Create export dropdown buttons for cards tab
+    cards_export_dropdown = dbc.DropdownMenu(
+        label="Export",
+        color="primary",
+        className="me-2",
+        children=[
+            dbc.DropdownMenuItem("Export as CSV", id="event-cards-export-csv-dropdown"),
+            dbc.DropdownMenuItem("Export as TSV", id="event-cards-export-tsv-dropdown"),
+            dbc.DropdownMenuItem("Export as Excel", id="event-cards-export-excel-dropdown"),
+            dbc.DropdownMenuItem("Export as JSON", id="event-cards-export-json-dropdown"),
+            dbc.DropdownMenuItem("Export as HTML", id="event-cards-export-html-dropdown"),
+            dbc.DropdownMenuItem("Export as LaTeX", id="event-cards-export-latex-dropdown"),
+        ],
+        toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
+        style={"display": "inline-block"}
+    )
+
+    # Export container
+    cards_export_container = html.Div([
+        cards_export_dropdown,
+        dcc.Download(id="download-event-cards-csv"),
+        dcc.Download(id="download-event-cards-excel"),
+        dcc.Download(id="download-event-cards-tsv"),
+        dcc.Download(id="download-event-cards-json"),
+        dcc.Download(id="download-event-cards-html"),
+        dcc.Download(id="download-event-cards-latex"),
+    ], style={"textAlign": "right", "marginBottom": "10px"})
+    
+    # Store events data for export
+    events_data_store = dcc.Store(id="event-cards-data-store", data=events_data)
+    
     return html.Div([
+        events_data_store,
+        cards_export_container,
         upcoming_section,
         html.Br(),
         ongoing_section,
@@ -4048,6 +4081,110 @@ def export_event_insights_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks
         outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
     if triggered_id == "event-export-latex-dropdown":
         outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
+    return outputs
+
+# Export callbacks for event cards tab
+@app.callback(
+    [Output("download-event-cards-csv", "data"),
+     Output("download-event-cards-excel", "data"),
+     Output("download-event-cards-tsv", "data"),
+     Output("download-event-cards-json", "data"),
+     Output("download-event-cards-html", "data"),
+     Output("download-event-cards-latex", "data")],
+    [Input("event-cards-export-csv-dropdown", "n_clicks"),
+     Input("event-cards-export-tsv-dropdown", "n_clicks"),
+     Input("event-cards-export-excel-dropdown", "n_clicks"),
+     Input("event-cards-export-json-dropdown", "n_clicks"),
+     Input("event-cards-export-html-dropdown", "n_clicks"),
+     Input("event-cards-export-latex-dropdown", "n_clicks")],
+    [State("event-cards-data-store", "data")],
+    prevent_initial_call=True
+)
+def export_event_cards_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+    ctx = callback_context
+    if not ctx.triggered:
+        return [None] * 6
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    if not data:
+        return [None] * 6
+    
+    # Convert events data to DataFrame
+    rows = []
+    for ev in data:
+        # Get district
+        state = ev.get("s", "")
+        country = ev.get("co", "")
+        city = ev.get("c", "")
+        
+        # Calculate district (reuse logic from update_events_tab_content)
+        district = None
+        if country == "Israel":
+            district = "ISR"
+        elif country == "Canada":
+            district = "ONT"
+        else:
+            # DISTRICT_STATES_COMBINED is loaded at module level
+            for district_acronym, states in DISTRICT_STATES_COMBINED.items():
+                if state in states.get('abbreviations', []):
+                    if district_acronym == "FMA" and is_western_pennsylvania_city(city, state):
+                        district = None
+                        break
+                    district = district_acronym
+                    break
+        
+        # Get week
+        week = "N/A"
+        try:
+            start_date_str = ev.get("sd", "")
+            if start_date_str:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                week_idx = get_week_number(start_date)
+                if week_idx is not None:
+                    week = f"{week_idx+1}"
+        except Exception:
+            pass
+        
+        # Build location string
+        location = ", ".join([v for v in [state, country] if v])
+        
+        # Event type name
+        event_type_map = {0: "Regional", 1: "District", 2: "District Championship", 3: "Championship Division", 4: "Championship", 5: "Offseason", 99: "Offseason"}
+        event_type_name = event_type_map.get(ev.get("et"), "Unknown")
+        
+        rows.append({
+            "Event Key": ev.get("k", ""),
+            "Name": ev.get("n", ""),
+            "Year": ev.get("y", ""),
+            "Week": week,
+            "District": district or "",
+            "Location": location,
+            "City": city,
+            "State/Province": state,
+            "Country": country,
+            "Event Type": event_type_name,
+            "Start Date": ev.get("sd", ""),
+            "End Date": ev.get("ed", ""),
+            "Website": ev.get("w", ""),
+        })
+    
+    df = pd.DataFrame(rows)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename_prefix = "event_cards"
+    
+    # Prepare outputs for all formats
+    outputs = [None] * 6
+    if triggered_id == "event-cards-export-csv-dropdown":
+        outputs[0] = dcc.send_data_frame(df.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
+    if triggered_id == "event-cards-export-excel-dropdown":
+        outputs[1] = dcc.send_data_frame(df.to_excel, f"{filename_prefix}_{timestamp}.xlsx", index=False)
+    if triggered_id == "event-cards-export-tsv-dropdown":
+        outputs[2] = dcc.send_data_frame(df.to_csv, f"{filename_prefix}_{timestamp}.tsv", sep='\t', index=False)
+    if triggered_id == "event-cards-export-json-dropdown":
+        outputs[3] = dict(content=df.to_json(orient='records', indent=2), filename=f"{filename_prefix}_{timestamp}.json")
+    if triggered_id == "event-cards-export-html-dropdown":
+        outputs[4] = dict(content=df.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
+    if triggered_id == "event-cards-export-latex-dropdown":
+        outputs[5] = dict(content=df.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
     return outputs
 
 # Search toggle callback
