@@ -3610,11 +3610,12 @@ def load_teams(
         nickname = t.get('nickname', 'Unknown')
         nickname_safe = nickname.replace('"', "'")
         truncated = truncate_name(nickname)
-        team_display = f'[{team_num} | {truncated}](/team/{team_num}/{selected_year} "{nickname_safe}")'
+        nickname_link = f'[{truncated}](/team/{team_num}/{selected_year} "{nickname_safe}")'
         favorites_count = favorites_counts.get(team_num, 0)
         table_rows.append({
-            "epa_rank": rank,
-            "team_display": team_display,
+            "ace_rank": rank,
+            "team_number": int(team_num) if team_num else 0,
+            "nickname": nickname_link,
             "epa": round(abs(t.get("normal_epa") or 0), 2),  # RAW column shows normal_epa
             "confidence": t.get("confidence", 0),
             "ace": round(abs(t.get("epa") or 0), 2),  # ACE column shows epa
@@ -3984,8 +3985,8 @@ def export_data(csv_clicks, excel_clicks, tsv_clicks, json_clicks, html_clicks, 
     else:
         filename_prefix = "teams_data"
     df_export = df.copy()
-    if 'team_display' in df_export.columns:
-        df_export['team_display'] = df_export['team_display'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    if 'nickname' in df_export.columns:
+        df_export['nickname'] = df_export['nickname'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     # Prepare outputs for all formats
     outputs = [None] * 6

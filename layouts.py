@@ -2204,8 +2204,9 @@ def teams_layout(default_year=current_year):
     teams_table = dash_table.DataTable(
         id="teams-table",
         columns=[
-            {"name": "ACE Rank", "id": "epa_rank", "type": "numeric"},
-            {"name": "Team", "id": "team_display", "presentation": "markdown"},
+            {"name": "ACE Rank", "id": "ace_rank", "type": "numeric"},
+            {"name": "Team #", "id": "team_number", "type": "numeric"},
+            {"name": "Nickname", "id": "nickname", "presentation": "markdown"},
             {"name": "RAW", "id": "epa", "type": "numeric"},
             {"name": "Confidence", "id": "confidence", "type": "numeric"},
             {"name": "ACE", "id": "ace", "type": "numeric"},
