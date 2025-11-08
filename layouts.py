@@ -689,6 +689,609 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         ]
     )
 
+def blog_index_layout():
+    """Blog index page listing all blog posts"""
+    blog_posts = [
+        {
+            "title": "RAW vs ACE: Understanding Peekorobo's Metrics",
+            "description": "Learn the difference between RAW (unadjusted performance) and ACE (adjusted contribution estimate), and how confidence scores work.",
+            "url": "/blog/raw-vs-ace",
+            "date": "2025-01-08"
+        },
+        {
+            "title": "Peekorobo's Features",
+            "description": "Complete overview of all features available on Peekorobo, from team analysis to match predictions and event insights.",
+            "url": "/blog/features",
+            "date": "2025-01-08"
+        },
+        {
+            "title": "Match Prediction System",
+            "description": "How Peekorobo predicts match outcomes using ACE values, confidence scores, and adaptive learning algorithms.",
+            "url": "/blog/predictions",
+            "date": "2025-01-08"
+        }
+    ]
+    
+    return html.Div([
+        topbar(),
+        dbc.Container([
+            html.Div([
+                html.H1("Blog", 
+                    style={"fontSize": "2.5em", "marginBottom": "15px", "color": "var(--text-primary)"}),
+                html.P("Technical documentation and insights about Peekorobo's metrics",
+                    style={"fontSize": "1.2em", "color": "var(--text-secondary)", "marginBottom": "40px"}),
+                
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H3([
+                                    html.A(post["title"], href=post["url"], 
+                                        style={"color": "var(--text-primary)", "textDecoration": "none"})
+                                ], style={"marginTop": "0", "marginBottom": "6px"}),
+                                html.P(post["description"], style={"color": "var(--text-secondary)", "marginBottom": "2px"}),
+                                html.Small(post["date"], style={"color": "var(--text-muted)", "marginBottom": "0"})
+                            ], style={"padding": "15px", "paddingBottom": "5px"})
+                        ], style={"backgroundColor": "var(--card-bg)", "border": "1px solid var(--border-color)", "marginBottom": "20px", "height": "100%"})
+                    ], width=12, md=6, style={"marginBottom": "20px"}) 
+                    for post in blog_posts
+                ], style={"marginBottom": "60px"})
+            ], style={"maxWidth": "1000px", "margin": "0 auto", "padding": "40px 20px"})
+        ], fluid=True, style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"}),
+        footer
+    ], style={"minHeight": "100vh", "display": "flex", "flexDirection": "column"})
+
+def raw_vs_ace_blog_layout():
+    """Blog layout explaining RAW vs ACE metrics"""
+    return html.Div([
+        topbar(),
+        dbc.Container([
+            html.Div([
+                html.H1("RAW vs ACE: Understanding Peekorobo's Metrics", 
+                    style={"fontSize": "2.5em", "marginBottom": "15px", "color": "var(--text-primary)"}),
+                
+                html.P([
+                    "We use two metrics: ", html.Strong("RAW"), " and ", html.Strong("ACE"), " (Adjusted Contribution Estimate). ",
+                    "RAW is unadjusted performance. ACE is RAW multiplied by a confidence score."
+                ], style={"fontSize": "1.1em", "marginBottom": "40px", "color": "var(--text-primary)"}),
+                
+                html.H2("What is RAW?", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H3("RAW (Raw Expected Points Added)", style={"color": "var(--text-primary)", "marginTop": "0"}),
+                        html.P([
+                            html.Strong("RAW"), " is the unadjusted measure of a team's expected contribution. ",
+                            "It's calculated using an exponential moving average of match contributions over time."
+                        ], style={"color": "var(--text-primary)"}),
+                        
+                        html.H4("Calculation", style={"color": "var(--text-primary)", "marginTop": "25px"}),
+                        html.P("Using an Exponential Moving Average (EMA):", style={"color": "var(--text-primary)"}),
+                        html.Ul([
+                            html.Li("Calculate actual contribution per match (auto + teleop + endgame)"),
+                            html.Li(["Update RAW: ", html.Code("RAW_new = RAW_old + K × (actual_contribution - RAW_old)", style={"color": "#ffdd00"})]),
+                            html.Li(["Learning rate ", html.Code("K = 0.4", style={"color": "#ffdd00"}), " (adjusted for match importance)"])
+                        ], style={"color": "var(--text-primary)"}),
+                        
+                        html.Div([
+                            html.Code("RAW = Auto RAW + Teleop RAW + Endgame RAW", 
+                                style={"fontSize": "1.2em", "fontWeight": "bold", "color": "#ffdd00"})
+                        ], style={
+                            "backgroundColor": "var(--bg-secondary)",
+                            "border": "2px solid var(--border-color)",
+                            "borderRadius": "6px",
+                            "padding": "20px",
+                            "margin": "20px 0",
+                            "textAlign": "center",
+                            "fontFamily": "monospace",
+                            "color": "var(--text-primary)"
+                        }),
+                    ])
+                ], style={"backgroundColor": "var(--card-bg)", "border": "1px solid var(--border-color)", "marginBottom": "30px"}),
+                
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H3("Exponential Moving Average (EMA) Algorithm", style={"color": "var(--text-primary)", "marginTop": "0"}),
+                        html.P(["RAW is calculated using an EMA with learning rate ", html.Code("K = 0.4", style={"color": "#ffdd00"}), ":"], style={"color": "var(--text-primary)"}),
+                        html.Div([
+                            html.Code("RAW_new = RAW_old + K × (actual_contribution - RAW_old)", 
+                                style={"fontSize": "1.1em", "fontWeight": "bold", "color": "#ffdd00"})
+                        ], style={
+                            "backgroundColor": "var(--bg-secondary)",
+                            "border": "2px solid var(--border-color)",
+                            "borderRadius": "6px",
+                            "padding": "15px",
+                            "margin": "15px 0",
+                            "textAlign": "center",
+                            "fontFamily": "monospace",
+                            "color": "var(--text-primary)"
+                        }),
+                        html.P(["Where ", html.Code("K", style={"color": "#ffdd00"}), " is adjusted by:"], style={"color": "var(--text-primary)"}),
+                        html.Ul([
+                            html.Li([html.Strong("Match Importance:"), " Qualifying matches (1.1×), elimination matches (1.0×)"]),
+                            html.Li([html.Strong("Chronological Weight:"), " Later-season events weighted more heavily"]),
+                            html.Li([html.Strong("Decay Factor:"), " Currently set to 1.0 (no decay)"])
+                        ], style={"color": "var(--text-primary)"})
+                    ])
+                ], style={"backgroundColor": "var(--card-bg)", "border": "1px solid var(--border-color)", "marginBottom": "20px"}),
+                
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H3("Multi-Event Aggregation", style={"color": "var(--text-primary)", "marginTop": "0"}),
+                        html.P("For teams with multiple events, RAW and confidence are aggregated with chronological weighting:", style={"color": "var(--text-primary)"}),
+                        html.Ul([
+                            html.Li(["Each event's RAW is weighted by: ", html.Code("chronological_weight × match_count", style={"color": "#ffdd00"})]),
+                            html.Li("Chronological weights range from 0.2 (early season) to 1.0 (late season)"),
+                            html.Li("Confidence components are averaged across events using the same weights"),
+                            html.Li("Final ACE = Weighted Average RAW × Final Confidence")
+                        ], style={"color": "var(--text-primary)"})
+                    ])
+                ], style={"backgroundColor": "var(--card-bg)", "border": "1px solid var(--border-color)", "marginBottom": "30px"}),
+                
+                html.H2("What is ACE?", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H3("ACE (Adjusted Contribution Estimate)", style={"color": "var(--text-primary)", "marginTop": "0"}),
+                        html.P([
+                            html.Strong("ACE"), " is RAW multiplied by a confidence score (0.0 to 1.0). ",
+                            "Teams with high RAW but low confidence get a lower ACE. Consistent teams have ACE closer to RAW."
+                        ], style={"color": "var(--text-primary)"}),
+                        
+                        html.Div([
+                            html.Code("ACE = RAW × Confidence Score", 
+                                style={"fontSize": "1.2em", "fontWeight": "bold", "color": "#ffdd00"})
+                        ], style={
+                            "backgroundColor": "var(--bg-secondary)",
+                            "border": "2px solid var(--border-color)",
+                            "borderRadius": "6px",
+                            "padding": "20px",
+                            "margin": "20px 0",
+                            "textAlign": "center",
+                            "fontFamily": "monospace",
+                            "color": "var(--text-primary)"
+                        }),
+                        
+                        html.P("Confidence score ranges from 0.0 to 1.0:", style={"color": "var(--text-primary)"}),
+                        html.Ul([
+                            html.Li([html.Strong("1.0"), " = Maximum confidence (ACE = RAW)"]),
+                            html.Li([html.Strong("0.5"), " = Low confidence (ACE = 50% of RAW)"]),
+                            html.Li([html.Strong("0.0"), " = No confidence (ACE = 0)"])
+                        ], style={"color": "var(--text-primary)"})
+                    ])
+                ], style={"backgroundColor": "var(--card-bg)", "border": "1px solid var(--border-color)", "marginBottom": "30px"}),
+                
+                html.H2("Confidence Score", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Confidence is a weighted combination of five factors:", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Div([
+                    html.Code("Raw Confidence = (0.35 × Consistency) + (0.35 × Dominance) + (0.10 × Record Alignment) + (0.10 × Veteran) + (0.10 × Events)", 
+                        style={"fontSize": "1.1em", "fontWeight": "bold", "color": "#ffdd00"})
+                ], style={
+                    "backgroundColor": "var(--bg-secondary)",
+                    "border": "2px solid var(--border-color)",
+                    "borderRadius": "6px",
+                    "padding": "20px",
+                    "margin": "20px 0",
+                    "textAlign": "center",
+                    "fontFamily": "monospace",
+                    "color": "var(--text-primary)"
+                }),
+                
+                html.H3("Non-Linear Scaling", style={"color": "var(--text-primary)", "marginTop": "30px"}),
+                html.P("After calculating raw confidence:", style={"color": "var(--text-primary)"}),
+                html.Ul([
+                    html.Li([html.Strong(">0.85:"), " 1.1× multiplier"]),
+                    html.Li([html.Strong("<0.65:"), " 0.9× multiplier"]),
+                    html.Li([html.Strong("Final:"), " Capped 0.0-1.0"])
+                ], style={"color": "var(--text-primary)", "marginBottom": "30px"}),
+                
+                html.H2("Confidence Components", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H3("Confidence Components", style={"color": "var(--text-primary)", "marginTop": "0"}),
+                        
+                        html.Div([
+                            html.Div([
+                                html.Strong("Consistency (35%)", style={"color": "var(--text-primary)"}),
+                                html.Span("35%", style={"float": "right", "color": "var(--navbar-hover)", "fontWeight": "bold"})
+                            ], style={"padding": "12px", "backgroundColor": "var(--bg-secondary)", "borderRadius": "6px", "marginBottom": "10px"}),
+                            html.P([
+                                "Performance consistency across matches. Lower variance = higher consistency."
+                            ], style={"marginLeft": "15px", "color": "var(--text-primary)"}),
+                            html.H4("Consistency Calculation", style={"color": "var(--text-primary)", "marginTop": "15px", "marginBottom": "10px"}),
+                            html.P("Formula:", style={"color": "var(--text-primary)"}),
+                            html.Div([
+                                html.Code("Consistency = max(0.0, 1.0 - (stdev / (peak + ε)))", 
+                                    style={"fontSize": "1.1em", "fontWeight": "bold", "color": "#ffdd00"})
+                            ], style={
+                                "backgroundColor": "var(--bg-secondary)",
+                                "border": "2px solid var(--border-color)",
+                                "borderRadius": "6px",
+                                "padding": "15px",
+                                "margin": "15px 0",
+                                "textAlign": "center",
+                                "fontFamily": "monospace",
+                                "color": "var(--text-primary)"
+                            }),
+                            html.P("Where:", style={"color": "var(--text-primary)"}),
+                            html.Ul([
+                                html.Li([html.Code("stdev", style={"color": "#ffdd00"}), " = Standard deviation of all match contributions"]),
+                                html.Li([html.Code("peak", style={"color": "#ffdd00"}), " = Maximum contribution in any match"]),
+                                html.Li([html.Code("ε", style={"color": "#ffdd00"}), " = Small epsilon (1e-6) to prevent division by zero"])
+                            ], style={"color": "var(--text-primary)"})
+                        ], style={"marginBottom": "20px"}),
+                        
+                        html.Div([
+                            html.Div([
+                                html.Strong("Dominance (35%)", style={"color": "var(--text-primary)"}),
+                                html.Span("35%", style={"float": "right", "color": "var(--navbar-hover)", "fontWeight": "bold"})
+                            ], style={"padding": "12px", "backgroundColor": "var(--bg-secondary)", "borderRadius": "6px", "marginBottom": "10px"}),
+                            html.P([
+                                "How much a team outscores opponents. Larger margins = higher dominance."
+                            ], style={"marginLeft": "15px", "color": "var(--text-primary)"}),
+                            html.H4("Dominance Calculation", style={"color": "var(--text-primary)", "marginTop": "15px", "marginBottom": "10px"}),
+                            html.P("Calculation:", style={"color": "var(--text-primary)"}),
+                            html.Div([
+                                html.Code([
+                                    "margin = team_contribution - (opponent_score / team_count)", html.Br(),
+                                    "scaled_margin = margin / (opponent_score + ε)", html.Br(),
+                                    "norm_margin = (scaled_margin + 1) / 1.3", html.Br(),
+                                    "dominance = mean(norm_margin) capped at [0.0, 1.0]"
+                                ], style={"fontSize": "1.0em", "fontWeight": "bold", "whiteSpace": "pre", "color": "#ffdd00"})
+                            ], style={
+                                "backgroundColor": "var(--bg-secondary)",
+                                "border": "2px solid var(--border-color)",
+                                "borderRadius": "6px",
+                                "padding": "15px",
+                                "margin": "15px 0",
+                                "textAlign": "left",
+                                "fontFamily": "monospace",
+                                "color": "var(--text-primary)"
+                            })
+                        ], style={"marginBottom": "20px"}),
+                        
+                        html.Div([
+                            html.Div([
+                                html.Strong("Record Alignment (10%)", style={"color": "var(--text-primary)"}),
+                                html.Span("10%", style={"float": "right", "color": "var(--navbar-hover)", "fontWeight": "bold"})
+                            ], style={"padding": "12px", "backgroundColor": "var(--bg-secondary)", "borderRadius": "6px", "marginBottom": "10px"}),
+                            html.P([
+                                "Whether win-loss record matches performance. High RAW + high win rate = boost. ",
+                                "Scaled 0.7 (0% wins) to 1.0 (100% wins)."
+                            ], style={"marginLeft": "15px", "color": "var(--text-primary)"})
+                        ], style={"marginBottom": "20px"}),
+                        
+                        html.Div([
+                            html.Div([
+                                html.Strong("Veteran Boost (10%)", style={"color": "var(--text-primary)"}),
+                                html.Span("10%", style={"float": "right", "color": "var(--navbar-hover)", "fontWeight": "bold"})
+                            ], style={"padding": "12px", "backgroundColor": "var(--bg-secondary)", "borderRadius": "6px", "marginBottom": "10px"}),
+                            html.P("Based on years of competition:", style={"marginLeft": "15px", "color": "var(--text-primary)"}),
+                            html.Ul([
+                                html.Li("1 year: 0.2 boost"),
+                                html.Li("2 years: 0.4 boost"),
+                                html.Li("3 years: 0.6 boost"),
+                                html.Li("4+ years: 1.0 boost")
+                            ], style={"marginLeft": "30px", "color": "var(--text-primary)"})
+                        ], style={"marginBottom": "20px"}),
+                        
+                        html.Div([
+                            html.Div([
+                                html.Strong("Event Boost (10%)", style={"color": "var(--text-primary)"}),
+                                html.Span("10%", style={"float": "right", "color": "var(--navbar-hover)", "fontWeight": "bold"})
+                            ], style={"padding": "12px", "backgroundColor": "var(--bg-secondary)", "borderRadius": "6px", "marginBottom": "10px"}),
+                            html.P("Based on number of events:", style={"marginLeft": "15px", "color": "var(--text-primary)"}),
+                            html.Ul([
+                                html.Li("1 event: 0.5 boost"),
+                                html.Li("2 events: 0.9 boost"),
+                                html.Li("3+ events: 1.0 boost")
+                            ], style={"marginLeft": "30px", "color": "var(--text-primary)"})
+                        ])
+                    ])
+                ], style={"backgroundColor": "var(--card-bg)", "border": "1px solid var(--border-color)", "marginBottom": "30px"}),
+                
+                html.H2("Why Both?", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                dbc.Table([
+                    html.Thead([
+                        html.Tr([
+                            html.Th("Aspect", style={"backgroundColor": "var(--navbar-bg)", "color": "var(--navbar-text)"}),
+                            html.Th("RAW", style={"backgroundColor": "var(--navbar-bg)", "color": "var(--navbar-text)"}),
+                            html.Th("ACE", style={"backgroundColor": "var(--navbar-bg)", "color": "var(--navbar-text)"})
+                        ])
+                    ]),
+                    html.Tbody([
+                        html.Tr([
+                            html.Td(html.Strong("What it measures"), style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"}),
+                            html.Td("Raw performance potential", style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"}),
+                            html.Td("Realistic expected contribution", style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"})
+                        ]),
+                        html.Tr([
+                            html.Td(html.Strong("Adjustments"), style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"}),
+                            html.Td("None - pure performance", style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"}),
+                            html.Td("Adjusted for reliability", style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"})
+                        ]),
+                        html.Tr([
+                            html.Td(html.Strong("Best for"), style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"}),
+                            html.Td("Understanding peak capability", style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"}),
+                            html.Td("Match predictions and rankings", style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"})
+                        ]),
+                        html.Tr([
+                            html.Td(html.Strong("Example"), style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"}),
+                            html.Td("Team scores 50 points in best match", style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"}),
+                            html.Td("Team averages 35 points reliably", style={"backgroundColor": "var(--table-bg)", "color": "var(--text-primary)"})
+                        ])
+                    ])
+                ], bordered=True, hover=True, responsive=True, style={"marginBottom": "30px", "backgroundColor": "var(--table-bg)", "color": "var(--text-primary)", "borderColor": "var(--table-border)"}),
+                
+                dbc.Alert([
+                    html.H4("Example", style={"marginTop": "0", "color": "var(--text-primary)"}),
+                    html.P([
+                        html.Strong("Team A: "), "RAW = 45, Confidence = 0.6 → ACE = 27", html.Br(),
+                        html.Strong("Team B: "), "RAW = 35, Confidence = 0.9 → ACE = 31.5"
+                    ], style={"color": "var(--text-primary)"}),
+                    html.P("Team A has higher RAW, but Team B has higher ACE due to consistency. We favor Team B in predictions.", style={"color": "var(--text-primary)"})
+                ], color="info", style={"marginBottom": "30px", "backgroundColor": "var(--card-bg)", "borderColor": "#ffdd00", "color": "var(--text-primary)"}),
+            ], style={"maxWidth": "900px", "margin": "0 auto", "padding": "40px 20px"})
+        ], fluid=True, style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"}),
+        footer
+    ], style={"minHeight": "100vh", "display": "flex", "flexDirection": "column"})
+
+def features_blog_layout():
+    """Blog post explaining all Peekorobo features"""
+    return html.Div([
+        topbar(),
+        dbc.Container([
+            html.Div([
+                html.H1("Peekorobo's Features", 
+                    style={"fontSize": "2.5em", "marginBottom": "15px", "color": "var(--text-primary)"}),
+                
+                html.P([
+                    "Peekorobo is a comprehensive web application for analyzing FRC team performance, leveraging data from The Blue Alliance (TBA) and a contribution estimation model called the ACE algorithm. ",
+                    "It offers rich insights into team rankings, match performance and predictions, strength of schedule, historical trends, and event dynamics."
+                ], style={"fontSize": "1.1em", "marginBottom": "40px", "color": "var(--text-primary)"}),
+                
+                html.H2("Home Page", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Global search preview: As you type, you'll see categorized suggestions for Teams, Events, and Users with smart highlighting of closest matches, recent years, and quick links.", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Img(src="/assets/readme/homepage.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "30px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                
+                html.H2("Team Profiles", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Each team has a dedicated profile page displaying detailed information for a selected year (or historical overview).", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Ul([
+                    html.Li([html.Strong("General Info: "), "Team number, nickname, location (city, state, country), rookie year, and website. Notable achievements like Hall of Fame or World Championships are highlighted."]),
+                    html.Li([html.Strong("Years Participated: "), "Links to view the team's profile for specific past seasons."]),
+                    html.Li([html.Strong("Performance Metrics: "), "Detailed breakdown of the team's performance based on the ACE model, including:"]),
+                    html.Ul([
+                        html.Li("Overall ACE and RAW"),
+                        html.Li("Component breakdown: Auto ACE, Teleop ACE, Endgame ACE"),
+                        html.Li("Global, Country, and State/Province ranks (clickable links to the Teams insights filtered view)"),
+                        html.Li("Season win/loss/tie record"),
+                        html.Li("ACE component pills with color coding based on percentile rank relative to all teams in the selected year")
+                    ], style={"marginLeft": "20px", "marginTop": "10px", "marginBottom": "10px"}),
+                    html.Li([html.Strong("Recent Events: "), "A section showcasing the team's most recent event performances with key stats and match outcomes."]),
+                    html.Li([html.Strong("Event History Table: "), "A searchable and filterable table listing all events the team participated in during the selected year (or across history), including event name, location, and dates."]),
+                    html.Li([html.Strong("Awards Table: "), "A table listing all awards the team received in the selected year (or across history), including award name, event name, and year."]),
+                    html.Li([html.Strong("Blue Banners: "), "A visual display of blue banners won by the team, with links to the corresponding events."]),
+                    html.Li([html.Strong("Favorite Button: "), "Authenticated users can favorite teams to easily access them from their user profile."])
+                ], style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Img(src="/assets/readme/team.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "30px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                
+                html.H2("Teams", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Explore and compare all teams within a given year.", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Ul([
+                    html.Li([html.Strong("Filtering: "), "Filter teams by year, country, state/province, and district."]),
+                    html.Li([html.Strong("Search: "), "Interactive search bar to filter teams by number, name, or location."]),
+                    html.Li([html.Strong("Top 3 Spotlight: "), "Highlights the top 3 teams based on ACE with dedicated cards."]),
+                    html.Li([html.Strong("Main Table: "), "A detailed table displaying teams with columns for ACE Rank, ACE, RAW (unweighted), Confidence, and the component breakdowns (Auto ACE, Teleop ACE, Endgame ACE), Location, and Record. Favorite counts are also shown with subtle highlighting at configurable thresholds."]),
+                    html.Li([html.Strong("Exports: "), "Download the current or selected rows as CSV, TSV, Excel, JSON, HTML, or LaTeX."]),
+                    html.Li([html.Strong("ACE Color Key: "), "A legend explaining the color coding used for ACE and its components, based on percentiles. Users can toggle between global percentiles (all teams) and filtered percentiles (teams matching current filters)."]),
+                    html.Li([html.Strong("Avatars Gallery: "), "A separate tab displaying all team avatars for the filtered set of teams."]),
+                    html.Li([html.Strong("Bubble Chart: "), "A visual representation of team performance plotting two chosen ACE components against each other, with bubble size potentially representing overall ACE. Useful for identifying specialists (high on one axis) or well-rounded teams (balanced on both axes). Users can select which components to plot on the X and Y axes."])
+                ], style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Img(src="/assets/readme/teams.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                html.Img(src="/assets/readme/teams_avatars.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                html.Img(src="/assets/readme/teams_bubble.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "30px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                
+                html.H2("Events", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Browse and filter FRC events across different years.", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Ul([
+                    html.Li([html.Strong("Filtering: "), "Filter events by year, event type (Season, Off-season, Regional, District, Championship), week number, and district."]),
+                    html.Li([html.Strong("Search: "), "Interactive search bar to filter events by name or code."]),
+                    html.Li([html.Strong("Sorting: "), "Toggle between sorting events by time (start date) or alphabetically by name."]),
+                    html.Li([html.Strong("Card View: "), "Displays events as interactive cards showing key details and a favorite button for logged-in users. Includes separate sections for Upcoming and Ongoing events."]),
+                    html.Li([html.Strong("Event Insights Table: "), "A tabular view providing insights into the competitive strength of events, showing Max ACE, Top 8 ACE, and Top 24 ACE for teams participating in each event. Color-coded based on percentiles for comparison."])
+                ], style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Img(src="/assets/readme/events.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                html.Img(src="/assets/readme/event_insights.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "30px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                
+                html.H2("Event Details", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("A dedicated page for each FRC event providing in-depth information.", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Ul([
+                    html.Li([html.Strong("Header: "), "Event name, year, location, dates, type, website link, and a favorite button. Includes a thumbnail link to the event's YouTube match video if available."]),
+                    html.Li([html.Strong("Data Tabs: "), "Switch between different views of event data:"]),
+                    html.Ul([
+                        html.Li([html.Strong("Teams: "), "Lists all teams participating in the event, sorted by ACE Rank, with ACE and component breakdowns. Includes a spotlight of the top teams at the event. A Stats Type selector lets you switch between Overall season metrics and Event-specific metrics; event stats include SoS and ACE Δ versus season baselines."]),
+                        html.Li([html.Strong("Rankings: "), "Displays the official event rankings (Rank, Wins, Losses, Ties, DQ) alongside ACE Rank and ACE for comparison."]),
+                        html.Li([html.Strong("Matches: "), "Lists all matches played at the event, including Red/Blue alliances, scores, winner, and adaptive win predictions based on ACE and confidence. Toggle between Both Alliances and Team Focus views, filter by team, and create a YouTube playlist of selected matches with one click. Inline accuracy badges summarize prediction performance, and an Event Insights card surfaces high/low scores, win margins, and handy match links."]),
+                        html.Li([html.Strong("SoS: "), "Strength of Schedule table per team using average opponent ACE and per-match win probabilities."]),
+                        html.Li([html.Strong("Compare: "), "Select multiple teams and compare event stats side-by-side, plus a radar chart normalized to the event field."]),
+                        html.Li([html.Strong("Metrics: "), "Explore TBA metrics via a dropdown (OPRs, DPRs, CCWMs, COPRs variants). Results are sortable and link back to team pages."]),
+                        html.Li([html.Strong("Alliances: "), "Visual bracket-style cards that show alliance captains/picks and playoff progression/status pulled from TBA."])
+                    ], style={"marginLeft": "20px", "marginTop": "10px", "marginBottom": "10px"})
+                ], style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Img(src="/assets/readme/event_teams.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                html.Img(src="/assets/readme/event_ranks.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                html.Img(src="/assets/readme/event_matches.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                html.Img(src="/assets/readme/event_sos.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                html.Img(src="/assets/readme/event_compare.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                html.Img(src="/assets/readme/event_metrics.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                html.Img(src="/assets/readme/event_alliances.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "30px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                
+                html.H2("Challenges", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Explore the history of FRC games year by year.", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Ul([
+                    html.Li([html.Strong("Challenge Dictionary: "), "Lists all FRC challenges from 1992 to the present, with names, years, and logos."]),
+                    html.Li([html.Strong("Challenge Details: "), "Clicking on a challenge leads to a page with a summary of the game, links to the official game manual, and the game reveal video."])
+                ], style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Img(src="/assets/readme/challenges.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                html.Img(src="/assets/readme/challenge_details.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "30px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                
+                html.H2("Team Map", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Visualize the geographic distribution of FRC teams for a given year on an interactive map.", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Img(src="/assets/readme/map.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "30px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                
+                html.H2("User Profiles", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Authenticated users have a profile page.", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Ul([
+                    html.Li([html.Strong("My Profile: "), "Displays user information (username, role, team affiliation, bio, avatar, card background color), favorite team and event counts, and lists of followers and following. Edit your profile (including picking an avatar from a gallery and a background color with automatic contrast adjustment)."]),
+                    html.Li([html.Strong("Favorite Teams/Events: "), "Lists the teams and events the user has favorited, with direct links and an option to remove them."]),
+                    html.Li([html.Strong("Other User Profiles: "), "View profiles of other users, see their favorited teams/events, and follow/unfollow them with one click."]),
+                    html.Li([html.Strong("User Search: "), "Search for other users by username. Results appear in a compact overlay with follow/unfollow actions and quick links."])
+                ], style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+                
+                html.Img(src="/assets/readme/user_profile.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                html.Img(src="/assets/readme/other_user_profile.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "30px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
+                
+                html.H2("Theme Toggle", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Switch between light and dark mode for a personalized viewing experience.", style={"color": "var(--text-primary)", "marginBottom": "30px"}),
+                
+                html.H2("Universal Profile Icon/Toast", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("A small icon is shown in the bottom right for logged-in users, linking to their profile. For logged-out users, a dismissible toast encourages registration/login to use favorite features.", style={"color": "var(--text-primary)", "marginBottom": "30px"})
+            ], style={"maxWidth": "1200px", "margin": "0 auto", "padding": "40px 20px"})
+        ], fluid=True, style={"padding": "20px", "maxWidth": "1400px", "margin": "0 auto"}),
+        footer
+    ], style={"minHeight": "100vh", "display": "flex", "flexDirection": "column"})
+
+def predictions_blog_layout():
+    """Blog post explaining the match prediction system"""
+    return html.Div([
+        topbar(),
+        dbc.Container([
+            html.Div([
+                html.H1("Match Prediction System", 
+                    style={"fontSize": "2.5em", "marginBottom": "15px", "color": "var(--text-primary)"}),
+                
+                html.P([
+                    "Peekorobo uses ACE values and adaptive learning to predict match outcomes. ",
+                    "The system continuously improves by learning from actual match results."
+                ], style={"fontSize": "1.1em", "marginBottom": "40px", "color": "var(--text-primary)"}),
+                
+                html.H2("Basic Prediction Formula", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Predictions start with ACE values:", style={"color": "var(--text-primary)"}),
+                html.Div([
+                    html.Code([
+                        "red_ace = sum(team.ace for team in red_alliance)", html.Br(),
+                        "blue_ace = sum(team.ace for team in blue_alliance)", html.Br(),
+                        "diff = red_ace - blue_ace"
+                    ], style={"fontSize": "1.1em", "fontWeight": "bold", "whiteSpace": "pre", "color": "#ffdd00"})
+                ], style={
+                    "backgroundColor": "var(--bg-secondary)",
+                    "border": "2px solid var(--border-color)",
+                    "borderRadius": "6px",
+                    "padding": "20px",
+                    "margin": "20px 0",
+                    "textAlign": "left",
+                    "fontFamily": "monospace",
+                    "color": "var(--text-primary)"
+                }),
+                
+                html.H2("Win Probability Calculation", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Win probability uses logistic regression:", style={"color": "var(--text-primary)"}),
+                html.Div([
+                    html.Code([
+                        "scale = boost × (0.06 + 0.3 × (1 - avg_confidence))", html.Br(),
+                        "p_red = 1 / (1 + exp(-scale × diff))", html.Br(),
+                        "p_red = max(0.15, min(0.90, p_red))"
+                    ], style={"fontSize": "1.1em", "fontWeight": "bold", "whiteSpace": "pre", "color": "#ffdd00"})
+                ], style={
+                    "backgroundColor": "var(--bg-secondary)",
+                    "border": "2px solid var(--border-color)",
+                    "borderRadius": "6px",
+                    "padding": "20px",
+                    "margin": "20px 0",
+                    "textAlign": "left",
+                    "fontFamily": "monospace",
+                    "color": "var(--text-primary)"
+                }),
+                
+                html.P("The scale factor adjusts based on average confidence. Lower confidence = wider probability distribution.", style={"color": "var(--text-primary)"}),
+                
+                html.H2("Adaptive Learning", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H3("Event-Specific Adjustments", style={"color": "var(--text-primary)", "marginTop": "0"}),
+                        html.P("The system learns from match outcomes:", style={"color": "var(--text-primary)"}),
+                        html.Ul([
+                            html.Li("Tracks prediction accuracy per event"),
+                            html.Li("Adjusts team performance estimates based on actual results"),
+                            html.Li("Applies event-specific multipliers"),
+                            html.Li("Improves predictions as event progresses")
+                        ], style={"color": "var(--text-primary)"}),
+                        html.Div([
+                            html.Code([
+                                "error = predicted_score - actual_score", html.Br(),
+                                "adjustment = learning_rate × error", html.Br(),
+                                "team_adjustment[event][team] += adjustment"
+                            ], style={"fontSize": "1.0em", "fontWeight": "bold", "whiteSpace": "pre", "color": "#ffdd00"})
+                        ], style={
+                            "backgroundColor": "var(--bg-secondary)",
+                            "border": "2px solid var(--border-color)",
+                            "borderRadius": "6px",
+                            "padding": "15px",
+                            "margin": "15px 0",
+                            "textAlign": "left",
+                            "fontFamily": "monospace",
+                            "color": "var(--text-primary)"
+                        })
+                    ])
+                ], style={"backgroundColor": "var(--card-bg)", "border": "1px solid var(--border-color)", "marginBottom": "20px"}),
+                
+                html.H2("Prediction Confidence", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
+                
+                html.P("Prediction confidence depends on:", style={"color": "var(--text-primary)"}),
+                html.Ul([
+                    html.Li("Average confidence of teams in the match"),
+                    html.Li("ACE difference between alliances"),
+                    html.Li("Number of matches played by teams"),
+                    html.Li("Event-specific learning adjustments")
+                ], style={"color": "var(--text-primary)"}),
+                
+                html.P("Higher team confidence = more reliable predictions. Large ACE differences = more confident predictions.", style={"color": "var(--text-primary)", "marginTop": "20px"}),
+                
+            ], style={"maxWidth": "900px", "margin": "0 auto", "padding": "40px 20px"})
+        ], fluid=True, style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"}),
+        footer
+    ], style={"minHeight": "100vh", "display": "flex", "flexDirection": "column"})
+
 def topbar():
     return dbc.Navbar(
         dbc.Container(
@@ -799,6 +1402,7 @@ def topbar():
                                         className="custom-navlink",
                                         children=[
                                             dbc.DropdownMenuItem("Compare", href="/compare"),
+                                            dbc.DropdownMenuItem("Blog", href="/blog"),
                                             dbc.DropdownMenuItem("Account", href="/login", id="account-link"),
                                             dbc.DropdownMenuItem(divider=True),
                                             dbc.DropdownMenu(

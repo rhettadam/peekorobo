@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout
 
 from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name,get_team_data_with_fallback
 
@@ -318,6 +318,18 @@ def display_page(pathname):
             return match_layout(event_key, match_key)
         else:
             return dbc.Alert("Invalid match URL.", color="danger")
+
+    if pathname == "/blog":
+        return blog_index_layout()
+    
+    if pathname == "/blog/raw-vs-ace":
+        return raw_vs_ace_blog_layout()
+    
+    if pathname == "/blog/features":
+        return features_blog_layout()
+    
+    if pathname == "/blog/predictions":
+        return predictions_blog_layout()
 
     return home_layout
 
