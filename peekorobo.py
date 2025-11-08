@@ -1694,9 +1694,42 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             {"name": "ACE", "id": "ACE", "type": "numeric"},
         ]
 
+        # Export dropdown for rankings
+        rankings_export_dropdown = dbc.DropdownMenu(
+            label="Export",
+            color="primary",
+            className="me-2",
+            children=[
+                dbc.DropdownMenuItem("Export as CSV", id="event-rankings-export-csv-dropdown"),
+                dbc.DropdownMenuItem("Export as TSV", id="event-rankings-export-tsv-dropdown"),
+                dbc.DropdownMenuItem("Export as Excel", id="event-rankings-export-excel-dropdown"),
+                dbc.DropdownMenuItem("Export as JSON", id="event-rankings-export-json-dropdown"),
+                dbc.DropdownMenuItem("Export as HTML", id="event-rankings-export-html-dropdown"),
+                dbc.DropdownMenuItem("Export as LaTeX", id="event-rankings-export-latex-dropdown"),
+            ],
+            toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
+            style={"display": "inline-block"}
+        )
+
+        rankings_export_container = html.Div([
+            rankings_export_dropdown,
+            dcc.Download(id="download-event-rankings-csv"),
+            dcc.Download(id="download-event-rankings-excel"),
+            dcc.Download(id="download-event-rankings-tsv"),
+            dcc.Download(id="download-event-rankings-json"),
+            dcc.Download(id="download-event-rankings-html"),
+            dcc.Download(id="download-event-rankings-latex"),
+        ], style={"textAlign": "right", "marginBottom": "10px"})
+
+        # Store rankings data for export
+        rankings_data_store = dcc.Store(id="event-rankings-data-store", data=data_rows)
+
         return html.Div([
+            rankings_data_store,
             ace_legend_layout(),
+            rankings_export_container,
             dash_table.DataTable(
+                id="event-rankings-table",
                 columns=columns,
                 sort_action="native",
                 sort_mode="multi",
@@ -1915,9 +1948,43 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             {"name": "Easiest Win Prob", "id": "Easiest Win Prob", "type": "numeric"},
             {"name": "# Matches", "id": "# Matches", "type": "numeric"},
         ]
+
+        # Export dropdown for SoS
+        sos_export_dropdown = dbc.DropdownMenu(
+            label="Export",
+            color="primary",
+            className="me-2",
+            children=[
+                dbc.DropdownMenuItem("Export as CSV", id="event-sos-export-csv-dropdown"),
+                dbc.DropdownMenuItem("Export as TSV", id="event-sos-export-tsv-dropdown"),
+                dbc.DropdownMenuItem("Export as Excel", id="event-sos-export-excel-dropdown"),
+                dbc.DropdownMenuItem("Export as JSON", id="event-sos-export-json-dropdown"),
+                dbc.DropdownMenuItem("Export as HTML", id="event-sos-export-html-dropdown"),
+                dbc.DropdownMenuItem("Export as LaTeX", id="event-sos-export-latex-dropdown"),
+            ],
+            toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
+            style={"display": "inline-block"}
+        )
+
+        sos_export_container = html.Div([
+            sos_export_dropdown,
+            dcc.Download(id="download-event-sos-csv"),
+            dcc.Download(id="download-event-sos-excel"),
+            dcc.Download(id="download-event-sos-tsv"),
+            dcc.Download(id="download-event-sos-json"),
+            dcc.Download(id="download-event-sos-html"),
+            dcc.Download(id="download-event-sos-latex"),
+        ], style={"textAlign": "right", "marginBottom": "10px"})
+
+        # Store SoS data for export
+        sos_data_store = dcc.Store(id="event-sos-data-store", data=team_sos_rows)
+
         return html.Div([
+            sos_data_store,
             html.H4("Strength of Schedule (SoS)", className="mb-3 mt-3"),
+            sos_export_container,
             dash_table.DataTable(
+                id="event-sos-table",
                 columns=sos_columns,
                 sort_action="native",
                 sort_mode="multi",
@@ -2313,24 +2380,59 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
     
     spotlight_layout = dbc.Row(spotlight_cards, className="justify-content-center mb-4")
     
-    return dash_table.DataTable(
-        columns=columns,
-        sort_action="native",
-        sort_mode="multi",
-        filter_action="native",
-        filter_options={"case": "insensitive"},
-        data=rows,
-        page_size=10,
-        style_table=common_style_table,
-        style_header=common_style_header,
-        style_cell=common_style_cell,
-        style_data_conditional=style_data_conditional,
-        style_filter={
-            "backgroundColor": "var(--input-bg)",
-            "color": "var(--text-primary)",
-            "borderColor": "var(--input-border)",
-        }
-    ), spotlight_layout
+    # Export dropdown for teams
+    teams_export_dropdown = dbc.DropdownMenu(
+        label="Export",
+        color="primary",
+        className="me-2",
+        children=[
+            dbc.DropdownMenuItem("Export as CSV", id="event-teams-export-csv-dropdown"),
+            dbc.DropdownMenuItem("Export as TSV", id="event-teams-export-tsv-dropdown"),
+            dbc.DropdownMenuItem("Export as Excel", id="event-teams-export-excel-dropdown"),
+            dbc.DropdownMenuItem("Export as JSON", id="event-teams-export-json-dropdown"),
+            dbc.DropdownMenuItem("Export as HTML", id="event-teams-export-html-dropdown"),
+            dbc.DropdownMenuItem("Export as LaTeX", id="event-teams-export-latex-dropdown"),
+        ],
+        toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
+        style={"display": "inline-block"}
+    )
+
+    teams_export_container = html.Div([
+        teams_export_dropdown,
+        dcc.Download(id="download-event-teams-csv"),
+        dcc.Download(id="download-event-teams-excel"),
+        dcc.Download(id="download-event-teams-tsv"),
+        dcc.Download(id="download-event-teams-json"),
+        dcc.Download(id="download-event-teams-html"),
+        dcc.Download(id="download-event-teams-latex"),
+    ], style={"textAlign": "right", "marginBottom": "10px"})
+
+    # Store teams data for export
+    teams_data_store = dcc.Store(id="event-teams-data-store", data=rows)
+    
+    return html.Div([
+        teams_data_store,
+        teams_export_container,
+        dash_table.DataTable(
+            id="event-teams-table",
+            columns=columns,
+            sort_action="native",
+            sort_mode="multi",
+            filter_action="native",
+            filter_options={"case": "insensitive"},
+            data=rows,
+            page_size=10,
+            style_table=common_style_table,
+            style_header=common_style_header,
+            style_cell=common_style_cell,
+            style_data_conditional=style_data_conditional,
+            style_filter={
+                "backgroundColor": "var(--input-bg)",
+                "color": "var(--text-primary)",
+                "borderColor": "var(--input-border)",
+            }
+        )
+    ]), spotlight_layout
 
 @app.callback(
     Output("matches-container", "children"),
@@ -2501,6 +2603,9 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
 
     qual_data = build_match_rows(qual_matches, table_style)
     playoff_data = build_match_rows(playoff_matches, table_style)
+    
+    # Combine all match data for export
+    all_matches_data = qual_data + playoff_data
 
     if table_style == "both":
         match_columns = [
@@ -2975,8 +3080,38 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             ], style={"backgroundColor": "var(--card-bg)"})
         ], className="mb-4 shadow-sm", style={"borderRadius": "14px", "border": "1.5px solid var(--border-color)", "overflow": "hidden", "marginTop": "3rem"})
     
+    # Export dropdown for matches
+    matches_export_dropdown = dbc.DropdownMenu(
+        label="Export",
+        color="primary",
+        className="me-2",
+        children=[
+            dbc.DropdownMenuItem("Export as CSV", id="event-matches-export-csv-dropdown"),
+            dbc.DropdownMenuItem("Export as TSV", id="event-matches-export-tsv-dropdown"),
+            dbc.DropdownMenuItem("Export as Excel", id="event-matches-export-excel-dropdown"),
+            dbc.DropdownMenuItem("Export as JSON", id="event-matches-export-json-dropdown"),
+            dbc.DropdownMenuItem("Export as HTML", id="event-matches-export-html-dropdown"),
+            dbc.DropdownMenuItem("Export as LaTeX", id="event-matches-export-latex-dropdown"),
+        ],
+        toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
+        style={"display": "inline-block"}
+    )
+
+    matches_export_container = html.Div([
+        matches_export_dropdown,
+        dcc.Download(id="download-event-matches-csv"),
+        dcc.Download(id="download-event-matches-excel"),
+        dcc.Download(id="download-event-matches-tsv"),
+        dcc.Download(id="download-event-matches-json"),
+        dcc.Download(id="download-event-matches-html"),
+        dcc.Download(id="download-event-matches-latex"),
+    ], style={"textAlign": "right", "marginBottom": "10px"})
+
+    # Store matches data for export
+    matches_data_store = dcc.Store(id="event-matches-data-store", data=all_matches_data)
+    
     # Build the content list dynamically based on what exists
-    content = []
+    content = [matches_data_store, matches_export_container]
     
     if qual_header and qual_table:
         content.extend([qual_header, html.Div(qual_table, className="recent-events-table")])
@@ -3157,7 +3292,39 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
         height=400,
         template="plotly_dark"
     )
+    # Export dropdown for compare
+    compare_export_dropdown = dbc.DropdownMenu(
+        label="Export",
+        color="primary",
+        className="me-2",
+        children=[
+            dbc.DropdownMenuItem("Export as CSV", id="event-compare-export-csv-dropdown"),
+            dbc.DropdownMenuItem("Export as TSV", id="event-compare-export-tsv-dropdown"),
+            dbc.DropdownMenuItem("Export as Excel", id="event-compare-export-excel-dropdown"),
+            dbc.DropdownMenuItem("Export as JSON", id="event-compare-export-json-dropdown"),
+            dbc.DropdownMenuItem("Export as HTML", id="event-compare-export-html-dropdown"),
+            dbc.DropdownMenuItem("Export as LaTeX", id="event-compare-export-latex-dropdown"),
+        ],
+        toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
+        style={"display": "inline-block"}
+    )
+
+    compare_export_container = html.Div([
+        compare_export_dropdown,
+        dcc.Download(id="download-event-compare-csv"),
+        dcc.Download(id="download-event-compare-excel"),
+        dcc.Download(id="download-event-compare-tsv"),
+        dcc.Download(id="download-event-compare-json"),
+        dcc.Download(id="download-event-compare-html"),
+        dcc.Download(id="download-event-compare-latex"),
+    ], style={"textAlign": "right", "marginBottom": "10px"})
+
+    # Store compare data for export
+    compare_data_store = dcc.Store(id="event-compare-data-store", data=rows)
+    
     return html.Div([
+        compare_data_store,
+        compare_export_container,
         dash_table.DataTable(
             columns=columns,
             sort_action="native",
@@ -4185,6 +4352,284 @@ def export_event_cards_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, h
         outputs[4] = dict(content=df.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
     if triggered_id == "event-cards-export-latex-dropdown":
         outputs[5] = dict(content=df.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
+    return outputs
+
+# Export callbacks for event rankings table
+@app.callback(
+    [Output("download-event-rankings-csv", "data"),
+     Output("download-event-rankings-excel", "data"),
+     Output("download-event-rankings-tsv", "data"),
+     Output("download-event-rankings-json", "data"),
+     Output("download-event-rankings-html", "data"),
+     Output("download-event-rankings-latex", "data")],
+    [Input("event-rankings-export-csv-dropdown", "n_clicks"),
+     Input("event-rankings-export-tsv-dropdown", "n_clicks"),
+     Input("event-rankings-export-excel-dropdown", "n_clicks"),
+     Input("event-rankings-export-json-dropdown", "n_clicks"),
+     Input("event-rankings-export-html-dropdown", "n_clicks"),
+     Input("event-rankings-export-latex-dropdown", "n_clicks")],
+    [State("event-rankings-data-store", "data")],
+    prevent_initial_call=True
+)
+def export_event_rankings_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+    ctx = callback_context
+    if not ctx.triggered:
+        return [None] * 6
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    if not data:
+        return [None] * 6
+    df = pd.DataFrame(data)
+    df_export = df.copy()
+    if 'Team' in df_export.columns:
+        df_export['Team'] = df_export['Team'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename_prefix = "event_rankings"
+    outputs = [None] * 6
+    if triggered_id == "event-rankings-export-csv-dropdown":
+        outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
+    if triggered_id == "event-rankings-export-excel-dropdown":
+        outputs[1] = dcc.send_data_frame(df_export.to_excel, f"{filename_prefix}_{timestamp}.xlsx", index=False)
+    if triggered_id == "event-rankings-export-tsv-dropdown":
+        outputs[2] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.tsv", sep='\t', index=False)
+    if triggered_id == "event-rankings-export-json-dropdown":
+        outputs[3] = dict(content=df_export.to_json(orient='records', indent=2), filename=f"{filename_prefix}_{timestamp}.json")
+    if triggered_id == "event-rankings-export-html-dropdown":
+        outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
+    if triggered_id == "event-rankings-export-latex-dropdown":
+        outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
+    return outputs
+
+# Export callbacks for event teams table
+@app.callback(
+    [Output("download-event-teams-csv", "data"),
+     Output("download-event-teams-excel", "data"),
+     Output("download-event-teams-tsv", "data"),
+     Output("download-event-teams-json", "data"),
+     Output("download-event-teams-html", "data"),
+     Output("download-event-teams-latex", "data")],
+    [Input("event-teams-export-csv-dropdown", "n_clicks"),
+     Input("event-teams-export-tsv-dropdown", "n_clicks"),
+     Input("event-teams-export-excel-dropdown", "n_clicks"),
+     Input("event-teams-export-json-dropdown", "n_clicks"),
+     Input("event-teams-export-html-dropdown", "n_clicks"),
+     Input("event-teams-export-latex-dropdown", "n_clicks")],
+    [State("event-teams-data-store", "data")],
+    prevent_initial_call=True
+)
+def export_event_teams_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+    ctx = callback_context
+    if not ctx.triggered:
+        return [None] * 6
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    if not data:
+        return [None] * 6
+    df = pd.DataFrame(data)
+    df_export = df.copy()
+    if 'Team' in df_export.columns:
+        df_export['Team'] = df_export['Team'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename_prefix = "event_teams"
+    outputs = [None] * 6
+    if triggered_id == "event-teams-export-csv-dropdown":
+        outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
+    if triggered_id == "event-teams-export-excel-dropdown":
+        outputs[1] = dcc.send_data_frame(df_export.to_excel, f"{filename_prefix}_{timestamp}.xlsx", index=False)
+    if triggered_id == "event-teams-export-tsv-dropdown":
+        outputs[2] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.tsv", sep='\t', index=False)
+    if triggered_id == "event-teams-export-json-dropdown":
+        outputs[3] = dict(content=df_export.to_json(orient='records', indent=2), filename=f"{filename_prefix}_{timestamp}.json")
+    if triggered_id == "event-teams-export-html-dropdown":
+        outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
+    if triggered_id == "event-teams-export-latex-dropdown":
+        outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
+    return outputs
+
+# Export callbacks for event SoS table
+@app.callback(
+    [Output("download-event-sos-csv", "data"),
+     Output("download-event-sos-excel", "data"),
+     Output("download-event-sos-tsv", "data"),
+     Output("download-event-sos-json", "data"),
+     Output("download-event-sos-html", "data"),
+     Output("download-event-sos-latex", "data")],
+    [Input("event-sos-export-csv-dropdown", "n_clicks"),
+     Input("event-sos-export-tsv-dropdown", "n_clicks"),
+     Input("event-sos-export-excel-dropdown", "n_clicks"),
+     Input("event-sos-export-json-dropdown", "n_clicks"),
+     Input("event-sos-export-html-dropdown", "n_clicks"),
+     Input("event-sos-export-latex-dropdown", "n_clicks")],
+    [State("event-sos-data-store", "data")],
+    prevent_initial_call=True
+)
+def export_event_sos_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+    ctx = callback_context
+    if not ctx.triggered:
+        return [None] * 6
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    if not data:
+        return [None] * 6
+    df = pd.DataFrame(data)
+    df_export = df.copy()
+    if 'Team' in df_export.columns:
+        df_export['Team'] = df_export['Team'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    if 'Hardest Match' in df_export.columns:
+        df_export['Hardest Match'] = df_export['Hardest Match'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    if 'Easiest Match' in df_export.columns:
+        df_export['Easiest Match'] = df_export['Easiest Match'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename_prefix = "event_sos"
+    outputs = [None] * 6
+    if triggered_id == "event-sos-export-csv-dropdown":
+        outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
+    if triggered_id == "event-sos-export-excel-dropdown":
+        outputs[1] = dcc.send_data_frame(df_export.to_excel, f"{filename_prefix}_{timestamp}.xlsx", index=False)
+    if triggered_id == "event-sos-export-tsv-dropdown":
+        outputs[2] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.tsv", sep='\t', index=False)
+    if triggered_id == "event-sos-export-json-dropdown":
+        outputs[3] = dict(content=df_export.to_json(orient='records', indent=2), filename=f"{filename_prefix}_{timestamp}.json")
+    if triggered_id == "event-sos-export-html-dropdown":
+        outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
+    if triggered_id == "event-sos-export-latex-dropdown":
+        outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
+    return outputs
+
+# Export callbacks for event matches table
+@app.callback(
+    [Output("download-event-matches-csv", "data"),
+     Output("download-event-matches-excel", "data"),
+     Output("download-event-matches-tsv", "data"),
+     Output("download-event-matches-json", "data"),
+     Output("download-event-matches-html", "data"),
+     Output("download-event-matches-latex", "data")],
+    [Input("event-matches-export-csv-dropdown", "n_clicks"),
+     Input("event-matches-export-tsv-dropdown", "n_clicks"),
+     Input("event-matches-export-excel-dropdown", "n_clicks"),
+     Input("event-matches-export-json-dropdown", "n_clicks"),
+     Input("event-matches-export-html-dropdown", "n_clicks"),
+     Input("event-matches-export-latex-dropdown", "n_clicks")],
+    [State("event-matches-data-store", "data")],
+    prevent_initial_call=True
+)
+def export_event_matches_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+    ctx = callback_context
+    if not ctx.triggered:
+        return [None] * 6
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    if not data:
+        return [None] * 6
+    df = pd.DataFrame(data)
+    df_export = df.copy()
+    # Remove markdown from columns
+    for col in df_export.columns:
+        if df_export[col].dtype == 'object':
+            df_export[col] = df_export[col].astype(str).str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    # Remove hidden columns used for styling
+    df_export = df_export.drop(columns=[col for col in df_export.columns if col.endswith(' Prediction %')], errors='ignore')
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename_prefix = "event_matches"
+    outputs = [None] * 6
+    if triggered_id == "event-matches-export-csv-dropdown":
+        outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
+    if triggered_id == "event-matches-export-excel-dropdown":
+        outputs[1] = dcc.send_data_frame(df_export.to_excel, f"{filename_prefix}_{timestamp}.xlsx", index=False)
+    if triggered_id == "event-matches-export-tsv-dropdown":
+        outputs[2] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.tsv", sep='\t', index=False)
+    if triggered_id == "event-matches-export-json-dropdown":
+        outputs[3] = dict(content=df_export.to_json(orient='records', indent=2), filename=f"{filename_prefix}_{timestamp}.json")
+    if triggered_id == "event-matches-export-html-dropdown":
+        outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
+    if triggered_id == "event-matches-export-latex-dropdown":
+        outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
+    return outputs
+
+# Export callbacks for event compare table
+@app.callback(
+    [Output("download-event-compare-csv", "data"),
+     Output("download-event-compare-excel", "data"),
+     Output("download-event-compare-tsv", "data"),
+     Output("download-event-compare-json", "data"),
+     Output("download-event-compare-html", "data"),
+     Output("download-event-compare-latex", "data")],
+    [Input("event-compare-export-csv-dropdown", "n_clicks"),
+     Input("event-compare-export-tsv-dropdown", "n_clicks"),
+     Input("event-compare-export-excel-dropdown", "n_clicks"),
+     Input("event-compare-export-json-dropdown", "n_clicks"),
+     Input("event-compare-export-html-dropdown", "n_clicks"),
+     Input("event-compare-export-latex-dropdown", "n_clicks")],
+    [State("event-compare-data-store", "data")],
+    prevent_initial_call=True
+)
+def export_event_compare_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+    ctx = callback_context
+    if not ctx.triggered:
+        return [None] * 6
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    if not data:
+        return [None] * 6
+    df = pd.DataFrame(data)
+    df_export = df.copy()
+    if 'Team' in df_export.columns:
+        df_export['Team'] = df_export['Team'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename_prefix = "event_compare"
+    outputs = [None] * 6
+    if triggered_id == "event-compare-export-csv-dropdown":
+        outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
+    if triggered_id == "event-compare-export-excel-dropdown":
+        outputs[1] = dcc.send_data_frame(df_export.to_excel, f"{filename_prefix}_{timestamp}.xlsx", index=False)
+    if triggered_id == "event-compare-export-tsv-dropdown":
+        outputs[2] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.tsv", sep='\t', index=False)
+    if triggered_id == "event-compare-export-json-dropdown":
+        outputs[3] = dict(content=df_export.to_json(orient='records', indent=2), filename=f"{filename_prefix}_{timestamp}.json")
+    if triggered_id == "event-compare-export-html-dropdown":
+        outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
+    if triggered_id == "event-compare-export-latex-dropdown":
+        outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
+    return outputs
+
+# Export callbacks for event metrics table
+@app.callback(
+    [Output("download-event-metrics-csv", "data"),
+     Output("download-event-metrics-excel", "data"),
+     Output("download-event-metrics-tsv", "data"),
+     Output("download-event-metrics-json", "data"),
+     Output("download-event-metrics-html", "data"),
+     Output("download-event-metrics-latex", "data")],
+    [Input("event-metrics-export-csv-dropdown", "n_clicks"),
+     Input("event-metrics-export-tsv-dropdown", "n_clicks"),
+     Input("event-metrics-export-excel-dropdown", "n_clicks"),
+     Input("event-metrics-export-json-dropdown", "n_clicks"),
+     Input("event-metrics-export-html-dropdown", "n_clicks"),
+     Input("event-metrics-export-latex-dropdown", "n_clicks")],
+    [State("event-metrics-data-store", "data")],
+    prevent_initial_call=True
+)
+def export_event_metrics_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data):
+    ctx = callback_context
+    if not ctx.triggered:
+        return [None] * 6
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    if not data:
+        return [None] * 6
+    df = pd.DataFrame(data)
+    df_export = df.copy()
+    if 'Team' in df_export.columns:
+        df_export['Team'] = df_export['Team'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename_prefix = "event_metrics"
+    outputs = [None] * 6
+    if triggered_id == "event-metrics-export-csv-dropdown":
+        outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
+    if triggered_id == "event-metrics-export-excel-dropdown":
+        outputs[1] = dcc.send_data_frame(df_export.to_excel, f"{filename_prefix}_{timestamp}.xlsx", index=False)
+    if triggered_id == "event-metrics-export-tsv-dropdown":
+        outputs[2] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.tsv", sep='\t', index=False)
+    if triggered_id == "event-metrics-export-json-dropdown":
+        outputs[3] = dict(content=df_export.to_json(orient='records', indent=2), filename=f"{filename_prefix}_{timestamp}.json")
+    if triggered_id == "event-metrics-export-html-dropdown":
+        outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
+    if triggered_id == "event-metrics-export-latex-dropdown":
+        outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
     return outputs
 
 # Search toggle callback
@@ -5392,6 +5837,36 @@ def update_metrics_table(selected_metric, pathname):
     # Sort by value (descending)
     table_data.sort(key=lambda x: float(x["Value"]) if x["Value"].replace(".", "").replace("-", "").isdigit() else 0, reverse=True)
     
+    # Export dropdown for metrics
+    metrics_export_dropdown = dbc.DropdownMenu(
+        label="Export",
+        color="primary",
+        className="me-2",
+        children=[
+            dbc.DropdownMenuItem("Export as CSV", id="event-metrics-export-csv-dropdown"),
+            dbc.DropdownMenuItem("Export as TSV", id="event-metrics-export-tsv-dropdown"),
+            dbc.DropdownMenuItem("Export as Excel", id="event-metrics-export-excel-dropdown"),
+            dbc.DropdownMenuItem("Export as JSON", id="event-metrics-export-json-dropdown"),
+            dbc.DropdownMenuItem("Export as HTML", id="event-metrics-export-html-dropdown"),
+            dbc.DropdownMenuItem("Export as LaTeX", id="event-metrics-export-latex-dropdown"),
+        ],
+        toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
+        style={"display": "inline-block"}
+    )
+
+    metrics_export_container = html.Div([
+        metrics_export_dropdown,
+        dcc.Download(id="download-event-metrics-csv"),
+        dcc.Download(id="download-event-metrics-excel"),
+        dcc.Download(id="download-event-metrics-tsv"),
+        dcc.Download(id="download-event-metrics-json"),
+        dcc.Download(id="download-event-metrics-html"),
+        dcc.Download(id="download-event-metrics-latex"),
+    ], style={"textAlign": "right", "marginBottom": "10px"})
+
+    # Store metrics data for export
+    metrics_data_store = dcc.Store(id="event-metrics-data-store", data=table_data)
+    
     # Create DataTable
     table = dash_table.DataTable(
         columns=[
@@ -5434,7 +5909,11 @@ def update_metrics_table(selected_metric, pathname):
         ]
     )
     
-    return table
+    return html.Div([
+        metrics_data_store,
+        metrics_export_container,
+        table
+    ])
 
 @app.callback(
     Output("insights-table-container", "children"),
