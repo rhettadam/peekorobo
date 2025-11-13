@@ -3,7 +3,7 @@ from dash import html, dcc, dash_table
 from datagather import load_year_data,get_team_avatar,get_team_years_participated,TEAM_COLORS
 from flask import session
 from datetime import datetime, date, timedelta, timezone
-from utils import WEEK_RANGES_BY_YEAR,get_team_data_with_fallback,format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability,predict_win_probability_adaptive, learn_from_match_outcome, get_event_prediction_confidence, compute_percentiles, pill, get_event_week_label, reset_event_learning, is_western_pennsylvania_city
+from utils import WEEK_RANGES_BY_YEAR,get_team_data_with_fallback,format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability, compute_percentiles, pill, get_event_week_label, is_western_pennsylvania_city
 import json
 import os
 import re
@@ -706,7 +706,7 @@ def blog_index_layout():
         },
         {
             "title": "Match Prediction System",
-            "description": "How Peekorobo predicts match outcomes using ACE values, confidence scores, and adaptive learning algorithms.",
+            "description": "How Peekorobo predicts match outcomes using ACE values and confidence scores.",
             "url": "/blog/predictions",
             "date": "2025-01-08"
         }
@@ -1119,7 +1119,7 @@ def features_blog_layout():
                     html.Ul([
                         html.Li([html.Strong("Teams: "), "Lists all teams participating in the event, sorted by ACE Rank, with ACE and component breakdowns. Includes a spotlight of the top teams at the event. A Stats Type selector lets you switch between Overall season metrics and Event-specific metrics; event stats include SoS and ACE Δ versus season baselines."]),
                         html.Li([html.Strong("Rankings: "), "Displays the official event rankings (Rank, Wins, Losses, Ties, DQ) alongside ACE Rank and ACE for comparison."]),
-                        html.Li([html.Strong("Matches: "), "Lists all matches played at the event, including Red/Blue alliances, scores, winner, and adaptive win predictions based on ACE and confidence. Toggle between Both Alliances and Team Focus views, filter by team, and create a YouTube playlist of selected matches with one click. Inline accuracy badges summarize prediction performance, and an Event Insights card surfaces high/low scores, win margins, and handy match links."]),
+                        html.Li([html.Strong("Matches: "), "Lists all matches played at the event, including Red/Blue alliances, scores, winner, and win predictions based on ACE and confidence. Toggle between Both Alliances and Team Focus views, filter by team, and create a YouTube playlist of selected matches with one click. Inline accuracy badges summarize prediction performance, and an Event Insights card surfaces high/low scores, win margins, and handy match links."]),
                         html.Li([html.Strong("SoS: "), "Strength of Schedule table per team using average opponent ACE and per-match win probabilities."]),
                         html.Li([html.Strong("Compare: "), "Select multiple teams and compare event stats side-by-side, plus a radar chart normalized to the event field."]),
                         html.Li([html.Strong("Metrics: "), "Explore TBA metrics via a dropdown (OPRs, DPRs, CCWMs, COPRs variants). Results are sortable and link back to team pages."]),
@@ -1189,8 +1189,8 @@ def predictions_blog_layout():
                     style={"fontSize": "2.5em", "marginBottom": "15px", "color": "var(--text-primary)"}),
                 
                 html.P([
-                    "Peekorobo uses ACE values and adaptive learning to predict match outcomes. ",
-                    "The system continuously improves by learning from actual match results."
+                    "Peekorobo uses ACE values to predict match outcomes. ",
+                    "The system calculates win probabilities based on team ACE and confidence scores."
                 ], style={"fontSize": "1.1em", "marginBottom": "40px", "color": "var(--text-primary)"}),
                 
                 html.H2("Basic Prediction Formula", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
@@ -1201,7 +1201,7 @@ def predictions_blog_layout():
                         "red_ace = sum(team.ace for team in red_alliance)", html.Br(),
                         "blue_ace = sum(team.ace for team in blue_alliance)", html.Br(),
                         "diff = red_ace - blue_ace"
-                    ], style={"fontSize": "1.1em", "fontWeight": "bold", "whiteSpace": "pre-wrap", "wordBreak": "break-word", "color": "#ffdd00"})
+                    ], style={"fontSize": "1.1em", "fontWeight": "bold", "whiteSpace": "pre", "color": "#ffdd00"})
                 ], style={
                     "backgroundColor": "var(--bg-secondary)",
                     "border": "2px solid var(--border-color)",
@@ -1221,7 +1221,7 @@ def predictions_blog_layout():
                         "scale = boost × (0.06 + 0.3 × (1 - avg_confidence))", html.Br(),
                         "p_red = 1 / (1 + exp(-scale × diff))", html.Br(),
                         "p_red = max(0.15, min(0.90, p_red))"
-                    ], style={"fontSize": "1.1em", "fontWeight": "bold","whiteSpace": "pre-wrap", "wordBreak": "break-word", "color": "#ffdd00"})
+                    ], style={"fontSize": "1.1em", "fontWeight": "bold", "whiteSpace": "pre", "color": "#ffdd00"})
                 ], style={
                     "backgroundColor": "var(--bg-secondary)",
                     "border": "2px solid var(--border-color)",
@@ -1235,45 +1235,13 @@ def predictions_blog_layout():
                 
                 html.P("The scale factor adjusts based on average confidence. Lower confidence = wider probability distribution.", style={"color": "var(--text-primary)"}),
                 
-                html.H2("Adaptive Learning", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
-                
-                dbc.Card([
-                    dbc.CardBody([
-                        html.H3("Event-Specific Adjustments", style={"color": "var(--text-primary)", "marginTop": "0"}),
-                        html.P("The system learns from match outcomes:", style={"color": "var(--text-primary)"}),
-                        html.Ul([
-                            html.Li("Tracks prediction accuracy per event"),
-                            html.Li("Adjusts team performance estimates based on actual results"),
-                            html.Li("Applies event-specific multipliers"),
-                            html.Li("Improves predictions as event progresses")
-                        ], style={"color": "var(--text-primary)"}),
-                        html.Div([
-                            html.Code([
-                                "error = predicted_score - actual_score", html.Br(),
-                                "adjustment = learning_rate × error", html.Br(),
-                                "team_adjustment[event][team] += adjustment"
-                            ], style={"fontSize": "1.0em", "fontWeight": "bold", "whiteSpace": "pre-wrap", "wordBreak": "break-word", "color": "#ffdd00"})
-                        ], style={
-                            "backgroundColor": "var(--bg-secondary)",
-                            "border": "2px solid var(--border-color)",
-                            "borderRadius": "6px",
-                            "padding": "15px",
-                            "margin": "15px 0",
-                            "textAlign": "left",
-                            "fontFamily": "monospace",
-                            "color": "var(--text-primary)"
-                        })
-                    ])
-                ], style={"backgroundColor": "var(--card-bg)", "border": "1px solid var(--border-color)", "marginBottom": "20px"}),
-                
                 html.H2("Prediction Confidence", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
                 
                 html.P("Prediction confidence depends on:", style={"color": "var(--text-primary)"}),
                 html.Ul([
                     html.Li("Average confidence of teams in the match"),
                     html.Li("ACE difference between alliances"),
-                    html.Li("Number of matches played by teams"),
-                    html.Li("Event-specific learning adjustments")
+                    html.Li("Number of matches played by teams")
                 ], style={"color": "var(--text-primary)"}),
                 
                 html.P("Higher team confidence = more reliable predictions. Large ACE differences = more confident predictions.", style={"color": "var(--text-primary)", "marginTop": "20px"}),
@@ -3195,17 +3163,6 @@ def events_layout(year=current_year, active_tab="cards-tab"):
                         ],
                         className="mb-4",
                     ),
-                    # Learning progress indicator
-                    dbc.Alert(
-                        id="learning-progress-alert",
-                        is_open=False,
-                        color="info",
-                        className="mb-3",
-                        children=[
-                            html.H6("🤖 Adaptive Learning Active", className="mb-2"),
-                            html.P(id="learning-stats-text", className="mb-0", style={"fontSize": "0.9rem"})
-                        ]
-                    ),
                     html.Div(id="events-tab-content"),
                 ],
                 style={
@@ -3398,7 +3355,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             # 2024 structure: EVENT_MATCHES is a list
             year_matches = EVENT_MATCHES
         
-        # Get ALL matches for this event for learning purposes
+        # Get ALL matches for this event
         all_event_matches = [m for m in year_matches if m.get("ek") == event_key]
         
         # Calculate record from match data instead of rankings
@@ -3448,9 +3405,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             html.Span(str(ties), style={"color": "gray", "fontWeight": "bold"})
         ])
         
-        # Reset learning state for this event to prevent accumulation across page refreshes
-        reset_event_learning(event_key)
-        
         def get_team_epa_info(t_key):
             # First try to get event-specific stats for this team
             t_data = epa_data.get(t_key.strip(), {})
@@ -3496,25 +3450,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 # Final fallback
                 return {"team_number": int(t_key.strip()), "epa": 0, "confidence": 0.7, "consistency": 0}
 
-        # Process ALL matches for learning (this ensures the adaptive predictor learns from all matches)
-        for match in all_event_matches:
-            red_str = match.get("rt", "")
-            blue_str = match.get("bt", "")
-            red_score = match.get("rs", 0)
-            blue_score = match.get("bs", 0)
-            
-            # Only learn from completed matches
-            if red_score > 0 and blue_score > 0:
-                red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
-                blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
-                
-                if red_team_info and blue_team_info:
-                    # Learn from completed matches
-                    winner = match.get("wa") or "Tie"
-                    winner = winner.lower() if winner else "tie"
-                    if winner in ["red", "blue"]:
-                        learn_from_match_outcome(event_key, match.get("k", ""), winner, red_score, blue_score)
-        
         # Filter to only show matches the team played in
         matches = [
             m for m in all_event_matches
@@ -3553,7 +3488,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
                 
                 if red_team_info and blue_team_info:
-                    p_red, p_blue = predict_win_probability_adaptive(red_team_info, blue_team_info, event_key, match.get("k", ""))
+                    p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
                     
                     if winner == "tie" or winner == "":
                         # Only count as correct if prediction is 50%
@@ -3654,13 +3589,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
                 blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
                 if red_team_info and blue_team_info:
-                    # Use adaptive prediction that learns from previous matches
-                    p_red, p_blue = predict_win_probability_adaptive(red_team_info, blue_team_info, event_key, match.get("k", ""))
-                    # Learn from completed matches
-                    winner = match.get("wa") or "Tie"
-                    winner = winner.lower() if winner else "tie"
-                    if winner in ["red", "blue"]:
-                        learn_from_match_outcome(event_key, match.get("k", ""), winner, red_score, blue_score)
+                    # Use simple prediction
+                    p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
                     
                     prediction = f"{p_red:.0%}" if str(team_number) in red_str else f"{p_blue:.0%}"
                     prediction_percent = round((p_red if str(team_number) in red_str else p_blue) * 100)

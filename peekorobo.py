@@ -26,7 +26,7 @@ from datagather import load_data_2025,load_search_data,load_year_data,get_team_a
 
 from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout
 
-from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability_adaptive,learn_from_match_outcome,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name,get_team_data_with_fallback
+from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name,get_team_data_with_fallback
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -1439,7 +1439,7 @@ def update_events_tab_content(
             style={"display": "inline-block"}
         )
 
-        # Export container
+        # Export container (at top)
         export_container = html.Div([
             event_export_dropdown,
             dcc.Download(id="download-event-insights-csv"),
@@ -1449,6 +1449,23 @@ def update_events_tab_content(
             dcc.Download(id="download-event-insights-html"),
             dcc.Download(id="download-event-insights-latex"),
         ], style={"textAlign": "right", "marginBottom": "10px"})
+        
+        # Rows per page container (at bottom)
+        rows_per_page_container = html.Div([
+            html.Label("Rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
+            dcc.Dropdown(
+                id="event-insights-page-size",
+                options=[
+                    {"label": "10", "value": 10},
+                    {"label": "25", "value": 25},
+                    {"label": "50", "value": 50},
+                    {"label": "100", "value": 100},
+                ],
+                value=25,
+                clearable=False,
+                style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+            ),
+        ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
 
         # Update direction button text
         direction_text = "▲" if is_reverse else "▼"
@@ -1471,6 +1488,8 @@ def update_events_tab_content(
                 sort_action="native",
                 sort_mode="multi",
                 data=df.to_dict("records"),
+                page_size=25,
+                page_current=0,
                 style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
                 style_header={
                     "backgroundColor": "var(--card-bg)",        # Match the table background
@@ -1490,7 +1509,8 @@ def update_events_tab_content(
                 },
                 style_data_conditional=style_data_conditional,
                 style_as_list_view=True,
-            )
+            ),
+            rows_per_page_container
         ]), district_options, direction_text
 
 
@@ -1723,6 +1743,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             style={"display": "inline-block"}
         )
 
+        # Export container (at top)
         rankings_export_container = html.Div([
             rankings_export_dropdown,
             dcc.Download(id="download-event-rankings-csv"),
@@ -1732,6 +1753,23 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             dcc.Download(id="download-event-rankings-html"),
             dcc.Download(id="download-event-rankings-latex"),
         ], style={"textAlign": "right", "marginBottom": "10px"})
+        
+        # Rows per page container (at bottom)
+        rankings_rows_per_page_container = html.Div([
+            html.Label("Rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
+            dcc.Dropdown(
+                id="event-rankings-page-size",
+                options=[
+                    {"label": "10", "value": 10},
+                    {"label": "25", "value": 25},
+                    {"label": "50", "value": 50},
+                    {"label": "100", "value": 100},
+                ],
+                value=10,
+                clearable=False,
+                style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+            ),
+        ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
 
         # Store rankings data for export
         rankings_data_store = dcc.Store(id="event-rankings-data-store", data=data_rows)
@@ -1749,6 +1787,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 filter_options={"case": "insensitive"},
                 data=data_rows,
                 page_size=10,
+                page_current=0,
                 style_table=common_style_table,
                 style_header=common_style_header,
                 style_cell=common_style_cell,
@@ -1758,7 +1797,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                     "color": "var(--text-primary)",
                     "borderColor": "var(--input-border)",
                 }
-            )
+            ),
+            rankings_rows_per_page_container
         ]), query_string
 
     # === Teams Tab ===
@@ -1908,7 +1948,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                     opp_count += 1
                 avg_opp_ace = opp_ace / opp_count if opp_count else 0
                 opp_aces.append(avg_opp_ace)
-                # Win probability (use adaptive prediction)
+                # Win probability
                 red_info = [
                     {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
                     for t in m.get("rt", "").split(",") if t.strip().isdigit()
@@ -1917,7 +1957,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                     {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
                     for t in m.get("bt", "").split(",") if t.strip().isdigit()
                 ]
-                p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, m.get("ek", ""), m.get("k", ""))
+                p_red, p_blue = predict_win_probability(red_info, blue_info)
                 win_prob = p_red if alliance == "red" else p_blue
                 win_probs.append(win_prob)
                 if win_prob < hardest_prob:
@@ -1978,6 +2018,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             style={"display": "inline-block"}
         )
 
+        # Export container (at top)
         sos_export_container = html.Div([
             sos_export_dropdown,
             dcc.Download(id="download-event-sos-csv"),
@@ -1987,6 +2028,24 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             dcc.Download(id="download-event-sos-html"),
             dcc.Download(id="download-event-sos-latex"),
         ], style={"textAlign": "right", "marginBottom": "10px"})
+        
+        # Rows per page container (at bottom)
+        sos_rows_per_page_container = html.Div([
+            html.Label("Rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
+            dcc.Dropdown(
+                id="event-sos-page-size",
+                options=[
+                    {"label": "10", "value": 10},
+                    {"label": "15", "value": 15},
+                    {"label": "25", "value": 25},
+                    {"label": "50", "value": 50},
+                    {"label": "100", "value": 100},
+                ],
+                value=15,
+                clearable=False,
+                style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+            ),
+        ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
 
         # Store SoS data for export
         sos_data_store = dcc.Store(id="event-sos-data-store", data=team_sos_rows)
@@ -2004,6 +2063,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 filter_options={"case": "insensitive"},
                 data=team_sos_rows,
                 page_size=15,
+                page_current=0,
                 style_table=common_style_table,
                 style_header=common_style_header,
                 style_cell=common_style_cell,
@@ -2012,7 +2072,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                     "color": "var(--text-primary)",
                     "borderColor": "var(--input-border)",
                 }
-            )
+            ),
+            sos_rows_per_page_container
         ]), query_string
 
     # === Compare Teams Tab ===
@@ -2200,7 +2261,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                         alliance = "blue"
                         opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
                     
-                    # Win probability (use adaptive prediction)
+                    # Win probability
                     red_info = [
                         {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
                         for t in m.get("rt", "").split(",") if t.strip().isdigit()
@@ -2209,7 +2270,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                         {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
                         for t in m.get("bt", "").split(",") if t.strip().isdigit()
                     ]
-                    p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, m.get("ek", ""), m.get("k", ""))
+                    p_red, p_blue = predict_win_probability(red_info, blue_info)
                     win_prob = p_red if alliance == "red" else p_blue
                     win_probs.append(win_prob)
                 
@@ -2409,6 +2470,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         style={"display": "inline-block"}
     )
 
+    # Export container (at top)
     teams_export_container = html.Div([
         teams_export_dropdown,
         dcc.Download(id="download-event-teams-csv"),
@@ -2418,6 +2480,23 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         dcc.Download(id="download-event-teams-html"),
         dcc.Download(id="download-event-teams-latex"),
     ], style={"textAlign": "right", "marginBottom": "10px"})
+    
+    # Rows per page container (at bottom)
+    teams_rows_per_page_container = html.Div([
+        html.Label("Rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
+        dcc.Dropdown(
+            id="event-teams-page-size",
+            options=[
+                {"label": "10", "value": 10},
+                {"label": "25", "value": 25},
+                {"label": "50", "value": 50},
+                {"label": "100", "value": 100},
+            ],
+            value=10,
+            clearable=False,
+            style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+        ),
+    ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
 
     # Store teams data for export
     teams_data_store = dcc.Store(id="event-teams-data-store", data=rows)
@@ -2434,6 +2513,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             filter_options={"case": "insensitive"},
             data=rows,
             page_size=10,
+            page_current=0,
             style_table=common_style_table,
             style_header=common_style_header,
             style_cell=common_style_cell,
@@ -2443,7 +2523,8 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                 "color": "var(--text-primary)",
                 "borderColor": "var(--input-border)",
             }
-        )
+        ),
+        teams_rows_per_page_container
     ]), spotlight_layout
 
 @app.callback(
@@ -2541,14 +2622,8 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             red_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
             blue_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
 
-            # Use adaptive prediction that learns from previous matches
-            p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, event_key, match.get("k", ""))
-            
-            # Learn from completed matches
-            winner = match.get("wa") or "Tie"
-            winner = winner.lower() if winner else "tie"
-            if winner in ["red", "blue"]:
-                learn_from_match_outcome(event_key, match.get("k", ""), winner, red_score, blue_score)
+            # Use simple prediction
+            p_red, p_blue = predict_win_probability(red_info, blue_info)
             
             if p_red == 0.5 and p_blue == 0.5:
                 pred_red = "50%"
@@ -2747,11 +2822,13 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
 
     qual_table = [
         dash_table.DataTable(
+            id="qual-matches-table",
             columns=match_columns,
             sort_action="native",
             sort_mode="multi",
             data=qual_data,
             page_size=10,
+            page_current=0,
             style_table=style_table,
             style_header=style_header,
             style_cell=style_cell,
@@ -2763,11 +2840,13 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
 
     playoff_table = [
         dash_table.DataTable(
+            id="playoff-matches-table",
             columns=match_columns,
             sort_action="native",
             sort_mode="multi",
             data=playoff_data,
             page_size=10,
+            page_current=0,
             style_table=style_table,
             style_header=style_header,
             style_cell=style_cell,
@@ -3109,6 +3188,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         style={"display": "inline-block"}
     )
 
+    # Export container (at top)
     matches_export_container = html.Div([
         matches_export_dropdown,
         dcc.Download(id="download-event-matches-csv"),
@@ -3118,6 +3198,36 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         dcc.Download(id="download-event-matches-html"),
         dcc.Download(id="download-event-matches-latex"),
     ], style={"textAlign": "right", "marginBottom": "10px"})
+    
+    # Rows per page container (at bottom)
+    matches_rows_per_page_container = html.Div([
+        html.Label("Qual rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
+        dcc.Dropdown(
+            id="qual-matches-page-size",
+            options=[
+                {"label": "10", "value": 10},
+                {"label": "25", "value": 25},
+                {"label": "50", "value": 50},
+                {"label": "100", "value": 100},
+            ],
+            value=10,
+            clearable=False,
+            style={"width": "65px", "display": "inline-block", "marginRight": "10px", "fontSize": "0.85rem"}
+        ),
+        html.Label("Playoff rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
+        dcc.Dropdown(
+            id="playoff-matches-page-size",
+            options=[
+                {"label": "10", "value": 10},
+                {"label": "25", "value": 25},
+                {"label": "50", "value": 50},
+                {"label": "100", "value": 100},
+            ],
+            value=10,
+            clearable=False,
+            style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+        ),
+    ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px", "gap": "10px"})
 
     # Store matches data for export
     matches_data_store = dcc.Store(id="event-matches-data-store", data=all_matches_data)
@@ -3134,6 +3244,9 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
     # Only include insights card if it exists
     if insights_card:
         content.append(insights_card)
+    
+    # Add rows per page container at the end
+    content.append(matches_rows_per_page_container)
     
     return html.Div(content)
 
@@ -3173,7 +3286,7 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
                 score = m.get("bs", 0)
                 opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
             scores.append(score)
-            # Win probability (use adaptive prediction)
+            # Win probability
             red_info = [
                 {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
                 for t in m.get("rt", "").split(",") if t.strip().isdigit()
@@ -3182,7 +3295,7 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
                 {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
                 for t in m.get("bt", "").split(",") if t.strip().isdigit()
             ]
-            p_red, p_blue = predict_win_probability_adaptive(red_info, blue_info, m.get("ek", ""), m.get("k", ""))
+            p_red, p_blue = predict_win_probability(red_info, blue_info)
             win_prob = p_red if alliance == "red" else p_blue
             win_probs.append(win_prob)
         avg_score_map[tnum_str] = sum(scores) / len(scores) if scores else 0
@@ -5387,6 +5500,7 @@ def update_team_events(active_tab, store_data):
     ]
 
     events_table = dash_table.DataTable(
+        id="team-events-table",
         columns=[
             {"name": "Event Name", "id": "event_name", "presentation": "markdown"},
             {"name": "Location", "id": "event_location"},
@@ -5398,6 +5512,7 @@ def update_team_events(active_tab, store_data):
         sort_mode="multi",
         data=events_data,
         page_size=10,
+        page_current=0,
         style_table={
             "overflowX": "auto",
             "borderRadius": "10px",
@@ -5428,7 +5543,24 @@ def update_team_events(active_tab, store_data):
         ],
     )
 
-    return html.Div([events_table])
+    return html.Div([
+        events_table,
+        html.Div([
+            html.Label("Rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
+            dcc.Dropdown(
+                id="team-events-page-size",
+                options=[
+                    {"label": "10", "value": 10},
+                    {"label": "25", "value": 25},
+                    {"label": "50", "value": 50},
+                    {"label": "100", "value": 100},
+                ],
+                value=10,
+                clearable=False,
+                style={"width": "65px", "display": "inline-block", "marginRight": "20px", "fontSize": "0.85rem"}
+            ),
+        ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
+    ])
 
 @app.callback(
     Output("team-awards-content", "children"),
@@ -5463,6 +5595,7 @@ def update_team_awards(active_tab, store_data):
         
         # Build DataTable
         awards_table = dash_table.DataTable(
+            id="team-awards-table",
             columns=[
                 {"name": "Award Name", "id": "award_name"},
                 {"name": "Event", "id": "event_name", "presentation": "markdown"},
@@ -5471,6 +5604,7 @@ def update_team_awards(active_tab, store_data):
             data=table_data,
             sort_action="native", sort_mode="multi",
             page_size=10,
+            page_current=0,
             style_table={ 
                 "overflowX": "auto", "borderRadius": "10px", "border": "none",
                 "backgroundColor": "var(--card-bg)",
@@ -5539,7 +5673,25 @@ def update_team_awards(active_tab, store_data):
             }
         ) if banners else html.Div()
         
-        return html.Div([awards_table, banner_section])
+        return html.Div([
+            awards_table,
+            html.Div([
+                html.Label("Rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
+                dcc.Dropdown(
+                    id="team-awards-page-size",
+                    options=[
+                        {"label": "10", "value": 10},
+                        {"label": "25", "value": 25},
+                        {"label": "50", "value": 50},
+                        {"label": "100", "value": 100},
+                    ],
+                    value=10,
+                    clearable=False,
+                    style={"width": "65px", "display": "inline-block", "marginRight": "20px", "fontSize": "0.85rem"}
+                ),
+            ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"}),
+            banner_section
+        ])
 
     # Only fetch history from TBA API
     if not year or str(year).lower() == "history":
@@ -5879,6 +6031,7 @@ def update_metrics_table(selected_metric, pathname):
         style={"display": "inline-block"}
     )
 
+    # Export container (at top)
     metrics_export_container = html.Div([
         metrics_export_dropdown,
         dcc.Download(id="download-event-metrics-csv"),
@@ -5888,12 +6041,30 @@ def update_metrics_table(selected_metric, pathname):
         dcc.Download(id="download-event-metrics-html"),
         dcc.Download(id="download-event-metrics-latex"),
     ], style={"textAlign": "right", "marginBottom": "10px"})
+    
+    # Rows per page container (at bottom)
+    metrics_rows_per_page_container = html.Div([
+        html.Label("Rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
+        dcc.Dropdown(
+            id="event-metrics-page-size",
+            options=[
+                {"label": "10", "value": 10},
+                {"label": "20", "value": 20},
+                {"label": "50", "value": 50},
+                {"label": "100", "value": 100},
+            ],
+            value=20,
+            clearable=False,
+            style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+        ),
+    ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
 
     # Store metrics data for export
     metrics_data_store = dcc.Store(id="event-metrics-data-store", data=table_data)
     
     # Create DataTable
     table = dash_table.DataTable(
+        id="event-metrics-table",
         columns=[
             {"name": "Team", "id": "Team", "presentation": "markdown"},
             {"name": selected_metric, "id": "Value", "type": "numeric"}
@@ -5902,6 +6073,7 @@ def update_metrics_table(selected_metric, pathname):
         sort_action="native",
         sort_mode="single",
         page_size=20,
+        page_current=0,
         style_table={
             "overflowX": "auto", 
             "borderRadius": "10px", 
@@ -5937,7 +6109,8 @@ def update_metrics_table(selected_metric, pathname):
     return html.Div([
         metrics_data_store,
         metrics_export_container,
-        table
+        table,
+        metrics_rows_per_page_container
     ])
 
 @app.callback(
@@ -6087,28 +6260,47 @@ def update_insights_table(selected_insight, pathname, event_teams, event_db):
             {"name": "Keys", "id": "Keys"},
             {"name": "Value", "id": "Value"},
         ]
-    return dash_table.DataTable(
-        columns=columns,
-        data=rows,
-        style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
-        style_header={
-            "backgroundColor": "var(--card-bg)",
-            "fontWeight": "bold",
-            "textAlign": "center",
-            "borderBottom": "1px solid #ccc",
-            "padding": "6px",
-            "fontSize": "13px",
-        },
-        style_cell={
-            "backgroundColor": "var(--card-bg)",
-            "textAlign": "center",
-            "padding": "10px",
-            "border": "none",
-            "fontSize": "14px",
-        },
-        page_size=20,
-        style_as_list_view=True,
-    )
+    return html.Div([
+        dash_table.DataTable(
+            columns=columns,
+            data=rows,
+            style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
+            style_header={
+                "backgroundColor": "var(--card-bg)",
+                "fontWeight": "bold",
+                "textAlign": "center",
+                "borderBottom": "1px solid #ccc",
+                "padding": "6px",
+                "fontSize": "13px",
+            },
+            style_cell={
+                "backgroundColor": "var(--card-bg)",
+                "textAlign": "center",
+                "padding": "10px",
+                "border": "none",
+                "fontSize": "14px",
+            },
+            id="insights-table",
+            page_size=20,
+            page_current=0,
+            style_as_list_view=True,
+        ),
+        html.Div([
+            html.Label("Rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
+            dcc.Dropdown(
+                id="insights-page-size",
+                options=[
+                    {"label": "10", "value": 10},
+                    {"label": "20", "value": 20},
+                    {"label": "50", "value": 50},
+                    {"label": "100", "value": 100},
+                ],
+                value=20,
+                clearable=False,
+                style={"width": "65px", "display": "inline-block", "marginRight": "20px", "fontSize": "0.85rem"}
+            ),
+        ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
+    ])
 
 # Callback for collapsible team cards
 @app.callback(
@@ -6181,8 +6373,8 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
     effective_team = detected_team
 
     # Build baseline PeekoLive events; if a team filter is active OR there's a search query, do not cap
+    from layouts import get_peekolive_events
     events = get_peekolive_events(include_all=bool(effective_team) or bool(search_query))
-    
 
     # Apply Events page filters to PeekoLive list
     # Year filter
@@ -6349,6 +6541,77 @@ def update_match_notifications(selected_team):
         pass
     
     return dash.no_update
+
+# Page size callbacks for all DataTables
+@app.callback(
+    Output("event-insights-table", "page_size"),
+    Input("event-insights-page-size", "value")
+)
+def update_event_insights_page_size(page_size):
+    return page_size
+
+@app.callback(
+    Output("event-rankings-table", "page_size"),
+    Input("event-rankings-page-size", "value")
+)
+def update_event_rankings_page_size(page_size):
+    return page_size
+
+@app.callback(
+    Output("event-sos-table", "page_size"),
+    Input("event-sos-page-size", "value")
+)
+def update_event_sos_page_size(page_size):
+    return page_size
+
+@app.callback(
+    Output("event-teams-table", "page_size"),
+    Input("event-teams-page-size", "value")
+)
+def update_event_teams_page_size(page_size):
+    return page_size
+
+@app.callback(
+    Output("qual-matches-table", "page_size"),
+    Input("qual-matches-page-size", "value")
+)
+def update_qual_matches_page_size(page_size):
+    return page_size
+
+@app.callback(
+    Output("playoff-matches-table", "page_size"),
+    Input("playoff-matches-page-size", "value")
+)
+def update_playoff_matches_page_size(page_size):
+    return page_size
+
+@app.callback(
+    Output("team-events-table", "page_size"),
+    Input("team-events-page-size", "value")
+)
+def update_team_events_page_size(page_size):
+    return page_size
+
+@app.callback(
+    Output("team-awards-table", "page_size"),
+    Input("team-awards-page-size", "value")
+)
+def update_team_awards_page_size(page_size):
+    return page_size
+
+@app.callback(
+    Output("event-metrics-table", "page_size"),
+    Input("event-metrics-page-size", "value")
+)
+def update_event_metrics_page_size(page_size):
+    return page_size
+
+@app.callback(
+    Output("insights-table", "page_size"),
+    Input("insights-page-size", "value")
+)
+def update_insights_page_size(page_size):
+    return page_size
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
