@@ -3763,8 +3763,8 @@ def compare_layout():
 
     mode_toggle = dbc.ButtonGroup(
         [
-            dbc.Button("Compare Teams", id="compare-mode-teams", n_clicks=0, active=True, outline=True, color="primary"),
-            dbc.Button("Compare Alliances", id="compare-mode-alliances", n_clicks=0, active=False, outline=True, color="primary"),
+            dbc.Button("Compare Teams", id="compare-mode-teams", n_clicks=0, active=True, outline=True, color="warning"),
+            dbc.Button("Compare Alliances", id="compare-mode-alliances", n_clicks=0, active=False, outline=True, color="warning"),
         ],
         id="compare-mode-toggle",
         className="mb-3"

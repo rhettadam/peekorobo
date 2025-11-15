@@ -2109,8 +2109,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             ),
             dbc.ButtonGroup(
                 [
-                    dbc.Button("Compare Teams", id="event-compare-mode-teams", n_clicks=0, active=True, outline=True, color="primary", size="sm"),
-                    dbc.Button("Compare Alliances", id="event-compare-mode-alliances", n_clicks=0, active=False, outline=True, color="primary", size="sm"),
+                    dbc.Button("Compare Teams", id="event-compare-mode-teams", n_clicks=0, active=True, outline=True, color="warning", size="sm"),
+                    dbc.Button("Compare Alliances", id="event-compare-mode-alliances", n_clicks=0, active=False, outline=True, color="warning", size="sm"),
                 ],
                 id="event-compare-mode-toggle",
                 className="mb-3"
