@@ -1702,9 +1702,13 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 team_data = year_team_data.get(int(team_num), {})
             nickname = team_data.get("nickname", "Unknown")
 
+            nickname_safe = nickname.replace('"', "'")
+            truncated = truncate_name(nickname)
+            nickname_link = f'[{truncated}](/team/{tstr}/{event_year} "{nickname_safe}")'
             data_rows.append({
                 "Rank": rank_info.get("rk", None),
-                "Team": f"[{tstr} | {truncate_name(nickname)}](/team/{tstr}/{event_year})",
+                "Team #": int(team_num) if team_num else 0,
+                "Nickname": nickname_link,
                 "Wins": rank_info.get("w", None),
                 "Losses": rank_info.get("l", None),
                 "Ties": rank_info.get("t", None),
@@ -1717,7 +1721,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
 
         columns = [
             {"name": "Rank", "id": "Rank", "type": "numeric"},
-            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "Team #", "id": "Team #", "type": "numeric"},
+            {"name": "Nickname", "id": "Nickname", "presentation": "markdown"},
             {"name": "Wins", "id": "Wins", "type": "numeric"},
             {"name": "Losses", "id": "Losses", "type": "numeric"},
             {"name": "Ties", "id": "Ties", "type": "numeric"},
@@ -1976,8 +1981,12 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 if not m: return None
                 label = m.get("k", "").split("_", 1)[-1].upper()
                 return f"[{label}](/match/{m.get('ek', '')}/{label})"
+            nickname_safe = nickname.replace('"', "'")
+            truncated = truncate_name(nickname)
+            nickname_link = f'[{truncated}](/team/{team_num}/{event_year} "{nickname_safe}")'
             team_sos_rows.append({
-                "Team": f"[{team_num} | {truncate_name(nickname)}](/team/{team_num}/{event_year})",
+                "Team #": int(team_num_int) if team_num_int else 0,
+                "Nickname": nickname_link,
                 "SoS": round(sos_metric, 2),
                 "Avg Opponent ACE": round(avg_opp_ace, 2),
                 "Avg Win Prob": round(avg_win_prob, 2),
@@ -1990,7 +1999,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         # Sort by SoS (ascending: hardest at bottom, easiest at top)
         team_sos_rows.sort(key=lambda r: r["SoS"], reverse=True)
         sos_columns = [
-            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "Team #", "id": "Team #", "type": "numeric"},
+            {"name": "Nickname", "id": "Nickname", "presentation": "markdown"},
             {"name": "SoS", "id": "SoS", "type": "numeric"},
             {"name": "Avg Opponent ACE", "id": "Avg Opponent ACE", "type": "numeric"},
             {"name": "Avg Win Prob", "id": "Avg Win Prob", "type": "numeric"},
@@ -2095,9 +2105,20 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 value=default_team_values,
                 multi=True,
                 placeholder="Select teams...",
-                style={"marginBottom": "20px"}
+                style={"marginBottom": "10px"}
             ),
-            html.Div(id="compare-teams-table-container")
+            dbc.ButtonGroup(
+                [
+                    dbc.Button("Compare Teams", id="event-compare-mode-teams", n_clicks=0, active=True, outline=True, color="primary", size="sm"),
+                    dbc.Button("Compare Alliances", id="event-compare-mode-alliances", n_clicks=0, active=False, outline=True, color="primary", size="sm"),
+                ],
+                id="event-compare-mode-toggle",
+                className="mb-3"
+            ),
+            html.Div(id="event-compare-mode-hint", style={"marginBottom": "10px", "fontSize": "0.85rem", "color": "var(--text-secondary)"}),
+            html.Div(id="compare-teams-table-container"),
+            dcc.Store(id="event-compare-mode-store", data="teams"),
+            dcc.Store(id="event-radar-toggles-store", data={"show_alliances": True, "show_teams": True})
         ])
         return compare_layout, query_string
 
@@ -2179,15 +2200,20 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             tstr = str(tnum)
             team_data, actual_year = get_team_data_with_fallback(int(tnum), event_year, year_team_data)
             
+            nickname = t.get('nn', 'Unknown')
+            nickname_safe = nickname.replace('"', "'")
+            truncated = truncate_name(nickname)
+            nickname_link = f'[{truncated}](/team/{tstr}/{event_year} "{nickname_safe}")'
             rows.append({
                 "ACE Rank": rank_map.get(int(tnum), None),
+                "Team #": int(tnum) if tnum else 0,
+                "Nickname": nickname_link,
                 "RAW": team_data.get('normal_epa', 0),
                 "Confidence": team_data.get('confidence', 0),
                 "ACE": team_data.get('epa', 0),
                 "Auto": team_data.get('auto_epa', 0),
                 "Teleop": team_data.get('teleop_epa', 0),
                 "Endgame": team_data.get('endgame_epa', 0),
-                "Team": f"[{tstr} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tstr}/{event_year})",
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
         
@@ -2311,9 +2337,15 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             event_ace = event_team_data.get('epa', 0)
             ace_improvement = event_ace - overall_ace
             
+            nickname = t.get('nn', 'Unknown')
+            nickname_safe = nickname.replace('"', "'")
+            truncated = truncate_name(nickname)
+            nickname_link = f'[{truncated}](/team/{tstr}/{event_year} "{nickname_safe}")'
             rows.append({
                 "Event Rank": event_rank,
                 "ACE Rank": overall_ace_rank,
+                "Team #": int(tnum) if tnum else 0,
+                "Nickname": nickname_link,
                 "RAW": event_team_data.get('normal_epa', 0),
                 "Confidence": event_team_data.get('confidence', 0),
                 "ACE": event_team_data.get('epa', 0),
@@ -2322,7 +2354,6 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                 "Endgame": event_team_data.get('endgame_epa', 0),
                 "SoS": round(sos_value, 2),
                 "ACE Δ": round(ace_improvement, 2),
-                "Team": f"[{tstr} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tstr}/{event_year})",
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
         
@@ -2397,7 +2428,8 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
     if stats_type == "overall":
         columns = [
             {"name": "ACE Rank", "id": "ACE Rank", "type": "numeric"},
-            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "Team #", "id": "Team #", "type": "numeric"},
+            {"name": "Nickname", "id": "Nickname", "presentation": "markdown"},
             {"name": "RAW", "id": "RAW", "type": "numeric"},
             {"name": "Confidence", "id": "Confidence", "type": "numeric"},
             {"name": "ACE", "id": "ACE", "type": "numeric"},
@@ -2410,7 +2442,8 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         columns = [
             {"name": "Event Rank", "id": "Event Rank", "type": "numeric"},
             {"name": "ACE Rank", "id": "ACE Rank", "type": "numeric"},
-            {"name": "Team", "id": "Team", "presentation": "markdown"},
+            {"name": "Team #", "id": "Team #", "type": "numeric"},
+            {"name": "Nickname", "id": "Nickname", "presentation": "markdown"},
             {"name": "RAW", "id": "RAW", "type": "numeric"},
             {"name": "Confidence", "id": "Confidence", "type": "numeric"},
             {"name": "ACE", "id": "ACE", "type": "numeric"},
@@ -3250,19 +3283,82 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
     
     return html.Div(content)
 
+# Add callback for radar chart toggles
+@app.callback(
+    Output("event-radar-toggles-store", "data"),
+    Input("event-radar-toggles-checklist", "value"),
+    prevent_initial_call=True
+)
+def update_event_radar_toggles(selected_values):
+    if not selected_values:
+        return {"show_alliances": False, "show_teams": False}
+    return {
+        "show_alliances": "show_alliances" in selected_values,
+        "show_teams": "show_teams" in selected_values
+    }
+
+# Add callback for event compare mode toggle
+@app.callback(
+    [
+        Output("event-compare-mode-store", "data"),
+        Output("event-compare-mode-teams", "active"),
+        Output("event-compare-mode-alliances", "active"),
+        Output("event-compare-mode-hint", "children"),
+    ],
+    [
+        Input("event-compare-mode-teams", "n_clicks"),
+        Input("event-compare-mode-alliances", "n_clicks"),
+    ],
+    State("compare-teams-dropdown", "value"),
+)
+def update_event_compare_mode(teams_clicks, alliances_clicks, selected_teams):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return "teams", True, False, "Select 2+ teams to compare"
+    
+    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    
+    if button_id == "event-compare-mode-alliances":
+        if selected_teams and len(selected_teams) >= 3 and len(selected_teams) % 3 == 0:
+            num_alliances = len(selected_teams) // 3
+            return "alliances", False, True, f"Comparing {num_alliances} alliance{'s' if num_alliances > 1 else ''} ({len(selected_teams)} teams)"
+        elif selected_teams and len(selected_teams) > 0:
+            return "alliances", False, True, f"Select a multiple of 3 teams (currently {len(selected_teams)} teams)"
+        else:
+            return "alliances", False, True, "Select 3, 6, 9, or more teams (multiple of 3) to compare as alliances"
+    else:
+        if selected_teams and len(selected_teams) >= 2:
+            return "teams", True, False, f"Comparing {len(selected_teams)} teams"
+        else:
+            return "teams", True, False, "Select 2+ teams to compare"
+
 # Add a callback for the compare teams table
 @app.callback(
     Output("compare-teams-table-container", "children"),
     Input("compare-teams-dropdown", "value"),
+    Input("event-compare-mode-store", "data"),
+    Input("event-radar-toggles-store", "data"),
     State("store-event-epa", "data"),
     State("store-event-teams", "data"),
     State("store-rankings", "data"),
     State("store-event-year", "data"),
     State("store-event-matches", "data"),
 )
-def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, event_year, event_matches):
+def update_compare_teams_table(selected_teams, mode, radar_toggles, epa_data, event_teams, rankings, event_year, event_matches):
+    mode = mode or "teams"
+    radar_toggles = radar_toggles or {"show_alliances": True, "show_teams": True}
+    show_alliances = radar_toggles.get("show_alliances", True)
+    show_teams = radar_toggles.get("show_teams", True)
+    
     if not selected_teams:
-        return dbc.Alert("Select two or more teams to compare.", color="info")
+        return dbc.Alert("Select teams to compare.", color="info")
+    
+    if mode == "alliances":
+        if len(selected_teams) < 3 or len(selected_teams) % 3 != 0:
+            return dbc.Alert(f"Select a multiple of 3 teams to compare as alliances (currently {len(selected_teams)} teams). Select 3, 6, 9, 12, etc.", color="warning")
+    else:
+        if len(selected_teams) < 2:
+            return dbc.Alert("Select two or more teams to compare.", color="info")
     # Build lookup for event_teams
     team_lookup = {str(t["tk"]): t for t in event_teams}
 
@@ -3301,14 +3397,58 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
         avg_score_map[tnum_str] = sum(scores) / len(scores) if scores else 0
         sos_map[tnum_str] = sum(win_probs) / len(win_probs) if win_probs else 0
 
+    # Handle alliance mode - calculate combined stats for multiple alliances
+    alliance_rows = []
+    if mode == "alliances" and len(selected_teams) >= 3 and len(selected_teams) % 3 == 0:
+        # Group teams into alliances (3 teams per alliance)
+        num_alliances = len(selected_teams) // 3
+        for alliance_idx in range(num_alliances):
+            alliance_teams = selected_teams[alliance_idx * 3:(alliance_idx + 1) * 3]
+            
+            # Calculate combined alliance stats
+            combined_auto = sum(float(epa_data.get(str(tnum), {}).get('auto_epa', 0)) for tnum in alliance_teams)
+            combined_teleop = sum(float(epa_data.get(str(tnum), {}).get('teleop_epa', 0)) for tnum in alliance_teams)
+            combined_endgame = sum(float(epa_data.get(str(tnum), {}).get('endgame_epa', 0)) for tnum in alliance_teams)
+            combined_ace = sum(float(epa_data.get(str(tnum), {}).get('epa', 0)) for tnum in alliance_teams)
+            combined_raw = sum(float(epa_data.get(str(tnum), {}).get('normal_epa', 0)) for tnum in alliance_teams)
+            combined_confidence = sum(float(epa_data.get(str(tnum), {}).get('confidence', 0)) for tnum in alliance_teams) / 3.0
+            combined_wins = sum((rankings or {}).get(str(tnum), {}).get('w', 0) for tnum in alliance_teams)
+            combined_losses = sum((rankings or {}).get(str(tnum), {}).get('l', 0) for tnum in alliance_teams)
+            combined_ties = sum((rankings or {}).get(str(tnum), {}).get('t', 0) for tnum in alliance_teams)
+            combined_sos = sum(sos_map.get(str(tnum), 0) for tnum in alliance_teams) / 3.0
+            
+            team_numbers = [int(tnum) for tnum in alliance_teams]
+            alliance_label = " | ".join([f"#{num}" for num in team_numbers])
+            alliance_name = f"Alliance {alliance_idx + 1}" if num_alliances > 1 else "Alliance"
+            
+            alliance_rows.append({
+                "Team #": alliance_label,
+                "Nickname": alliance_name,
+                "Rank": "N/A",
+                "W-L-T": f"{combined_wins}-{combined_losses}-{combined_ties}",
+                "SoS": round(combined_sos, 2),
+                "RAW": round(combined_raw, 2),
+                "Auto": round(combined_auto, 2),
+                "Teleop": round(combined_teleop, 2),
+                "Endgame": round(combined_endgame, 2),
+                "Confidence": round(combined_confidence, 2),
+                "ACE": round(combined_ace, 2),
+                "_alliance_teams": alliance_teams,  # Store for radar chart
+            })
+    
     # Build rows for each team
     rows = []
     for tnum in selected_teams:
         t = team_lookup.get(str(tnum), {})
         epa = epa_data.get(str(tnum), {})
         rank_info = (rankings or {}).get(str(tnum), {})
+        nickname = t.get('nn', 'Unknown')
+        nickname_safe = nickname.replace('"', "'")
+        truncated = truncate_name(nickname)
+        nickname_link = f'[{truncated}](/team/{tnum}/{event_year} "{nickname_safe}")'
         rows.append({
-            "Team": f"[{tnum} | {truncate_name(t.get('nn', 'Unknown'))}](/team/{tnum}/{event_year})",
+            "Team #": int(tnum) if tnum else 0,
+            "Nickname": nickname_link,
             "Rank": rank_info.get("rk", "N/A"),
             "W-L-T": f"{rank_info.get('w', 'N/A')}-{rank_info.get('l', 'N/A')}-{rank_info.get('t', 'N/A')}",
             "SoS": sos_map.get(str(tnum), 0),
@@ -3319,6 +3459,10 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
             "Confidence": float(epa.get('confidence', 0)),
             "ACE": float(epa.get('epa', 0)),
         })
+    
+    # Add alliance rows at the beginning if in alliance mode
+    if alliance_rows:
+        rows = alliance_rows + rows
     # Compute global percentiles for coloring
     if event_year == current_year:
         global_teams = TEAM_DATABASE.get(event_year, {}).values()
@@ -3339,7 +3483,8 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
     }
     style_data_conditional = get_epa_styling(percentiles_dict)
     columns = [
-        {"name": "Team", "id": "Team", "presentation": "markdown"},
+        {"name": "Team #", "id": "Team #", "type": "numeric"},
+        {"name": "Nickname", "id": "Nickname", "presentation": "markdown"},
         {"name": "Rank", "id": "Rank"},
         {"name": "W-L-T", "id": "W-L-T"},
         {"name": "SoS", "id": "SoS"},
@@ -3378,33 +3523,114 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
             stat_minmax[stat] = (0, 1)
     # Radar chart with normalized values
     fig = go.Figure()
-    for row in rows:
-        tnum = row["Team"].split("|")[0].replace("[", "").strip()
-        tnum_key = tnum
-        values = [
-            row["Auto"],
-            row["Teleop"],
-            row["Endgame"],
-            row["Confidence"],
-            row["RAW"],
-            row["ACE"],
-            avg_score_map.get(tnum_key, 0),
-            sos_map.get(tnum_key, 0),
-        ]
-        norm_values = []
-        for v, stat in zip(values, radar_stats):
-            stat_min, stat_max = stat_minmax[stat]
-            if stat_max > stat_min:
-                norm = (v - stat_min) / (stat_max - stat_min)
+    
+    # Define colors for multiple alliances
+    alliance_colors = [
+        'rgba(244, 67, 54, 0.4)',    # Red
+        'rgba(33, 150, 243, 0.4)',   # Blue
+        'rgba(76, 175, 80, 0.4)',    # Green
+        'rgba(255, 193, 7, 0.4)',    # Yellow
+        'rgba(255, 87, 34, 0.4)',    # Orange
+    ]
+
+    alliance_line_colors = [
+        'rgba(244, 67, 54, 1.0)',    
+        'rgba(33, 150, 243, 1.0)',   
+        'rgba(76, 175, 80, 1.0)',    
+        'rgba(255, 193, 7, 1.0)',    
+        'rgba(255, 87, 34, 1.0)',    
+    ]
+    # Process alliance rows first if they exist and toggle is on
+    if mode == "alliances" and alliance_rows and show_alliances:
+        # Remove "Avg Score" from radar stats for alliances since it's not meaningful
+        alliance_radar_stats = [s for s in radar_stats if s != "Avg Score"]
+        for idx, alliance_row in enumerate(alliance_rows):
+            # For alliance, use combined values but scale normalization
+            values = [
+                alliance_row["Auto"],
+                alliance_row["Teleop"],
+                alliance_row["Endgame"],
+                alliance_row["Confidence"],
+                alliance_row["RAW"],
+                alliance_row["ACE"],
+                alliance_row["SoS"],
+            ]
+            # Scale mins/maxs by 3 for alliance comparison (except averaged stats)
+            alliance_stat_minmax = {}
+            for stat in alliance_radar_stats:
+                if stat in ["Confidence", "SoS"]:
+                    # Confidence and SoS are averaged, so keep original range
+                    alliance_stat_minmax[stat] = (stat_minmax[stat][0], stat_minmax[stat][1])
+                else:
+                    # Other stats (Auto, Teleop, Endgame, RAW, ACE) are summed, so scale by 3
+                    alliance_stat_minmax[stat] = (stat_minmax[stat][0] * 3, stat_minmax[stat][1] * 3)
+            norm_values = []
+            for v, stat in zip(values, alliance_radar_stats):
+                stat_min, stat_max = alliance_stat_minmax[stat]
+                if stat_max > stat_min:
+                    norm = (v - stat_min) / (stat_max - stat_min)
+                else:
+                    norm = 0.5
+                norm_values.append(norm)
+            color_idx = idx % len(alliance_colors)
+            fig.add_trace(go.Scatterpolar(
+                r=norm_values,
+                theta=alliance_radar_stats,
+                fill='toself',
+                fillcolor=alliance_colors[color_idx],
+                line=dict(color=alliance_line_colors[color_idx], width=3),
+                name=alliance_row["Nickname"],
+            ))
+    
+    # Process team rows (skip alliance rows if they exist) - only if toggle is on
+    if show_teams:
+        # Use alliance_radar_stats if in alliance mode (to exclude Avg Score), otherwise use full radar_stats
+        team_radar_stats = alliance_radar_stats if (mode == "alliances" and alliance_rows) else radar_stats
+        for row in rows:
+            # Skip alliance rows - we already processed them
+            if row.get("Nickname") and ("Alliance" in row.get("Nickname", "")):
+                continue
+            
+            tnum = str(row["Team #"])
+            tnum_key = tnum
+            
+            if mode == "alliances" and alliance_rows:
+                # In alliance mode, exclude Avg Score for consistency
+                values = [
+                    row["Auto"],
+                    row["Teleop"],
+                    row["Endgame"],
+                    row["Confidence"],
+                    row["RAW"],
+                    row["ACE"],
+                    row["SoS"],
+                ]
             else:
-                norm = 0.5
-            norm_values.append(norm)
-        fig.add_trace(go.Scatterpolar(
-            r=norm_values,
-            theta=radar_stats,
-            fill='toself',
-            name=tnum,
-        ))
+                # In team mode, include all stats
+                values = [
+                    row["Auto"],
+                    row["Teleop"],
+                    row["Endgame"],
+                    row["Confidence"],
+                    row["RAW"],
+                    row["ACE"],
+                    avg_score_map.get(tnum_key, 0),
+                    sos_map.get(tnum_key, 0),
+                ]
+            norm_values = []
+            for v, stat in zip(values, team_radar_stats):
+                stat_min, stat_max = stat_minmax[stat]
+                if stat_max > stat_min:
+                    norm = (v - stat_min) / (stat_max - stat_min)
+                else:
+                    norm = 0.5
+                norm_values.append(norm)
+            fig.add_trace(go.Scatterpolar(
+                r=norm_values,
+                theta=team_radar_stats,
+                fill='toself',
+                name=tnum,
+            ))
     fig.update_layout(
         polar=dict(
             radialaxis=dict(visible=True, showticklabels=True, ticks=''),
@@ -3476,8 +3702,20 @@ def update_compare_teams_table(selected_teams, epa_data, event_teams, rankings, 
         ),
         html.Div([
             html.Hr(),
-            html.H5("Radar Chart Comparison", style={"marginTop": "20px"}),
-            dcc.Graph(figure=fig)
+            html.H5("Radar Chart Comparison", style={"marginTop": "20px", "marginBottom": "10px"}),
+            html.Div([
+                dbc.Checklist(
+                    id="event-radar-toggles-checklist",
+                    options=[opt for opt in [
+                        {"label": " Show Alliances", "value": "show_alliances"} if mode == "alliances" else None,
+                        {"label": " Show Teams", "value": "show_teams"},
+                    ] if opt is not None],
+                    value=["show_alliances", "show_teams"] if (mode == "alliances" and show_alliances and show_teams) else (["show_alliances"] if (mode == "alliances" and show_alliances) else ["show_teams"]),
+                    inline=True,
+                    style={"marginBottom": "10px", "color": "var(--text-primary)"}
+                )
+            ]) if mode == "alliances" else html.Div(),
+            dcc.Graph(figure=fig, id="event-compare-radar-chart")
         ])
     ])
 
@@ -4823,6 +5061,54 @@ def toggle_search_bar(n_clicks, current_style):
     return new_container_style, new_button_style
 
 @app.callback(
+    [
+        Output("compare-mode-store", "data"),
+        Output("compare-mode-teams", "active"),
+        Output("compare-mode-alliances", "active"),
+        Output("compare-mode-hint", "children"),
+    ],
+    [
+        Input("compare-mode-teams", "n_clicks"),
+        Input("compare-mode-alliances", "n_clicks"),
+    ],
+    State("compare-teams", "value"),
+)
+def update_compare_mode(teams_clicks, alliances_clicks, selected_teams):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return "teams", True, False, "Select 2+ teams to compare"
+    
+    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    
+    if button_id == "compare-mode-alliances":
+        if selected_teams and len(selected_teams) >= 3 and len(selected_teams) % 3 == 0:
+            num_alliances = len(selected_teams) // 3
+            return "alliances", False, True, f"Comparing {num_alliances} alliance{'s' if num_alliances > 1 else ''} ({len(selected_teams)} teams)"
+        elif selected_teams and len(selected_teams) > 0:
+            return "alliances", False, True, f"Select a multiple of 3 teams (currently {len(selected_teams)} teams)"
+        else:
+            return "alliances", False, True, "Select 3, 6, 9, or more teams (multiple of 3) to compare as alliances"
+    else:
+        if selected_teams and len(selected_teams) >= 2:
+            return "teams", True, False, f"Comparing {len(selected_teams)} teams"
+        else:
+            return "teams", True, False, "Select 2+ teams to compare"
+
+# Add callback for standalone compare radar chart toggles
+@app.callback(
+    Output("compare-radar-toggles-store", "data"),
+    Input("compare-radar-toggles-checklist", "value"),
+    prevent_initial_call=True
+)
+def update_compare_radar_toggles(selected_values):
+    if not selected_values:
+        return {"show_alliances": False, "show_teams": False}
+    return {
+        "show_alliances": "show_alliances" in selected_values,
+        "show_teams": "show_teams" in selected_values
+    }
+
+@app.callback(
     Output("compare-teams", "options"),
     Input("compare-year", "value")
 )
@@ -4853,13 +5139,25 @@ def update_compare_team_dropdowns(year):
     Output("compare-output-section", "children"),
     Input("compare-teams", "value"), # Change trigger to team dropdown value
     Input("compare-year", "value"), # Also trigger on year change
+    Input("compare-mode-store", "data"),  # Mode: "teams" or "alliances"
+    Input("compare-radar-toggles-store", "data"),  # Radar chart toggles
     # Removed prevent_initial_call=True so it runs on page load with defaults
 )
-def compare_multiple_teams(team_ids, year): # Update function signature
-
-    if not team_ids or len(team_ids) < 2:
-        # Provide a message prompting the user to select teams
-        return dbc.Alert("Select at least 2 teams to compare.", color="info", className="text-center my-4")
+def compare_multiple_teams(team_ids, year, mode, radar_toggles): # Update function signature
+    mode = mode or "teams"
+    radar_toggles = radar_toggles or {"show_alliances": True, "show_teams": True}
+    show_alliances = radar_toggles.get("show_alliances", True)
+    show_teams = radar_toggles.get("show_teams", True)
+    
+    if not team_ids:
+        return dbc.Alert("Select teams to compare.", color="info", className="text-center my-4")
+    
+    if mode == "alliances":
+        if len(team_ids) < 3 or len(team_ids) % 3 != 0:
+            return dbc.Alert(f"Select a multiple of 3 teams to compare as alliances (currently {len(team_ids)} teams). Select 3, 6, 9, 12, etc.", color="warning", className="text-center my-4")
+    else:
+        if len(team_ids) < 2:
+            return dbc.Alert("Select at least 2 teams to compare.", color="info", className="text-center my-4")
 
     year = year or current_year
     
@@ -4879,8 +5177,13 @@ def compare_multiple_teams(team_ids, year): # Update function signature
     
     selected = [teams.get(int(tid)) for tid in team_ids if tid and int(tid) in teams]
 
-    if not all(selected) or len(selected) < 2:
+    if not all(selected):
         return dbc.Alert("Please select valid teams for the chosen year.", color="warning", className="text-center my-4")
+    
+    if mode == "alliances" and (len(selected) < 3 or len(selected) % 3 != 0):
+        return dbc.Alert(f"Please select a multiple of 3 teams for alliance comparison (currently {len(selected)} teams). Select 3, 6, 9, 12, etc.", color="warning", className="text-center my-4")
+    elif mode == "teams" and len(selected) < 2:
+        return dbc.Alert("Please select at least 2 valid teams for comparison.", color="warning", className="text-center my-4")
 
     def pill(label, value, color):
         return html.Span(f"{label}: {value}", style={
@@ -4967,10 +5270,6 @@ def compare_multiple_teams(team_ids, year): # Update function signature
             "padding": "8px" # Reduced padding
         })
 
-    # Radar chart - NORMALIZED SPIDER WEB
-    categories = ["ACE", "Auto", "Teleop", "Endgame", "Confidence", "RAW", "Avg Score"]
-    stat_keys = ["epa", "auto_epa", "teleop_epa", "endgame_epa", "confidence", "normal_epa", "average_match_score"]
-
     # Compute min/max for each stat across selected teams
     def get_stat(t, k):
         v = t.get(k, 0)
@@ -4978,6 +5277,80 @@ def compare_multiple_teams(team_ids, year): # Update function signature
             return float(v) if v is not None else 0.0 # Handle None values
         except Exception:
             return 0.0
+
+    # Handle alliance mode - support multiple alliances
+    alliance_cards = []
+    alliance_stats_list = []
+    if mode == "alliances" and len(selected) >= 3 and len(selected) % 3 == 0:
+        num_alliances = len(selected) // 3
+        
+        # Create alliance card function
+        def alliance_card(teams_list, stats, year, alliance_num):
+            team_numbers = [t['team_number'] for t in teams_list]
+            team_nicknames = [t.get('nickname', '') for t in teams_list]
+            alliance_label = " | ".join([f"#{num}" for num in team_numbers])
+            alliance_nicknames = " | ".join([nickname[:15] if nickname else f"#{num}" for num, nickname in zip(team_numbers, team_nicknames)])
+            alliance_title = f"Alliance {alliance_num}" if num_alliances > 1 else "Alliance"
+            
+            return dbc.Card([
+                dbc.CardBody([
+                    html.Div([
+                        html.H3(alliance_title, style={"fontWeight": "bold", "color": "var(--text-primary)", "marginBottom": "8px", "textAlign": "center"}),
+                        html.H4(alliance_label, style={"fontWeight": "bold", "color": "var(--text-primary)", "marginBottom": "4px", "textAlign": "center", "fontSize": "1.1rem"}),
+                        html.P(alliance_nicknames, style={"color": "var(--text-secondary)", "marginBottom": "12px", "textAlign": "center", "fontSize": "0.9rem"}),
+                        html.Div([
+                            pill("Auto", f"{stats.get('auto_epa', 0):.2f}", colors["Auto"]),
+                            pill("Teleop", f"{stats.get('teleop_epa', 0):.2f}", colors["Teleop"]),
+                            pill("Endgame", f"{stats.get('endgame_epa', 0):.2f}", colors["Endgame"]),
+                            pill("ACE", f"{stats.get('epa', 0):.2f}", colors["ACE"]),
+                        ], style={"display": "flex", "flexWrap": "wrap", "gap": "4px", "marginBottom": "6px", "justifyContent": "center"}),
+                        html.Div([
+                            html.Span("Combined Record: ", style={"fontWeight": "bold"}),
+                            html.Span(str(stats.get('wins', 0)), style={"color": "green", "fontWeight": "bold"}),
+                            html.Span("-"),
+                            html.Span(str(stats.get('losses', 0)), style={"color": "red", "fontWeight": "bold"}),
+                            html.Span("-"),
+                            html.Span(str(stats.get('ties', 0)), style={"color": "#777", "fontWeight": "bold"}),
+                        ], style={"marginBottom": "0px", "textAlign": "center"}),
+                    ])
+                ])
+            ], style={
+                "borderRadius": "12px",
+                "boxShadow": "0px 4px 12px rgba(0,0,0,0.15)",
+                "backgroundColor": "var(--card-bg)",
+                "marginBottom": "20px",
+                "border": "2px solid #673ab7",
+                "padding": "12px"
+            })
+        
+        # Process each alliance
+        for alliance_idx in range(num_alliances):
+            alliance_teams = selected[alliance_idx * 3:(alliance_idx + 1) * 3]
+            
+            # Calculate combined alliance stats
+            alliance_stats = {
+                "auto_epa": sum(get_stat(t, "auto_epa") for t in alliance_teams),
+                "teleop_epa": sum(get_stat(t, "teleop_epa") for t in alliance_teams),
+                "endgame_epa": sum(get_stat(t, "endgame_epa") for t in alliance_teams),
+                "epa": sum(get_stat(t, "epa") for t in alliance_teams),
+                "normal_epa": sum(get_stat(t, "normal_epa") for t in alliance_teams),
+                "confidence": sum(get_stat(t, "confidence") for t in alliance_teams) / 3.0,  # Average confidence
+                "wins": sum(t.get('wins', 0) for t in alliance_teams),
+                "losses": sum(t.get('losses', 0) for t in alliance_teams),
+                "ties": sum(t.get('ties', 0) for t in alliance_teams),
+            }
+            
+            alliance_cards.append(alliance_card(alliance_teams, alliance_stats, year, alliance_idx + 1))
+            alliance_stats_list.append(alliance_stats)
+        
+        alliance_card_display = html.Div(alliance_cards)
+    else:
+        alliance_card_display = None
+        alliance_stats_list = []
+
+    # Radar chart - NORMALIZED SPIDER WEB
+    categories = ["ACE", "Auto", "Teleop", "Endgame", "Confidence", "RAW", "Avg Score"]
+    stat_keys = ["epa", "auto_epa", "teleop_epa", "endgame_epa", "confidence", "normal_epa", "average_match_score"]
 
     # Calculate global min/max for the selected year
     all_teams_in_year = TEAM_DATABASE.get(year, {}).values()
@@ -5008,21 +5381,92 @@ def compare_multiple_teams(team_ids, year): # Update function signature
         'rgba(127, 127, 127, 0.3)',  # Gray
     ]
 
-    for i, t in enumerate(selected): # Use enumerate to get an index
-        r_norm = [
-            normalize(get_stat(t, k), mins[k], maxs[k]) for k in stat_keys
-        ]
-        r_actual = [get_stat(t, k) for k in stat_keys]
-        fig.add_trace(go.Scatterpolar(
-            r=r_norm,
-            theta=categories,
-            fill='toself',
-            fillcolor=colors_rgba[i % len(colors_rgba)], # Assign color from palette
-            line=dict(color=colors_rgba[i % len(colors_rgba)].replace(', 0.6', ', 1.0'), width=2), # Thicker, opaque line
-            name=f"#{t['team_number']} | {t.get('nickname', 'Unknown')}", # Add nickname to legend/hover name
-            hovertemplate='<b>%{theta}</b><br>Normalized: %{r:.2f}<br>Actual: %{customdata:.2f}<extra>Team ' + str(t['team_number']) + '</extra>',
-            customdata=r_actual,
-        ))
+    # Define colors for multiple alliances
+    alliance_colors = [
+        'rgba(103, 58, 183, 0.4)',   # Purple
+        'rgba(156, 39, 176, 0.4)',   # Purple 2
+        'rgba(123, 31, 162, 0.4)',   # Purple 3
+        'rgba(171, 71, 188, 0.4)',   # Purple 4
+        'rgba(142, 36, 170, 0.4)',   # Purple 5
+    ]
+    alliance_line_colors = [
+        'rgba(103, 58, 183, 1.0)',
+        'rgba(156, 39, 176, 1.0)',
+        'rgba(123, 31, 162, 1.0)',
+        'rgba(171, 71, 188, 1.0)',
+        'rgba(142, 36, 170, 1.0)',
+    ]
+    
+    # Remove "Avg Score" from categories/stat_keys for alliances since it's not meaningful
+    alliance_categories = [c for c in categories if c != "Avg Score"]
+    alliance_stat_keys = [k for k in stat_keys if k != "average_match_score"]
+    
+    # Add alliance traces if in alliance mode and toggle is on
+    if mode == "alliances" and alliance_stats_list and show_alliances:
+        
+        # For alliance, we need to scale the mins/maxs for combined values
+        # Multiply team max by 3 for alliance comparison (except averaged stats)
+        alliance_mins = {}
+        alliance_maxs = {}
+        for k in alliance_stat_keys:
+            if k == "confidence":
+                # Confidence is averaged, so keep original 0-1 range
+                alliance_mins[k] = mins[k]
+                alliance_maxs[k] = maxs[k]
+            else:
+                # Other stats (auto_epa, teleop_epa, endgame_epa, epa, normal_epa) are summed, so scale by 3
+                alliance_mins[k] = mins[k] * 3
+                alliance_maxs[k] = maxs[k] * 3
+        
+        for idx, alliance_stats in enumerate(alliance_stats_list):
+            alliance_teams = selected[idx * 3:(idx + 1) * 3]
+            team_numbers = [t['team_number'] for t in alliance_teams]
+            
+            alliance_r_norm = [
+                normalize(alliance_stats.get(k, 0), alliance_mins[k], alliance_maxs[k]) for k in alliance_stat_keys
+            ]
+            alliance_r_actual = [
+                alliance_stats.get("epa", 0),
+                alliance_stats.get("auto_epa", 0),
+                alliance_stats.get("teleop_epa", 0),
+                alliance_stats.get("endgame_epa", 0),
+                alliance_stats.get("confidence", 0),
+                alliance_stats.get("normal_epa", 0),
+            ]
+            color_idx = idx % len(alliance_colors)
+            alliance_name = f"Alliance {idx + 1}" if len(alliance_stats_list) > 1 else "Alliance"
+            fig.add_trace(go.Scatterpolar(
+                r=alliance_r_norm,
+                theta=alliance_categories,
+                fill='toself',
+                fillcolor=alliance_colors[color_idx],
+                line=dict(color=alliance_line_colors[color_idx], width=3),
+                name=alliance_name,
+                hovertemplate='<b>%{theta}</b><br>Normalized: %{r:.2f}<br>Actual: %{customdata:.2f}<extra>' + alliance_name + '</extra>',
+                customdata=alliance_r_actual,
+            ))
+
+    # Add team traces only if toggle is on
+    if show_teams:
+        # Use alliance_categories/stat_keys if in alliance mode (to exclude Avg Score), otherwise use full categories/stat_keys
+        team_categories = alliance_categories if (mode == "alliances" and alliance_stats_list) else categories
+        team_stat_keys = alliance_stat_keys if (mode == "alliances" and alliance_stats_list) else stat_keys
+        
+        for i, t in enumerate(selected): # Use enumerate to get an index
+            r_norm = [
+                normalize(get_stat(t, k), mins[k], maxs[k]) for k in team_stat_keys
+            ]
+            r_actual = [get_stat(t, k) for k in team_stat_keys]
+            fig.add_trace(go.Scatterpolar(
+                r=r_norm,
+                theta=team_categories,
+                fill='toself',
+                fillcolor=colors_rgba[i % len(colors_rgba)], # Assign color from palette
+                line=dict(color=colors_rgba[i % len(colors_rgba)].replace(', 0.3', ', 1.0'), width=2), # Thicker, opaque line
+                name=f"#{t['team_number']} | {t.get('nickname', 'Unknown')}", # Add nickname to legend/hover name
+                hovertemplate='<b>%{theta}</b><br>Normalized: %{r:.2f}<br>Actual: %{customdata:.2f}<extra>Team ' + str(t['team_number']) + '</extra>',
+                customdata=r_actual,
+            ))
 
     fig.update_layout(
         polar=dict(
@@ -5053,15 +5497,50 @@ def compare_multiple_teams(team_ids, year): # Update function signature
     )
 
     # Container for team cards using Flexbox for wrapping
-    cards_container = html.Div([
-        team_card(t, year) for t in selected
-    ], style={
-        "display": "flex",
-        "flexWrap": "wrap",
-        "gap": "12px", # Space between cards
-        "justifyContent": "center" # Center cards in the container
-    })
+    team_cards_list = [team_card(t, year) for t in selected]
+    
+    if alliance_card_display:
+        cards_container = html.Div([
+            alliance_card_display,
+            html.Hr(style={"margin": "20px 0"}),
+            html.H5("Individual Teams", style={"textAlign": "center", "marginBottom": "15px", "color": "var(--text-primary)"}),
+            html.Div(team_cards_list, style={
+                "display": "flex",
+                "flexWrap": "wrap",
+                "gap": "12px",
+                "justifyContent": "center"
+            })
+        ])
+    else:
+        cards_container = html.Div(team_cards_list, style={
+            "display": "flex",
+            "flexWrap": "wrap",
+            "gap": "12px", # Space between cards
+            "justifyContent": "center" # Center cards in the container
+        })
 
+    # Add radar chart toggles UI (only show alliance toggle if in alliance mode)
+    radar_toggles_ui = None
+    if mode == "alliances" and alliance_stats_list:
+        options = [
+            {"label": " Show Alliances", "value": "show_alliances"},
+            {"label": " Show Teams", "value": "show_teams"},
+        ]
+        value = []
+        if show_alliances:
+            value.append("show_alliances")
+        if show_teams:
+            value.append("show_teams")
+        radar_toggles_ui = html.Div([
+            dbc.Checklist(
+                id="compare-radar-toggles-checklist",
+                options=options,
+                value=value,
+                inline=True,
+                style={"marginBottom": "10px", "color": "var(--text-primary)"}
+            )
+        ])
+    
     return html.Div([
         dbc.Row([ # Main row for cards and graph
             dbc.Col( # Column for team cards container
@@ -5071,7 +5550,10 @@ def compare_multiple_teams(team_ids, year): # Update function signature
                 className="mb-4" # Add bottom margin when stacked
             ),
             dbc.Col( # Column for the radar chart
-                dcc.Graph(figure=fig, config={"displayModeBar": False}, style={"height": "475px"}), # Added style for height
+                html.Div([
+                    radar_toggles_ui if radar_toggles_ui else html.Div(),
+                    dcc.Graph(figure=fig, config={"displayModeBar": False}, style={"height": "475px"}), # Added style for height
+                ]),
                 md=8, # Allocate more space for the graph
                 xs=12, # Stack vertically on extra small screens
                 className="mb-4" # Add bottom margin when stacked

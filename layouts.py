@@ -696,19 +696,19 @@ def blog_index_layout():
             "title": "RAW vs ACE: Understanding Peekorobo's Metrics",
             "description": "Learn the difference between RAW (unadjusted performance) and ACE (adjusted contribution estimate), and how confidence scores work.",
             "url": "/blog/raw-vs-ace",
-            "date": "2025-01-08"
+            "date": "2025-11-10"
         },
         {
             "title": "Peekorobo's Features",
             "description": "Complete overview of all features available on Peekorobo, from team analysis to match predictions and event insights.",
             "url": "/blog/features",
-            "date": "2025-01-08"
+            "date": "2025-11-10"
         },
         {
             "title": "Match Prediction System",
             "description": "How Peekorobo predicts match outcomes using ACE values and confidence scores.",
             "url": "/blog/predictions",
-            "date": "2025-01-08"
+            "date": "2025-11-10"
         }
     ]
     
@@ -807,7 +807,6 @@ def raw_vs_ace_blog_layout():
                         }),
                         html.P(["Where ", html.Code("K", style={"color": "#ffdd00"}), " is adjusted by:"], style={"color": "var(--text-primary)"}),
                         html.Ul([
-                            html.Li([html.Strong("Match Importance:"), " Qualifying matches (1.1×), elimination matches (1.0×)"]),
                             html.Li([html.Strong("Chronological Weight:"), " Later-season events weighted more heavily"]),
                         ], style={"color": "var(--text-primary)"})
                     ])
@@ -1046,8 +1045,6 @@ def features_blog_layout():
                 ], style={"fontSize": "1.1em", "marginBottom": "40px", "color": "var(--text-primary)"}),
                 
                 html.H2("Home Page", style={"color": "var(--text-primary)", "marginTop": "40px", "marginBottom": "20px", "borderBottom": "2px solid var(--border-color)", "paddingBottom": "10px"}),
-                
-                html.P("Global search preview: As you type, you'll see categorized suggestions for Teams, Events, and Users with smart highlighting of closest matches, recent years, and quick links.", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
                 
                 html.Img(src="/assets/readme/homepage.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "30px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
                 
@@ -3764,6 +3761,15 @@ def compare_layout():
         style={"width": "100%"},
     )
 
+    mode_toggle = dbc.ButtonGroup(
+        [
+            dbc.Button("Compare Teams", id="compare-mode-teams", n_clicks=0, active=True, outline=True, color="primary"),
+            dbc.Button("Compare Alliances", id="compare-mode-alliances", n_clicks=0, active=False, outline=True, color="primary"),
+        ],
+        id="compare-mode-toggle",
+        className="mb-3"
+    )
+
     return html.Div([
         topbar(),
         dbc.Container([
@@ -3771,7 +3777,11 @@ def compare_layout():
             dbc.Row([
                 dbc.Col([
                     html.Label("Teams", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
-                    team_dropdown
+                    team_dropdown,
+                    html.Div([
+                        mode_toggle
+                    ], style={"marginTop": "10px", "textAlign": "center"}),
+                    html.Div(id="compare-mode-hint", style={"marginTop": "5px", "fontSize": "0.85rem", "color": "var(--text-secondary)", "textAlign": "center"})
                 ], width=7),
                 dbc.Col([
                     html.Label("Year", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
@@ -3781,6 +3791,8 @@ def compare_layout():
             html.Hr(),
             html.Div(id="compare-output-section", children=[]) # Make this div initially empty
         ], style={"maxWidth": "1000px", "margin": "0 auto", "padding": "20px", "flexGrow": "1"}),
+        dcc.Store(id="compare-mode-store", data="teams"),  # Store the current mode
+        dcc.Store(id="compare-radar-toggles-store", data={"show_alliances": True, "show_teams": True}),  # Store radar chart toggles
         footer
     ])
 
