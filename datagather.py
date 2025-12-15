@@ -152,7 +152,7 @@ def load_data():
         team_cursor.execute("""
             SELECT team_number, year, nickname, city, state_prov, country, website,
                    normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                   wins, losses, event_epas
+                   wins, losses, ties, event_epas
             FROM team_epas
             ORDER BY year, team_number
         """)
@@ -161,7 +161,7 @@ def load_data():
         for row in team_cursor.fetchall():
             team_number, year, nickname, city, state_prov, country, website, \
             normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
-            wins, losses, event_epas = row
+            wins, losses, ties, event_epas = row
             
             raw_team_data = {
                 "team_number": team_number,
@@ -179,6 +179,7 @@ def load_data():
                 "endgame_epa": endgame_epa,
                 "wins": wins,
                 "losses": losses,
+                "ties": ties,
                 "event_epas": event_epas
             }
             
@@ -607,7 +608,7 @@ def load_year_data(year):
             cursor.execute("""
                 SELECT team_number, year, nickname, city, state_prov, country, website,
                        normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                       wins, losses, event_epas
+                       wins, losses, ties, event_epas
                 FROM team_epas
                 WHERE year = %s
                 ORDER BY team_number
@@ -616,7 +617,7 @@ def load_year_data(year):
                 (
                     team_number, year, nickname, city, state_prov, country, website,
                     normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                    wins, losses, event_epas
+                    wins, losses, ties, event_epas
                 ) = row
 
                 raw_team_data = {
@@ -635,6 +636,7 @@ def load_year_data(year):
                     "endgame_epa": endgame_epa,
                     "wins": wins,
                     "losses": losses,
+                    "ties": ties,
                     "event_epas": safe_json_load(event_epas)
                 }
 

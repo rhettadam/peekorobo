@@ -239,8 +239,8 @@ def insert_team_epa(result, year):
     cur.execute("""
         INSERT INTO team_epas (team_number, year, nickname, city, state_prov, country, website,
                                normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                               wins, losses, event_epas)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                               wins, losses, ties, event_epas)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (team_number, year) DO UPDATE SET
             nickname = EXCLUDED.nickname,
             city = EXCLUDED.city,
@@ -255,6 +255,7 @@ def insert_team_epa(result, year):
             endgame_epa = EXCLUDED.endgame_epa,
             wins = EXCLUDED.wins,
             losses = EXCLUDED.losses,
+            ties = EXCLUDED.ties,
             event_epas = EXCLUDED.event_epas
     """, (
         result.get("team_number"),
@@ -272,6 +273,7 @@ def insert_team_epa(result, year):
         result.get("endgame_epa"),
         result.get("wins"),
         result.get("losses"),
+        result.get("ties"),
         json.dumps(result.get("event_epas", []))
     ))
     conn.commit()
@@ -374,7 +376,7 @@ def get_existing_team_epa(team_number, year):
     
     cur.execute("""
         SELECT nickname, city, state_prov, country, website, normal_epa, epa, confidence, 
-               auto_epa, teleop_epa, endgame_epa, wins, losses, event_epas
+               auto_epa, teleop_epa, endgame_epa, wins, losses, ties, event_epas
         FROM team_epas WHERE team_number = %s AND year = %s
     """, (team_number, year))
     
@@ -384,7 +386,7 @@ def get_existing_team_epa(team_number, year):
     
     if row:
         # Handle event_epas field - it might be a JSON string or already parsed list
-        event_epas_raw = row[13]
+        event_epas_raw = row[14]
         if event_epas_raw is None:
             event_epas = []
         elif isinstance(event_epas_raw, str):
@@ -414,6 +416,7 @@ def get_existing_team_epa(team_number, year):
             "endgame_epa": endgame_epa,
             "wins": row[11],
             "losses": row[12],
+            "ties": row[13],
             "event_epas": event_epas
         }
     return None
@@ -569,6 +572,7 @@ def data_has_changed(existing, new_data, data_type):
             not float_equal(existing.get("endgame_epa"), new_data.get("endgame_epa")) or
             existing.get("wins", 0) != new_data.get("wins", 0) or
             existing.get("losses", 0) != new_data.get("losses", 0) or
+            existing.get("ties", 0) != new_data.get("ties", 0) or
             existing.get("nickname") != new_data.get("nickname") or
             existing.get("city") != new_data.get("city") or
             existing.get("state_prov") != new_data.get("state_prov") or
