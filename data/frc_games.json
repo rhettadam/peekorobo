@@ -1,4 +1,11 @@
 {
+  "2026": {
+    "name": "Rebuilt",
+    "video": "",
+    "logo": "/assets/logos/2026.png",
+    "manual": "https://firstfrc.blob.core.windows.net/frc2026/Manual/2026GameManual.pdf",
+    "summary": ""
+  },
   "2025": {
     "name": "Reefscape",
     "video": "https://www.youtube.com/watch?v=YWbxcjlY9JY",
