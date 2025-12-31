@@ -3889,15 +3889,6 @@ def load_teams(
 ):
     ctx = callback_context
     
-    # Simple debouncing: if this is a search trigger and the query is very short, 
-    # wait for more input before processing
-    # Debouncing: ignore very short queries unless it's a valid team number (3+ digits)
-
-    if ctx.triggered and any(t["prop_id"].startswith("search-bar.value") for t in ctx.triggered):
-        q = search_query.strip()
-        if len(q) < 3 and not (q.isdigit() and len(q) >= 3):
-            return no_update, no_update, ..., no_update
-
     # Default filter values
     default_values = {
         "year": current_year,
@@ -3910,12 +3901,12 @@ def load_teams(
         "district": "All"
     }
 
-    # Build query string for updating URL
+    # Build query string for updating URL (always build it, even for empty search)
     params = {
         "year": selected_year,
         "country": selected_country,
         "state": selected_state,
-        "search": search_query,
+        "search": search_query or "",  # Ensure empty string instead of None
         "x": x_axis,
         "y": y_axis,
         "tab": active_tab,
@@ -3926,7 +3917,7 @@ def load_teams(
         k: v for k, v in params.items()
         if v not in (None, "", "All") and str(v) != str(default_values.get(k, ""))
     })
-    # Only update the URL if a dropdown was the trigger
+    # Only update the URL if not triggered by URL change itself
     if ctx.triggered and not any(t["prop_id"].startswith("teams-url.search") for t in ctx.triggered):
         url_update = query_string
     else:
