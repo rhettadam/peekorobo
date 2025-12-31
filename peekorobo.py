@@ -22,7 +22,7 @@ import pandas as pd
 
 import plotly.graph_objects as go
 
-from datagather import load_data_2025,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
+from datagather import load_data_current_year,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
 from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout
 
@@ -32,7 +32,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Load optimized data: current year data globally + search data with all events
-TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data_2025()
+TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data_current_year()
 SEARCH_TEAM_DATA, SEARCH_EVENT_DATA = load_search_data()
 
 with open('data/district_states.json', 'r', encoding='utf-8') as f:
@@ -41,7 +41,7 @@ with open('data/district_states.json', 'r', encoding='utf-8') as f:
 # Store app startup time for "Last Updated" indicator
 APP_STARTUP_TIME = datetime.now()
 
-current_year = 2025
+current_year = 2026
 
 
 app = dash.Dash(

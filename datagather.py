@@ -9,6 +9,7 @@ import json
 from collections import defaultdict
 import threading
 import time
+from datetime import date
 
 load_dotenv()
 
@@ -367,28 +368,29 @@ def get_team_avatar(team_number, year=2025):
         return f"/assets/avatars/{team_number}.png?v=1"
     return "/assets/avatars/stock.png"
 
-def load_data_2025():
-    """Load only 2025 data for better performance."""
+def load_data_current_year():
+    """Load only current year data for better performance."""
+    current_year = 2026
     def compress_dict(d):
         """Remove any None or empty string values. Keep empty lists and dictionaries."""
         # Special case: preserve empty string for winning_alliance (wa) as it indicates ties
         return {k: v for k, v in d.items() if v not in (None, "") or k == "wa"}
 
-    # === Load team EPA data from PostgreSQL for 2025 only ===
+    # === Load team EPA data from PostgreSQL for current year only ===
     with DatabaseConnection() as conn:
         team_cursor = conn.cursor()
         
-        # Get only 2025 team EPA data
+        # Get only current year team EPA data
         team_cursor.execute("""
             SELECT team_number, year, nickname, city, state_prov, country, website,
                    normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
                    wins, losses, event_epas
             FROM team_epas
-            WHERE year = 2025
+            WHERE year = %s
             ORDER BY team_number
-        """)
+        """, (current_year,))
         
-        team_data = {2025: {}}
+        team_data = {current_year: {}}
         for row in team_cursor.fetchall():
             team_number, year, nickname, city, state_prov, country, website, \
             normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
@@ -424,19 +426,19 @@ def load_data_2025():
             
             # Compress the dictionary
             team = compress_dict(raw_team_data)
-            team_data[2025][team_number] = team
+            team_data[current_year][team_number] = team
 
-        # === Load event data from PostgreSQL for 2025 only ===
+        # === Load event data from PostgreSQL for current year only ===
         # Events
         event_cursor = conn.cursor()
         event_cursor.execute("""
             SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
             FROM events
-            WHERE year = 2025
+            WHERE year = %s
             ORDER BY event_key
-        """)
+        """, (current_year,))
         
-        event_data = {2025: {}}
+        event_data = {current_year: {}}
         for row in event_cursor.fetchall():
             event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
             ev = compress_dict({
@@ -453,17 +455,17 @@ def load_data_2025():
                 "wt": webcast_type,
                 "wc": webcast_channel
             })
-            event_data[2025][event_key] = ev
+            event_data[current_year][event_key] = ev
 
-        # Event Teams for 2025
+        # Event Teams for current year
         event_cursor.execute("""
             SELECT event_key, team_number, nickname, city, state_prov, country
             FROM event_teams
-            WHERE event_key LIKE '2025%'
+            WHERE event_key LIKE %s
             ORDER BY event_key, team_number
-        """)
+        """, (f"{current_year}%",))
         
-        EVENT_TEAMS = {2025: {}}
+        EVENT_TEAMS = {current_year: {}}
         for row in event_cursor.fetchall():
             event_key, team_number, nickname, city, state_prov, country = row
             team = compress_dict({
@@ -474,17 +476,17 @@ def load_data_2025():
                 "s": state_prov,
                 "co": country
             })
-            EVENT_TEAMS[2025].setdefault(event_key, []).append(team)
+            EVENT_TEAMS[current_year].setdefault(event_key, []).append(team)
 
-        # Rankings for 2025
+        # Rankings for current year
         event_cursor.execute("""
             SELECT event_key, team_number, rank, wins, losses, ties, dq
             FROM event_rankings
-            WHERE event_key LIKE '2025%'
+            WHERE event_key LIKE %s
             ORDER BY event_key, team_number
-        """)
+        """, (f"{current_year}%",))
         
-        EVENT_RANKINGS = {2025: {}}
+        EVENT_RANKINGS = {current_year: {}}
         for row in event_cursor.fetchall():
             event_key, team_number, rank, wins, losses, ties, dq = row
             ranking = compress_dict({
@@ -496,15 +498,15 @@ def load_data_2025():
                 "t": ties,
                 "dq": dq
             })
-            EVENT_RANKINGS[2025].setdefault(event_key, {})[team_number] = ranking
+            EVENT_RANKINGS[current_year].setdefault(event_key, {})[team_number] = ranking
 
-        # Awards for 2025
+        # Awards for current year
         event_cursor.execute("""
             SELECT event_key, team_number, award_name, year
             FROM event_awards
-            WHERE year = 2025
+            WHERE year = %s
             ORDER BY event_key, team_number
-        """)
+        """, (current_year,))
         
         EVENTS_AWARDS = []
         for row in event_cursor.fetchall():
@@ -517,16 +519,16 @@ def load_data_2025():
             })
             EVENTS_AWARDS.append(award)
 
-        # Matches for 2025
+        # Matches for current year
         event_cursor.execute("""
             SELECT match_key, event_key, comp_level, match_number, set_number, 
                    red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time
             FROM event_matches
-            WHERE event_key LIKE '2025%'
+            WHERE event_key LIKE %s
             ORDER BY event_key, match_number
-        """)
+        """, (f"{current_year}%",))
         
-        EVENT_MATCHES = {2025: []}
+        EVENT_MATCHES = {current_year: []}
         for row in event_cursor.fetchall():
             match_key, event_key, comp_level, match_number, set_number, \
             red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time = row
@@ -544,7 +546,7 @@ def load_data_2025():
                 "yt": youtube_key,
                 "pt": predicted_time
             })
-            EVENT_MATCHES[2025].append(match_data)
+            EVENT_MATCHES[current_year].append(match_data)
 
         event_cursor.close()
         team_cursor.close()
@@ -565,7 +567,7 @@ def load_search_data():
             continue
         nickname = info.get("nickname", "")
         last_year = info.get("last_year", None)
-        for year in range(1992, 2026):
+        for year in range(1992, 2027):
             team_data.setdefault(year, {})[team_number] = {
                 "team_number": team_number,
                 "nickname": nickname,

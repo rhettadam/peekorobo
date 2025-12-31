@@ -15,7 +15,7 @@ import numpy as np
 import time
 import pytz
 
-current_year = 2025
+current_year = 2026
 DEFAULT_TIMEZONE = 'America/Chicago'  # Central Time
 
 with open('data/district_states.json', 'r', encoding='utf-8') as f:
@@ -534,16 +534,16 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                 
                 district_has_multiple_states = len(unique_states) > 1
         
-        # Add state rank card (always show state rank)
-        rank_cards.append(
-            rank_card(state, state_rank, state_teams, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa")
-        )
-        
         # Add district rank card if team is in a district with multiple states
         if district_rank and district_name and district_teams > 0 and district_has_multiple_states:
             rank_cards.append(
                 rank_card(district_name, district_rank, district_teams, f"/teams?year={performance_year}&sort_by=epa")
             )
+        
+        # Add state rank card (always show state rank)
+        rank_cards.append(
+            rank_card(state, state_rank, state_teams, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa")
+        )
 
         return html.Div([
             html.Div(rank_cards, className="rank-card-container")
@@ -2601,7 +2601,7 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
 def teams_layout(default_year=current_year):
     teams_year_dropdown = dcc.Dropdown(
         id="teams-year-dropdown",
-        options=[{"label": str(y), "value": y} for y in range(1992, 2027)],
+        options=[{"label": str(y), "value": y} for y in reversed(range(1992, 2027))],
         value=default_year,
         clearable=False,
         placeholder="Select Year",
@@ -3015,7 +3015,7 @@ def teams_layout(default_year=current_year):
 def events_layout(year=current_year, active_tab="cards-tab"):
     year_dropdown = dcc.Dropdown(
         id="year-dropdown",
-        options=[{"label": str(yr), "value": yr} for yr in range(2000, 2027)],
+        options=[{"label": str(yr), "value": yr} for yr in reversed(range(2000, 2027))],
         value=year,
         placeholder="Year",
         clearable=False
@@ -3753,7 +3753,7 @@ def compare_layout():
 
     year_dropdown = dcc.Dropdown(
         id="compare-year",
-        options=[{"label": str(y), "value": y} for y in range(1992, 2027)],
+        options=[{"label": str(y), "value": y} for y in reversed(range(1992, 2027))],
         value=current_year,
         clearable=False,
         placeholder="Select Year",

@@ -97,20 +97,31 @@ def predict_win_probability(red_info, blue_info):
     return p_red, 1 - p_red
 
 def calculate_single_rank(team_data, selected_team):
+    # Extract selected team's information
+    selected_epa = selected_team.get("epa")
+    
+    # If selected team has no EPA data, return N/A for all ranks
+    if selected_epa is None:
+        return "N/A", "N/A", "N/A"
+    
+    selected_epa = selected_epa or 0  # Convert None/False to 0, but we already checked for None above
+    selected_country = (selected_team.get("country") or "").lower()
+    selected_state = (selected_team.get("state_prov") or "").lower()
+
     global_rank = 1
     country_rank = 1
     state_rank = 1
-
-    # Extract selected team's information
-    selected_epa = selected_team.get("epa", 0) or 0  # Ensure selected_epa is a number
-    selected_country = (selected_team.get("country") or "").lower()
-    selected_state = (selected_team.get("state_prov") or "").lower()
 
     for team in team_data:
         if team.get("team_number") == selected_team.get("team_number"):
             continue
 
-        team_epa = team.get("epa", 0) or 0  # Default to 0 if ACE is None
+        team_epa = team.get("epa")
+        # Skip teams with no EPA data for comparison
+        if team_epa is None:
+            continue
+            
+        team_epa = team_epa or 0
         team_country = (team.get("country") or "").lower()
         team_state = (team.get("state_prov") or "").lower()
 
@@ -140,27 +151,36 @@ def calculate_all_ranks(year, data):
     teams_data = list(year_data.values())
 
     for team in teams_data:
-        epa = team.get("epa", 0) or 0  # <- already includes confidence
-
+        epa = team.get("epa")
+        
         # For display: this is the "Total ACE"
         team["display_ace"] = epa
-        # Choose sorting strategy
-        team["sort_metric"] = epa
+        # Choose sorting strategy - use 0 for sorting if None, but track None separately
+        team["sort_metric"] = epa if epa is not None else 0
+        team["has_epa"] = epa is not None
 
-    # Sort by the chosen ranking metric
-    teams_data = sorted(teams_data, key=lambda x: x.get("sort_metric", 0), reverse=True)
+    # Sort by the chosen ranking metric - teams with EPA first, then by EPA value
+    teams_data = sorted(teams_data, key=lambda x: (not x.get("has_epa", False), x.get("sort_metric", 0)), reverse=True)
 
-    # Compute percentiles for display using `display_ace` only
+    # Compute percentiles for display using `display_ace` only (excluding None values)
     values = [team.get("display_ace") for team in teams_data if team.get("display_ace") is not None]
     percentiles = {p: np.percentile(values, int(p)) for p in ["99", "95", "90", "75", "50", "25"]} if values else {p: 0 for p in ["99", "95", "90", "75", "50", "25"]}
 
-    for idx, team in enumerate(teams_data):
+    rank = 1
+    for team in teams_data:
         team_number = str(team["team_number"])
         ace = team["display_ace"]
-        rank = idx + 1
+        
+        # Only assign rank if team has EPA data, otherwise use "N/A"
+        if team.get("has_epa", False):
+            current_rank = rank
+            rank += 1
+        else:
+            current_rank = "N/A"
+        
         epa_info[team_number] = {
             "epa": ace,
-            "rank": rank,
+            "rank": current_rank,
             "epa_display": ace,
         }
 
