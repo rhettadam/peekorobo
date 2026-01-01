@@ -6646,6 +6646,60 @@ def update_selected_year(selected_year):
     return selected_year if selected_year else current_year
 
 @app.callback(
+    Output("selected-country-store", "data"),
+    Input("higher-lower-country-dropdown", "value"),
+    prevent_initial_call=False
+)
+def update_selected_country(selected_country):
+    """Store the selected country"""
+    return selected_country if selected_country else "All"
+
+@app.callback(
+    Output("selected-state-store", "data"),
+    Input("higher-lower-state-dropdown", "value"),
+    prevent_initial_call=False
+)
+def update_selected_state(selected_state):
+    """Store the selected state"""
+    return selected_state if selected_state else "All"
+
+@app.callback(
+    Output("selected-district-store", "data"),
+    Input("higher-lower-district-dropdown", "value"),
+    prevent_initial_call=False
+)
+def update_selected_district(selected_district):
+    """Store the selected district"""
+    return selected_district if selected_district else "All"
+
+@app.callback(
+    [Output("higher-lower-state-dropdown", "options"),
+     Output("higher-lower-state-dropdown", "value")],
+    Input("higher-lower-country-dropdown", "value"),
+    prevent_initial_call=False
+)
+def update_higher_lower_state_options(selected_country):
+    """Update state dropdown options based on selected country and reset value"""
+    with open('data/states.json', 'r', encoding='utf-8') as f:
+        STATES = json.load(f)
+    
+    state_options = [{"label": "All States", "value": "All"}]
+    if selected_country and selected_country != "All" and selected_country in STATES:
+        state_options += [
+            {"label": s["label"], "value": s["value"]}
+            for s in STATES[selected_country] if isinstance(s, dict)
+        ]
+    elif not selected_country or selected_country == "All":
+        # Default to US states if global
+        state_options += [
+            {"label": s["label"], "value": s["value"]}
+            for s in STATES.get("USA", []) if isinstance(s, dict)
+        ]
+    
+    # Reset state to "All" when country changes
+    return state_options, "All"
+
+@app.callback(
     [Output("teams-data-store", "data"),
      Output("game-state-store", "data"),
      Output("game-started-store", "data"),
@@ -6653,11 +6707,14 @@ def update_selected_year(selected_year):
     [Input("higher-lower-start-btn", "n_clicks"),
      Input("url", "pathname")],
     [State("selected-year-store", "data"),
+     State("selected-country-store", "data"),
+     State("selected-state-store", "data"),
+     State("selected-district-store", "data"),
      State("game-started-store", "data"),
      State("teams-cache-store", "data")],
     prevent_initial_call=False
 )
-def initialize_higher_lower_game(start_clicks, pathname, selected_year, game_started, teams_cache):
+def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected_country, selected_state, selected_district, game_started, teams_cache):
     """Load teams data and initialize game when Start button is clicked"""
     if pathname != "/higher-lower":
         return no_update, no_update, no_update, no_update
@@ -6681,14 +6738,26 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, game_sta
     # Use selected year or default to current year
     year = selected_year if selected_year else current_year
     
-    # Check cache first - avoid reloading if we already have data for this year
+    # Normalize filter values
+    selected_country = selected_country if selected_country else "All"
+    selected_state = selected_state if selected_state else "All"
+    selected_district = selected_district if selected_district else "All"
+    
+    # Create cache key that includes filters
+    cache_key = f"{year}_{selected_country}_{selected_state}_{selected_district}"
+    
+    # Check cache first - avoid reloading if we already have data for this filter combination
     teams_cache = teams_cache or {}
-    if str(year) in teams_cache:
-        teams_list = teams_cache[str(year)]
+    if cache_key in teams_cache:
+        teams_list = teams_cache[cache_key]
     else:
-        # Load team data for the selected year
+        # Load team data for the selected year (only once per year)
         teams_list = []
         try:
+            # Load avatar cache once (globally cached, but ensure it's loaded)
+            from datagather import _load_avatar_cache
+            available_avatars = _load_avatar_cache()  # This is cached globally, fast after first call
+            
             if year == current_year:
                 # Use global TEAM_DATABASE for current year
                 year_data = TEAM_DATABASE.get(current_year, {})
@@ -6698,9 +6767,6 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, game_sta
                 year_data = year_team_data
             
             # Extract teams with valid ACE values and pre-compute avatar URLs
-            from datagather import _load_avatar_cache
-            available_avatars = _load_avatar_cache()
-            
             for team_num, team_data in year_data.items():
                 if isinstance(team_data, dict):
                     ace = team_data.get("epa")
@@ -6717,11 +6783,44 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, game_sta
                             "team_number": team_num,
                             "nickname": team_data.get("nickname", f"Team {team_num}"),
                             "ace": ace,
-                            "avatar_url": avatar_url  # Pre-computed avatar URL
+                            "avatar_url": avatar_url,  # Pre-computed avatar URL
+                            "country": team_data.get("country", ""),
+                            "state_prov": team_data.get("state_prov", ""),
+                            "city": team_data.get("city", "")
                         })
             
-            # Cache the teams list for this year
-            teams_cache[str(year)] = teams_list
+            # Apply filters (country, state, district)
+            if selected_country and selected_country != "All":
+                teams_list = [t for t in teams_list if (t.get("country") or "").lower() == selected_country.lower()]
+            
+            if selected_district and selected_district != "All":
+                if selected_district == "ISR":
+                    teams_list = [
+                        t for t in teams_list
+                        if (t.get("country") or "").lower() == "israel"
+                    ]
+                elif selected_district == "FMA":
+                    # For FMA district, exclude teams from western Pennsylvania cities
+                    from utils import is_western_pennsylvania_city
+                    teams_list = [
+                        t for t in teams_list
+                        if (t.get("state_prov") or "").lower() in ["delaware", "new jersey", "pa", "pennsylvania"] and
+                        not is_western_pennsylvania_city(t.get("city", ""))
+                    ]
+                else:
+                    district_info = DISTRICT_STATES_COMBINED.get(selected_district, {})
+                    allowed_states = []
+                    if district_info:
+                        allowed_states = [s.lower() for s in district_info.get("abbreviations", []) + district_info.get("names", [])]
+                    teams_list = [
+                        t for t in teams_list
+                        if (t.get("state_prov") or "").lower() in allowed_states
+                    ]
+            elif selected_state and selected_state != "All":
+                teams_list = [t for t in teams_list if (t.get("state_prov") or "").lower() == selected_state.lower()]
+            
+            # Cache the filtered teams list with the cache key
+            teams_cache[cache_key] = teams_list
         except Exception as e:
             print(f"Error loading team data for year {year}: {e}")
             return [], {
@@ -6778,7 +6877,7 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, game_sta
     prevent_initial_call=True
 )
 def handle_guess(higher_clicks, lower_clicks, current_state, teams_data):
-    """Handle higher/lower button clicks and set reveal phase"""
+    """Handle higher/lower button clicks - instant transition for snappy gameplay"""
     ctx = callback_context
     if not ctx.triggered:
         return no_update, no_update
@@ -6801,57 +6900,21 @@ def handle_guess(higher_clicks, lower_clicks, current_state, teams_data):
     is_higher = triggered_id == "higher-btn"
     correct = (is_higher and right_ace > left_ace) or (not is_higher and right_ace < left_ace)
     
-    # Set reveal phase - show ACE and wait before transitioning
+    # Set reveal phase - show ACE briefly for visual feedback
     game_state["revealing"] = True
     game_state["reveal_correct"] = correct
     game_state["reveal_right_ace"] = right_ace
     
-    # Store the result for after reveal
+    # Apply changes immediately (no pending state needed)
     if correct:
         score = game_state.get("score", 0) + 1
         highscore = game_state.get("highscore", 0)
         if score > highscore:
             highscore = score
-        game_state["pending_score"] = score
-        game_state["pending_highscore"] = highscore
-    else:
-        wrong_guesses = game_state.get("wrong_guesses", 0) + 1
-        game_state["pending_wrong_guesses"] = wrong_guesses
-    
-    # Enable interval to transition after reveal
-    return game_state, False  # False = interval enabled
-
-@app.callback(
-    [Output("game-state-store", "data", allow_duplicate=True),
-     Output("reveal-transition-interval", "disabled", allow_duplicate=True)],
-    Input("reveal-transition-interval", "n_intervals"),
-    [State("game-state-store", "data"),
-     State("teams-data-store", "data")],
-    prevent_initial_call=True
-)
-def transition_after_reveal(n_intervals, current_state, teams_data):
-    """Transition to next round after ACE reveal"""
-    import random
-    
-    if not current_state or not current_state.get("revealing"):
-        return no_update, no_update
-    
-    game_state = current_state.copy()
-    
-    # Clear reveal state
-    game_state["revealing"] = False
-    game_state.pop("reveal_correct", None)
-    game_state.pop("reveal_right_ace", None)
-    
-    # Apply pending changes
-    if "pending_score" in game_state:
-        game_state["score"] = game_state.pop("pending_score")
-        game_state["highscore"] = game_state.pop("pending_highscore")
+        game_state["score"] = score
+        game_state["highscore"] = highscore
         
-        # Move right team to left, pick new right team
-        right_team = game_state.get("right_team")
-        right_ace = game_state.get("right_ace")
-        
+        # Move right team to left, pick new right team immediately
         game_state["left_team"] = right_team
         game_state["left_ace"] = right_ace
         
@@ -6861,10 +6924,33 @@ def transition_after_reveal(n_intervals, current_state, teams_data):
             new_right_team = random.choice(available_teams)
             game_state["right_team"] = new_right_team
             game_state["right_ace"] = new_right_team["ace"]
-    elif "pending_wrong_guesses" in game_state:
-        game_state["wrong_guesses"] = game_state.pop("pending_wrong_guesses")
+    else:
+        wrong_guesses = game_state.get("wrong_guesses", 0) + 1
+        game_state["wrong_guesses"] = wrong_guesses
     
-    # Disable interval after transition
+    # Enable short interval to clear reveal state for visual feedback (300ms)
+    return game_state, False  # False = interval enabled
+
+@app.callback(
+    [Output("game-state-store", "data", allow_duplicate=True),
+     Output("reveal-transition-interval", "disabled", allow_duplicate=True)],
+    Input("reveal-transition-interval", "n_intervals"),
+    State("game-state-store", "data"),
+    prevent_initial_call=True
+)
+def clear_reveal_state(n_intervals, current_state):
+    """Quickly clear reveal state after brief visual feedback (300ms)"""
+    if not current_state or not current_state.get("revealing"):
+        return no_update, no_update
+    
+    game_state = current_state.copy()
+    
+    # Clear reveal state - transition already happened in handle_guess
+    game_state["revealing"] = False
+    game_state.pop("reveal_correct", None)
+    game_state.pop("reveal_right_ace", None)
+    
+    # Disable interval after clearing reveal
     return game_state, True  # True = interval disabled
 
 @app.callback(
@@ -6911,7 +6997,8 @@ def update_game_display(game_state, teams_data, selected_year):
     
     # Check if game is over
     game_over = wrong_guesses >= 3
-    buttons_disabled = game_over or revealing  # Disable buttons during reveal
+    # Don't disable buttons during reveal for snappy gameplay - reveal is just visual feedback
+    buttons_disabled = game_over
     
     # Build left team display
     left_avatar = html.Div()

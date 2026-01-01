@@ -7125,22 +7125,61 @@ def higher_lower_layout():
         topbar(),
         dbc.Container(fluid=True, children=[
             html.Div([
-            # Year selector and start button
+            # Filters and start button
             html.Div([
                 html.Div([
-                    html.Label("Year:", style={"marginRight": "10px", "color": "var(--text-primary)", "fontWeight": "bold"}),
-                    dcc.Dropdown(
-                        id="higher-lower-year-dropdown",
-                        options=[{"label": str(yr), "value": yr} for yr in reversed(range(1992, 2027))],
-                        value=current_year,
-                        clearable=False,
-                        placeholder="Select Year",
-                        style={"width": "100px", "display": "inline-block"},
-                        className="custom-input-box"
-                    ),
-                    dbc.Button("Start", id="higher-lower-start-btn", color="warning", size="lg",
-                              style={"marginLeft": "20px", "padding": "10px 30px", "fontSize": "1rem"})
-                ], style={"display": "flex", "alignItems": "center", "justifyContent": "center", "padding": "20px"})
+                    html.Div([
+                        html.Label("Year", style={"color": "var(--text-primary)", "fontWeight": "bold", "marginBottom": "5px", "fontSize": "0.9rem"}),
+                        dcc.Dropdown(
+                            id="higher-lower-year-dropdown",
+                            options=[{"label": str(yr), "value": yr} for yr in reversed(range(1992, 2027))],
+                            value=current_year,
+                            clearable=False,
+                            placeholder="Select Year",
+                            className="custom-input-box higher-lower-filter-dropdown"
+                        )
+                    ], className="higher-lower-filter-item"),
+                    html.Div([
+                        html.Label("Country", style={"color": "var(--text-primary)", "fontWeight": "bold", "marginBottom": "5px", "fontSize": "0.9rem"}),
+                        dcc.Dropdown(
+                            id="higher-lower-country-dropdown",
+                            options=[{"label": "All", "value": "All"}] + (json.load(open('data/countries.json', 'r', encoding='utf-8')) if os.path.exists('data/countries.json') else []),
+                            value="All",
+                            clearable=False,
+                            placeholder="Select Country",
+                            className="custom-input-box higher-lower-filter-dropdown"
+                        )
+                    ], className="higher-lower-filter-item"),
+                    html.Div([
+                        html.Label("State", style={"color": "var(--text-primary)", "fontWeight": "bold", "marginBottom": "5px", "fontSize": "0.9rem"}),
+                        dcc.Dropdown(
+                            id="higher-lower-state-dropdown",
+                            options=[{"label": "All States", "value": "All"}],
+                            value="All",
+                            clearable=False,
+                            placeholder="Select State/Province",
+                            className="custom-input-box higher-lower-filter-dropdown"
+                        )
+                    ], className="higher-lower-filter-item"),
+                    html.Div([
+                        html.Label("District", style={"color": "var(--text-primary)", "fontWeight": "bold", "marginBottom": "5px", "fontSize": "0.9rem"}),
+                        dcc.Dropdown(
+                            id="higher-lower-district-dropdown",
+                            options=[
+                                {"label": "All Districts", "value": "All"},
+                                *[{"label": acronym, "value": acronym} for acronym in DISTRICT_STATES_COMBINED.keys()]
+                            ],
+                            value="All",
+                            clearable=False,
+                            placeholder="Select District",
+                            className="custom-input-box higher-lower-filter-dropdown"
+                        )
+                    ], className="higher-lower-filter-item"),
+                    html.Div([
+                        dbc.Button("Start", id="higher-lower-start-btn", color="warning", size="lg",
+                                  className="higher-lower-start-button")
+                    ], className="higher-lower-filter-item higher-lower-start-container")
+                ], className="higher-lower-filters-container")
             ], style={"borderBottom": "1px solid rgba(255, 255, 255, 0.1)"}),
             
             # Score and Highscore at top
@@ -7258,9 +7297,12 @@ def higher_lower_layout():
             }),
             dcc.Store(id="teams-data-store", data=[]),
             dcc.Store(id="selected-year-store", data=current_year),
+            dcc.Store(id="selected-country-store", data="All"),
+            dcc.Store(id="selected-state-store", data="All"),
+            dcc.Store(id="selected-district-store", data="All"),
             dcc.Store(id="game-started-store", data=False),
             dcc.Store(id="teams-cache-store", data={}),  # Cache teams data per year
-            dcc.Interval(id="reveal-transition-interval", interval=2000, n_intervals=0, disabled=True),
+            dcc.Interval(id="reveal-transition-interval", interval=300, n_intervals=0, disabled=True),  # Short 300ms for visual feedback only
             ], style={"maxWidth": "1200px", "margin": "0 auto", "padding": "20px"})
         ], style={"minHeight": "100vh", "backgroundColor": "var(--bg-primary)"})
     ])

@@ -675,8 +675,111 @@ label {
 /* Search Preview Link Colors */
 /* Removed rules as color is now controlled by team_link_with_avatar */
 
+/* Higher or Lower Game Filter Styles */
+.higher-lower-filters-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 15px;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.higher-lower-filter-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
+.higher-lower-filter-item label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.higher-lower-filter-dropdown {
+    min-width: 120px;
+    width: 100%;
+}
+
+.higher-lower-start-container {
+    display: flex;
+    align-items: flex-end;
+}
+
+.higher-lower-start-button {
+    padding: 10px 30px !important;
+    font-size: 1rem !important;
+    white-space: nowrap;
+}
+
+/* Desktop: specific widths for filters */
+@media (min-width: 768px) {
+    .higher-lower-filter-item:nth-child(1) { /* Year */
+        flex: 0 0 100px;
+    }
+    .higher-lower-filter-item:nth-child(2) { /* Country */
+        flex: 0 0 180px;
+        margin-left: 20px; /* Extra spacing after Year dropdown */
+    }
+    .higher-lower-filter-item:nth-child(3) { /* State */
+        flex: 0 0 180px;
+    }
+    .higher-lower-filter-item:nth-child(4) { /* District */
+        flex: 0 0 150px;
+    }
+    .higher-lower-filter-item:nth-child(5) { /* Start button */
+        flex: 0 0 auto;
+    }
+}
+
 /* Higher or Lower Game Responsive Styles */
 @media (max-width: 767px) {
+    /* Mobile: stack filters vertically */
+    .higher-lower-filters-container {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 15px;
+        gap: 12px;
+    }
+    
+    .higher-lower-filter-item {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    
+    .higher-lower-filter-dropdown {
+        width: 100% !important;
+        min-width: 100% !important;
+    }
+    
+    /* Better touch targets for mobile dropdowns */
+    .higher-lower-filter-dropdown .Select-control,
+    .higher-lower-filter-dropdown .Select-input,
+    .higher-lower-filter-dropdown .Select-placeholder,
+    .higher-lower-filter-dropdown .Select-value {
+        min-height: 44px !important; /* iOS recommended touch target */
+        line-height: 44px !important;
+        font-size: 16px !important; /* Prevents zoom on iOS */
+    }
+    
+    .higher-lower-filter-dropdown .Select-input > input {
+        padding: 12px 0 !important;
+    }
+    
+    .higher-lower-start-container {
+        width: 100%;
+        margin-top: 5px;
+    }
+    
+    .higher-lower-start-button {
+        width: 100% !important;
+        padding: 12px 30px !important;
+        font-size: 1.1rem !important;
+    }
+    
     /* Mobile: scale down but keep side-by-side layout */
     #higher-lower-game-container {
         minHeight: auto !important;
@@ -725,16 +828,6 @@ label {
     .higher-lower-vs {
         font-size: 1.5rem !important;
         padding: 5px 15px !important;
-    }
-    
-    /* Year selector and start button on mobile */
-    #higher-lower-year-dropdown {
-        width: 120px !important;
-    }
-    
-    #higher-lower-start-btn {
-        padding: 8px 20px !important;
-        font-size: 0.9rem !important;
     }
     
     /* Score section on mobile */
