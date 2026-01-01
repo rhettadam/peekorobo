@@ -180,17 +180,19 @@ def insert_event_data(all_data, year):
                 webcast_type = EXCLUDED.webcast_type,
                 webcast_channel = EXCLUDED.webcast_channel
         """, data["event"])
-        # Insert teams
+        # Insert teams (filter out teams with null team_number)
         if data["teams"]:
-            cur.executemany("""
-                INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (event_key, team_number) DO UPDATE SET
-                    nickname = EXCLUDED.nickname,
-                    city = EXCLUDED.city,
-                    state_prov = EXCLUDED.state_prov,
-                    country = EXCLUDED.country
-            """, data["teams"])
+            valid_teams = [team for team in data["teams"] if team[1] is not None]
+            if valid_teams:
+                cur.executemany("""
+                    INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (event_key, team_number) DO UPDATE SET
+                        nickname = EXCLUDED.nickname,
+                        city = EXCLUDED.city,
+                        state_prov = EXCLUDED.state_prov,
+                        country = EXCLUDED.country
+                """, valid_teams)
         # Insert rankings
         if data["rankings"]:
             cur.executemany("""
@@ -342,21 +344,29 @@ def get_existing_event_data(event_key):
     cur.execute("SELECT name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel FROM events WHERE event_key = %s", (event_key,))
     event_row = cur.fetchone()
     
-    # Get teams
+    # Get teams - ensure we always return a dict, even if empty
     cur.execute("SELECT team_number, nickname, city, state_prov, country FROM event_teams WHERE event_key = %s", (event_key,))
     teams = {row[0]: {"nickname": row[1], "city": row[2], "state_prov": row[3], "country": row[4]} for row in cur.fetchall()}
+    if not teams:
+        teams = {}  # Ensure it's always a dict, not None
     
     # Get rankings
     cur.execute("SELECT team_number, rank, wins, losses, ties, dq FROM event_rankings WHERE event_key = %s", (event_key,))
     rankings = {row[0]: {"rank": row[1], "wins": row[2], "losses": row[3], "ties": row[4], "dq": row[5]} for row in cur.fetchall()}
+    if not rankings:
+        rankings = {}
     
     # Get matches
     cur.execute("SELECT match_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time FROM event_matches WHERE event_key = %s", (event_key,))
     matches = {row[0]: {"comp_level": row[1], "match_number": row[2], "set_number": row[3], "red_teams": row[4], "blue_teams": row[5], "red_score": row[6], "blue_score": row[7], "winning_alliance": row[8], "youtube_key": row[9], "predicted_time": row[10]} for row in cur.fetchall()}
+    if not matches:
+        matches = {}
     
     # Get awards
     cur.execute("SELECT team_number, award_name FROM event_awards WHERE event_key = %s", (event_key,))
     awards = set((row[0], row[1]) for row in cur.fetchall())
+    if not awards:
+        awards = set()
     
     cur.close()
     conn.close()
@@ -447,28 +457,36 @@ def data_has_changed(existing, new_data, data_type):
         )
     
     elif data_type == "teams":
-        existing_teams = existing["teams"]
-        new_teams = new_data["teams"]
+        existing_teams = existing.get("teams", {}) or {}
+        new_teams = new_data.get("teams", []) or []
+        
+        # Handle None values
+        if existing_teams is None:
+            existing_teams = {}
+        if new_teams is None:
+            new_teams = []
         
         # Check if team lists are different
-        existing_team_nums = set(existing_teams.keys())
-        new_team_nums = set(team[1] for team in new_teams)
+        existing_team_nums = set(existing_teams.keys()) if isinstance(existing_teams, dict) else set()
+        new_team_nums = set(team[1] for team in new_teams if len(team) > 1)
         
         if existing_team_nums != new_team_nums:
             return True
         
         # Check if any team data has changed
         for team_data in new_teams:
+            if len(team_data) < 6:
+                continue  # Skip invalid team data
             team_num = team_data[1]
             if team_num not in existing_teams:
                 return True
             
             existing_team = existing_teams[team_num]
             if (
-                existing_team["nickname"] != team_data[2] or
-                existing_team["city"] != team_data[3] or
-                existing_team["state_prov"] != team_data[4] or
-                existing_team["country"] != team_data[5]
+                existing_team.get("nickname") != team_data[2] or
+                existing_team.get("city") != team_data[3] or
+                existing_team.get("state_prov") != team_data[4] or
+                existing_team.get("country") != team_data[5]
             ):
                 return True
         
@@ -689,11 +707,15 @@ def create_event_db(year):
                     print(f"DEBUG: Skipping event {key} due to B teams")
                     return None  # Skip this event entirely
 
-                # Append team data
+                # Append team data (skip teams with null team_number)
                 for t in teams:
+                    team_number = t.get("team_number")
+                    if team_number is None:
+                        print(f"DEBUG: Skipping team with null team_number in event {key}: {t.get('nickname', 'Unknown')}")
+                        continue
                     new_data["teams"].append((
                         key,
-                        t.get("team_number"),
+                        team_number,
                         t.get("nickname"),
                         t.get("city"),
                         t.get("state_prov"),
@@ -895,12 +917,17 @@ def insert_event_data(results, year):
         
         # Update teams if needed
         if updates["teams"] and data["teams"]:
-            # Delete existing teams for this event and reinsert
-            cur.execute("DELETE FROM event_teams WHERE event_key = %s", (data["event"][0],))
-            cur.executemany("""
-                INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, data["teams"])
+            # Filter out teams with null team_number before inserting
+            valid_teams = [team for team in data["teams"] if team[1] is not None]
+            if not valid_teams:
+                print(f"WARNING: No valid teams (with team_number) for event {data['event'][0]}")
+            else:
+                # Delete existing teams for this event and reinsert
+                cur.execute("DELETE FROM event_teams WHERE event_key = %s", (data["event"][0],))
+                cur.executemany("""
+                    INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, valid_teams)
         
         # Update rankings if needed
         if updates["rankings"] and data["rankings"]:
