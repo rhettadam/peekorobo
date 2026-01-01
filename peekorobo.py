@@ -6767,57 +6767,68 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
                 year_data = year_team_data
             
             # Extract teams with valid ACE values and pre-compute avatar URLs
+            # Filter first to avoid storing unnecessary data
+            filtered_year_data = {}
             for team_num, team_data in year_data.items():
                 if isinstance(team_data, dict):
                     ace = team_data.get("epa")
                     if ace is not None and ace > 0:  # Only include teams with valid ACE
-                        # Pre-compute avatar URL to avoid repeated lookups
-                        if 9970 <= team_num <= 9999:
-                            avatar_url = "/assets/avatars/bbot.png?v=1"
-                        elif team_num in available_avatars:
-                            avatar_url = f"/assets/avatars/{team_num}.png?v=1"
-                        else:
-                            avatar_url = "/assets/avatars/stock.png"
-                        
-                        teams_list.append({
-                            "team_number": team_num,
-                            "nickname": team_data.get("nickname", f"Team {team_num}"),
-                            "ace": ace,
-                            "avatar_url": avatar_url,  # Pre-computed avatar URL
-                            "country": team_data.get("country", ""),
-                            "state_prov": team_data.get("state_prov", ""),
-                            "city": team_data.get("city", "")
-                        })
+                        filtered_year_data[team_num] = team_data
             
-            # Apply filters (country, state, district)
+            # Apply filters BEFORE building teams_list to avoid storing unnecessary data
             if selected_country and selected_country != "All":
-                teams_list = [t for t in teams_list if (t.get("country") or "").lower() == selected_country.lower()]
+                filtered_year_data = {
+                    num: data for num, data in filtered_year_data.items()
+                    if (data.get("country") or "").lower() == selected_country.lower()
+                }
             
             if selected_district and selected_district != "All":
                 if selected_district == "ISR":
-                    teams_list = [
-                        t for t in teams_list
-                        if (t.get("country") or "").lower() == "israel"
-                    ]
+                    filtered_year_data = {
+                        num: data for num, data in filtered_year_data.items()
+                        if (data.get("country") or "").lower() == "israel"
+                    }
                 elif selected_district == "FMA":
                     # For FMA district, exclude teams from western Pennsylvania cities
                     from utils import is_western_pennsylvania_city
-                    teams_list = [
-                        t for t in teams_list
-                        if (t.get("state_prov") or "").lower() in ["delaware", "new jersey", "pa", "pennsylvania"] and
-                        not is_western_pennsylvania_city(t.get("city", ""))
-                    ]
+                    filtered_year_data = {
+                        num: data for num, data in filtered_year_data.items()
+                        if (data.get("state_prov") or "").lower() in ["delaware", "new jersey", "pa", "pennsylvania"] and
+                        not is_western_pennsylvania_city(data.get("city", ""))
+                    }
                 else:
                     district_info = DISTRICT_STATES_COMBINED.get(selected_district, {})
                     allowed_states = []
                     if district_info:
                         allowed_states = [s.lower() for s in district_info.get("abbreviations", []) + district_info.get("names", [])]
-                    teams_list = [
-                        t for t in teams_list
-                        if (t.get("state_prov") or "").lower() in allowed_states
-                    ]
+                    filtered_year_data = {
+                        num: data for num, data in filtered_year_data.items()
+                        if (data.get("state_prov") or "").lower() in allowed_states
+                    }
             elif selected_state and selected_state != "All":
-                teams_list = [t for t in teams_list if (t.get("state_prov") or "").lower() == selected_state.lower()]
+                filtered_year_data = {
+                    num: data for num, data in filtered_year_data.items()
+                    if (data.get("state_prov") or "").lower() == selected_state.lower()
+                }
+            
+            # Now build minimal teams_list with only the data we need
+            for team_num, team_data in filtered_year_data.items():
+                ace = team_data.get("epa")
+                # Pre-compute avatar URL to avoid repeated lookups
+                if 9970 <= team_num <= 9999:
+                    avatar_url = "/assets/avatars/bbot.png?v=1"
+                elif team_num in available_avatars:
+                    avatar_url = f"/assets/avatars/{team_num}.png?v=1"
+                else:
+                    avatar_url = "/assets/avatars/stock.png"
+                
+                # Only store the minimal data needed for the game
+                teams_list.append({
+                    "team_number": team_num,
+                    "nickname": team_data.get("nickname", f"Team {team_num}"),
+                    "ace": ace,
+                    "avatar_url": avatar_url
+                })
             
             # Cache the filtered teams list with the cache key
             teams_cache[cache_key] = teams_list
@@ -6972,9 +6983,10 @@ def transition_after_reveal(n_intervals, current_state, teams_data):
      Output("left-team-name", "children"),
      Output("left-team-ace", "children")],
     Input("game-state-store", "data"),
+    [State("selected-year-store", "data")],
     prevent_initial_call=False
 )
-def update_left_team_display(game_state):
+def update_left_team_display(game_state, selected_year):
     """Update left team display - only when left team changes"""
     if not game_state:
         return html.Div(), "Loading...", "0.0"
@@ -6987,6 +6999,7 @@ def update_left_team_display(game_state):
     
     team_num = left_team["team_number"]
     avatar_url = left_team.get("avatar_url", f"/assets/avatars/{team_num}.png?v=1")
+    year = selected_year if selected_year else current_year
     
     left_avatar = html.Img(
         src=avatar_url,
@@ -6998,7 +7011,15 @@ def update_left_team_display(game_state):
             "border": "3px solid white"
         }
     )
-    left_name = f"{left_team['nickname']} ({team_num})"
+    left_name = html.A(
+        f"{left_team['nickname']} ({team_num})",
+        href=f"/team/{team_num}/{year}",
+        style={
+            "color": "var(--text-primary)",
+            "textDecoration": "underline",
+            "cursor": "pointer"
+        }
+    )
     left_ace_display = f"{left_ace:.1f}" if left_ace is not None else "0.0"
     
     return left_avatar, left_name, left_ace_display
@@ -7007,9 +7028,10 @@ def update_left_team_display(game_state):
     [Output("right-team-avatar-container", "children"),
      Output("right-team-name", "children")],
     Input("game-state-store", "data"),
+    [State("selected-year-store", "data")],
     prevent_initial_call=False
 )
-def update_right_team_display(game_state):
+def update_right_team_display(game_state, selected_year):
     """Update right team display - only when right team changes"""
     if not game_state:
         return html.Div(), "Loading..."
@@ -7021,6 +7043,7 @@ def update_right_team_display(game_state):
     
     team_num = right_team["team_number"]
     avatar_url = right_team.get("avatar_url", f"/assets/avatars/{team_num}.png?v=1")
+    year = selected_year if selected_year else current_year
     
     right_avatar = html.Img(
         src=avatar_url,
@@ -7032,7 +7055,15 @@ def update_right_team_display(game_state):
             "border": "3px solid white"
         }
     )
-    right_name = f"{right_team['nickname']} ({team_num})"
+    right_name = html.A(
+        f"{right_team['nickname']} ({team_num})",
+        href=f"/team/{team_num}/{year}",
+        style={
+            "color": "var(--text-primary)",
+            "textDecoration": "underline",
+            "cursor": "pointer"
+        }
+    )
     
     return right_avatar, right_name
 
