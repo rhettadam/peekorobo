@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_current_year,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout
 
 from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name,get_team_data_with_fallback
 
@@ -319,9 +319,6 @@ def display_page(pathname):
             return user_profile_layout(username=username)
         except ValueError:
             pass
-    
-    if pathname.startswith("/compare"):
-        return compare_layout()
 
     if pathname.startswith("/match/"):
         # /match/<event_key>/<match_key>
@@ -344,6 +341,9 @@ def display_page(pathname):
     
     if pathname == "/blog/predictions":
         return predictions_blog_layout()
+    
+    if pathname == "/higher-lower":
+        return higher_lower_layout()
 
     return home_layout
 
@@ -364,8 +364,6 @@ def update_tab_title(pathname):
         return 'Events - Peekorobo'
     elif pathname.startswith('/map'):
         return 'Map - Peekorobo'
-    elif pathname.startswith('/compare'):
-        return 'Compare - Peekorobo'
     else:
         return 'Peekorobo'
 
@@ -5102,507 +5100,6 @@ def toggle_search_bar(n_clicks, current_style):
     return new_container_style, new_button_style
 
 @app.callback(
-    [
-        Output("compare-mode-store", "data"),
-        Output("compare-mode-teams", "active"),
-        Output("compare-mode-alliances", "active"),
-        Output("compare-mode-hint", "children"),
-    ],
-    [
-        Input("compare-mode-teams", "n_clicks"),
-        Input("compare-mode-alliances", "n_clicks"),
-    ],
-    State("compare-teams", "value"),
-)
-def update_compare_mode(teams_clicks, alliances_clicks, selected_teams):
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        return "teams", True, False, "Select 2+ teams to compare"
-    
-    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    
-    if button_id == "compare-mode-alliances":
-        if selected_teams and len(selected_teams) >= 3 and len(selected_teams) % 3 == 0:
-            num_alliances = len(selected_teams) // 3
-            return "alliances", False, True, f"Comparing {num_alliances} alliance{'s' if num_alliances > 1 else ''} ({len(selected_teams)} teams)"
-        elif selected_teams and len(selected_teams) > 0:
-            return "alliances", False, True, f"Select a multiple of 3 teams (currently {len(selected_teams)} teams)"
-        else:
-            return "alliances", False, True, "Select 3, 6, 9, or more teams (multiple of 3) to compare as alliances"
-    else:
-        if selected_teams and len(selected_teams) >= 2:
-            return "teams", True, False, f"Comparing {len(selected_teams)} teams"
-        else:
-            return "teams", True, False, "Select 2+ teams to compare"
-
-# Add callback for standalone compare radar chart toggles
-@app.callback(
-    Output("compare-radar-toggles-store", "data"),
-    Input("compare-radar-toggles-checklist", "value"),
-    prevent_initial_call=True
-)
-def update_compare_radar_toggles(selected_values):
-    if not selected_values:
-        return {"show_alliances": False, "show_teams": False}
-    return {
-        "show_alliances": "show_alliances" in selected_values,
-        "show_teams": "show_teams" in selected_values
-    }
-
-@app.callback(
-    Output("compare-teams", "options"),
-    Input("compare-year", "value")
-)
-def update_compare_team_dropdowns(year):
-    year = year or current_year
-    
-    # Check if data for the selected year is available
-    if not TEAM_DATABASE.get(year):
-        # Load data for the specific year if it's not current year
-        if year != current_year:
-            try:
-                year_team_data, _, _, _, _, _ = load_year_data(year)
-                teams = year_team_data
-            except Exception as e:
-                return []  # Return empty options if loading fails
-        else:
-            return []  # Return empty options for current year if not loaded
-    else:
-        teams = TEAM_DATABASE.get(year, {})
-    
-    options = [
-        {"label": f"{t['team_number']} | {t.get('nickname', '')}", "value": t["team_number"]}
-        for t in teams.values()
-    ]
-    return options
-
-@app.callback(
-    Output("compare-output-section", "children"),
-    Input("compare-teams", "value"), # Change trigger to team dropdown value
-    Input("compare-year", "value"), # Also trigger on year change
-    Input("compare-mode-store", "data"),  # Mode: "teams" or "alliances"
-    Input("compare-radar-toggles-store", "data"),  # Radar chart toggles
-    # Removed prevent_initial_call=True so it runs on page load with defaults
-)
-def compare_multiple_teams(team_ids, year, mode, radar_toggles): # Update function signature
-    mode = mode or "teams"
-    radar_toggles = radar_toggles or {"show_alliances": True, "show_teams": True}
-    show_alliances = radar_toggles.get("show_alliances", True)
-    show_teams = radar_toggles.get("show_teams", True)
-    
-    if not team_ids:
-        return dbc.Alert("Select teams to compare.", color="info", className="text-center my-4")
-    
-    if mode == "alliances":
-        if len(team_ids) < 3 or len(team_ids) % 3 != 0:
-            return dbc.Alert(f"Select a multiple of 3 teams to compare as alliances (currently {len(team_ids)} teams). Select 3, 6, 9, 12, etc.", color="warning", className="text-center my-4")
-    else:
-        if len(team_ids) < 2:
-            return dbc.Alert("Select at least 2 teams to compare.", color="info", className="text-center my-4")
-
-    year = year or current_year
-    
-    # Check if data for the selected year is available
-    if not TEAM_DATABASE.get(year):
-        # Load data for the specific year if it's not current year
-        if year != current_year:
-            try:
-                year_team_data, _, _, _, _, _ = load_year_data(year)
-                teams = year_team_data
-            except Exception as e:
-                return html.Div(f"Error loading data for year {year}: {str(e)}", className="text-center my-4", style={"color": "var(--text-secondary)"})
-        else:
-            return html.Div(f"Loading data for year {year}...", className="text-center my-4", style={"color": "var(--text-secondary)"})
-    else:
-        teams = TEAM_DATABASE.get(year, {})
-    
-    selected = [teams.get(int(tid)) for tid in team_ids if tid and int(tid) in teams]
-
-    if not all(selected):
-        return dbc.Alert("Please select valid teams for the chosen year.", color="warning", className="text-center my-4")
-    
-    if mode == "alliances" and (len(selected) < 3 or len(selected) % 3 != 0):
-        return dbc.Alert(f"Please select a multiple of 3 teams for alliance comparison (currently {len(selected)} teams). Select 3, 6, 9, 12, etc.", color="warning", className="text-center my-4")
-    elif mode == "teams" and len(selected) < 2:
-        return dbc.Alert("Please select at least 2 valid teams for comparison.", color="warning", className="text-center my-4")
-
-    def pill(label, value, color):
-        return html.Span(f"{label}: {value}", style={
-            "backgroundColor": color,
-            "borderRadius": "6px",
-            "padding": "4px 10px",
-            "color": "white",
-            "fontWeight": "bold",
-            "fontSize": "0.85rem",
-            "marginRight": "6px",
-            "display": "inline-block",
-            "marginBottom": "4px"
-        })
-
-    # Color palette for pills
-    colors = {
-        "ACE": "#673ab7",
-        "RAW": "#d32f2f",
-        "Auto": "#1976d2",
-        "Teleop": "#fb8c00",
-        "Endgame": "#388e3c",
-        "Confidence": "#555"
-    }
-
-    def team_card(t, year):
-        team_number = t['team_number']
-        nickname = t.get('nickname', '')
-        avatar_url = get_team_avatar(team_number)
-
-        return dbc.Card([
-            dbc.CardBody([
-                dbc.Row([
-                    dbc.Col( # Avatar column
-                        html.Img(
-                            src=avatar_url,
-                            style={
-                                "height": "60px",
-                                "width": "60px",
-                                "borderRadius": "50%",
-                                "objectFit": "contain",
-                                "marginRight": "15px",
-                                "backgroundColor": "transparent"
-                            }
-                        ) if avatar_url else html.Div(), # Show empty div if no avatar
-                        width="auto",
-                        className="d-flex align-items-center"
-                    ),
-                    dbc.Col( # Team Info and Stats Column
-                        html.Div([
-                            # Make team name/number clickable link
-                            html.A(
-                                html.H4(f"#{team_number} | {nickname}", style={"fontWeight": "bold", "color": "var(--text-primary)", "marginBottom": "8px"}),
-                                href=f"/team/{team_number}/{year}", # Link to team page
-                                style={"textDecoration": "none"} # Remove underline
-                            ),
-                            html.Div([
-                                pill("Auto", f"{t.get('auto_epa', 'N/A'):.2f}", colors["Auto"]),
-                                pill("Teleop", f"{t.get('teleop_epa', 'N/A'):.2f}", colors["Teleop"]),
-                                pill("Endgame", f"{t.get('endgame_epa', 'N/A'):.2f}", colors["Endgame"]),
-                                pill("ACE", f"{t.get('epa', 'N/A'):.2f}", colors["ACE"]),
-                            ], style={"display": "flex", "flexWrap": "wrap", "gap": "4px", "marginBottom": "6px"}), # Reduced margin
-                            html.Div([
-                                html.Span("Record: ", style={"fontWeight": "bold"}),
-                                html.Span(str(t.get('wins', 0)), style={"color": "green", "fontWeight": "bold"}),
-                                html.Span("-"),
-                                html.Span(str(t.get('losses', 0)), style={"color": "red", "fontWeight": "bold"}),
-                                html.Span("-"),
-                                html.Span(str(t.get('ties', 0)), style={"color": "#777", "fontWeight": "bold"}),
-                            ], style={"marginBottom": "0px"}), # Removed margin
-                        ]),
-                        width=True, # Take remaining width
-                    )
-                ], className="g-0"), # Remove gutter for tighter layout
-            ])
-        ], style={
-            "borderRadius": "12px",
-            "boxShadow": "0px 4px 12px rgba(0,0,0,0.10)",
-            "backgroundColor": "var(--card-bg)",
-            "marginBottom": "16px",
-            "minWidth": "280px",
-            "maxWidth": "350px",
-            "marginLeft": "auto",
-            "marginRight": "auto",
-            "padding": "8px" # Reduced padding
-        })
-
-    # Compute min/max for each stat across selected teams
-    def get_stat(t, k):
-        v = t.get(k, 0)
-        try:
-            return float(v) if v is not None else 0.0 # Handle None values
-        except Exception:
-            return 0.0
-
-    # Handle alliance mode - support multiple alliances
-    alliance_cards = []
-    alliance_stats_list = []
-    if mode == "alliances" and len(selected) >= 3 and len(selected) % 3 == 0:
-        num_alliances = len(selected) // 3
-        
-        # Create alliance card function
-        def alliance_card(teams_list, stats, year, alliance_num):
-            team_numbers = [t['team_number'] for t in teams_list]
-            team_nicknames = [t.get('nickname', '') for t in teams_list]
-            alliance_label = " | ".join([f"#{num}" for num in team_numbers])
-            alliance_nicknames = " | ".join([nickname[:15] if nickname else f"#{num}" for num, nickname in zip(team_numbers, team_nicknames)])
-            alliance_title = f"Alliance {alliance_num}" if num_alliances > 1 else "Alliance"
-            
-            return dbc.Card([
-                dbc.CardBody([
-                    html.Div([
-                        html.H3(alliance_title, style={"fontWeight": "bold", "color": "var(--text-primary)", "marginBottom": "8px", "textAlign": "center"}),
-                        html.H4(alliance_label, style={"fontWeight": "bold", "color": "var(--text-primary)", "marginBottom": "4px", "textAlign": "center", "fontSize": "1.1rem"}),
-                        html.P(alliance_nicknames, style={"color": "var(--text-secondary)", "marginBottom": "12px", "textAlign": "center", "fontSize": "0.9rem"}),
-                        html.Div([
-                            pill("Auto", f"{stats.get('auto_epa', 0):.2f}", colors["Auto"]),
-                            pill("Teleop", f"{stats.get('teleop_epa', 0):.2f}", colors["Teleop"]),
-                            pill("Endgame", f"{stats.get('endgame_epa', 0):.2f}", colors["Endgame"]),
-                            pill("ACE", f"{stats.get('epa', 0):.2f}", colors["ACE"]),
-                        ], style={"display": "flex", "flexWrap": "wrap", "gap": "4px", "marginBottom": "6px", "justifyContent": "center"}),
-                        html.Div([
-                            html.Span("Combined Record: ", style={"fontWeight": "bold"}),
-                            html.Span(str(stats.get('wins', 0)), style={"color": "green", "fontWeight": "bold"}),
-                            html.Span("-"),
-                            html.Span(str(stats.get('losses', 0)), style={"color": "red", "fontWeight": "bold"}),
-                            html.Span("-"),
-                            html.Span(str(stats.get('ties', 0)), style={"color": "#777", "fontWeight": "bold"}),
-                        ], style={"marginBottom": "0px", "textAlign": "center"}),
-                    ])
-                ])
-            ], style={
-                "borderRadius": "12px",
-                "boxShadow": "0px 4px 12px rgba(0,0,0,0.15)",
-                "backgroundColor": "var(--card-bg)",
-                "marginBottom": "20px",
-                "border": "2px solid #673ab7",
-                "padding": "12px"
-            })
-        
-        # Process each alliance
-        for alliance_idx in range(num_alliances):
-            alliance_teams = selected[alliance_idx * 3:(alliance_idx + 1) * 3]
-            
-            # Calculate combined alliance stats
-            alliance_stats = {
-                "auto_epa": sum(get_stat(t, "auto_epa") for t in alliance_teams),
-                "teleop_epa": sum(get_stat(t, "teleop_epa") for t in alliance_teams),
-                "endgame_epa": sum(get_stat(t, "endgame_epa") for t in alliance_teams),
-                "epa": sum(get_stat(t, "epa") for t in alliance_teams),
-                "normal_epa": sum(get_stat(t, "normal_epa") for t in alliance_teams),
-                "confidence": sum(get_stat(t, "confidence") for t in alliance_teams) / 3.0,  # Average confidence
-                "wins": sum(t.get('wins', 0) for t in alliance_teams),
-                "losses": sum(t.get('losses', 0) for t in alliance_teams),
-                "ties": sum(t.get('ties', 0) for t in alliance_teams),
-            }
-            
-            alliance_cards.append(alliance_card(alliance_teams, alliance_stats, year, alliance_idx + 1))
-            alliance_stats_list.append(alliance_stats)
-        
-        alliance_card_display = html.Div(alliance_cards)
-    else:
-        alliance_card_display = None
-        alliance_stats_list = []
-
-    # Radar chart - NORMALIZED SPIDER WEB
-    categories = ["ACE", "Auto", "Teleop", "Endgame", "Confidence", "RAW", "Avg Score"]
-    stat_keys = ["epa", "auto_epa", "teleop_epa", "endgame_epa", "confidence", "normal_epa", "average_match_score"]
-
-    # Calculate global min/max for the selected year
-    all_teams_in_year = TEAM_DATABASE.get(year, {}).values()
-    if not all_teams_in_year:
-        # Fallback if no data for the year
-        mins = {k: 0.0 for k in stat_keys}
-        maxs = {k: 1.0 for k in stat_keys} # Use a dummy range if no data
-    else:
-        mins = {k: min(get_stat(t, k) for t in all_teams_in_year) for k in stat_keys}
-        maxs = {k: max(get_stat(t, k) for t in all_teams_in_year) for k in stat_keys}
-
-    def normalize(val, min_val, max_val):
-        if max_val == min_val:
-            return 0.5  # Avoid division by zero, return middle value
-        return (val - min_val) / (max_val - min_val)
-
-    fig = go.Figure()
-
-    # Define a palette of semi-transparent colors
-    colors_rgba = [
-        'rgba(31, 119, 180, 0.3)',  # Blue
-        'rgba(255, 127, 14, 0.3)',   # Orange
-        'rgba(44, 160, 44, 0.3)',    # Green
-        'rgba(214, 39, 40, 0.3)',    # Red
-        'rgba(148, 103, 189, 0.3)',  # Purple
-        'rgba(140, 86, 75, 0.3)',    # Brown
-        'rgba(227, 119, 194, 0.3)',  # Pink
-        'rgba(127, 127, 127, 0.3)',  # Gray
-    ]
-
-    # Define colors for multiple alliances
-    alliance_colors = [
-        'rgba(103, 58, 183, 0.4)',   # Purple
-        'rgba(156, 39, 176, 0.4)',   # Purple 2
-        'rgba(123, 31, 162, 0.4)',   # Purple 3
-        'rgba(171, 71, 188, 0.4)',   # Purple 4
-        'rgba(142, 36, 170, 0.4)',   # Purple 5
-    ]
-    alliance_line_colors = [
-        'rgba(103, 58, 183, 1.0)',
-        'rgba(156, 39, 176, 1.0)',
-        'rgba(123, 31, 162, 1.0)',
-        'rgba(171, 71, 188, 1.0)',
-        'rgba(142, 36, 170, 1.0)',
-    ]
-    
-    # Remove "Avg Score" from categories/stat_keys for alliances since it's not meaningful
-    alliance_categories = [c for c in categories if c != "Avg Score"]
-    alliance_stat_keys = [k for k in stat_keys if k != "average_match_score"]
-    
-    # Add alliance traces if in alliance mode and toggle is on
-    if mode == "alliances" and alliance_stats_list and show_alliances:
-        
-        # For alliance, we need to scale the mins/maxs for combined values
-        # Multiply team max by 3 for alliance comparison (except averaged stats)
-        alliance_mins = {}
-        alliance_maxs = {}
-        for k in alliance_stat_keys:
-            if k == "confidence":
-                # Confidence is averaged, so keep original 0-1 range
-                alliance_mins[k] = mins[k]
-                alliance_maxs[k] = maxs[k]
-            else:
-                # Other stats (auto_epa, teleop_epa, endgame_epa, epa, normal_epa) are summed, so scale by 3
-                alliance_mins[k] = mins[k] * 3
-                alliance_maxs[k] = maxs[k] * 3
-        
-        for idx, alliance_stats in enumerate(alliance_stats_list):
-            alliance_teams = selected[idx * 3:(idx + 1) * 3]
-            team_numbers = [t['team_number'] for t in alliance_teams]
-            
-            alliance_r_norm = [
-                normalize(alliance_stats.get(k, 0), alliance_mins[k], alliance_maxs[k]) for k in alliance_stat_keys
-            ]
-            alliance_r_actual = [
-                alliance_stats.get("epa", 0),
-                alliance_stats.get("auto_epa", 0),
-                alliance_stats.get("teleop_epa", 0),
-                alliance_stats.get("endgame_epa", 0),
-                alliance_stats.get("confidence", 0),
-                alliance_stats.get("normal_epa", 0),
-            ]
-            color_idx = idx % len(alliance_colors)
-            alliance_name = f"Alliance {idx + 1}" if len(alliance_stats_list) > 1 else "Alliance"
-            fig.add_trace(go.Scatterpolar(
-                r=alliance_r_norm,
-                theta=alliance_categories,
-                fill='toself',
-                fillcolor=alliance_colors[color_idx],
-                line=dict(color=alliance_line_colors[color_idx], width=3),
-                name=alliance_name,
-                hovertemplate='<b>%{theta}</b><br>Normalized: %{r:.2f}<br>Actual: %{customdata:.2f}<extra>' + alliance_name + '</extra>',
-                customdata=alliance_r_actual,
-            ))
-
-    # Add team traces only if toggle is on
-    if show_teams:
-        # Use alliance_categories/stat_keys if in alliance mode (to exclude Avg Score), otherwise use full categories/stat_keys
-        team_categories = alliance_categories if (mode == "alliances" and alliance_stats_list) else categories
-        team_stat_keys = alliance_stat_keys if (mode == "alliances" and alliance_stats_list) else stat_keys
-        
-        for i, t in enumerate(selected): # Use enumerate to get an index
-            r_norm = [
-                normalize(get_stat(t, k), mins[k], maxs[k]) for k in team_stat_keys
-            ]
-            r_actual = [get_stat(t, k) for k in team_stat_keys]
-            fig.add_trace(go.Scatterpolar(
-                r=r_norm,
-                theta=team_categories,
-                fill='toself',
-                fillcolor=colors_rgba[i % len(colors_rgba)], # Assign color from palette
-                line=dict(color=colors_rgba[i % len(colors_rgba)].replace(', 0.3', ', 1.0'), width=2), # Thicker, opaque line
-                name=f"#{t['team_number']} | {t.get('nickname', 'Unknown')}", # Add nickname to legend/hover name
-                hovertemplate='<b>%{theta}</b><br>Normalized: %{r:.2f}<br>Actual: %{customdata:.2f}<extra>Team ' + str(t['team_number']) + '</extra>',
-                customdata=r_actual,
-            ))
-
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 1],
-                tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1],
-                ticktext=["0", "20", "40", "60", "80", "100"],
-                gridcolor="#bbb",
-                gridwidth=1,
-                linecolor="#888",
-                linewidth=1,
-                rangemode="tozero", # Ensure the radial axis starts at the center
-            ),
-            angularaxis=dict(
-                gridcolor="#bbb",
-                gridwidth=1,
-                linecolor="#888",
-                linewidth=1,
-            ),
-            bgcolor="rgba(0,0,0,0)",
-        ),
-        showlegend=True,
-        margin=dict(l=80, r=80, t=80, b=80),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#999")
-    )
-
-    # Container for team cards using Flexbox for wrapping
-    team_cards_list = [team_card(t, year) for t in selected]
-    
-    if alliance_card_display:
-        cards_container = html.Div([
-            alliance_card_display,
-            html.Hr(style={"margin": "20px 0"}),
-            html.H5("Individual Teams", style={"textAlign": "center", "marginBottom": "15px", "color": "var(--text-primary)"}),
-            html.Div(team_cards_list, style={
-                "display": "flex",
-                "flexWrap": "wrap",
-                "gap": "12px",
-                "justifyContent": "center"
-            })
-        ])
-    else:
-        cards_container = html.Div(team_cards_list, style={
-            "display": "flex",
-            "flexWrap": "wrap",
-            "gap": "12px", # Space between cards
-            "justifyContent": "center" # Center cards in the container
-        })
-
-    # Add radar chart toggles UI (only show alliance toggle if in alliance mode)
-    radar_toggles_ui = None
-    if mode == "alliances" and alliance_stats_list:
-        options = [
-            {"label": " Show Alliances", "value": "show_alliances"},
-            {"label": " Show Teams", "value": "show_teams"},
-        ]
-        value = []
-        if show_alliances:
-            value.append("show_alliances")
-        if show_teams:
-            value.append("show_teams")
-        radar_toggles_ui = html.Div([
-            dbc.Checklist(
-                id="compare-radar-toggles-checklist",
-                options=options,
-                value=value,
-                inline=True,
-                style={"marginBottom": "10px", "color": "var(--text-primary)"}
-            )
-        ])
-    
-    return html.Div([
-        dbc.Row([ # Main row for cards and graph
-            dbc.Col( # Column for team cards container
-                cards_container, # Use the flex container here
-                md=4, # Allocate more space for cards
-                xs=12, # Stack vertically on extra small screens
-                className="mb-4" # Add bottom margin when stacked
-            ),
-            dbc.Col( # Column for the radar chart
-                html.Div([
-                    radar_toggles_ui if radar_toggles_ui else html.Div(),
-                    dcc.Graph(figure=fig, config={"displayModeBar": False}, style={"height": "475px"}), # Added style for height
-                ]),
-                md=8, # Allocate more space for the graph
-                xs=12, # Stack vertically on extra small screens
-                className="mb-4" # Add bottom margin when stacked
-            ),
-        ], className="justify-content-center"), # Center the main row
-    ], style={"padding": "10px 0"})
-
-@app.callback(
     Output("favorite-alert", "children", allow_duplicate=True),
     Output("favorite-alert", "is_open", allow_duplicate=True),
     Output({"type": "favorite-team-btn", "key": ALL}, "children"),
@@ -7135,7 +6632,405 @@ def update_event_metrics_page_size(page_size):
 )
 def update_insights_page_size(page_size):
     return page_size
+
+# Higher or Lower Game Callbacks
+@app.callback(
+    Output("selected-year-store", "data"),
+    Input("higher-lower-year-dropdown", "value"),
+    prevent_initial_call=False
+)
+def update_selected_year(selected_year):
+    """Store the selected year"""
+    return selected_year if selected_year else current_year
+
+@app.callback(
+    [Output("teams-data-store", "data"),
+     Output("game-state-store", "data"),
+     Output("game-started-store", "data")],
+    [Input("higher-lower-start-btn", "n_clicks"),
+     Input("url", "pathname")],
+    [State("selected-year-store", "data"),
+     State("game-started-store", "data")],
+    prevent_initial_call=False
+)
+def initialize_higher_lower_game(start_clicks, pathname, selected_year, game_started):
+    """Load teams data and initialize game when Start button is clicked"""
+    if pathname != "/higher-lower":
+        return no_update, no_update, no_update
+    
+    ctx = callback_context
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
+    
+    # Only initialize when Start button is clicked (not on page load)
+    if triggered_id != "higher-lower-start-btn" and not game_started:
+        return [], {
+            "score": 0,
+            "highscore": 0,
+            "wrong_guesses": 0,
+            "left_team": None,
+            "right_team": None,
+            "left_ace": None,
+            "right_ace": None
+        }, False
+    
+    # Use selected year or default to current year
+    year = selected_year if selected_year else current_year
+    
+    # Load team data for the selected year
+    teams_list = []
+    try:
+        if year == current_year:
+            # Use global TEAM_DATABASE for current year
+            year_data = TEAM_DATABASE.get(current_year, {})
+        else:
+            # Load data for other years using load_year_data
+            year_team_data, _, _, _, _, _ = load_year_data(year)
+            year_data = year_team_data
+        
+        # Extract teams with valid ACE values
+        for team_num, team_data in year_data.items():
+            if isinstance(team_data, dict):
+                ace = team_data.get("epa")
+                if ace is not None and ace > 0:  # Only include teams with valid ACE
+                    teams_list.append({
+                        "team_number": team_num,
+                        "nickname": team_data.get("nickname", f"Team {team_num}"),
+                        "ace": ace
+                    })
+    except Exception as e:
+        print(f"Error loading team data for year {year}: {e}")
+        return [], {
+            "score": 0,
+            "highscore": 0,
+            "wrong_guesses": 0,
+            "left_team": None,
+            "right_team": None,
+            "left_ace": None,
+            "right_ace": None
+        }, False
+    
+    # Initialize game state with two random teams
+    if not teams_list:
+        # No teams available
+        new_game_state = {
+            "score": 0,
+            "highscore": 0,
+            "wrong_guesses": 0,
+            "left_team": None,
+            "right_team": None,
+            "left_ace": None,
+            "right_ace": None
+        }
+        return teams_list, new_game_state, True
+    
+    # Pick two random teams
+    import random
+    selected_teams = random.sample(teams_list, min(2, len(teams_list)))
+    left_team = selected_teams[0]
+    right_team = selected_teams[1] if len(selected_teams) > 1 else selected_teams[0]
+    
+    new_game_state = {
+        "score": 0,
+        "highscore": 0,
+        "wrong_guesses": 0,
+        "left_team": left_team,
+        "right_team": right_team,
+        "left_ace": left_team["ace"],
+        "right_ace": right_team["ace"]
+    }
+    
+    return teams_list, new_game_state, True
+
+@app.callback(
+    [Output("game-state-store", "data", allow_duplicate=True),
+     Output("reveal-transition-interval", "disabled")],
+    [Input("higher-btn", "n_clicks"),
+     Input("lower-btn", "n_clicks")],
+    [
+        State("game-state-store", "data"),
+        State("teams-data-store", "data")
+    ],
+    prevent_initial_call=True
+)
+def handle_guess(higher_clicks, lower_clicks, current_state, teams_data):
+    """Handle higher/lower button clicks and set reveal phase"""
+    ctx = callback_context
+    if not ctx.triggered:
+        return no_update, no_update
+    
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    
+    if not current_state or not teams_data or triggered_id not in ["higher-btn", "lower-btn"]:
+        return no_update, no_update
+    
+    game_state = current_state.copy()
+    left_team = game_state.get("left_team")
+    right_team = game_state.get("right_team")
+    left_ace = game_state.get("left_ace")
+    right_ace = game_state.get("right_ace")
+    
+    if not left_team or not right_team:
+        return no_update, no_update
+    
+    # Check if guess is correct
+    is_higher = triggered_id == "higher-btn"
+    correct = (is_higher and right_ace > left_ace) or (not is_higher and right_ace < left_ace)
+    
+    # Set reveal phase - show ACE and wait before transitioning
+    game_state["revealing"] = True
+    game_state["reveal_correct"] = correct
+    game_state["reveal_right_ace"] = right_ace
+    
+    # Store the result for after reveal
+    if correct:
+        score = game_state.get("score", 0) + 1
+        highscore = game_state.get("highscore", 0)
+        if score > highscore:
+            highscore = score
+        game_state["pending_score"] = score
+        game_state["pending_highscore"] = highscore
+    else:
+        wrong_guesses = game_state.get("wrong_guesses", 0) + 1
+        game_state["pending_wrong_guesses"] = wrong_guesses
+    
+    # Enable interval to transition after reveal
+    return game_state, False  # False = interval enabled
+
+@app.callback(
+    [Output("game-state-store", "data", allow_duplicate=True),
+     Output("reveal-transition-interval", "disabled", allow_duplicate=True)],
+    Input("reveal-transition-interval", "n_intervals"),
+    [State("game-state-store", "data"),
+     State("teams-data-store", "data")],
+    prevent_initial_call=True
+)
+def transition_after_reveal(n_intervals, current_state, teams_data):
+    """Transition to next round after ACE reveal"""
+    import random
+    
+    if not current_state or not current_state.get("revealing"):
+        return no_update, no_update
+    
+    game_state = current_state.copy()
+    
+    # Clear reveal state
+    game_state["revealing"] = False
+    game_state.pop("reveal_correct", None)
+    game_state.pop("reveal_right_ace", None)
+    
+    # Apply pending changes
+    if "pending_score" in game_state:
+        game_state["score"] = game_state.pop("pending_score")
+        game_state["highscore"] = game_state.pop("pending_highscore")
+        
+        # Move right team to left, pick new right team
+        right_team = game_state.get("right_team")
+        right_ace = game_state.get("right_ace")
+        
+        game_state["left_team"] = right_team
+        game_state["left_ace"] = right_ace
+        
+        # Pick a new random team for right side
+        available_teams = [t for t in teams_data if t["team_number"] != right_team["team_number"]]
+        if available_teams:
+            new_right_team = random.choice(available_teams)
+            game_state["right_team"] = new_right_team
+            game_state["right_ace"] = new_right_team["ace"]
+    elif "pending_wrong_guesses" in game_state:
+        game_state["wrong_guesses"] = game_state.pop("pending_wrong_guesses")
+    
+    # Disable interval after transition
+    return game_state, True  # True = interval disabled
+
+@app.callback(
+    [
+        Output("left-team-avatar-container", "children"),
+        Output("left-team-name", "children"),
+        Output("left-team-ace", "children"),
+        Output("right-team-avatar-container", "children"),
+        Output("right-team-name", "children"),
+        Output("right-team-ace-container", "children"),
+        Output("score-display", "children"),
+        Output("highscore-display", "children"),
+        Output("game-over-message", "children"),
+        Output("game-over-message", "style"),
+        Output("higher-lower-buttons-container", "style"),
+        Output("higher-btn", "disabled"),
+        Output("lower-btn", "disabled")
+    ],
+    Input("game-state-store", "data"),
+    [State("teams-data-store", "data"),
+     State("selected-year-store", "data")],
+    prevent_initial_call=False
+)
+def update_game_display(game_state, teams_data, selected_year):
+    """Update the game display based on current state"""
+    from datagather import get_team_avatar
+    
+    # Return empty display if stores aren't ready yet
+    if not game_state:
+        return [html.Div()] * 12
+    
+    # If teams_data is empty but we have game_state, that's okay - use what's in game_state
+    if not teams_data:
+        teams_data = []
+    
+    # Use selected year or default to current year for avatars
+    year = selected_year if selected_year else current_year
+    
+    wrong_guesses = game_state.get("wrong_guesses", 0)
+    score = game_state.get("score", 0)
+    highscore = game_state.get("highscore", 0)
+    left_team = game_state.get("left_team")
+    right_team = game_state.get("right_team")
+    left_ace = game_state.get("left_ace")
+    right_ace = game_state.get("right_ace")
+    revealing = game_state.get("revealing", False)
+    reveal_right_ace = game_state.get("reveal_right_ace")
+    reveal_correct = game_state.get("reveal_correct", False)
+    
+    # Check if game is over
+    game_over = wrong_guesses >= 3
+    buttons_disabled = game_over or revealing  # Disable buttons during reveal
+    
+    # Build left team display
+    left_avatar = html.Div()
+    left_name = "Loading..."
+    left_ace_display = "0.0"
+    if left_team:
+        team_num = left_team["team_number"]
+        avatar_url = get_team_avatar(team_num, year)
+        left_avatar = html.Img(
+            src=avatar_url,
+            style={
+                "width": "200px",
+                "height": "200px",
+                "objectFit": "contain",
+                "borderRadius": "50%",
+                "border": "3px solid white"
+            }
+        )
+        left_name = f"{left_team['nickname']} ({team_num})"
+        left_ace_display = f"{left_ace:.1f}"
+    
+    # Build right team display
+    right_avatar = html.Div()
+    right_name = "Loading..."
+    right_ace_container = html.Div()
+    buttons_container_style = {"display": "none"}
+    if right_team:
+        team_num = right_team["team_number"]
+        avatar_url = get_team_avatar(team_num, year)
+        right_avatar = html.Img(
+            src=avatar_url,
+            style={
+                "width": "200px",
+                "height": "200px",
+                "objectFit": "contain",
+                "borderRadius": "50%",
+                "border": "3px solid white"
+            }
+        )
+        right_name = f"{right_team['nickname']} ({team_num})"
+        
+        if game_over:
+            # Show the ACE value when game is over
+            right_ace_container = html.Div(
+                f"{right_ace:.1f}",
+                style={
+                    "fontSize": "3rem",
+                    "fontWeight": "bold",
+                    "textAlign": "center",
+                    "color": "var(--text-primary)"
+                }
+            )
+            buttons_container_style = {"display": "none"}
+        elif revealing and reveal_right_ace is not None:
+            # Show ACE value during reveal phase with smooth transition
+            color = "#28a745" if reveal_correct else "#dc3545"  # Green for correct, red for wrong
+            right_ace_container = html.Div(
+                f"{reveal_right_ace:.1f}",
+                style={
+                    "fontSize": "3rem",
+                    "fontWeight": "bold",
+                    "textAlign": "center",
+                    "color": color,
+                    "transition": "opacity 0.3s ease-in-out, color 0.3s ease-in-out",
+                    "opacity": 1
+                }
+            )
+            buttons_container_style = {"display": "none"}
+        else:
+            # Hide ACE value, show buttons
+            right_ace_container = html.Div(style={"display": "none"})
+            buttons_container_style = {"textAlign": "center", "marginBottom": "10px"}
+    
+    # Game over message
+    game_over_msg = html.Div()
+    game_over_style = {"display": "none"}
+    if game_over:
+        game_over_msg = html.Div([
+            html.H3("Game Over!", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+            html.P(f"Final Score: {score}", style={"fontSize": "1.5rem", "color": "var(--text-primary)", "marginBottom": "10px"}),
+            html.P(f"Highscore: {highscore}", style={"fontSize": "1.2rem", "color": "var(--text-secondary)", "marginBottom": "20px"}),
+            dbc.Button("Play Again", id="play-again-btn", color="primary", size="lg",
+                      style={"padding": "15px 40px", "fontSize": "1.2rem"})
+        ], style={"textAlign": "center"})
+        game_over_style = {"display": "block", "textAlign": "center", "padding": "20px"}
+    
+    # Handle case when right_team doesn't exist
+    if not right_team:
+        right_ace_container = html.Div(style={"display": "none"})
+        buttons_container_style = {"display": "none"}
+    
+    return (
+        left_avatar,
+        left_name,
+        left_ace_display,
+        right_avatar,
+        right_name,
+        right_ace_container,
+        str(score),
+        str(highscore),
+        game_over_msg,
+        game_over_style,
+        buttons_container_style,
+        buttons_disabled,
+        buttons_disabled
+    )
+
+@app.callback(
+    Output("game-state-store", "data", allow_duplicate=True),
+    Input("play-again-btn", "n_clicks"),
+    [State("teams-data-store", "data"),
+     State("game-state-store", "data")],
+    prevent_initial_call=True
+)
+def reset_game(play_again_clicks, teams_data, current_state):
+    """Reset the game when Play Again is clicked"""
+    if not play_again_clicks or not teams_data:
+        return no_update
+    
+    import random
+    
+    # Preserve highscore
+    highscore = current_state.get("highscore", 0) if current_state else 0
+    
+    # Pick two random teams
+    selected_teams = random.sample(teams_data, min(2, len(teams_data)))
+    left_team = selected_teams[0]
+    right_team = selected_teams[1] if len(selected_teams) > 1 else selected_teams[0]
+    
+    return {
+        "score": 0,
+        "highscore": highscore,
+        "wrong_guesses": 0,
+        "left_team": left_team,
+        "right_team": right_team,
+        "left_ace": left_team["ace"],
+        "right_ace": right_team["ace"]
+    }
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=True)

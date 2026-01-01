@@ -1359,6 +1359,7 @@ def topbar():
                                         children=[
                                             dbc.DropdownMenuItem("Compare", href="/compare"),
                                             dbc.DropdownMenuItem("Blog", href="/blog"),
+                                            dbc.DropdownMenuItem("Higher or Lower", href="/higher-lower"),
                                             dbc.DropdownMenuItem("Account", href="/login", id="account-link"),
                                             dbc.DropdownMenuItem(divider=True),
                                             dbc.DropdownMenu(
@@ -3729,9 +3730,11 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     {"if": {"filter_query": '{Winner} = "Blue"', "column_id": "Winner"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)"},
                     {"if": {"filter_query": '{Winner} = "Blue"', "column_id": "Outcome"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)"},
                     {"if": {"filter_query": '{Winner} = "Blue"', "column_id": "Prediction"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)"},
-                    # Alliance column styling
-                    {"if": {"column_id": "Red Alliance"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
-                    {"if": {"column_id": "Blue Alliance"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
+                    # Alliance column styling - only bold the alliance the team is on
+                    {"if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Alliance"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
+                    {"if": {"filter_query": '{team_alliance} = "Blue"', "column_id": "Blue Alliance"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
+                    {"if": {"column_id": "Red Alliance"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)"},
+                    {"if": {"column_id": "Blue Alliance"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)"},
                     # Score column styling
                     {"if": {"column_id": "Red Score"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
                     {"if": {"column_id": "Blue Score"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
@@ -3773,64 +3776,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
     return html.Div([
         html.H3("Recent Events", style={"marginTop": "2rem", "color": "var(--text-secondary)", "fontWeight": "bold"}),
         html.Div(recent_rows)
-    ])
-
-def compare_layout():
-    # Team options will be filled by callback or server-side, so use empty list for now
-    team_dropdown = dcc.Dropdown(
-        id="compare-teams",
-        options=[],
-        placeholder="Select teams to compare",
-        className="custom-input-box",
-        style={"width": "100%"},
-        searchable=True,
-        multi=True,
-        value=[1323, 2056] # Set default teams
-    )
-
-    year_dropdown = dcc.Dropdown(
-        id="compare-year",
-        options=[{"label": str(y), "value": y} for y in reversed(range(1992, 2027))],
-        value=current_year,
-        clearable=False,
-        placeholder="Select Year",
-        className="custom-input-box",
-        style={"width": "100%"},
-    )
-
-    mode_toggle = dbc.ButtonGroup(
-        [
-            dbc.Button("Compare Teams", id="compare-mode-teams", n_clicks=0, active=True, outline=True, color="warning"),
-            dbc.Button("Compare Alliances", id="compare-mode-alliances", n_clicks=0, active=False, outline=True, color="warning"),
-        ],
-        id="compare-mode-toggle",
-        className="mb-3"
-    )
-
-    return html.Div([
-        topbar(),
-        dbc.Container([
-            html.H2("Compare Teams", className="text-center my-4"),
-            dbc.Row([
-                dbc.Col([
-                    html.Label("Teams", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
-                    team_dropdown,
-                    html.Div([
-                        mode_toggle
-                    ], style={"marginTop": "10px", "textAlign": "center"}),
-                    html.Div(id="compare-mode-hint", style={"marginTop": "5px", "fontSize": "0.85rem", "color": "var(--text-secondary)", "textAlign": "center"})
-                ], width=7),
-                dbc.Col([
-                    html.Label("Year", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
-                    year_dropdown
-                ], width=3),
-            ], className="mb-4 justify-content-center"),
-            html.Hr(),
-            html.Div(id="compare-output-section", children=[]) # Make this div initially empty
-        ], style={"maxWidth": "1000px", "margin": "0 auto", "padding": "20px", "flexGrow": "1"}),
-        dcc.Store(id="compare-mode-store", data="teams"),  # Store the current mode
-        dcc.Store(id="compare-radar-toggles-store", data={"show_alliances": True, "show_teams": True}),  # Store radar chart toggles
-        footer
     ])
 
 def get_peekolive_events_categorized(include_all: bool = False):
@@ -7172,3 +7117,148 @@ def build_match_notifications(event_key, selected_team=None):
         notifications.append(notification)
     
     return html.Div(notifications)
+
+def higher_lower_layout():
+    """Higher or Lower game layout comparing team ACE values"""
+    return html.Div([
+        topbar(),
+        dbc.Container(fluid=True, children=[
+            html.Div([
+            # Year selector and start button
+            html.Div([
+                html.Div([
+                    html.Label("Year:", style={"marginRight": "10px", "color": "var(--text-primary)", "fontWeight": "bold"}),
+                    dcc.Dropdown(
+                        id="higher-lower-year-dropdown",
+                        options=[{"label": str(yr), "value": yr} for yr in reversed(range(2015, 2027))],
+                        value=current_year,
+                        clearable=False,
+                        placeholder="Select Year",
+                        style={"width": "100px", "display": "inline-block"},
+                        className="custom-input-box"
+                    ),
+                    dbc.Button("Start", id="higher-lower-start-btn", color="primary", size="lg",
+                              style={"marginLeft": "20px", "padding": "10px 30px", "fontSize": "1rem"})
+                ], style={"display": "flex", "alignItems": "center", "justifyContent": "center", "padding": "20px"})
+            ], style={"borderBottom": "1px solid rgba(255, 255, 255, 0.1)"}),
+            
+            # Score and Highscore at top
+            html.Div([
+                html.Div([
+                    html.Div("Highscore", style={"fontSize": "0.75rem", "color": "var(--text-secondary)"}),
+                    html.Div(id="highscore-display", children="0", style={"fontSize": "1.5rem", "fontWeight": "bold", "color": "var(--text-primary)"})
+                ], style={"textAlign": "center", "flex": 1}),
+                html.Div(style={"width": "2px", "backgroundColor": "white", "height": "40px", "margin": "0 20px"}),
+                html.Div([
+                    html.Div("Score", style={"fontSize": "0.75rem", "color": "var(--text-secondary)"}),
+                    html.Div(id="score-display", children="0", style={"fontSize": "1.5rem", "fontWeight": "bold", "color": "var(--text-primary)"})
+                ], style={"textAlign": "center", "flex": 1}),
+                html.Div([
+                    dbc.Popover(
+                        [
+                            dbc.PopoverHeader("How to Play"),
+                            dbc.PopoverBody([
+                                html.P("Guess whether the hidden team's ACE is Higher or Lower than the shown team's ACE."),
+                                html.P("You get 3 wrong guesses before the game ends."),
+                                html.P("Your score increases with each correct guess. Try to beat your highscore!"),
+                                html.P([html.Strong("ACE (Adjusted Contribution Estimate)"), " is a team's expected contribution to a match, combining performance metrics with confidence factors."]),
+                            ])
+                        ],
+                        target="higher-lower-info-icon",
+                        trigger="click",
+                        placement="left",
+                    ),
+                    html.I(
+                        id="higher-lower-info-icon",
+                        className="fas fa-info-circle",
+                        style={"fontSize": "1.2rem", "color": "var(--text-secondary)", "cursor": "pointer"}
+                    )
+                ], style={"position": "absolute", "right": "20px", "top": "10px"})
+            ], style={
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "padding": "20px",
+                "position": "relative",
+                "borderBottom": "1px solid rgba(255, 255, 255, 0.1)"
+            }),
+            
+            # Main game area - two halves
+            html.Div([
+                # Left team (shows ACE)
+                html.Div([
+                    html.Div(id="left-team-avatar-container", style={"textAlign": "center", "marginBottom": "20px"}),
+                    html.Div(id="left-team-name", className="higher-lower-team-name", style={"fontSize": "1.5rem", "fontWeight": "bold", "textAlign": "center", "marginBottom": "10px", "color": "var(--text-primary)"}),
+                    html.Div("has a", style={"fontSize": "1rem", "textAlign": "center", "marginBottom": "10px", "color": "var(--text-secondary)"}),
+                    html.Div(id="left-team-ace", className="higher-lower-ace", style={"fontSize": "3rem", "fontWeight": "bold", "textAlign": "center", "marginBottom": "10px", "color": "var(--text-primary)"}),
+                    html.Div("ACE", style={"fontSize": "0.875rem", "textAlign": "center", "color": "var(--text-secondary)"})
+                ], className="higher-lower-team-panel", style={
+                    "flex": 1,
+                    "padding": "40px",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "justifyContent": "center",
+                    "alignItems": "center",
+                    "borderRight": "2px solid white"
+                }),
+                
+                # VS divider
+                html.Div("vs", className="higher-lower-vs", style={
+                    "position": "absolute",
+                    "left": "50%",
+                    "top": "50%",
+                    "transform": "translate(-50%, -50%)",
+                    "fontSize": "2rem",
+                    "fontWeight": "bold",
+                    "color": "white",
+                    "backgroundColor": "var(--bg-primary)",
+                    "padding": "10px 20px",
+                    "zIndex": 10
+                }),
+                
+                # Right team (hidden ACE with buttons)
+                html.Div([
+                    html.Div(id="right-team-avatar-container", style={"textAlign": "center", "marginBottom": "20px"}),
+                    html.Div(id="right-team-name", className="higher-lower-team-name", style={"fontSize": "1.5rem", "fontWeight": "bold", "textAlign": "center", "marginBottom": "10px", "color": "var(--text-primary)"}),
+                    html.Div("has a", style={"fontSize": "1rem", "textAlign": "center", "marginBottom": "10px", "color": "var(--text-secondary)"}),
+                    html.Div(id="right-team-ace-container", className="higher-lower-ace", style={"textAlign": "center", "marginBottom": "10px"}),
+                    html.Div([
+                        dbc.Button("Higher", id="higher-btn", color="danger", size="lg", className="higher-lower-btn", style={"marginRight": "10px", "padding": "15px 40px", "fontSize": "1.2rem"}),
+                        dbc.Button("Lower", id="lower-btn", color="success", size="lg", className="higher-lower-btn", style={"padding": "15px 40px", "fontSize": "1.2rem"})
+                    ], id="higher-lower-buttons-container", style={"textAlign": "center", "marginBottom": "10px"}),
+                    html.Div("ACE", style={"fontSize": "0.875rem", "textAlign": "center", "color": "var(--text-secondary)"})
+                ], className="higher-lower-team-panel", style={
+                    "flex": 1,
+                    "padding": "40px",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "justifyContent": "center",
+                    "alignItems": "center"
+                })
+            ], id="higher-lower-game-container", style={
+                "display": "flex",
+                "position": "relative",
+                "minHeight": "60vh",
+                "alignItems": "center"
+            }),
+            
+            # Game over message
+            html.Div(id="game-over-message", style={"display": "none", "textAlign": "center", "padding": "20px"}),
+            
+            # Stores for game state
+            dcc.Store(id="game-state-store", data={
+                "score": 0,
+                "highscore": 0,
+                "wrong_guesses": 0,
+                "left_team": None,
+                "right_team": None,
+                "left_ace": None,
+                "right_ace": None
+            }),
+            dcc.Store(id="teams-data-store", data=[]),
+            dcc.Store(id="selected-year-store", data=current_year),
+            dcc.Store(id="game-started-store", data=False),
+            dcc.Interval(id="reveal-transition-interval", interval=2000, n_intervals=0, disabled=True),
+            ], style={"maxWidth": "1200px", "margin": "0 auto", "padding": "20px"})
+        ], style={"minHeight": "100vh", "backgroundColor": "var(--bg-primary)"})
+    ])
