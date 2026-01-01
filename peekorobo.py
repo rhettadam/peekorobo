@@ -6646,23 +6646,26 @@ def update_selected_year(selected_year):
 @app.callback(
     [Output("teams-data-store", "data"),
      Output("game-state-store", "data"),
-     Output("game-started-store", "data")],
+     Output("game-started-store", "data"),
+     Output("teams-cache-store", "data")],
     [Input("higher-lower-start-btn", "n_clicks"),
      Input("url", "pathname")],
     [State("selected-year-store", "data"),
-     State("game-started-store", "data")],
+     State("game-started-store", "data"),
+     State("teams-cache-store", "data")],
     prevent_initial_call=False
 )
-def initialize_higher_lower_game(start_clicks, pathname, selected_year, game_started):
+def initialize_higher_lower_game(start_clicks, pathname, selected_year, game_started, teams_cache):
     """Load teams data and initialize game when Start button is clicked"""
     if pathname != "/higher-lower":
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update
     
     ctx = callback_context
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
     
     # Only initialize when Start button is clicked (not on page load)
     if triggered_id != "higher-lower-start-btn" and not game_started:
+        teams_cache = teams_cache or {}
         return [], {
             "score": 0,
             "highscore": 0,
@@ -6671,43 +6674,63 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, game_sta
             "right_team": None,
             "left_ace": None,
             "right_ace": None
-        }, False
+        }, False, teams_cache
     
     # Use selected year or default to current year
     year = selected_year if selected_year else current_year
     
-    # Load team data for the selected year
-    teams_list = []
-    try:
-        if year == current_year:
-            # Use global TEAM_DATABASE for current year
-            year_data = TEAM_DATABASE.get(current_year, {})
-        else:
-            # Load data for other years using load_year_data
-            year_team_data, _, _, _, _, _ = load_year_data(year)
-            year_data = year_team_data
-        
-        # Extract teams with valid ACE values
-        for team_num, team_data in year_data.items():
-            if isinstance(team_data, dict):
-                ace = team_data.get("epa")
-                if ace is not None and ace > 0:  # Only include teams with valid ACE
-                    teams_list.append({
-                        "team_number": team_num,
-                        "nickname": team_data.get("nickname", f"Team {team_num}"),
-                        "ace": ace
-                    })
-    except Exception as e:
-        print(f"Error loading team data for year {year}: {e}")
-        return [], {
-            "score": 0,
-            "highscore": 0,
-            "wrong_guesses": 0,
-            "left_team": None,
-            "right_team": None,
-            "left_ace": None,
-            "right_ace": None
-        }, False
+    # Check cache first - avoid reloading if we already have data for this year
+    teams_cache = teams_cache or {}
+    if str(year) in teams_cache:
+        teams_list = teams_cache[str(year)]
+    else:
+        # Load team data for the selected year
+        teams_list = []
+        try:
+            if year == current_year:
+                # Use global TEAM_DATABASE for current year
+                year_data = TEAM_DATABASE.get(current_year, {})
+            else:
+                # Load data for other years using load_year_data
+                year_team_data, _, _, _, _, _ = load_year_data(year)
+                year_data = year_team_data
+            
+            # Extract teams with valid ACE values and pre-compute avatar URLs
+            from datagather import _load_avatar_cache
+            available_avatars = _load_avatar_cache()
+            
+            for team_num, team_data in year_data.items():
+                if isinstance(team_data, dict):
+                    ace = team_data.get("epa")
+                    if ace is not None and ace > 0:  # Only include teams with valid ACE
+                        # Pre-compute avatar URL to avoid repeated lookups
+                        if 9970 <= team_num <= 9999:
+                            avatar_url = "/assets/avatars/bbot.png?v=1"
+                        elif team_num in available_avatars:
+                            avatar_url = f"/assets/avatars/{team_num}.png?v=1"
+                        else:
+                            avatar_url = "/assets/avatars/stock.png"
+                        
+                        teams_list.append({
+                            "team_number": team_num,
+                            "nickname": team_data.get("nickname", f"Team {team_num}"),
+                            "ace": ace,
+                            "avatar_url": avatar_url  # Pre-computed avatar URL
+                        })
+            
+            # Cache the teams list for this year
+            teams_cache[str(year)] = teams_list
+        except Exception as e:
+            print(f"Error loading team data for year {year}: {e}")
+            return [], {
+                "score": 0,
+                "highscore": 0,
+                "wrong_guesses": 0,
+                "left_team": None,
+                "right_team": None,
+                "left_ace": None,
+                "right_ace": None
+            }, False, teams_cache
     
     # Initialize game state with two random teams
     if not teams_list:
@@ -6721,7 +6744,7 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, game_sta
             "left_ace": None,
             "right_ace": None
         }
-        return teams_list, new_game_state, True
+        return teams_list, new_game_state, True, teams_cache
     
     # Pick two random teams
     import random
@@ -6739,7 +6762,7 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, game_sta
         "right_ace": right_team["ace"]
     }
     
-    return teams_list, new_game_state, True
+    return teams_list, new_game_state, True, teams_cache
 
 @app.callback(
     [Output("game-state-store", "data", allow_duplicate=True),
@@ -6865,8 +6888,6 @@ def transition_after_reveal(n_intervals, current_state, teams_data):
 )
 def update_game_display(game_state, teams_data, selected_year):
     """Update the game display based on current state"""
-    from datagather import get_team_avatar
-    
     # Return empty display if stores aren't ready yet
     if not game_state:
         return [html.Div()] * 12
@@ -6874,9 +6895,6 @@ def update_game_display(game_state, teams_data, selected_year):
     # If teams_data is empty but we have game_state, that's okay - use what's in game_state
     if not teams_data:
         teams_data = []
-    
-    # Use selected year or default to current year for avatars
-    year = selected_year if selected_year else current_year
     
     wrong_guesses = game_state.get("wrong_guesses", 0)
     score = game_state.get("score", 0)
@@ -6899,7 +6917,8 @@ def update_game_display(game_state, teams_data, selected_year):
     left_ace_display = "0.0"
     if left_team:
         team_num = left_team["team_number"]
-        avatar_url = get_team_avatar(team_num, year)
+        # Use pre-computed avatar URL if available, otherwise fallback
+        avatar_url = left_team.get("avatar_url", f"/assets/avatars/{team_num}.png?v=1")
         left_avatar = html.Img(
             src=avatar_url,
             style={
@@ -6920,7 +6939,8 @@ def update_game_display(game_state, teams_data, selected_year):
     buttons_container_style = {"display": "none"}
     if right_team:
         team_num = right_team["team_number"]
-        avatar_url = get_team_avatar(team_num, year)
+        # Use pre-computed avatar URL if available, otherwise fallback
+        avatar_url = right_team.get("avatar_url", f"/assets/avatars/{team_num}.png?v=1")
         right_avatar = html.Img(
             src=avatar_url,
             style={
@@ -7016,7 +7036,7 @@ def reset_game(play_again_clicks, teams_data, current_state):
     # Preserve highscore
     highscore = current_state.get("highscore", 0) if current_state else 0
     
-    # Pick two random teams
+    # Pick two random teams (avatar URLs already in teams_data)
     selected_teams = random.sample(teams_data, min(2, len(teams_data)))
     left_team = selected_teams[0]
     right_team = selected_teams[1] if len(selected_teams) > 1 else selected_teams[0]
