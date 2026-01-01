@@ -7137,7 +7137,7 @@ def higher_lower_layout():
                         style={"width": "100px", "display": "inline-block"},
                         className="custom-input-box"
                     ),
-                    dbc.Button("Start", id="higher-lower-start-btn", color="primary", size="lg",
+                    dbc.Button("Start", id="higher-lower-start-btn", color="warning", size="lg",
                               style={"marginLeft": "20px", "padding": "10px 30px", "fontSize": "1rem"})
                 ], style={"display": "flex", "alignItems": "center", "justifyContent": "center", "padding": "20px"})
             ], style={"borderBottom": "1px solid rgba(255, 255, 255, 0.1)"}),
@@ -7223,8 +7223,8 @@ def higher_lower_layout():
                     html.Div("has a", style={"fontSize": "1rem", "textAlign": "center", "marginBottom": "10px", "color": "var(--text-secondary)"}),
                     html.Div(id="right-team-ace-container", className="higher-lower-ace", style={"textAlign": "center", "marginBottom": "10px"}),
                     html.Div([
-                        dbc.Button("Higher", id="higher-btn", color="danger", size="lg", className="higher-lower-btn", style={"marginRight": "10px", "padding": "15px 40px", "fontSize": "1.2rem"}),
-                        dbc.Button("Lower", id="lower-btn", color="success", size="lg", className="higher-lower-btn", style={"padding": "15px 40px", "fontSize": "1.2rem"})
+                        dbc.Button("Higher", id="higher-btn", color="success", size="lg", className="higher-lower-btn", style={"marginRight": "10px", "padding": "15px 40px", "fontSize": "1.2rem"}),
+                        dbc.Button("Lower", id="lower-btn", color="danger", size="lg", className="higher-lower-btn", style={"padding": "15px 40px", "fontSize": "1.2rem"})
                     ], id="higher-lower-buttons-container", style={"textAlign": "center", "marginBottom": "10px"}),
                     html.Div("ACE", style={"fontSize": "0.875rem", "textAlign": "center", "color": "var(--text-secondary)"})
                 ], className="higher-lower-team-panel", style={
