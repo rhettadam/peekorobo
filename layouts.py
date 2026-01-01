@@ -2183,18 +2183,56 @@ def login_layout():
                             style={"width": "100%", "maxWidth": "500px", "marginBottom": "30px"},
                             className="home-image"
                         ),
-                        html.H3("Login or Register", style={"textAlign": "center", "marginBottom": "20px", "color": "var(--text-primary)"}),
-                        dbc.Input(id="username", type="text", placeholder="Username", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1rem"}),
-                        dbc.Input(id="password", type="password", placeholder="Password", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1.5rem"}),
-                        dbc.Row([
-                            dbc.Col(dbc.Button("Login", id="login-btn", style={
-                                "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%"
-                            }), width=6),
-                            dbc.Col(dbc.Button("Register", id="register-btn", style={
-                                "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%"
-                            }), width=6),
-                        ], justify="center", style={"maxWidth": "500px", "margin": "auto"}),
+                        html.H3("Login", style={"textAlign": "center", "marginBottom": "20px", "color": "var(--text-primary)"}),
+                        dbc.Input(id="login-username", type="text", placeholder="Username or Email", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1rem"}),
+                        dbc.Input(id="login-password", type="password", placeholder="Password", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1.5rem"}),
+                        dbc.Button("Login", id="login-btn", style={
+                            "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%", "maxWidth": "500px"
+                        }),
+                        html.Div([
+                            html.Span("Don't have an account? ", style={"color": "var(--text-primary)"}),
+                            html.A("Register", href="/register", style={"color": "#ffdd00ff", "textDecoration": "underline"})
+                        ], style={"textAlign": "center", "marginTop": "1rem"}),
                         html.Div(id="login-message", style={"textAlign": "center", "marginTop": "1rem", "color": "#333", "fontWeight": "bold"}),
+                    ], style={"textAlign": "center", "paddingTop": "50px"})
+                , width=12),
+            )
+        ], class_name="py-5", style={
+            "backgroundColor": "var(--bg-primary)",
+            "flexGrow": "1" # Added flex-grow
+            }),
+        footer
+    ])
+
+def register_layout():
+    # Optional redirect if logged in
+    if "user_id" in session:
+        return dcc.Location(href="/user", id="redirect-to-profile")
+
+    return html.Div([
+        topbar(),
+        dcc.Location(id="register-redirect", refresh=True),
+        dbc.Container(fluid=True, children=[
+            dbc.Row(
+                dbc.Col(
+                    html.Div([
+                        html.Img(
+                            src="/assets/home.png",
+                            style={"width": "100%", "maxWidth": "500px", "marginBottom": "30px"},
+                            className="home-image"
+                        ),
+                        html.H3("Register", style={"textAlign": "center", "marginBottom": "20px", "color": "var(--text-primary)"}),
+                        dbc.Input(id="register-username", type="text", placeholder="Username", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1rem"}),
+                        dbc.Input(id="register-email", type="email", placeholder="Email (optional)", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1rem"}),
+                        dbc.Input(id="register-password", type="password", placeholder="Password", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1.5rem"}),
+                        dbc.Button("Register", id="register-btn", style={
+                            "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%", "maxWidth": "500px"
+                        }),
+                        html.Div([
+                            html.Span("Already have an account? ", style={"color": "var(--text-primary)"}),
+                            html.A("Login", href="/login", style={"color": "#ffdd00ff", "textDecoration": "underline"})
+                        ], style={"textAlign": "center", "marginTop": "1rem"}),
+                        html.Div(id="register-message", style={"textAlign": "center", "marginTop": "1rem", "color": "#333", "fontWeight": "bold"}),
                     ], style={"textAlign": "center", "paddingTop": "50px"})
                 , width=12),
             )
@@ -3183,16 +3221,15 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
     
     year_events = EVENT_DATABASE.get(performance_year, {}) if isinstance(EVENT_DATABASE, dict) else EVENT_DATABASE
 
-    # Detect data structure: 2025 has year keys, 2024 doesn't
     has_year_keys = isinstance(EVENT_TEAMS, dict) and performance_year in EVENT_TEAMS
     
     for ek, ev in year_events.items():
         # Handle both data structures
         if has_year_keys:
-            # 2025 structure: EVENT_TEAMS[year][event_key]
+            # current yearstructure: EVENT_TEAMS[year][event_key]
             event_teams = EVENT_TEAMS.get(performance_year, {}).get(ek, [])
         else:
-            # 2024 structure: EVENT_TEAMS[event_key]
+            # before current year structure: EVENT_TEAMS[event_key]
             event_teams = EVENT_TEAMS.get(ek, []) if isinstance(EVENT_TEAMS, dict) else EVENT_TEAMS
         
         if not any(int(t.get("tk", -1)) == team_number for t in event_teams):
@@ -3217,10 +3254,10 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
 
         # Handle both data structures
         if has_year_keys:
-            # 2025 structure: EVENT_TEAMS[year][event_key]
+            # current year structure: EVENT_TEAMS[year][event_key]
             event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
         else:
-            # 2024 structure: EVENT_TEAMS[event_key]
+            # before current year structure: EVENT_TEAMS[event_key]
             event_teams = EVENT_TEAMS.get(event_key, []) if isinstance(EVENT_TEAMS, dict) else EVENT_TEAMS
     
         # Skip if team wasn't on the team list
@@ -3231,10 +3268,10 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         if event_key == "2025cmptx":
             # Handle both data structures for matches
             if has_year_keys:
-                # 2025 structure: EVENT_MATCHES[year]
+                # current year structure: EVENT_MATCHES[year]
                 year_matches = EVENT_MATCHES.get(year, [])
             else:
-                # 2024 structure: EVENT_MATCHES is a list
+                # before current year structure: EVENT_MATCHES is a list
                 year_matches = EVENT_MATCHES
             einstein_matches = [
                 m for m in year_matches
@@ -3261,10 +3298,10 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
 
         # Handle both data structures for rankings
         if has_year_keys:
-            # 2025 structure: EVENT_RANKINGS[year][event_key]
+            # current year structure: EVENT_RANKINGS[year][event_key]
             ranking = EVENT_RANKINGS.get(year, {}).get(event_key, {}).get(team_number, {})
         else:
-            # 2024 structure: EVENT_RANKINGS[event_key]
+            # before current year structure: EVENT_RANKINGS[event_key]
             ranking = EVENT_RANKINGS.get(event_key, {}).get(team_number, {}) if isinstance(EVENT_RANKINGS, dict) else {}
         rank_val = ranking.get("rk", "N/A")
         total_teams = len(event_teams)
@@ -3298,7 +3335,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         # Placeholder for record - will be calculated after all_event_matches is defined
         record = None
 
-        # Get event-specific data for 2025 events
+        # Get event-specific data
         event_epa_pills = None
         if year >= 2015:
             # Access event_epas from the specific team's data within the epa_data dictionary
@@ -4619,9 +4656,9 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
         return [html.Div("No team data available", style={"color": text_color})]
     
     # Get current year data
-    current_year_data = team_database.get(2025, {})
+    current_year_data = team_database.get(current_year, {})
     if not current_year_data:
-        return [html.Div("No 2025 team data available", style={"color": text_color})]
+        return [html.Div("No team data available for the current year", style={"color": text_color})]
     
     # Get user's team location info
     user_team_location = None
@@ -4848,7 +4885,7 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
             # Modern button
             html.A(
                 "Peek",
-                href=f"/team/{team_num}/2025",
+                href=f"/team/{team_num}/{current_year}",
                 style={
                     "display": "block",
                     "textAlign": "center",
@@ -4925,6 +4962,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
     role = "No role"
     team_affil = "####"
     bio = "No bio"
+    email = ""
     followers_count = 0
     following_count = 0
     color = "#f9f9f9"
@@ -4941,7 +4979,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
             if is_current_user:
                 # Current user - get full profile data
                 cursor.execute("""
-                    SELECT username, avatar_key, role, team, bio, followers, following, color
+                    SELECT username, avatar_key, role, team, bio, followers, following, color, email
                     FROM users WHERE id = %s
                 """, (target_user_id,))
                 user_row = cursor.fetchone()
@@ -4953,6 +4991,8 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     bio = user_row[4] or "No bio"
                     followers_ids = user_row[5] or []
                     following_ids = user_row[6] or []
+                    color = user_row[7] or "#f9f9f9"
+                    email = user_row[8] or ""
                     
                     # Get usernames and avatars for followers
                     if followers_ids:
@@ -4967,7 +5007,6 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     # Count values
                     followers_count = len(followers_ids)
                     following_count = len(following_ids)
-                    color = user_row[7] or "#f9f9f9"
             else:
                 # Other user - get profile data and check if current user is following
                 cursor.execute("""
@@ -5127,13 +5166,21 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
     # Profile edit form (only for current user)
     profile_edit_form = None
     if is_current_user:
-        profile_edit_form = html.Div(
+                profile_edit_form = html.Div(
             id="profile-edit-form",
             hidden=True,
             children=[
+                html.Label("Username", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
                 dbc.Input(id="edit-username", value=username_display, placeholder="Username", className="mb-2", size="sm"),
+                html.Label("Email (optional)", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
+                dbc.Input(id="edit-email", value=email, placeholder="Email (optional)", className="mb-2", size="sm"),
+                html.Label("New Password (leave blank to keep current)", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
+                dbc.Input(id="edit-password", type="password", placeholder="New Password (leave blank to keep current)", className="mb-2", size="sm", value=""),
+                html.Label("Role", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
                 dbc.Input(id="edit-role", value=role, placeholder="Role", className="mb-2", size="sm"),
+                html.Label("Team", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
                 dbc.Input(id="edit-team", value=team_affil, placeholder="Team", className="mb-2", size="sm"),
+                html.Label("Bio", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
                 dbc.Textarea(id="edit-bio", value=bio, placeholder="Bio", className="mb-2", style={"height": "60px", "fontSize": "0.85rem"}),
                 html.Label("Select Avatar", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
                 dcc.Dropdown(

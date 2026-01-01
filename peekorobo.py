@@ -6,7 +6,7 @@ from dash.dependencies import Input, Output, State
 
 import flask
 from flask import session
-from auth import register_user, verify_user
+from auth import register_user, verify_user, hash_password
 
 import os
 import numpy as np
@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_current_year,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,compare_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout
 
 from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name,get_team_data_with_fallback
 
@@ -216,6 +216,17 @@ def update_nav_active_state(pathname):
     return teams_active, map_active, events_active
 
 @app.callback(
+    Output("register-popup", "is_open"),
+    Input("url", "pathname")
+)
+def toggle_register_popup(pathname):
+    """Hide popup on login and register pages"""
+    if pathname == "/login" or pathname == "/register":
+        return False
+    # Only show if user is not logged in (check happens in the toast itself)
+    return "user_id" not in session
+
+@app.callback(
     Output("page-content", "children"),
     Input("url", "pathname")
 )
@@ -278,6 +289,9 @@ def display_page(pathname):
 
     if pathname == "/login":
         return login_layout()
+    
+    if pathname == "/register":
+        return register_layout()
 
     if pathname == "/user":
         return html.Div([
@@ -706,6 +720,8 @@ def update_color_display(color_value):
     Input("save-profile-btn", "n_clicks"),
     State("profile-edit-form", "hidden"),
     State("edit-username", "value"),
+    State("edit-email", "value"),
+    State("edit-password", "value"),
     State("edit-bg-color", "value"),
     State("edit-role", "value"),
     State("edit-team", "value"),
@@ -715,7 +731,7 @@ def update_color_display(color_value):
 )
 def handle_profile_edit(
     edit_clicks, save_clicks, editing_hidden,
-    username, color, role, team, bio, avatar_key_selected,
+    username, email, password, color, role, team, bio, avatar_key_selected,
     session_data
 ):
     triggered_id = ctx.triggered_id
@@ -742,16 +758,44 @@ def handle_profile_edit(
                 if cur.fetchone():
                     return [dash.no_update] * 18
 
-                cur.execute("""
-                    UPDATE users
-                    SET username = %s,
-                        role = %s,
-                        team = %s,
-                        bio = %s,
-                        avatar_key = %s,
-                        color = %s
-                    WHERE id = %s
-                """, (username, role, team, bio, avatar_key_selected, color, user_id))
+                # Check if email is already in use by another user
+                if email and email.strip():
+                    cur.execute("SELECT id FROM users WHERE LOWER(email) = %s AND id != %s", (email.lower().strip(), user_id))
+                    if cur.fetchone():
+                        return [dash.no_update] * 18
+                
+                # Validate password if provided
+                if password and password.strip():
+                    password_str = password.strip()
+                    if len(password_str) < 8 or not any(c.isupper() for c in password_str) or not any(c.islower() for c in password_str) or not any(c.isdigit() for c in password_str):
+                        return [dash.no_update] * 18
+                    password_hash = hash_password(password_str)
+                    # Update with password
+                    cur.execute("""
+                        UPDATE users
+                        SET username = %s,
+                            email = %s,
+                            password_hash = %s,
+                            role = %s,
+                            team = %s,
+                            bio = %s,
+                            avatar_key = %s,
+                            color = %s
+                        WHERE id = %s
+                    """, (username, email.strip() if email else None, password_hash, role, team, bio, avatar_key_selected, color, user_id))
+                else:
+                    # Update without password
+                    cur.execute("""
+                        UPDATE users
+                        SET username = %s,
+                            email = %s,
+                            role = %s,
+                            team = %s,
+                            bio = %s,
+                            avatar_key = %s,
+                            color = %s
+                        WHERE id = %s
+                    """, (username, email.strip() if email else None, role, team, bio, avatar_key_selected, color, user_id))
                 conn.commit()
 
                 cur.execute("SELECT role, team, bio, color, followers FROM users WHERE id = %s", (user_id,))
@@ -1053,46 +1097,52 @@ def remove_favorite(n_clicks, store_data, session_data):
     Output("login-message", "children"),
     Output("login-redirect", "href"),
     Input("login-btn", "n_clicks"),
-    Input("register-btn", "n_clicks"),
-    State("username", "value"),
-    State("password", "value"),
+    State("login-username", "value"),
+    State("login-password", "value"),
     prevent_initial_call=True
 )
-def handle_login(login_clicks, register_clicks, username, password):
-    ctx = dash.callback_context
-
-    if not ctx.triggered or not username or not password:
+def handle_login(login_clicks, username, password):
+    if not username or not password:
         return "Please enter both username and password.", dash.no_update
 
-    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    valid, user_id = verify_user(username, password)
+    if valid:
+        session["user_id"] = user_id
+        session["username"] = username
+        redirect_url = "/user"
+        return f"✅ Welcome, {username}!", redirect_url
+    else:
+        return "❌ Invalid username or password.", dash.no_update
 
-    if button_id == "login-btn":
-        valid, user_id = verify_user(username, password)
-        if valid:
+@app.callback(
+    Output("register-message", "children"),
+    Output("register-redirect", "href"),
+    Input("register-btn", "n_clicks"),
+    State("register-username", "value"),
+    State("register-email", "value"),
+    State("register-password", "value"),
+    prevent_initial_call=True
+)
+def handle_register(register_clicks, username, email, password):
+    if not username or not password:
+        return "Please enter both username and password.", dash.no_update
+
+    success, message = register_user(username.strip(), password.strip(), email.strip() if email else None)
+    if success:
+        # Auto-login after registration
+        try:
+            with DatabaseConnection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT id FROM users WHERE username = %s", (username.strip(),))
+                user_id = cursor.fetchone()[0]
             session["user_id"] = user_id
-            session["username"] = username
+            session["username"] = username.strip()
             redirect_url = "/user"
-            return f"✅ Welcome, {username}!", redirect_url
-        else:
-            return "❌ Invalid username or password.", dash.no_update
-
-    elif button_id == "register-btn":
-        success, message = register_user(username.strip(), password.strip())
-        if success:
-            # Auto-login after registration
-            try:
-                with DatabaseConnection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT id FROM users WHERE username = %s", (username.strip(),))
-                    user_id = cursor.fetchone()[0]
-                session["user_id"] = user_id
-                session["username"] = username.strip()
-                redirect_url = "/user"
-                return f"✅ Welcome, {username.strip()}!", redirect_url
-            except Exception as e:
-                return "Registration successful but login failed. Please try logging in.", dash.no_update
-        else:
-            return message, dash.no_update
+            return f"✅ Welcome, {username.strip()}!", redirect_url
+        except Exception as e:
+            return "Registration successful but login failed. Please try logging in.", dash.no_update
+    else:
+        return message, dash.no_update
 
 @app.callback(
     Output("favorite-alert", "children"),

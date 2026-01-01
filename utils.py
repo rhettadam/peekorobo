@@ -7,7 +7,7 @@ import pandas as pd
 
 import dash_bootstrap_components as dbc
 from dash import html
-from flask import session
+from flask import session, request
 from datagather import DatabaseConnection, get_team_avatar
 from datetime import datetime, date
 import json
@@ -530,7 +530,7 @@ def universal_profile_icon_or_toast():
                     width=6
                 ),
                 dbc.Col(
-                    dbc.Button("Register", href="/login", size="sm", color="warning", className="mt-2", style={
+                    dbc.Button("Register", href="/register", size="sm", color="warning", className="mt-2", style={
                         "width": "100%",
                         "backgroundColor": "var(--bg-secondary)",
                         "color": "var(--text-primary)",
@@ -544,6 +544,7 @@ def universal_profile_icon_or_toast():
         header="Join Peekorobo",
         is_open=True,
         dismissable=True,
+        className="register-popup-toast",
         icon="warning",
         header_style={  # Added header_style
             "backgroundColor": "var(--card-bg)",
