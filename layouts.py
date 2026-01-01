@@ -2335,7 +2335,7 @@ def create_team_card(team, year, avatar_url, epa_ranks):
                         "opacity": "0.9",
                         "fontWeight": "400"
                     }),
-                    html.P(f"ACE: {epa_display} (Global Rank: {rank})", className="card-text", style={
+                    html.P(f"ACE: {epa_display}", className="card-text", style={
                         "fontSize": "0.9rem",
                         "textAlign": "center",
                         "marginBottom": "1rem",
@@ -2445,7 +2445,7 @@ def create_team_card_spotlight(team, year_team_database, event_year):
                     "opacity": "0.9",
                     "fontWeight": "400"
                 }),
-                html.P(f"ACE: {epa_display} (Global Rank: {epa_rank})", className="card-text", style={
+                html.P(f"ACE: {epa_display}", className="card-text", style={
                     "fontSize": "0.9rem",
                     "textAlign": "center",
                     "marginBottom": "1rem",
