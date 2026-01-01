@@ -1357,7 +1357,6 @@ def topbar():
                                         in_navbar=True,
                                         className="custom-navlink",
                                         children=[
-                                            dbc.DropdownMenuItem("Compare", href="/compare"),
                                             dbc.DropdownMenuItem("Blog", href="/blog"),
                                             dbc.DropdownMenuItem("Higher or Lower", href="/higher-lower"),
                                             dbc.DropdownMenuItem("Account", href="/login", id="account-link"),
