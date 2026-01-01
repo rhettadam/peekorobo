@@ -7129,7 +7129,7 @@ def higher_lower_layout():
                     html.Label("Year:", style={"marginRight": "10px", "color": "var(--text-primary)", "fontWeight": "bold"}),
                     dcc.Dropdown(
                         id="higher-lower-year-dropdown",
-                        options=[{"label": str(yr), "value": yr} for yr in reversed(range(2015, 2027))],
+                        options=[{"label": str(yr), "value": yr} for yr in reversed(range(1992, 2027))],
                         value=current_year,
                         clearable=False,
                         placeholder="Select Year",
