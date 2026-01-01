@@ -6848,7 +6848,6 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
         return teams_list, new_game_state, True, teams_cache
     
     # Pick two random teams
-    import random
     selected_teams = random.sample(teams_list, min(2, len(teams_list)))
     left_team = selected_teams[0]
     right_team = selected_teams[1] if len(selected_teams) > 1 else selected_teams[0]
@@ -6877,7 +6876,7 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
     prevent_initial_call=True
 )
 def handle_guess(higher_clicks, lower_clicks, current_state, teams_data):
-    """Handle higher/lower button clicks - instant transition for snappy gameplay"""
+    """Handle higher/lower button clicks - show reveal first, then transition"""
     ctx = callback_context
     if not ctx.triggered:
         return no_update, no_update
@@ -6900,57 +6899,71 @@ def handle_guess(higher_clicks, lower_clicks, current_state, teams_data):
     is_higher = triggered_id == "higher-btn"
     correct = (is_higher and right_ace > left_ace) or (not is_higher and right_ace < left_ace)
     
-    # Set reveal phase - show ACE briefly for visual feedback
+    # Set reveal phase - show ACE with color feedback
     game_state["revealing"] = True
     game_state["reveal_correct"] = correct
     game_state["reveal_right_ace"] = right_ace
     
-    # Apply changes immediately (no pending state needed)
+    # Store pending changes (don't apply until after reveal)
     if correct:
         score = game_state.get("score", 0) + 1
         highscore = game_state.get("highscore", 0)
         if score > highscore:
             highscore = score
-        game_state["score"] = score
-        game_state["highscore"] = highscore
-        
-        # Move right team to left, pick new right team immediately
-        game_state["left_team"] = right_team
-        game_state["left_ace"] = right_ace
-        
-        # Pick a new random team for right side
-        available_teams = [t for t in teams_data if t["team_number"] != right_team["team_number"]]
-        if available_teams:
-            new_right_team = random.choice(available_teams)
-            game_state["right_team"] = new_right_team
-            game_state["right_ace"] = new_right_team["ace"]
+        game_state["pending_score"] = score
+        game_state["pending_highscore"] = highscore
+        game_state["pending_transition"] = True  # Mark that we need to transition teams
     else:
         wrong_guesses = game_state.get("wrong_guesses", 0) + 1
-        game_state["wrong_guesses"] = wrong_guesses
+        game_state["pending_wrong_guesses"] = wrong_guesses
     
-    # Enable short interval to clear reveal state for visual feedback (300ms)
+    # Enable interval to transition after reveal
     return game_state, False  # False = interval enabled
 
 @app.callback(
     [Output("game-state-store", "data", allow_duplicate=True),
      Output("reveal-transition-interval", "disabled", allow_duplicate=True)],
     Input("reveal-transition-interval", "n_intervals"),
-    State("game-state-store", "data"),
+    [State("game-state-store", "data"),
+     State("teams-data-store", "data")],
     prevent_initial_call=True
 )
-def clear_reveal_state(n_intervals, current_state):
-    """Quickly clear reveal state after brief visual feedback (300ms)"""
+def transition_after_reveal(n_intervals, current_state, teams_data):
+    """Transition to next round after ACE reveal"""
     if not current_state or not current_state.get("revealing"):
         return no_update, no_update
     
     game_state = current_state.copy()
     
-    # Clear reveal state - transition already happened in handle_guess
+    # Clear reveal state
     game_state["revealing"] = False
     game_state.pop("reveal_correct", None)
     game_state.pop("reveal_right_ace", None)
     
-    # Disable interval after clearing reveal
+    # Apply pending changes
+    if "pending_score" in game_state:
+        game_state["score"] = game_state.pop("pending_score")
+        game_state["highscore"] = game_state.pop("pending_highscore")
+        
+        # Only transition teams if marked
+        if game_state.pop("pending_transition", False):
+            # Move right team to left, pick new right team
+            right_team = game_state.get("right_team")
+            right_ace = game_state.get("right_ace")
+            
+            game_state["left_team"] = right_team
+            game_state["left_ace"] = right_ace
+            
+            # Pick a new random team for right side
+            available_teams = [t for t in teams_data if t["team_number"] != right_team["team_number"]]
+            if available_teams:
+                new_right_team = random.choice(available_teams)
+                game_state["right_team"] = new_right_team
+                game_state["right_ace"] = new_right_team["ace"]
+    elif "pending_wrong_guesses" in game_state:
+        game_state["wrong_guesses"] = game_state.pop("pending_wrong_guesses")
+    
+    # Disable interval after transition
     return game_state, True  # True = interval disabled
 
 @app.callback(
@@ -6997,8 +7010,8 @@ def update_game_display(game_state, teams_data, selected_year):
     
     # Check if game is over
     game_over = wrong_guesses >= 3
-    # Don't disable buttons during reveal for snappy gameplay - reveal is just visual feedback
-    buttons_disabled = game_over
+    # Disable buttons during reveal to prevent double-clicks, but keep it snappy
+    buttons_disabled = game_over or revealing
     
     # Build left team display
     left_avatar = html.Div()
@@ -7119,8 +7132,6 @@ def reset_game(play_again_clicks, teams_data, current_state):
     """Reset the game when Play Again is clicked"""
     if not play_again_clicks or not teams_data:
         return no_update
-    
-    import random
     
     # Preserve highscore
     highscore = current_state.get("highscore", 0) if current_state else 0

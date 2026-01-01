@@ -7302,7 +7302,7 @@ def higher_lower_layout():
             dcc.Store(id="selected-district-store", data="All"),
             dcc.Store(id="game-started-store", data=False),
             dcc.Store(id="teams-cache-store", data={}),  # Cache teams data per year
-            dcc.Interval(id="reveal-transition-interval", interval=300, n_intervals=0, disabled=True),  # Short 300ms for visual feedback only
+            dcc.Interval(id="reveal-transition-interval", interval=600, n_intervals=0, disabled=True),  # 600ms to show reveal clearly
             ], style={"maxWidth": "1200px", "margin": "0 auto", "padding": "20px"})
         ], style={"minHeight": "100vh", "backgroundColor": "var(--bg-primary)"})
     ])
