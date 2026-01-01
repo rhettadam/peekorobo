@@ -6966,160 +6966,194 @@ def transition_after_reveal(n_intervals, current_state, teams_data):
     # Disable interval after transition
     return game_state, True  # True = interval disabled
 
+# Optimized display callbacks - split into smaller callbacks to avoid recreating all HTML
 @app.callback(
-    [
-        Output("left-team-avatar-container", "children"),
-        Output("left-team-name", "children"),
-        Output("left-team-ace", "children"),
-        Output("right-team-avatar-container", "children"),
-        Output("right-team-name", "children"),
-        Output("right-team-ace-container", "children"),
-        Output("score-display", "children"),
-        Output("highscore-display", "children"),
-        Output("game-over-message", "children"),
-        Output("game-over-message", "style"),
-        Output("higher-lower-buttons-container", "style"),
-        Output("higher-btn", "disabled"),
-        Output("lower-btn", "disabled")
-    ],
+    [Output("left-team-avatar-container", "children"),
+     Output("left-team-name", "children"),
+     Output("left-team-ace", "children")],
     Input("game-state-store", "data"),
-    [State("teams-data-store", "data"),
-     State("selected-year-store", "data")],
     prevent_initial_call=False
 )
-def update_game_display(game_state, teams_data, selected_year):
-    """Update the game display based on current state"""
-    # Return empty display if stores aren't ready yet
+def update_left_team_display(game_state):
+    """Update left team display - only when left team changes"""
     if not game_state:
-        return [html.Div()] * 12
+        return html.Div(), "Loading...", "0.0"
     
-    # If teams_data is empty but we have game_state, that's okay - use what's in game_state
-    if not teams_data:
-        teams_data = []
+    left_team = game_state.get("left_team")
+    left_ace = game_state.get("left_ace")
+    
+    if not left_team:
+        return html.Div(), "Loading...", "0.0"
+    
+    team_num = left_team["team_number"]
+    avatar_url = left_team.get("avatar_url", f"/assets/avatars/{team_num}.png?v=1")
+    
+    left_avatar = html.Img(
+        src=avatar_url,
+        style={
+            "width": "200px",
+            "height": "200px",
+            "objectFit": "contain",
+            "borderRadius": "50%",
+            "border": "3px solid white"
+        }
+    )
+    left_name = f"{left_team['nickname']} ({team_num})"
+    left_ace_display = f"{left_ace:.1f}" if left_ace is not None else "0.0"
+    
+    return left_avatar, left_name, left_ace_display
+
+@app.callback(
+    [Output("right-team-avatar-container", "children"),
+     Output("right-team-name", "children")],
+    Input("game-state-store", "data"),
+    prevent_initial_call=False
+)
+def update_right_team_display(game_state):
+    """Update right team display - only when right team changes"""
+    if not game_state:
+        return html.Div(), "Loading..."
+    
+    right_team = game_state.get("right_team")
+    
+    if not right_team:
+        return html.Div(), "Loading..."
+    
+    team_num = right_team["team_number"]
+    avatar_url = right_team.get("avatar_url", f"/assets/avatars/{team_num}.png?v=1")
+    
+    right_avatar = html.Img(
+        src=avatar_url,
+        style={
+            "width": "200px",
+            "height": "200px",
+            "objectFit": "contain",
+            "borderRadius": "50%",
+            "border": "3px solid white"
+        }
+    )
+    right_name = f"{right_team['nickname']} ({team_num})"
+    
+    return right_avatar, right_name
+
+@app.callback(
+    [Output("right-team-ace-container", "children"),
+     Output("higher-lower-buttons-container", "style")],
+    Input("game-state-store", "data"),
+    prevent_initial_call=False
+)
+def update_right_ace_and_buttons(game_state):
+    """Update right ACE container and button visibility - optimized"""
+    if not game_state:
+        return html.Div(style={"display": "none"}), {"display": "none"}
     
     wrong_guesses = game_state.get("wrong_guesses", 0)
-    score = game_state.get("score", 0)
-    highscore = game_state.get("highscore", 0)
-    left_team = game_state.get("left_team")
-    right_team = game_state.get("right_team")
-    left_ace = game_state.get("left_ace")
     right_ace = game_state.get("right_ace")
     revealing = game_state.get("revealing", False)
     reveal_right_ace = game_state.get("reveal_right_ace")
     reveal_correct = game_state.get("reveal_correct", False)
+    right_team = game_state.get("right_team")
     
-    # Check if game is over
     game_over = wrong_guesses >= 3
-    # Disable buttons during reveal to prevent double-clicks, but keep it snappy
+    
+    if not right_team:
+        return html.Div(style={"display": "none"}), {"display": "none"}
+    
+    if game_over:
+        right_ace_container = html.Div(
+            f"{right_ace:.1f}" if right_ace is not None else "0.0",
+            style={
+                "fontSize": "3rem",
+                "fontWeight": "bold",
+                "textAlign": "center",
+                "color": "var(--text-primary)"
+            }
+        )
+        buttons_container_style = {"display": "none"}
+    elif revealing and reveal_right_ace is not None:
+        color = "#28a745" if reveal_correct else "#dc3545"
+        right_ace_container = html.Div(
+            f"{reveal_right_ace:.1f}",
+            style={
+                "fontSize": "3rem",
+                "fontWeight": "bold",
+                "textAlign": "center",
+                "color": color,
+                "transition": "opacity 0.3s ease-in-out, color 0.3s ease-in-out",
+                "opacity": 1
+            }
+        )
+        buttons_container_style = {"display": "none"}
+    else:
+        right_ace_container = html.Div(style={"display": "none"})
+        buttons_container_style = {"textAlign": "center", "marginBottom": "10px"}
+    
+    return right_ace_container, buttons_container_style
+
+@app.callback(
+    [Output("score-display", "children"),
+     Output("highscore-display", "children")],
+    Input("game-state-store", "data"),
+    prevent_initial_call=False
+)
+def update_scores(game_state):
+    """Update score displays - only when scores change"""
+    if not game_state:
+        return "0", "0"
+    
+    score = game_state.get("score", 0)
+    highscore = game_state.get("highscore", 0)
+    
+    return str(score), str(highscore)
+
+@app.callback(
+    [Output("game-over-message", "children"),
+     Output("game-over-message", "style")],
+    Input("game-state-store", "data"),
+    prevent_initial_call=False
+)
+def update_game_over_message(game_state):
+    """Update game over message - only when game over state changes"""
+    if not game_state:
+        return html.Div(), {"display": "none"}
+    
+    wrong_guesses = game_state.get("wrong_guesses", 0)
+    score = game_state.get("score", 0)
+    highscore = game_state.get("highscore", 0)
+    
+    game_over = wrong_guesses >= 3
+    
+    if not game_over:
+        return html.Div(), {"display": "none"}
+    
+    game_over_msg = html.Div([
+        html.H3("Game Over!", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
+        html.P(f"Final Score: {score}", style={"fontSize": "1.5rem", "color": "var(--text-primary)", "marginBottom": "10px"}),
+        html.P(f"Highscore: {highscore}", style={"fontSize": "1.2rem", "color": "var(--text-secondary)", "marginBottom": "20px"}),
+        dbc.Button("Play Again", id="play-again-btn", color="primary", size="lg",
+                  style={"padding": "15px 40px", "fontSize": "1.2rem"})
+    ], style={"textAlign": "center"})
+    
+    return game_over_msg, {"display": "block", "textAlign": "center", "padding": "20px"}
+
+@app.callback(
+    [Output("higher-btn", "disabled"),
+     Output("lower-btn", "disabled")],
+    Input("game-state-store", "data"),
+    prevent_initial_call=False
+)
+def update_button_states(game_state):
+    """Update button disabled states - only when relevant state changes"""
+    if not game_state:
+        return True, True
+    
+    wrong_guesses = game_state.get("wrong_guesses", 0)
+    revealing = game_state.get("revealing", False)
+    
+    game_over = wrong_guesses >= 3
     buttons_disabled = game_over or revealing
     
-    # Build left team display
-    left_avatar = html.Div()
-    left_name = "Loading..."
-    left_ace_display = "0.0"
-    if left_team:
-        team_num = left_team["team_number"]
-        # Use pre-computed avatar URL if available, otherwise fallback
-        avatar_url = left_team.get("avatar_url", f"/assets/avatars/{team_num}.png?v=1")
-        left_avatar = html.Img(
-            src=avatar_url,
-            style={
-                "width": "200px",
-                "height": "200px",
-                "objectFit": "contain",
-                "borderRadius": "50%",
-                "border": "3px solid white"
-            }
-        )
-        left_name = f"{left_team['nickname']} ({team_num})"
-        left_ace_display = f"{left_ace:.1f}"
-    
-    # Build right team display
-    right_avatar = html.Div()
-    right_name = "Loading..."
-    right_ace_container = html.Div()
-    buttons_container_style = {"display": "none"}
-    if right_team:
-        team_num = right_team["team_number"]
-        # Use pre-computed avatar URL if available, otherwise fallback
-        avatar_url = right_team.get("avatar_url", f"/assets/avatars/{team_num}.png?v=1")
-        right_avatar = html.Img(
-            src=avatar_url,
-            style={
-                "width": "200px",
-                "height": "200px",
-                "objectFit": "contain",
-                "borderRadius": "50%",
-                "border": "3px solid white"
-            }
-        )
-        right_name = f"{right_team['nickname']} ({team_num})"
-        
-        if game_over:
-            # Show the ACE value when game is over
-            right_ace_container = html.Div(
-                f"{right_ace:.1f}",
-                style={
-                    "fontSize": "3rem",
-                    "fontWeight": "bold",
-                    "textAlign": "center",
-                    "color": "var(--text-primary)"
-                }
-            )
-            buttons_container_style = {"display": "none"}
-        elif revealing and reveal_right_ace is not None:
-            # Show ACE value during reveal phase with smooth transition
-            color = "#28a745" if reveal_correct else "#dc3545"  # Green for correct, red for wrong
-            right_ace_container = html.Div(
-                f"{reveal_right_ace:.1f}",
-                style={
-                    "fontSize": "3rem",
-                    "fontWeight": "bold",
-                    "textAlign": "center",
-                    "color": color,
-                    "transition": "opacity 0.3s ease-in-out, color 0.3s ease-in-out",
-                    "opacity": 1
-                }
-            )
-            buttons_container_style = {"display": "none"}
-        else:
-            # Hide ACE value, show buttons
-            right_ace_container = html.Div(style={"display": "none"})
-            buttons_container_style = {"textAlign": "center", "marginBottom": "10px"}
-    
-    # Game over message
-    game_over_msg = html.Div()
-    game_over_style = {"display": "none"}
-    if game_over:
-        game_over_msg = html.Div([
-            html.H3("Game Over!", style={"color": "var(--text-primary)", "marginBottom": "20px"}),
-            html.P(f"Final Score: {score}", style={"fontSize": "1.5rem", "color": "var(--text-primary)", "marginBottom": "10px"}),
-            html.P(f"Highscore: {highscore}", style={"fontSize": "1.2rem", "color": "var(--text-secondary)", "marginBottom": "20px"}),
-            dbc.Button("Play Again", id="play-again-btn", color="primary", size="lg",
-                      style={"padding": "15px 40px", "fontSize": "1.2rem"})
-        ], style={"textAlign": "center"})
-        game_over_style = {"display": "block", "textAlign": "center", "padding": "20px"}
-    
-    # Handle case when right_team doesn't exist
-    if not right_team:
-        right_ace_container = html.Div(style={"display": "none"})
-        buttons_container_style = {"display": "none"}
-    
-    return (
-        left_avatar,
-        left_name,
-        left_ace_display,
-        right_avatar,
-        right_name,
-        right_ace_container,
-        str(score),
-        str(highscore),
-        game_over_msg,
-        game_over_style,
-        buttons_container_style,
-        buttons_disabled,
-        buttons_disabled
-    )
+    return buttons_disabled, buttons_disabled
 
 @app.callback(
     Output("game-state-store", "data", allow_duplicate=True),
