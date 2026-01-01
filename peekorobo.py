@@ -4183,6 +4183,7 @@ def load_teams(
         confidence = team.get("confidence", 0)
         wins = team.get("wins", 0)
         losses = team.get("losses", 0)
+        ties = team.get("ties", 0)
         favorites = favorites_counts.get(team_number, 0)
         return {
             "auto_epa": auto,
@@ -4197,6 +4198,7 @@ def load_teams(
             "confidence": confidence,
             "wins": wins,
             "losses": losses,
+            "ties": ties,
             "favorites": favorites,
         }.get(axis, 0)
 
