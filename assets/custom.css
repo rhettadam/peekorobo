@@ -274,6 +274,14 @@ h1, h2, h3, h4, h5, h6, p, span, div {
     background-color: var(--input-bg) !important;
     border-color: var(--input-border) !important;
     color: var(--input-text) !important;
+    background-image: none !important;
+}
+
+/* Remove wrapper backgrounds - Dash wraps Select in a div */
+.Select > div,
+.Select > div > div {
+    background-color: transparent !important;
+    background-image: none !important;
 }
 
 .Select-value,
@@ -308,6 +316,60 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 .Select-option.is-selected {
     background-color: var(--bg-secondary) !important;
     color: var(--text-primary) !important;
+}
+
+/* Fix double background on dropdowns - ensure only the control has background */
+.Select-control {
+    background-color: var(--input-bg) !important;
+    background-image: none !important;
+}
+
+.Select-control .Select-input {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+.Select-control .Select-value {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+.Select-control .Select-value-label {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+/* Remove any nested backgrounds but keep the control itself */
+.Select-control > .Select-input,
+.Select-control > .Select-value,
+.Select-control > .Select-arrow-zone {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+/* Fix wrapper div backgrounds - Dash/react-select creates wrapper divs */
+/* The Select component itself should be transparent */
+.Select {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+/* The first wrapper div should also be transparent */
+.Select > div {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+/* Only the Select-control should have a background */
+.custom-input-box .Select-control,
+.custom-input-box .Select > div > .Select-control {
+    background-color: var(--input-bg) !important;
+    background-image: none !important;
+}
+
+.Select-control .Select-input > input {
+    background-color: transparent !important;
+    background-image: none !important;
 }
 
 /* Ensure all dropdowns in dark mode have proper colors */
@@ -356,6 +418,32 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 [data-theme="dark"] .toast .btn-close {
     color: var(--text-primary) !important; /* Should be white in dark mode */
     filter: invert(1) grayscale(100%) brightness(200%) !important; /* Explicitly make it white */
+}
+
+/* Popovers */
+.popover {
+    background-color: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-primary) !important;
+}
+
+.popover-header {
+    background-color: var(--bg-secondary) !important;
+    border-bottom-color: var(--card-border) !important;
+    color: var(--text-primary) !important;
+}
+
+.popover-body {
+    background-color: var(--card-bg) !important;
+    color: var(--text-primary) !important;
+}
+
+.popover .popover-arrow::before {
+    border-color: var(--card-border) !important;
+}
+
+.popover .popover-arrow::after {
+    border-color: var(--card-bg) !important;
 }
 
 /* Modals */
@@ -513,6 +601,21 @@ img:hover {
     transition: background-color 0.3s, color 0.3s, border-color 0.3s;
 }
 
+/* For dcc.Dropdown with custom-input-box, make wrapper transparent */
+.custom-input-box.Select,
+.custom-input-box > .Select,
+.custom-input-box > div > .Select {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+/* Ensure only the Select-control inside custom-input-box has background */
+.custom-input-box .Select-control,
+.custom-input-box .Select > div > .Select-control {
+    background-color: var(--input-bg) !important;
+    background-image: none !important;
+}
+
 .custom-input-box::placeholder {
     color: var(--text-secondary) !important;
     opacity: 1;
@@ -571,6 +674,75 @@ label {
 
 /* Search Preview Link Colors */
 /* Removed rules as color is now controlled by team_link_with_avatar */
+
+/* Higher or Lower Game Responsive Styles */
+@media (max-width: 767px) {
+    /* Mobile: scale down but keep side-by-side layout */
+    #higher-lower-game-container {
+        minHeight: auto !important;
+        padding: 10px !important;
+    }
+    
+    .higher-lower-team-panel {
+        padding: 20px 10px !important;
+        min-width: 0 !important;
+    }
+    
+    /* Scale down avatars on mobile */
+    #left-team-avatar-container img,
+    #right-team-avatar-container img {
+        width: 120px !important;
+        height: 120px !important;
+    }
+    
+    /* Scale down text on mobile */
+    #left-team-name,
+    #right-team-name {
+        font-size: 1.1rem !important;
+    }
+    
+    #left-team-ace {
+        font-size: 2rem !important;
+    }
+    
+    #right-team-ace-container {
+        font-size: 2rem !important;
+    }
+    
+    /* Scale down buttons on mobile */
+    .higher-lower-btn {
+        padding: 10px 20px !important;
+        font-size: 1rem !important;
+        margin: 5px !important;
+    }
+    
+    #higher-lower-buttons-container {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+    }
+    
+    /* Scale down VS text */
+    .higher-lower-vs {
+        font-size: 1.5rem !important;
+        padding: 5px 15px !important;
+    }
+    
+    /* Year selector and start button on mobile */
+    #higher-lower-year-dropdown {
+        width: 120px !important;
+    }
+    
+    #higher-lower-start-btn {
+        padding: 8px 20px !important;
+        font-size: 0.9rem !important;
+    }
+    
+    /* Score section on mobile */
+    #score-display,
+    #highscore-display {
+        font-size: 1.2rem !important;
+    }
+}
 
 /* Search Preview Highlighted Link Color - Force black on yellow */
 #desktop-search-preview .dbc-row[style*="background-color: #ffdd00"] a,
