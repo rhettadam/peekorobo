@@ -1746,9 +1746,6 @@ def fetch_team_components(team, year):
 
     event_epa_results = []
     event_epa_full = []  # Keep full data for aggregation
-    total_wins = 0
-    total_losses = 0
-    total_ties = 0
 
     for event_key in event_keys:
         try:
@@ -1757,81 +1754,29 @@ def fetch_team_components(team, year):
             if not matches:
                 continue  # Skip if no matches in cache
             
-            if matches:
-                # Calculate overall wins/losses/ties from matches
-                for match in matches:
-                    # Normal case - check the original team key
-                    if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
-                        continue
-                    alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
-                    # 2015: Use scores, not winning_alliance
-                    event_year = str(match["event_key"])[:4] if "event_key" in match else str(year)
-                    if event_year == "2015":
-                        red_score = match["alliances"]["red"]["score"]
-                        blue_score = match["alliances"]["blue"]["score"]
-                        if alliance == "red":
-                            if red_score > blue_score:
-                                total_wins += 1
-                            elif red_score < blue_score:
-                                total_losses += 1
-                            else:
-                                total_ties += 1
-                        else:
-                            if blue_score > red_score:
-                                total_wins += 1
-                            elif blue_score < red_score:
-                                total_losses += 1
-                            else:
-                                total_ties += 1
-                    else:
-                        # Determine win/loss/tie based on scores instead of winning_alliance
-                        red_score = match["alliances"]["red"]["score"]
-                        blue_score = match["alliances"]["blue"]["score"]
-                        
-                        # Handle disqualifications (score of 0) as ties
-                        if red_score == 0 or blue_score == 0:
-                            total_ties += 1
-                        elif alliance == "red":
-                            if red_score > blue_score:
-                                total_wins += 1
-                            elif red_score < blue_score:
-                                total_losses += 1
-                            else:  # Equal scores = tie
-                                total_ties += 1
-                        else:  # alliance == "blue"
-                            if blue_score > red_score:
-                                total_wins += 1
-                            elif blue_score < red_score:
-                                total_losses += 1
-                            else:  # Equal scores = tie
-                                total_ties += 1
-
-                # Calculate EPA after processing all matches
-                event_epa = calculate_event_epa(matches, team_key, team_number)
-                event_epa["event_key"] = event_key  # Ensure event_key is included
-                # Keep full data for aggregation
-                event_epa_full.append(event_epa)
-                # Only keep essential fields for final event_epas
-                simplified_event_epa = {
-                    "event_key": event_key,
-                    "overall": event_epa["overall"],
-                    "auto": event_epa["auto"],
-                    "teleop": event_epa["teleop"],
-                    "endgame": event_epa["endgame"],
-                    "confidence": event_epa["confidence"],
-                    "actual_epa": event_epa["actual_epa"]
-                }
-                event_epa_results.append(simplified_event_epa)
+            # Calculate EPA for this event (which includes wins/losses/ties for the event)
+            event_epa = calculate_event_epa(matches, team_key, team_number)
+            event_epa["event_key"] = event_key  # Ensure event_key is included
+            # Keep full data for aggregation
+            event_epa_full.append(event_epa)
+            # Only keep essential fields for final event_epas
+            simplified_event_epa = {
+                "event_key": event_key,
+                "overall": event_epa["overall"],
+                "auto": event_epa["auto"],
+                "teleop": event_epa["teleop"],
+                "endgame": event_epa["endgame"],
+                "confidence": event_epa["confidence"],
+                "actual_epa": event_epa["actual_epa"]
+            }
+            event_epa_results.append(simplified_event_epa)
         except Exception as e:
             print(f"Failed to fetch matches for team {team_key} at event {event_key}: {e}")
             continue
 
     # Aggregate overall EPA from full event-specific EPAs
+    # This already sums up wins, losses, and ties from each event
     overall_epa_data = aggregate_overall_epa(event_epa_full, year, team_number)
-    
-    overall_epa_data["wins"] = total_wins
-    overall_epa_data["losses"] = total_losses
-    overall_epa_data["ties"] = total_ties
 
     return {
         "team_number": team.get("team_number"),
