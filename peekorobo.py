@@ -6880,13 +6880,10 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
      Output("reveal-transition-interval", "disabled")],
     [Input("higher-btn", "n_clicks"),
      Input("lower-btn", "n_clicks")],
-    [
-        State("game-state-store", "data"),
-        State("teams-data-store", "data")
-    ],
+    State("game-state-store", "data"),
     prevent_initial_call=True
 )
-def handle_guess(higher_clicks, lower_clicks, current_state, teams_data):
+def handle_guess(higher_clicks, lower_clicks, current_state):
     """Handle higher/lower button clicks - show reveal first, then transition"""
     ctx = callback_context
     if not ctx.triggered:
@@ -6894,7 +6891,7 @@ def handle_guess(higher_clicks, lower_clicks, current_state, teams_data):
     
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
     
-    if not current_state or not teams_data or triggered_id not in ["higher-btn", "lower-btn"]:
+    if not current_state or triggered_id not in ["higher-btn", "lower-btn"]:
         return no_update, no_update
     
     game_state = current_state.copy()
@@ -6933,16 +6930,17 @@ def handle_guess(higher_clicks, lower_clicks, current_state, teams_data):
 
 @app.callback(
     [Output("game-state-store", "data", allow_duplicate=True),
-     Output("reveal-transition-interval", "disabled", allow_duplicate=True)],
+     Output("reveal-transition-interval", "disabled", allow_duplicate=True),
+     Output("pick-new-team-trigger", "n_clicks", allow_duplicate=True)],
     Input("reveal-transition-interval", "n_intervals"),
     [State("game-state-store", "data"),
-     State("teams-data-store", "data")],
+     State("pick-new-team-trigger", "n_clicks")],
     prevent_initial_call=True
 )
-def transition_after_reveal(n_intervals, current_state, teams_data):
-    """Transition to next round after ACE reveal"""
+def transition_after_reveal(n_intervals, current_state, current_trigger_clicks):
+    """Transition to next round after ACE reveal - trigger team pick separately"""
     if not current_state or not current_state.get("revealing"):
-        return no_update, no_update
+        return no_update, no_update, no_update
     
     game_state = current_state.copy()
     
@@ -6956,26 +6954,60 @@ def transition_after_reveal(n_intervals, current_state, teams_data):
         game_state["score"] = game_state.pop("pending_score")
         game_state["highscore"] = game_state.pop("pending_highscore")
         
-        # Only transition teams if marked
+        # Only transition teams if marked - trigger separate callback to pick new team
         if game_state.pop("pending_transition", False):
-            # Move right team to left, pick new right team
+            # Move right team to left
             right_team = game_state.get("right_team")
             right_ace = game_state.get("right_ace")
             
             game_state["left_team"] = right_team
             game_state["left_ace"] = right_ace
+            game_state["needs_new_right_team"] = True  # Flag to pick new team
             
-            # Pick a new random team for right side
-            available_teams = [t for t in teams_data if t["team_number"] != right_team["team_number"]]
-            if available_teams:
-                new_right_team = random.choice(available_teams)
-                game_state["right_team"] = new_right_team
-                game_state["right_ace"] = new_right_team["ace"]
+            # Trigger team pick callback by incrementing trigger
+            return game_state, True, (current_trigger_clicks or 0) + 1
     elif "pending_wrong_guesses" in game_state:
         game_state["wrong_guesses"] = game_state.pop("pending_wrong_guesses")
     
     # Disable interval after transition
-    return game_state, True  # True = interval disabled
+    return game_state, True, no_update  # True = interval disabled
+
+@app.callback(
+    Output("game-state-store", "data", allow_duplicate=True),
+    Input("pick-new-team-trigger", "n_clicks"),
+    [State("game-state-store", "data"),
+     State("teams-data-store", "data")],
+    prevent_initial_call=True
+)
+def pick_new_right_team(trigger_clicks, current_state, teams_data):
+    """Pick a new random team for right side - only called when needed"""
+    if not trigger_clicks or not current_state or not teams_data:
+        return no_update
+    
+    game_state = current_state.copy()
+    
+    # Only pick if flag is set
+    if not game_state.get("needs_new_right_team"):
+        return no_update
+    
+    # Clear the flag
+    game_state.pop("needs_new_right_team", None)
+    
+    # Get current right team number to exclude it
+    right_team = game_state.get("right_team")
+    if not right_team:
+        return no_update
+    
+    # Pick a new random team - only iterate through teams_data here
+    current_right_num = right_team["team_number"]
+    available_teams = [t for t in teams_data if t["team_number"] != current_right_num]
+    
+    if available_teams:
+        new_right_team = random.choice(available_teams)
+        game_state["right_team"] = new_right_team
+        game_state["right_ace"] = new_right_team["ace"]
+    
+    return game_state
 
 # Optimized display callbacks - split into smaller callbacks to avoid recreating all HTML
 @app.callback(
@@ -7187,7 +7219,8 @@ def update_button_states(game_state):
     return buttons_disabled, buttons_disabled
 
 @app.callback(
-    Output("game-state-store", "data", allow_duplicate=True),
+    [Output("game-state-store", "data", allow_duplicate=True),
+     Output("pick-new-team-trigger", "n_clicks", allow_duplicate=True)],
     Input("play-again-btn", "n_clicks"),
     [State("teams-data-store", "data"),
      State("game-state-store", "data")],
@@ -7196,12 +7229,12 @@ def update_button_states(game_state):
 def reset_game(play_again_clicks, teams_data, current_state):
     """Reset the game when Play Again is clicked"""
     if not play_again_clicks or not teams_data:
-        return no_update
+        return no_update, no_update
     
     # Preserve highscore
     highscore = current_state.get("highscore", 0) if current_state else 0
     
-    # Pick two random teams (avatar URLs already in teams_data)
+    # Pick two random teams - only access teams_data here when needed
     selected_teams = random.sample(teams_data, min(2, len(teams_data)))
     left_team = selected_teams[0]
     right_team = selected_teams[1] if len(selected_teams) > 1 else selected_teams[0]
@@ -7214,7 +7247,7 @@ def reset_game(play_again_clicks, teams_data, current_state):
         "right_team": right_team,
         "left_ace": left_team["ace"],
         "right_ace": right_team["ace"]
-    }
+    }, no_update
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  

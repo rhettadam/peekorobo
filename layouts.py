@@ -7303,6 +7303,7 @@ def higher_lower_layout():
             dcc.Store(id="game-started-store", data=False),
             dcc.Store(id="teams-cache-store", data={}),  # Cache teams data per year
             dcc.Interval(id="reveal-transition-interval", interval=600, n_intervals=0, disabled=True),  # 600ms to show reveal clearly
+            html.Button(id="pick-new-team-trigger", n_clicks=0, style={"display": "none"})  # Hidden trigger for picking new teams
             ], style={"maxWidth": "1200px", "margin": "0 auto", "padding": "20px"})
         ], style={"minHeight": "100vh", "backgroundColor": "var(--bg-primary)"})
     ])
