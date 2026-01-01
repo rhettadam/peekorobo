@@ -7033,4 +7033,4 @@ def reset_game(play_again_clicks, teams_data, current_state):
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)
