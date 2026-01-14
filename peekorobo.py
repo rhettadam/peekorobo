@@ -217,14 +217,25 @@ def update_nav_active_state(pathname):
 
 @app.callback(
     Output("register-popup", "is_open"),
-    Input("url", "pathname")
+    [Input("url", "pathname"),
+     Input("register-popup", "n_dismiss")]
 )
-def toggle_register_popup(pathname):
-    """Hide popup on login and register pages"""
+def toggle_register_popup(pathname, n_dismiss):
+    """Hide popup on login and register pages, or if user has dismissed it"""
+    # If user dismissed the popup, mark it in session
+    if n_dismiss and n_dismiss > 0:
+        session["popup_dismissed"] = True
+    
+    # Hide popup on login and register pages
     if pathname == "/login" or pathname == "/register":
         return False
-    # Only show if user is not logged in (check happens in the toast itself)
-    return "user_id" not in session
+    
+    # Only show if user is not logged in AND hasn't dismissed it
+    if "user_id" in session:
+        return False
+    if session.get("popup_dismissed", False):
+        return False
+    return True
 
 @app.callback(
     Output("page-content", "children"),
