@@ -1,24 +1,24 @@
 {
   "2026": {
     "name": "Rebuilt",
-    "video": "",
+    "video": "https://www.youtube.com/watch?v=_fybREErgyM",
     "logo": "/assets/logos/2026.png",
     "manual": "https://firstfrc.blob.core.windows.net/frc2026/Manual/2026GameManual.pdf",
-    "summary": ""
+    "summary": "In REBUILT, two alliances of three teams compete to score points by shooting fuel (foam balls) into their alliance hub and climbing their tower before time runs out. Human players manage scoring elements through outposts, feeding fuel into the field and receiving fuel from robots. During teleoperated play, alliances coordinate through alliance shifts to maximize scoring opportunities. Alliances earn additional ranking points for meeting fuel scoring thresholds (Supercharged RP) and tower climbing thresholds (Traversal RP) during the 2-minute and 40-second match."
   },
   "2025": {
     "name": "Reefscape",
     "video": "https://www.youtube.com/watch?v=YWbxcjlY9JY",
     "logo": "/assets/logos/2025.png",
     "manual": "https://firstfrc.blob.core.windows.net/frc2025/Manual/2025GameManual.pdf",
-    "summary": "In REEFSCAPE, alliances of three teams compete to score points by harvesting algae, placing coral on their reef, and attaching to their barge before time runs out. This game rewards creativity, strategy, and cooperation with opponents, emphasizing the core value of Coopertition."
+    "summary": "In REEFSCAPE, two alliances of three teams compete to score coral (PVC pipes) on their tiered reef structure, with higher rows worth more points. Robots harvest algae (playground balls) from the reef and can score them directly in the net or deliver them to human players through the processor. Delivering algae to the processor unlocks all scoring locations on the reef. Human players provide additional coral from the coral station. In the final moments of the match, robots attach to their barge by grabbing onto their cages and parking underneath to earn additional points. Alliances can earn bonus ranking points through coopertition by delivering algae to the processor."
   },
   "2024": {
     "name": "Crescendo",
     "video": "https://www.youtube.com/watch?v=9keeDyFxzY4",
     "logo": "/assets/logos/2024.png",
     "manual": "https://firstfrc.blob.core.windows.net/frc2024/Manual/2024GameManual.pdf",
-    "summary": "In CRESCENDO SM presented by Haas, two competing alliances are invited to score notes, amplify their speaker, harmonize onstage, and take the spotlight before time runs out. Alliances earn additional rewards for meeting specific scoring thresholds and for cooperating with their opponents."
+    "summary": "In CRESCENDO, two alliances of three teams compete to score notes (orange foam torus rings) into the Amp and Speaker before time runs out. Notes scored in the Amp are worth 1 point each, while notes scored in the Speaker are worth 2 points. After scoring two notes in the Amp, human players can activate Amplification, which increases the point value of notes scored in the Speaker. In the final moments of the match, robots climb onto chains on the Stage to harmonize and earn additional points. Alliances can also earn bonus points for spotlighting (scoring a high note on the microphone) and for cooperating with their opponents."
   },
   "2023": {
     "name": "Charged Up",
@@ -35,7 +35,7 @@
     "summary": "In RAPID REACT, two competing alliances process cargo for transportation. Each alliance is assigned a cargo color (red or blue) to process by retrieving their assigned cargo and scoring it into the hub. Human players assist the cargo retrieval and scoring efforts from within their terminals. In the final moments of each match, alliance robots race to engage with their hangar to prepare for transport!"
   },
   "2021": {
-    "name": "Infinite Recharge 2",
+    "name": "Infinite Recharge II",
     "video": "https://www.youtube.com/watch?v=I77Dz9pfds4",
     "logo": "/assets/logos/2021.png",
     "manual": "https://firstfrc.blob.core.windows.net/frc2021/Manual/2021AtHomeChallengesManual.pdf",

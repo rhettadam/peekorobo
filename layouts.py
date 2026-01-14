@@ -1777,7 +1777,7 @@ def insights_layout():
                                         className="mb-1",
                                     ),
                                     html.P(
-                                        game.get("summary", "No summary available."),
+                                        (lambda s: s[:250] + "..." if len(s) > 250 else s)(game.get("summary", "No summary available.")),
                                         style={"color": "var(--text-primary)", "marginBottom": "5px", "fontSize": "0.9rem"},
                                     ),
                                 ],
