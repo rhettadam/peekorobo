@@ -5782,9 +5782,10 @@ def event_layout(event_key):
 
     tab_style = {"color": "var(--text-primary)", "backgroundColor": "transparent"}
     # Use dcc.Store to set initial tab from URL
+    team_count = len(event_teams) if event_teams else 0
     data_tabs = dbc.Tabs(
         [
-            dbc.Tab(label="Teams", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
+            dbc.Tab(label=f"Teams ({team_count})", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Rankings", tab_id="rankings", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Metrics", tab_id="metrics", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Matches", tab_id="matches", label_style=tab_style, active_label_style=tab_style),

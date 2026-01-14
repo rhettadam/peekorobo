@@ -515,6 +515,8 @@ def universal_profile_icon_or_toast():
     href="/user"
 )
     # Unauthenticated fallback toast
+    # Check if popup has been dismissed to avoid flash on page load
+    should_show = not session.get("popup_dismissed", False)
     return dbc.Toast(
         [
             html.Strong("New here?", className="me-auto"),
@@ -542,7 +544,7 @@ def universal_profile_icon_or_toast():
         ],
         id="register-popup",
         header="Join Peekorobo",
-        is_open=True,
+        is_open=should_show,
         dismissable=True,
         className="register-popup-toast",
         icon="warning",
