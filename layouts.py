@@ -1789,7 +1789,7 @@ def insights_layout():
                         className="align-items-center",
                     )
                 ),
-                className="mb-3",
+                className="mb-3 insights-card",
             )
         )
 
@@ -4110,7 +4110,7 @@ def build_peekolive_layout_with_events(events_data, detected_team=None):
             dbc.CardBody([
                 peekolive_embed_for(ev)
             ], style={"padding": 0, "flex": 1, "display": "flex", "flexDirection": "column"})
-        ], style=card_style, className="peekolive-card")
+        ], style=card_style, className="peekolive-card event-card")
 
     def build_section(title, events_list, section_id, event_status="ongoing"):
         if not events_list:

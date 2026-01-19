@@ -437,6 +437,26 @@ h1, h2, h3, h4, h5, h6, p, span, div {
     }
 }
 
+/* Insights cards hover effect */
+.insights-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.insights-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12), 0 0 0 2px rgba(255, 221, 0, 0.25);
+}
+
+/* Event cards hover effect */
+.event-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.event-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12),
+        0 0 0 2px rgba(255, 221, 0, 0.25),
+        0 0 12px rgba(255, 221, 0, 0.35);
+}
+
 /* Default (Light Mode) Close Button */
 .toast .btn-close {
     color: var(--text-primary) !important; /* Should be black in light mode */

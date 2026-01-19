@@ -613,7 +613,7 @@ def event_card(event, favorited=False):
                 ]
             )
         ],
-        className="mb-4 shadow",
+        className="mb-4 shadow event-card",
         style={"width": "18rem", "height": "22rem", "margin": "10px"},
     )
 
