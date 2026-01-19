@@ -1415,7 +1415,8 @@ def topbar():
                                                 html.Span("Try", style={
                                                     "fontWeight": "600",
                                                     "fontSize": "0.9rem",
-                                                    "letterSpacing": "0.5px"
+                                                    "letterSpacing": "0.5px",
+                                                    "color": "white"
                                                 }),
                                                 " ",
                                                 html.Img(
@@ -1456,7 +1457,8 @@ def topbar():
                             html.Span("Try", style={
                                 "fontWeight": "600",
                                 "fontSize": "0.95rem",
-                                "letterSpacing": "0.5px"
+                                "letterSpacing": "0.5px",
+                                "color": "white"
                             }),
                             " ",
                             html.Img(
@@ -2710,6 +2712,10 @@ def teams_layout(default_year=current_year):
             {"label": "Teleop+Endgame", "value": "teleop+endgame"},
             {"label": "RAW", "value": "raw"},
             {"label": "ACE", "value": "ace"},
+            {"label": "Auto % of ACE", "value": "auto_share"},
+            {"label": "Teleop % of ACE", "value": "teleop_share"},
+            {"label": "Endgame % of ACE", "value": "endgame_share"},
+            {"label": "Win Rate", "value": "win_rate"},
             {"label": "Team Number", "value": "team_number"},
             {"label": "Confidence", "value": "confidence"},
             {"label": "Wins", "value": "wins"},
@@ -2719,7 +2725,7 @@ def teams_layout(default_year=current_year):
         ],
         value="teleop_epa",
         clearable=False,
-        style={"width": "130px"},
+        style={"width": "160px"},
         className="custom-input-box"
     )
 
@@ -2734,6 +2740,10 @@ def teams_layout(default_year=current_year):
             {"label": "Teleop+Endgame", "value": "teleop+endgame"},
             {"label": "RAW", "value": "raw"},
             {"label": "ACE", "value": "ace"},
+            {"label": "Auto % of ACE", "value": "auto_share"},
+            {"label": "Teleop % of ACE", "value": "teleop_share"},
+            {"label": "Endgame % of ACE", "value": "endgame_share"},
+            {"label": "Win Rate", "value": "win_rate"},
             {"label": "Team Number", "value": "team_number"},
             {"label": "Confidence", "value": "confidence"},
             {"label": "Wins", "value": "wins"},
@@ -2743,7 +2753,35 @@ def teams_layout(default_year=current_year):
         ],
         value="auto+endgame",
         clearable=False,
-        style={"width": "130px"},
+        style={"width": "160px"},
+        className="custom-input-box"
+    )
+
+    z_axis_dropdown = dcc.Dropdown(
+        id="z-axis-dropdown",
+        options=[
+            {"label": "Teleop", "value": "teleop_epa"},
+            {"label": "Auto", "value": "auto_epa"},
+            {"label": "Endgame", "value": "endgame_epa"},
+            {"label": "Auto+Teleop", "value": "auto+teleop"},
+            {"label": "Auto+Endgame", "value": "auto+endgame"},
+            {"label": "Teleop+Endgame", "value": "teleop+endgame"},
+            {"label": "RAW", "value": "raw"},
+            {"label": "ACE", "value": "ace"},
+            {"label": "Auto % of ACE", "value": "auto_share"},
+            {"label": "Teleop % of ACE", "value": "teleop_share"},
+            {"label": "Endgame % of ACE", "value": "endgame_share"},
+            {"label": "Win Rate", "value": "win_rate"},
+            {"label": "Team Number", "value": "team_number"},
+            {"label": "Confidence", "value": "confidence"},
+            {"label": "Wins", "value": "wins"},
+            {"label": "Losses", "value": "losses"},
+            {"label": "Ties", "value": "ties"},
+            {"label": "Favorites", "value": "favorites"},
+        ],
+        value="ace",
+        clearable=False,
+        style={"width": "160px"},
         className="custom-input-box"
     )
 
@@ -2755,7 +2793,9 @@ def teams_layout(default_year=current_year):
                 dbc.Col(x_axis_dropdown, width=3),
                 dbc.Col(html.Label("Y Axis:", style={"color": "var(--text-primary)"}), width="auto"),
                 dbc.Col(y_axis_dropdown, width=3),
-            ], className="align-items-center")
+                dbc.Col(html.Label("Color:", style={"color": "var(--text-primary)"}), width="auto"),
+                dbc.Col(z_axis_dropdown, width=3),
+            ], className="align-items-center axis-dropdown-row")
         ],
         style={"display": "none", "marginBottom": "5px", "marginTop": "0px"}
     )
@@ -5308,11 +5348,12 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                         "listStyleType": "none",
                         "marginBottom": "0"
                     })
-                ])
+                ], style={"maxHeight": "300px", "overflowY": "auto"})
             ],
             id=f"popover-followers-{username}" if username else "popover-followers",
             target=f"followers-arrow-{username}" if username else "followers-arrow",
-            trigger="hover",
+            trigger="click",
+            autohide=False,
             placement="bottom"
         )
     
@@ -5348,11 +5389,12 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                         "listStyleType": "none",
                         "marginBottom": "0"
                     })
-                ])
+                ], style={"maxHeight": "300px", "overflowY": "auto"})
             ],
             id=f"popover-following-{username}" if username else "popover-following",
             target=f"following-arrow-{username}" if username else "following-arrow",
-            trigger="hover",
+            trigger="click",
+            autohide=False,
             placement="bottom"
         )
 

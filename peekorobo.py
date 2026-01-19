@@ -3930,6 +3930,7 @@ app.clientside_callback(
         Input("teams-tabs", "active_tab"),
         Input("x-axis-dropdown", "value"),
         Input("y-axis-dropdown", "value"),
+        Input("z-axis-dropdown", "value"),
         Input("percentile-toggle", "value"),
     ],
     [State("teams-url", "href")],
@@ -3943,6 +3944,7 @@ def load_teams(
     active_tab,
     x_axis,
     y_axis,
+    z_axis,
     percentile_mode,
     href
 ):
@@ -3968,6 +3970,7 @@ def load_teams(
         "search": search_query or "",  # Ensure empty string instead of None
         "x": x_axis,
         "y": y_axis,
+        "z": z_axis,
         "tab": active_tab,
         "district": selected_district,
         "percentile": "filtered" if "filtered" in percentile_mode else None,
@@ -4196,6 +4199,11 @@ def load_teams(
         losses = team.get("losses", 0)
         ties = team.get("ties", 0)
         favorites = favorites_counts.get(team_number, 0)
+        total_matches = wins + losses + ties
+        auto_share = (auto / ace) if ace else 0
+        teleop_share = (teleop / ace) if ace else 0
+        endgame_share = (endgame / ace) if ace else 0
+        win_rate = (wins / total_matches) if total_matches else 0
         return {
             "auto_epa": auto,
             "teleop_epa": teleop,
@@ -4205,6 +4213,10 @@ def load_teams(
             "teleop+endgame": teleop + endgame,
             "raw": raw,
             "ace": ace,
+            "auto_share": auto_share,
+            "teleop_share": teleop_share,
+            "endgame_share": endgame_share,
+            "win_rate": win_rate,
             "team_number": team_number,
             "confidence": confidence,
             "wins": wins,
@@ -4318,10 +4330,12 @@ def load_teams(
                 
             x_val = get_axis_value(t, x_axis)
             y_val = get_axis_value(t, y_axis)
-            if x_val is not None and y_val is not None:
+            z_val = get_axis_value(t, z_axis)
+            if x_val is not None and y_val is not None and z_val is not None:
                 chart_data.append({
                     "x": x_val,
                     "y": y_val,
+                    "z": z_val,
                     "epa": t.get("epa") or 0,
                     "team": f"{t.get('team_number')} - {t.get('nickname', '')}",
                     "team_number": str(t.get("team_number")),
@@ -4354,6 +4368,8 @@ def load_teams(
         def format_hover_value(axis, value):
             if axis in ["team_number", "wins", "losses", "ties", "favorites"]:
                 return f"{int(value)}"
+            if axis in ["auto_share", "teleop_share", "endgame_share", "win_rate"]:
+                return f"{value * 100:.1f}%"
             else:
                 return f"{value:.2f}"
         
@@ -4361,6 +4377,10 @@ def load_teams(
             return (axis.replace('_epa', ' ACE')
                        .replace('raw', 'RAW')
                        .replace('ace', 'ACE')
+                       .replace('auto_share', 'Auto % of ACE')
+                       .replace('teleop_share', 'Teleop % of ACE')
+                       .replace('endgame_share', 'Endgame % of ACE')
+                       .replace('win_rate', 'Win Rate')
                        .replace('+', ' + ')
                        .replace('team_number', 'Team Number')
                        .replace('confidence', 'Confidence')
@@ -4369,7 +4389,15 @@ def load_teams(
                        .replace('ties', 'Ties')
                        .replace('favorites', 'Favorites'))
         
-        df["hover"] = df.apply(lambda r: f"<b>{r['team']}</b><br>{format_axis_label(x_axis)}: {format_hover_value(x_axis, r['x'])}<br>{format_axis_label(y_axis)}: {format_hover_value(y_axis, r['y'])}<br>ACE: {r['epa']:.2f}", axis=1)
+        df["hover"] = df.apply(
+            lambda r: (
+                f"<b>{r['team']}</b><br>"
+                f"{format_axis_label(x_axis)}: {format_hover_value(x_axis, r['x'])}<br>"
+                f"{format_axis_label(y_axis)}: {format_hover_value(y_axis, r['y'])}<br>"
+                f"{format_axis_label(z_axis)}: {format_hover_value(z_axis, r['z'])}"
+            ),
+            axis=1
+        )
 
         # Create figure with improved styling
         fig = go.Figure()
@@ -4382,11 +4410,11 @@ def load_teams(
                 mode="markers",
                 marker=dict(
                     size=8,
-                    color=df.loc[~df["is_match"], "epa"],
+                    color=df.loc[~df["is_match"], "z"],
                     colorscale="Viridis",
                     colorbar=dict(
                         title=dict(
-                            text="ACE",
+                            text=format_axis_label(z_axis),
                             font=dict(color="#777")
                         ),
                         tickfont=dict(color="#777"),

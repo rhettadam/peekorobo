@@ -407,6 +407,36 @@ h1, h2, h3, h4, h5, h6, p, span, div {
     color: var(--toast-text);
 }
 
+/* Join Peekorobo popup hover styles */
+.register-popup-toast .btn-secondary:hover,
+.register-popup-toast .btn-warning:hover {
+    background-color: #ffdd00 !important;
+    color: #222 !important;
+    border-color: #ffdd00 !important;
+}
+
+/* Misc dropdown hover styling */
+.dropdown-menu .dropdown-item:hover,
+.dropdown-menu .dropdown-item:focus {
+    background-color: #ffdd00 !important;
+    color: #222 !important;
+}
+
+@media (max-width: 767px) {
+    .axis-dropdown-row {
+        flex-wrap: wrap !important;
+        row-gap: 10px;
+    }
+    .axis-dropdown-row > .col-auto,
+    .axis-dropdown-row > .col-3 {
+        flex: 1 1 100%;
+        max-width: 100%;
+    }
+    .axis-dropdown-row .custom-input-box {
+        width: 100% !important;
+    }
+}
+
 /* Default (Light Mode) Close Button */
 .toast .btn-close {
     color: var(--text-primary) !important; /* Should be black in light mode */
