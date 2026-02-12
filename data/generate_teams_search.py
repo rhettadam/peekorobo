@@ -29,19 +29,11 @@ def generate_teams_simple():
                     SELECT team_number, MAX(year) as last_year
                     FROM team_epas
                     GROUP BY team_number
-                ),
-                team_latest_info AS (
-                    SELECT DISTINCT ON (t.team_number) 
-                        t.team_number, 
-                        t.nickname,
-                        tly.last_year
-                    FROM team_epas t
-                    INNER JOIN team_last_year tly ON t.team_number = tly.team_number AND t.year = tly.last_year
-                    ORDER BY t.team_number, t.year DESC
                 )
-                SELECT team_number, nickname, last_year
-                FROM team_latest_info
-                ORDER BY team_number
+                SELECT t.team_number, t.nickname, tly.last_year
+                FROM teams t
+                LEFT JOIN team_last_year tly ON t.team_number = tly.team_number
+                ORDER BY t.team_number
             """)
             
             for row in cur.fetchall():

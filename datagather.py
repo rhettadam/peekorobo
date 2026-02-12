@@ -151,11 +151,13 @@ def load_data():
         
         # Get all team EPA data
         team_cursor.execute("""
-            SELECT team_number, year, nickname, city, state_prov, country, website,
-                   normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                   wins, losses, ties, event_epas
-            FROM team_epas
-            ORDER BY year, team_number
+            SELECT te.team_number, te.year,
+                   t.nickname, t.city, t.state_prov, t.country, t.website,
+                   te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
+                   te.wins, te.losses, te.ties, te.event_epas
+            FROM team_epas te
+            LEFT JOIN teams t ON te.team_number = t.team_number
+            ORDER BY te.year, te.team_number
         """)
         
         team_data = {}
@@ -201,14 +203,20 @@ def load_data():
         # Events
         event_cursor = conn.cursor()
         event_cursor.execute("""
-            SELECT event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
+            SELECT event_key, name, start_date, end_date, event_type,
+                   district_key, district_abbrev, district_name,
+                   city, state_prov, country, website, webcast_type, webcast_channel
             FROM events
             ORDER BY event_key
         """)
         
         event_data = {}
         for row in event_cursor.fetchall():
-            event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
+            (
+                event_key, name, start_date, end_date, event_type,
+                district_key, district_abbrev, district_name,
+                city, state_prov, country, website, webcast_type, webcast_channel
+            ) = row
             year = int(event_key[:4])
             ev = compress_dict({
                 "k": event_key,
@@ -217,6 +225,9 @@ def load_data():
                 "sd": start_date,
                 "ed": end_date,
                 "et": event_type,
+                "dk": district_key,
+                "da": district_abbrev,
+                "dn": district_name,
                 "c": city,
                 "s": state_prov,
                 "co": country,
@@ -387,12 +398,14 @@ def load_data_current_year():
         
         # Get only current year team EPA data
         team_cursor.execute("""
-            SELECT team_number, year, nickname, city, state_prov, country, website,
-                   normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                   wins, losses, event_epas
-            FROM team_epas
-            WHERE year = %s
-            ORDER BY team_number
+            SELECT te.team_number, te.year,
+                   t.nickname, t.city, t.state_prov, t.country, t.website,
+                   te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
+                   te.wins, te.losses, te.event_epas
+            FROM team_epas te
+            LEFT JOIN teams t ON te.team_number = t.team_number
+            WHERE te.year = %s
+            ORDER BY te.team_number
         """, (current_year,))
         
         team_data = {current_year: {}}
@@ -437,7 +450,9 @@ def load_data_current_year():
         # Events
         event_cursor = conn.cursor()
         event_cursor.execute("""
-            SELECT event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
+            SELECT event_key, name, start_date, end_date, event_type,
+                   district_key, district_abbrev, district_name,
+                   city, state_prov, country, website, webcast_type, webcast_channel
             FROM events
             WHERE event_key LIKE %s
             ORDER BY event_key
@@ -445,7 +460,11 @@ def load_data_current_year():
         
         event_data = {current_year: {}}
         for row in event_cursor.fetchall():
-            event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
+            (
+                event_key, name, start_date, end_date, event_type,
+                district_key, district_abbrev, district_name,
+                city, state_prov, country, website, webcast_type, webcast_channel
+            ) = row
             ev = compress_dict({
                 "k": event_key,
                 "n": name,
@@ -453,6 +472,9 @@ def load_data_current_year():
                 "sd": start_date,
                 "ed": end_date,
                 "et": event_type,
+                "dk": district_key,
+                "da": district_abbrev,
+                "dn": district_name,
                 "c": city,
                 "s": state_prov,
                 "co": country,
@@ -613,12 +635,14 @@ def load_year_data(year):
         team_data = {}
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT team_number, year, nickname, city, state_prov, country, website,
-                       normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                       wins, losses, ties, event_epas
-                FROM team_epas
-                WHERE year = %s
-                ORDER BY team_number
+                SELECT te.team_number, te.year,
+                       t.nickname, t.city, t.state_prov, t.country, t.website,
+                       te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
+                       te.wins, te.losses, te.ties, te.event_epas
+                FROM team_epas te
+                LEFT JOIN teams t ON te.team_number = t.team_number
+                WHERE te.year = %s
+                ORDER BY te.team_number
             """, (year,))
             for row in cursor.fetchall():
                 (
@@ -653,13 +677,19 @@ def load_year_data(year):
         event_data = {}
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
+                SELECT event_key, name, start_date, end_date, event_type,
+                       district_key, district_abbrev, district_name,
+                       city, state_prov, country, website, webcast_type, webcast_channel
                 FROM events
                 WHERE event_key LIKE %s
                 ORDER BY event_key
             """, (f"{year}%",))
             for row in cursor.fetchall():
-                event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
+                (
+                    event_key, name, start_date, end_date, event_type,
+                    district_key, district_abbrev, district_name,
+                    city, state_prov, country, website, webcast_type, webcast_channel
+                ) = row
                 event_data[event_key] = compress_dict({
                     "k": event_key,
                     "n": name,
@@ -667,6 +697,9 @@ def load_year_data(year):
                     "sd": start_date,
                     "ed": end_date,
                     "et": event_type,
+                    "dk": district_key,
+                    "da": district_abbrev,
+                    "dn": district_name,
                     "c": city,
                     "s": state_prov,
                     "co": country,

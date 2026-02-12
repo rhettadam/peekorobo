@@ -1321,26 +1321,13 @@ def update_events_tab_content(
         selected_event_types = [selected_event_types]
 
     def get_event_district(event):
-        """Get district for an event based on its location using DISTRICT_STATES mapping"""
-        state = event.get("s", "")  # State/province
-        country = event.get("co", "")  # Country
-        city = event.get("c", "")  # City
-        
-        # Special cases for non-US districts
-        if country == "Israel":
-            return "ISR"
-        if country == "Canada":
-            return "ONT"
-        
-        # Check US states against DISTRICT_STATES
-        for district_acronym, states in DISTRICT_STATES_COMBINED.items():
-            if state in states.get('abbreviations', []):
-                # Special handling for FMA district - exclude western Pennsylvania cities
-                if district_acronym == "FMA" and is_western_pennsylvania_city(city, state):
-                    return None  # Not in FMA district
-                return district_acronym
-        
-        return None
+        """Get district for an event using stored district data."""
+        district_abbrev = (event.get("da") or "").strip().upper()
+        if district_abbrev:
+            return district_abbrev
+
+        district_key = (event.get("dk") or "").strip()
+        return district_key[-2:].upper() if len(district_key) >= 2 else None
 
     # Get all unique districts from events
     district_keys = sorted(set(
@@ -4721,26 +4708,11 @@ def export_event_cards_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, h
     # Convert events data to DataFrame
     rows = []
     for ev in data:
-        # Get district
-        state = ev.get("s", "")
-        country = ev.get("co", "")
-        city = ev.get("c", "")
-        
-        # Calculate district (reuse logic from update_events_tab_content)
-        district = None
-        if country == "Israel":
-            district = "ISR"
-        elif country == "Canada":
-            district = "ONT"
-        else:
-            # DISTRICT_STATES_COMBINED is loaded at module level
-            for district_acronym, states in DISTRICT_STATES_COMBINED.items():
-                if state in states.get('abbreviations', []):
-                    if district_acronym == "FMA" and is_western_pennsylvania_city(city, state):
-                        district = None
-                        break
-                    district = district_acronym
-                    break
+        # Get district from stored fields
+        district = (ev.get("da") or "").strip().upper()
+        if not district:
+            district_key = (ev.get("dk") or "").strip()
+            district = district_key[-2:].upper() if len(district_key) >= 2 else None
         
         # Get week
         week = "N/A"
@@ -6491,23 +6463,15 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
         except Exception:
             pass
 
-    # District filter uses DISTRICT_STATES_COMBINED like events tab
+    # District filter uses stored district fields
     if selected_district and selected_district != "all":
         try:
             def get_event_district_from_ev(ev):
-                state = ev.get("state", "")
-                country = ev.get("country", "")
-                city = ev.get("city", "")
-                if country == "Israel":
-                    return "ISR"
-                if country == "Canada":
-                    return "ONT"
-                for district_acronym, states in DISTRICT_STATES_COMBINED.items():
-                    if state in states.get('abbreviations', []):
-                        if district_acronym == "FMA" and is_western_pennsylvania_city(city):
-                            return None
-                        return district_acronym
-                return None
+                district_abbrev = (ev.get("district_abbrev") or "").strip().upper()
+                if district_abbrev:
+                    return district_abbrev
+                district_key = (ev.get("district_key") or "").strip()
+                return district_key[-2:].upper() if len(district_key) >= 2 else None
             events = [ev for ev in events if get_event_district_from_ev(ev) == selected_district]
         except Exception:
             pass

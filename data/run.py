@@ -165,13 +165,20 @@ def insert_event_data(all_data, year):
     for i, data in enumerate(tqdm(all_data, desc=f'Inserting {year} events')):
         # Insert event
         cur.execute("""
-            INSERT INTO events (event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO events (
+                event_key, name, start_date, end_date, event_type,
+                district_key, district_abbrev, district_name,
+                city, state_prov, country, website, webcast_type, webcast_channel
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (event_key) DO UPDATE SET
                 name = EXCLUDED.name,
                 start_date = EXCLUDED.start_date,
                 end_date = EXCLUDED.end_date,
                 event_type = EXCLUDED.event_type,
+                district_key = EXCLUDED.district_key,
+                district_abbrev = EXCLUDED.district_abbrev,
+                district_name = EXCLUDED.district_name,
                 city = EXCLUDED.city,
                 state_prov = EXCLUDED.state_prov,
                 country = EXCLUDED.country,
@@ -233,21 +240,48 @@ def insert_event_data(all_data, year):
     cur.close()
     conn.close()
 
-def insert_team_epa(result, year):
-    # Insert or update a team's EPA data for a given year
+def upsert_team_profile(result):
+    # Insert or update a team's general profile data
     conn = get_pg_connection()
     cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO team_epas (team_number, year, nickname, city, state_prov, country, website,
-                               normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                               wins, losses, ties, event_epas)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (team_number, year) DO UPDATE SET
+    cur.execute(
+        """
+        INSERT INTO teams (team_number, nickname, city, state_prov, country, website)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (team_number) DO UPDATE SET
             nickname = EXCLUDED.nickname,
             city = EXCLUDED.city,
             state_prov = EXCLUDED.state_prov,
             country = EXCLUDED.country,
-            website = EXCLUDED.website,
+            website = EXCLUDED.website
+        """,
+        (
+            result.get("team_number"),
+            result.get("nickname"),
+            result.get("city"),
+            result.get("state_prov"),
+            result.get("country"),
+            result.get("website"),
+        ),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def insert_team_epa(result, year):
+    # Insert or update a team's EPA data for a given year
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO team_epas (
+            team_number, year,
+            normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
+            wins, losses, ties, event_epas
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (team_number, year) DO UPDATE SET
             normal_epa = EXCLUDED.normal_epa,
             epa = EXCLUDED.epa,
             confidence = EXCLUDED.confidence,
@@ -258,25 +292,22 @@ def insert_team_epa(result, year):
             losses = EXCLUDED.losses,
             ties = EXCLUDED.ties,
             event_epas = EXCLUDED.event_epas
-    """, (
-        result.get("team_number"),
-        year,
-        result.get("nickname"),
-        result.get("city"),
-        result.get("state_prov"),
-        result.get("country"),
-        result.get("website"),
-        result.get("normal_epa"),
-        result.get("epa"),
-        result.get("confidence"),
-        result.get("auto_epa"),
-        result.get("teleop_epa"),
-        result.get("endgame_epa"),
-        result.get("wins"),
-        result.get("losses"),
-        result.get("ties"),
-        json.dumps(result.get("event_epas", []))
-    ))
+        """,
+        (
+            result.get("team_number"),
+            year,
+            result.get("normal_epa"),
+            result.get("epa"),
+            result.get("confidence"),
+            result.get("auto_epa"),
+            result.get("teleop_epa"),
+            result.get("endgame_epa"),
+            result.get("wins"),
+            result.get("losses"),
+            result.get("ties"),
+            json.dumps(result.get("event_epas", [])),
+        ),
+    )
     conn.commit()
     cur.close()
     conn.close()
@@ -310,26 +341,37 @@ def get_team_events(team_number, year):
     return events
 
 def get_teams_for_year(year):
-    # Return a list of all teams that played in a given year, including website from team_epas if available
+    # Return a list of all teams that played in a given year, using teams table for profile data
     conn = get_pg_connection()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT DISTINCT et.team_number, et.nickname, et.city, et.state_prov, et.country, te.website
+    cur.execute(
+        """
+        SELECT DISTINCT
+            et.team_number,
+            COALESCE(t.nickname, et.nickname),
+            COALESCE(t.city, et.city),
+            COALESCE(t.state_prov, et.state_prov),
+            COALESCE(t.country, et.country),
+            t.website
         FROM event_teams et
-        LEFT JOIN team_epas te ON et.team_number = te.team_number AND te.year = %s
+        LEFT JOIN teams t ON et.team_number = t.team_number
         WHERE LEFT(et.event_key, 4) = %s
-    """, (year, str(year)))
+        """,
+        (str(year),),
+    )
     teams = []
     for row in cur.fetchall():
-        teams.append({
-            "team_number": row[0],
-            "nickname": row[1],
-            "city": row[2],
-            "state_prov": row[3],
-            "country": row[4],
-            "website": row[5] if row[5] else "N/A",
-            "key": f"frc{row[0]}"
-        })
+        teams.append(
+            {
+                "team_number": row[0],
+                "nickname": row[1],
+                "city": row[2],
+                "state_prov": row[3],
+                "country": row[4],
+                "website": row[5] if row[5] else "N/A",
+                "key": f"frc{row[0]}",
+            }
+        )
     cur.close()
     conn.close()
     return teams
@@ -340,7 +382,12 @@ def get_existing_event_data(event_key):
     cur = conn.cursor()
     
     # Get event (including webcast info)
-    cur.execute("SELECT name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel FROM events WHERE event_key = %s", (event_key,))
+    cur.execute("""
+        SELECT name, start_date, end_date, event_type,
+               district_key, district_abbrev, district_name,
+               city, state_prov, country, website, webcast_type, webcast_channel
+        FROM events WHERE event_key = %s
+    """, (event_key,))
     event_row = cur.fetchone()
     
     # Get teams - ensure we always return a dict, even if empty
@@ -383,11 +430,14 @@ def get_existing_team_epa(team_number, year):
     conn = get_pg_connection()
     cur = conn.cursor()
     
-    cur.execute("""
-        SELECT nickname, city, state_prov, country, website, normal_epa, epa, confidence, 
+    cur.execute(
+        """
+        SELECT normal_epa, epa, confidence,
                auto_epa, teleop_epa, endgame_epa, wins, losses, ties, event_epas
         FROM team_epas WHERE team_number = %s AND year = %s
-    """, (team_number, year))
+        """,
+        (team_number, year),
+    )
     
     row = cur.fetchone()
     cur.close()
@@ -395,7 +445,7 @@ def get_existing_team_epa(team_number, year):
     
     if row:
         # Handle event_epas field - it might be a JSON string or already parsed list
-        event_epas_raw = row[14]
+        event_epas_raw = row[9]
         if event_epas_raw is None:
             event_epas = []
         elif isinstance(event_epas_raw, str):
@@ -408,24 +458,19 @@ def get_existing_team_epa(team_number, year):
         else:
             event_epas = []
         # Fallback for NoneType EPA fields
-        auto_epa = row[8] if row[8] is not None else 0.0
-        teleop_epa = row[9] if row[9] is not None else 0.0
-        endgame_epa = row[10] if row[10] is not None else 0.0
+        auto_epa = row[3] if row[3] is not None else 0.0
+        teleop_epa = row[4] if row[4] is not None else 0.0
+        endgame_epa = row[5] if row[5] is not None else 0.0
         return {
-            "nickname": row[0],
-            "city": row[1],
-            "state_prov": row[2],
-            "country": row[3],
-            "website": row[4],
-            "normal_epa": row[5],
-            "epa": row[6],
-            "confidence": row[7],
+            "normal_epa": row[0],
+            "epa": row[1],
+            "confidence": row[2],
             "auto_epa": auto_epa,
             "teleop_epa": teleop_epa,
             "endgame_epa": endgame_epa,
-            "wins": row[11],
-            "losses": row[12],
-            "ties": row[13],
+            "wins": row[6],
+            "losses": row[7],
+            "ties": row[8],
             "event_epas": event_epas
         }
     return None
@@ -446,12 +491,15 @@ def data_has_changed(existing, new_data, data_type):
             existing_event[1] != new_event[2] or  # start_date
             existing_event[2] != new_event[3] or  # end_date
             existing_event[3] != new_event[4] or  # event_type
-            existing_event[4] != new_event[5] or  # city
-            existing_event[5] != new_event[6] or  # state_prov
-            existing_event[6] != new_event[7] or  # country
-            existing_event[7] != new_event[8] or  # website
-            existing_event[8] != new_event[9] or  # webcast_type
-            existing_event[9] != new_event[10]    # webcast_channel
+            existing_event[4] != new_event[5] or  # district_key
+            existing_event[5] != new_event[6] or  # district_abbrev
+            existing_event[6] != new_event[7] or  # district_name
+            existing_event[7] != new_event[8] or  # city
+            existing_event[8] != new_event[9] or  # state_prov
+            existing_event[9] != new_event[10] or  # country
+            existing_event[10] != new_event[11] or  # website
+            existing_event[11] != new_event[12] or # webcast_type
+            existing_event[12] != new_event[13]    # webcast_channel
         )
     
     elif data_type == "teams":
@@ -589,11 +637,7 @@ def data_has_changed(existing, new_data, data_type):
             existing.get("wins", 0) != new_data.get("wins", 0) or
             existing.get("losses", 0) != new_data.get("losses", 0) or
             existing.get("ties", 0) != new_data.get("ties", 0) or
-            existing.get("nickname") != new_data.get("nickname") or
-            existing.get("city") != new_data.get("city") or
-            existing.get("state_prov") != new_data.get("state_prov") or
-            existing.get("country") != new_data.get("country") or
-            existing.get("website") != new_data.get("website")
+            False
         ):
             return True
         
@@ -682,8 +726,11 @@ def create_event_db(year):
             "event": (
                 key, event.get("name"),
                 event.get("start_date"), event.get("end_date"),
-                event.get("event_type_string"), event.get("city"),
-                event.get("state_prov"), event.get("country"),
+                event.get("event_type_string"),
+                (event.get("district") or {}).get("key"),
+                (event.get("district") or {}).get("abbreviation"),
+                (event.get("district") or {}).get("display_name"),
+                event.get("city"), event.get("state_prov"), event.get("country"),
                 event.get("website"),
                 # Webcast info (store first webcast if available)
                 (event.get("webcasts", [{}]) or [{}])[0].get("type"),
@@ -897,13 +944,20 @@ def insert_event_data(results, year):
         # Update event if needed
         if updates["event"]:
             cur.execute("""
-                INSERT INTO events (event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO events (
+                    event_key, name, start_date, end_date, event_type,
+                    district_key, district_abbrev, district_name,
+                    city, state_prov, country, website, webcast_type, webcast_channel
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (event_key) DO UPDATE SET
                     name = EXCLUDED.name,
                     start_date = EXCLUDED.start_date,
                     end_date = EXCLUDED.end_date,
                     event_type = EXCLUDED.event_type,
+                    district_key = EXCLUDED.district_key,
+                    district_abbrev = EXCLUDED.district_abbrev,
+                    district_name = EXCLUDED.district_name,
                     city = EXCLUDED.city,
                     state_prov = EXCLUDED.state_prov,
                     country = EXCLUDED.country,
@@ -1003,6 +1057,9 @@ def fetch_and_store_team_data(year):
         if not new_epa_data:
             return None
         
+        # Always upsert team profile data
+        upsert_team_profile(new_epa_data)
+
         # Check if EPA data has changed
         if not data_has_changed(existing_epa, new_epa_data, "team_epa"):
             return {"team_number": team_number, "updated": False, "reason": "No changes"}
