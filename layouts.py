@@ -3257,7 +3257,13 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
     epa_data = team_epa_data or {}
 
     recent_rows = []
-    year = performance_year 
+    year = performance_year
+
+    def parse_event_year(event_key):
+        try:
+            return int(str(event_key)[:4])
+        except Exception:
+            return None
     # Get all events the team attended with start dates
     event_dates = []
     
@@ -3326,7 +3332,9 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             # EVENT_AWARDS is always a list
             einstein_awards = [
                 a for a in EVENT_AWARDS
-                if a["tk"] == team_number and a["ek"] == "2025cmptx" and a["y"] == year
+                if a["tk"] == team_number
+                and a["ek"] == "2025cmptx"
+                and parse_event_year(a.get("ek")) == year
             ]
     
             # If neither, skip
@@ -3351,7 +3359,9 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         # EVENT_AWARDS is always a list
         award_names = [
             a["an"] for a in EVENT_AWARDS
-            if a["tk"] == team_number and a["ek"] == event_key and a["y"] == year
+            if a["tk"] == team_number
+            and a["ek"] == event_key
+            and parse_event_year(a.get("ek")) == year
         ]
         awards_line = html.Div([
             html.Span("Awards: ", style={"fontWeight": "bold"}),
@@ -3831,7 +3841,7 @@ def get_peekolive_events_categorized(include_all: bool = False):
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT event_key, name, start_date, end_date, webcast_type, webcast_channel, year, city, state_prov, country
+                SELECT event_key, name, start_date, end_date, webcast_type, webcast_channel, city, state_prov, country
                 FROM events
                 WHERE webcast_type IS NOT NULL AND webcast_channel IS NOT NULL
                 ORDER BY start_date NULLS LAST
@@ -3839,7 +3849,11 @@ def get_peekolive_events_categorized(include_all: bool = False):
             )
             rows = cur.fetchall()
             for row in rows:
-                ek, name, sd, ed, wtype, wchan, y, city, state, country = row
+                ek, name, sd, ed, wtype, wchan, city, state, country = row
+                try:
+                    year = int(str(ek)[:4])
+                except Exception:
+                    year = None
                 try:
                     sd_d = datetime.strptime(sd, "%Y-%m-%d").date() if sd else None
                     ed_d = datetime.strptime(ed, "%Y-%m-%d").date() if ed else None
@@ -3853,7 +3867,7 @@ def get_peekolive_events_categorized(include_all: bool = False):
                     "webcast_channel": wchan,
                     "start_date": sd,
                     "end_date": ed,
-                    "year": y,
+                    "year": year,
                     "location": ", ".join([v for v in [city, state, country] if v])
                 }
                 
@@ -6301,7 +6315,7 @@ def focused_peekolive_layout(event_key):
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT event_key, name, start_date, end_date, webcast_type, webcast_channel, year, city, state_prov, country
+                SELECT event_key, name, start_date, end_date, webcast_type, webcast_channel, city, state_prov, country
                 FROM events
                 WHERE event_key = %s
                 """,
@@ -6309,7 +6323,11 @@ def focused_peekolive_layout(event_key):
             )
             row = cur.fetchone()
             if row:
-                ek, name, sd, ed, wtype, wchan, y, city, state, country = row
+                ek, name, sd, ed, wtype, wchan, city, state, country = row
+                try:
+                    year = int(str(ek)[:4])
+                except Exception:
+                    year = None
                 event_data = {
                     "event_key": ek,
                     "name": name,
@@ -6317,7 +6335,7 @@ def focused_peekolive_layout(event_key):
                     "webcast_channel": wchan,
                     "start_date": sd,
                     "end_date": ed,
-                    "year": y,
+                    "year": year,
                     "location": ", ".join([v for v in [city, state, country] if v])
                 }
     except Exception as e:

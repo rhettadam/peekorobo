@@ -5768,14 +5768,22 @@ def update_team_awards(active_tab, store_data):
             resp = requests.get(url, headers=headers, timeout=10)
             resp.raise_for_status()
             raw = resp.json()
-            awards = [
-                {
-                    "event_key": aw["event_key"],
-                    "name": aw["name"],
-                    "year": aw["year"]
-                }
-                for aw in raw if any(rec.get("team_key") == team_key for rec in aw.get("recipient_list", []))
-            ]
+            awards = []
+            for aw in raw:
+                if not any(rec.get("team_key") == team_key for rec in aw.get("recipient_list", [])):
+                    continue
+                event_key = aw.get("event_key", "")
+                try:
+                    event_year = int(str(event_key)[:4])
+                except Exception:
+                    event_year = None
+                awards.append(
+                    {
+                        "event_key": event_key,
+                        "name": aw.get("name"),
+                        "year": event_year,
+                    }
+                )
             return build_output(awards)
         except Exception as e:
             return f"Error loading awards from TBA: {e}"
@@ -5785,15 +5793,24 @@ def update_team_awards(active_tab, store_data):
     try:
         if int(year) == current_year:
             awards = [
-                {"event_key": aw["ek"], "name": aw["an"], "year": aw["y"]}
+                {
+                    "event_key": aw["ek"],
+                    "name": aw["an"],
+                    "year": int(str(aw["ek"])[:4]) if str(aw.get("ek", ""))[:4].isdigit() else None,
+                }
                 for aw in EVENT_AWARDS
-                if aw.get("tk") == int(team) and aw.get("y") == current_year
+                if aw.get("tk") == int(team)
+                and (int(str(aw.get("ek", ""))[:4]) if str(aw.get("ek", ""))[:4].isdigit() else None) == current_year
             ]
         else:
             _, _, _, _, aya, _ = load_year_data(int(year))
             source = aya.values() if isinstance(aya, dict) else aya
             awards = [
-                {"event_key": aw["ek"], "name": aw["an"], "year": aw["y"]}
+                {
+                    "event_key": aw["ek"],
+                    "name": aw["an"],
+                    "year": int(str(aw["ek"])[:4]) if str(aw.get("ek", ""))[:4].isdigit() else None,
+                }
                 for aw in source if aw.get("tk") == int(team)
             ]
     except Exception:

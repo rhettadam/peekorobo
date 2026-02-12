@@ -165,11 +165,10 @@ def insert_event_data(all_data, year):
     for i, data in enumerate(tqdm(all_data, desc=f'Inserting {year} events')):
         # Insert event
         cur.execute("""
-            INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO events (event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (event_key) DO UPDATE SET
                 name = EXCLUDED.name,
-                year = EXCLUDED.year,
                 start_date = EXCLUDED.start_date,
                 end_date = EXCLUDED.end_date,
                 event_type = EXCLUDED.event_type,
@@ -226,8 +225,8 @@ def insert_event_data(all_data, year):
         # Insert awards
         if data["awards"]:
             cur.executemany("""
-                INSERT INTO event_awards (event_key, team_number, award_name, year)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO event_awards (event_key, team_number, award_name)
+                VALUES (%s, %s, %s)
                 ON CONFLICT (event_key, team_number, award_name) DO NOTHING
             """, data["awards"])
     conn.commit()
@@ -341,7 +340,7 @@ def get_existing_event_data(event_key):
     cur = conn.cursor()
     
     # Get event (including webcast info)
-    cur.execute("SELECT name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel FROM events WHERE event_key = %s", (event_key,))
+    cur.execute("SELECT name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel FROM events WHERE event_key = %s", (event_key,))
     event_row = cur.fetchone()
     
     # Get teams - ensure we always return a dict, even if empty
@@ -444,16 +443,15 @@ def data_has_changed(existing, new_data, data_type):
         new_event = new_data["event"]
         return (
             existing_event[0] != new_event[1] or  # name
-            existing_event[1] != new_event[2] or  # year
-            existing_event[2] != new_event[3] or  # start_date
-            existing_event[3] != new_event[4] or  # end_date
-            existing_event[4] != new_event[5] or  # event_type
-            existing_event[5] != new_event[6] or  # city
-            existing_event[6] != new_event[7] or  # state_prov
-            existing_event[7] != new_event[8] or  # country
-            existing_event[8] != new_event[9] or  # website
-            existing_event[9] != new_event[10] or # webcast_type
-            existing_event[10] != new_event[11]   # webcast_channel
+            existing_event[1] != new_event[2] or  # start_date
+            existing_event[2] != new_event[3] or  # end_date
+            existing_event[3] != new_event[4] or  # event_type
+            existing_event[4] != new_event[5] or  # city
+            existing_event[5] != new_event[6] or  # state_prov
+            existing_event[6] != new_event[7] or  # country
+            existing_event[7] != new_event[8] or  # website
+            existing_event[8] != new_event[9] or  # webcast_type
+            existing_event[9] != new_event[10]    # webcast_channel
         )
     
     elif data_type == "teams":
@@ -654,7 +652,7 @@ def create_event_db(year):
             continue
         
         # Check if event has ended
-        end_date = existing_data["event"][4]  # end_date
+        end_date = existing_data["event"][2]  # end_date
         if end_date:
             try:
                 end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
@@ -682,7 +680,7 @@ def create_event_db(year):
         # Fetch new data
         new_data = {
             "event": (
-                key, event.get("name"), year,
+                key, event.get("name"),
                 event.get("start_date"), event.get("end_date"),
                 event.get("event_type_string"), event.get("city"),
                 event.get("state_prov"), event.get("country"),
@@ -808,7 +806,7 @@ def create_event_db(year):
                             # Normal team number extraction
                             t_num = int(team_key[3:])
                             
-                            new_data["awards"].append((key, t_num, aw.get("name"), year))
+                            new_data["awards"].append((key, t_num, aw.get("name")))
         except:
             pass
         
@@ -899,11 +897,10 @@ def insert_event_data(results, year):
         # Update event if needed
         if updates["event"]:
             cur.execute("""
-                INSERT INTO events (event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO events (event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (event_key) DO UPDATE SET
                     name = EXCLUDED.name,
-                    year = EXCLUDED.year,
                     start_date = EXCLUDED.start_date,
                     end_date = EXCLUDED.end_date,
                     event_type = EXCLUDED.event_type,
@@ -960,8 +957,8 @@ def insert_event_data(results, year):
                     seen.add(key)
                     deduped_awards.append(award)
             cur.executemany("""
-                INSERT INTO event_awards (event_key, team_number, award_name, year)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO event_awards (event_key, team_number, award_name)
+                VALUES (%s, %s, %s)
                 ON CONFLICT (event_key, team_number, award_name) DO NOTHING
             """, deduped_awards)
     

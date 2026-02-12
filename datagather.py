@@ -201,14 +201,15 @@ def load_data():
         # Events
         event_cursor = conn.cursor()
         event_cursor.execute("""
-            SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
+            SELECT event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
             FROM events
-            ORDER BY year, event_key
+            ORDER BY event_key
         """)
         
         event_data = {}
         for row in event_cursor.fetchall():
-            event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
+            event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
+            year = int(event_key[:4])
             ev = compress_dict({
                 "k": event_key,
                 "n": name,
@@ -270,14 +271,18 @@ def load_data():
 
         # Awards
         event_cursor.execute("""
-            SELECT event_key, team_number, award_name, year
+            SELECT event_key, team_number, award_name
             FROM event_awards
-            ORDER BY year, event_key, team_number
+            ORDER BY event_key, team_number
         """)
         
         EVENTS_AWARDS = []
         for row in event_cursor.fetchall():
-            event_key, team_number, award_name, year = row
+            event_key, team_number, award_name = row
+            try:
+                year = int(str(event_key)[:4])
+            except Exception:
+                year = None
             award = compress_dict({
                 "ek": event_key,
                 "tk": team_number,
@@ -432,19 +437,19 @@ def load_data_current_year():
         # Events
         event_cursor = conn.cursor()
         event_cursor.execute("""
-            SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
+            SELECT event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
             FROM events
-            WHERE year = %s
+            WHERE event_key LIKE %s
             ORDER BY event_key
-        """, (current_year,))
+        """, (f"{current_year}%",))
         
         event_data = {current_year: {}}
         for row in event_cursor.fetchall():
-            event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
+            event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
             ev = compress_dict({
                 "k": event_key,
                 "n": name,
-                "y": year,
+                "y": current_year,
                 "sd": start_date,
                 "ed": end_date,
                 "et": event_type,
@@ -502,20 +507,20 @@ def load_data_current_year():
 
         # Awards for current year
         event_cursor.execute("""
-            SELECT event_key, team_number, award_name, year
+            SELECT event_key, team_number, award_name
             FROM event_awards
-            WHERE year = %s
+            WHERE event_key LIKE %s
             ORDER BY event_key, team_number
-        """, (current_year,))
+        """, (f"{current_year}%",))
         
         EVENTS_AWARDS = []
         for row in event_cursor.fetchall():
-            event_key, team_number, award_name, year = row
+            event_key, team_number, award_name = row
             award = compress_dict({
                 "ek": event_key,
                 "tk": team_number,
                 "an": award_name,
-                "y": year
+                "y": current_year
             })
             EVENTS_AWARDS.append(award)
 
@@ -648,17 +653,17 @@ def load_year_data(year):
         event_data = {}
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT event_key, name, year, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
+                SELECT event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel
                 FROM events
-                WHERE year = %s
+                WHERE event_key LIKE %s
                 ORDER BY event_key
-            """, (year,))
+            """, (f"{year}%",))
             for row in cursor.fetchall():
-                event_key, name, y, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
+                event_key, name, start_date, end_date, event_type, city, state_prov, country, website, webcast_type, webcast_channel = row
                 event_data[event_key] = compress_dict({
                     "k": event_key,
                     "n": name,
-                    "y": y,
+                    "y": year,
                     "sd": start_date,
                     "ed": end_date,
                     "et": event_type,
@@ -713,17 +718,17 @@ def load_year_data(year):
         EVENTS_AWARDS = []
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT event_key, team_number, award_name, year
+                SELECT event_key, team_number, award_name
                 FROM event_awards
-                WHERE year = %s
+                WHERE event_key LIKE %s
                 ORDER BY event_key, team_number
-            """, (year,))
-            for event_key, team_number, award_name, y in cursor.fetchall():
+            """, (f"{year}%",))
+            for event_key, team_number, award_name in cursor.fetchall():
                 EVENTS_AWARDS.append(compress_dict({
                     "ek": event_key,
                     "tk": team_number,
                     "an": award_name,
-                    "y": y
+                    "y": year
                 }))
 
         # === Load matches for specific year ===
