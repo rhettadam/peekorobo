@@ -3,7 +3,7 @@ from dash import html, dcc, dash_table
 from datagather import load_year_data,get_team_avatar,get_team_years_participated,TEAM_COLORS
 from flask import session
 from datetime import datetime, date, timedelta, timezone
-from utils import WEEK_RANGES_BY_YEAR,get_team_data_with_fallback,format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability, compute_percentiles, pill, get_event_week_label, is_western_pennsylvania_city
+from utils import WEEK_RANGES_BY_YEAR,get_team_data_with_fallback,format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability, compute_percentiles, pill, get_event_week_label
 import json
 import os
 import re
@@ -18,8 +18,23 @@ import pytz
 current_year = 2026
 DEFAULT_TIMEZONE = 'America/Chicago'  # Central Time
 
-with open('data/district_states.json', 'r', encoding='utf-8') as f:
-    DISTRICT_STATES_COMBINED = json.load(f)
+def get_team_district_options():
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT DISTINCT district
+                FROM teams
+                WHERE district IS NOT NULL
+                ORDER BY district
+                """
+            )
+            districts = [row[0] for row in cur.fetchall()]
+            cur.close()
+        return [{"label": d, "value": d} for d in districts if d]
+    except Exception:
+        return []
 
 def get_team_card_colors_with_text(team_number):
     """Get team colors and appropriate text color for card with cleaner, more subtle styling."""
@@ -408,64 +423,24 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         country_teams = len([team for team in year_data.values() if team.get("country", "").lower() == country.lower()])
         state_teams = len([team for team in year_data.values() if team.get("state_prov", "").lower() == state.lower()])
         
-        # Load district definitions and determine team's district
+        # Use stored district data for district ranking
         district_rank = None
         district_name = None
         district_teams = 0
         
         try:  
-            # Check if this is a western Pennsylvania team first
-            team_city = selected_team.get("city", "")
-            is_western_pa = ((state.upper() == "PA" or state.upper() == "PENNSYLVANIA") and is_western_pennsylvania_city(team_city))
-            
-            if is_western_pa:
-                district_name = None
-                district_rank = None
-                district_teams = 0
-            else:
-                # Find which district the team belongs to
-                for district_code, district_info in DISTRICT_STATES_COMBINED.items():
-                    district_states = district_info.get("abbreviations", [])
-                    district_names = district_info.get("names", [])
-                    
-                    # Check if team's state matches this district
-                    if (state.upper() in district_states or 
-                        state in district_names or
-                        country in district_names):  # For international districts like Israel
-                        
-                        # Calculate district rank
-                        district_teams = len([
-                            team for team in year_data.values() 
-                            if (team.get("state_prov", "").upper() in district_states or 
-                                team.get("state_prov", "") in district_names or
-                                team.get("country", "") in district_names) and
-                            # For FMA district, exclude western Pennsylvania teams
-                            not (district_code == "FMA" and 
-                                 team.get("state_prov", "").upper() == "PA" and 
-                                 is_western_pennsylvania_city(team.get("city", "")))
-                        ])
-                        
-                        if district_teams > 0:
-                            # Sort teams in this district by ACE and find team's rank
-                            district_team_list = [
-                                team for team in year_data.values() 
-                                if (team.get("state_prov", "").upper() in district_states or 
-                                    team.get("state_prov", "") in district_names or
-                                    team.get("country", "") in district_names) and
-                                # For FMA district, exclude western Pennsylvania teams
-                                not (district_code == "FMA" and 
-                                     team.get("state_prov", "").upper() == "PA" and 
-                                     is_western_pennsylvania_city(team.get("city", "")))
-                            ]
-                            district_team_list.sort(key=lambda x: x.get("epa", 0), reverse=True)
-                            
-                            # Find the team's rank in the district
-                            for i, team in enumerate(district_team_list):
-                                if team.get("team_number") == selected_team.get("team_number"):
-                                    district_rank = i + 1
-                                    break
-                            
-                            district_name = district_code
+            district_name = selected_team.get("district")
+            if district_name:
+                district_team_list = [
+                    team for team in year_data.values()
+                    if team.get("district") == district_name
+                ]
+                district_teams = len(district_team_list)
+                if district_teams > 0:
+                    district_team_list.sort(key=lambda x: x.get("epa", 0), reverse=True)
+                    for i, team in enumerate(district_team_list):
+                        if team.get("team_number") == selected_team.get("team_number"):
+                            district_rank = i + 1
                             break
         except Exception as e:
             print(f"Error loading district data: {e}")
@@ -490,52 +465,8 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             rank_card(country, country_rank, country_teams, f"/teams?year={performance_year}&country={country}&sort_by=epa"),
         ]
         
-        # Check if district has multiple states
-        district_has_multiple_states = False
-        if district_name and DISTRICT_STATES_COMBINED:
-            district_info = DISTRICT_STATES_COMBINED.get(district_name, {})
-            district_states = district_info.get("abbreviations", [])
-            district_names = district_info.get("names", [])
-            
-            # Count how many states are in this district
-            states_in_district = 0
-            for team in year_data.values():
-                team_state = team.get("state_prov", "").upper()
-                team_country = team.get("country", "")
-                
-                if (team_state in district_states or 
-                    team.get("state_prov", "") in district_names or
-                    team_country in district_names):
-                    
-                    # For FMA district, exclude western Pennsylvania teams
-                    if district_name == "FMA" and team_state == "PA":
-                        if not is_western_pennsylvania_city(team.get("city", "")):
-                            states_in_district += 1
-                    else:
-                        states_in_district += 1
-            
-            # If we have teams from multiple states in this district, show district card
-            if states_in_district > 0:
-                unique_states = set()
-                for team in year_data.values():
-                    team_state = team.get("state_prov", "").upper()
-                    team_country = team.get("country", "")
-                    
-                    if (team_state in district_states or 
-                        team.get("state_prov", "") in district_names or
-                        team_country in district_names):
-                        
-                        # For FMA district, exclude western Pennsylvania teams
-                        if district_name == "FMA" and team_state == "PA":
-                            if not is_western_pennsylvania_city(team.get("city", "")):
-                                unique_states.add(team_state)
-                        else:
-                            unique_states.add(team_state)
-                
-                district_has_multiple_states = len(unique_states) > 1
-        
-        # Add district rank card if team is in a district with multiple states
-        if district_rank and district_name and district_teams > 0 and district_has_multiple_states:
+        # Add district rank card if district data exists
+        if district_rank and district_name and district_teams > 0:
             rank_cards.append(
                 rank_card(district_name, district_rank, district_teams, f"/teams?year={performance_year}&sort_by=epa")
             )
@@ -2676,10 +2607,7 @@ def teams_layout(default_year=current_year):
         id="district-dropdown",
         options=[
             {"label": "All Districts", "value": "All"},
-            *[
-                {"label": acronym, "value": acronym}
-                for acronym in DISTRICT_STATES_COMBINED.keys()
-            ]
+            *get_team_district_options()
         ],
         value="All",
         clearable=False,
@@ -7228,7 +7156,7 @@ def higher_lower_layout():
                             id="higher-lower-district-dropdown",
                             options=[
                                 {"label": "All Districts", "value": "All"},
-                                *[{"label": acronym, "value": acronym} for acronym in DISTRICT_STATES_COMBINED.keys()]
+                                *get_team_district_options()
                             ],
                             value="All",
                             clearable=False,

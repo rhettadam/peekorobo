@@ -152,7 +152,7 @@ def load_data():
         # Get all team EPA data
         team_cursor.execute("""
             SELECT te.team_number, te.year,
-                   t.nickname, t.city, t.state_prov, t.country, t.website,
+                   t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
                    te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
                    te.wins, te.losses, te.ties, te.event_epas
             FROM team_epas te
@@ -162,7 +162,7 @@ def load_data():
         
         team_data = {}
         for row in team_cursor.fetchall():
-            team_number, year, nickname, city, state_prov, country, website, \
+            team_number, year, nickname, city, state_prov, country, website, district, \
             normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
             wins, losses, ties, event_epas = row
             
@@ -174,6 +174,7 @@ def load_data():
                 "state_prov": state_prov,
                 "country": country,
                 "website": website,
+                "district": district,
                 "normal_epa": normal_epa,
                 "epa": epa,
                 "confidence": confidence,
@@ -399,7 +400,7 @@ def load_data_current_year():
         # Get only current year team EPA data
         team_cursor.execute("""
             SELECT te.team_number, te.year,
-                   t.nickname, t.city, t.state_prov, t.country, t.website,
+                   t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
                    te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
                    te.wins, te.losses, te.event_epas
             FROM team_epas te
@@ -410,7 +411,7 @@ def load_data_current_year():
         
         team_data = {current_year: {}}
         for row in team_cursor.fetchall():
-            team_number, year, nickname, city, state_prov, country, website, \
+            team_number, year, nickname, city, state_prov, country, website, district, \
             normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
             wins, losses, event_epas = row
             
@@ -422,6 +423,7 @@ def load_data_current_year():
                 "state_prov": state_prov,
                 "country": country,
                 "website": website,
+                "district": district,
                 "normal_epa": normal_epa,
                 "epa": epa,
                 "confidence": confidence,
@@ -636,7 +638,7 @@ def load_year_data(year):
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT te.team_number, te.year,
-                       t.nickname, t.city, t.state_prov, t.country, t.website,
+                       t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
                        te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
                        te.wins, te.losses, te.ties, te.event_epas
                 FROM team_epas te
@@ -646,7 +648,7 @@ def load_year_data(year):
             """, (year,))
             for row in cursor.fetchall():
                 (
-                    team_number, year, nickname, city, state_prov, country, website,
+                    team_number, year, nickname, city, state_prov, country, website, district,
                     normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
                     wins, losses, ties, event_epas
                 ) = row
@@ -659,6 +661,7 @@ def load_year_data(year):
                     "state_prov": state_prov,
                     "country": country,
                     "website": website,
+                    "district": district,
                     "normal_epa": normal_epa,
                     "epa": epa,
                     "confidence": confidence,

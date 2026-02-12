@@ -26,7 +26,7 @@ from datagather import load_data_current_year,load_search_data,load_year_data,ge
 
 from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout
 
-from utils import is_western_pennsylvania_city,format_human_date,predict_win_probability,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name,get_team_data_with_fallback
+from utils import format_human_date,predict_win_probability,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name,get_team_data_with_fallback
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -35,8 +35,6 @@ load_dotenv()
 TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data_current_year()
 SEARCH_TEAM_DATA, SEARCH_EVENT_DATA = load_search_data()
 
-with open('data/district_states.json', 'r', encoding='utf-8') as f:
-    DISTRICT_STATES_COMBINED = json.load(f)
 
 # Store app startup time for "Last Updated" indicator
 APP_STARTUP_TIME = datetime.now()
@@ -3996,27 +3994,10 @@ def load_teams(
         teams_data = [t for t in teams_data if (t.get("country") or "").lower() == selected_country.lower()]
 
     if selected_district and selected_district != "All":
-        if selected_district == "ISR":
-            teams_data = [
-                t for t in teams_data
-                if (t.get("country") or "").lower() == "israel"
-            ]
-        elif selected_district == "FMA":
-            # For FMA district, exclude teams from western Pennsylvania cities
-            teams_data = [
-                t for t in teams_data
-                if (t.get("state_prov") or "").lower() in ["delaware", "new jersey", "pa", "pennsylvania"] and
-                not is_western_pennsylvania_city(t.get("city", ""))
-            ]
-        else:
-            district_info = DISTRICT_STATES_COMBINED.get(selected_district, {})
-            allowed_states = []
-            if district_info:
-                allowed_states = [s.lower() for s in district_info.get("abbreviations", []) + district_info.get("names", [])]
-            teams_data = [
-                t for t in teams_data
-                if (t.get("state_prov") or "").lower() in allowed_states
-            ]
+        teams_data = [
+            t for t in teams_data
+            if (t.get("district") or "").upper() == selected_district.upper()
+        ]
     elif selected_state and selected_state != "All":
         teams_data = [t for t in teams_data if (t.get("state_prov") or "").lower() == selected_state.lower()]
 
@@ -4713,6 +4694,10 @@ def export_event_cards_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, h
         if not district:
             district_key = (ev.get("dk") or "").strip()
             district = district_key[-2:].upper() if len(district_key) >= 2 else None
+
+        city = ev.get("c", "")
+        state = ev.get("s", "")
+        country = ev.get("co", "")
         
         # Get week
         week = "N/A"
@@ -6803,28 +6788,10 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
                 }
             
             if selected_district and selected_district != "All":
-                if selected_district == "ISR":
-                    filtered_year_data = {
-                        num: data for num, data in filtered_year_data.items()
-                        if (data.get("country") or "").lower() == "israel"
-                    }
-                elif selected_district == "FMA":
-                    # For FMA district, exclude teams from western Pennsylvania cities
-                    from utils import is_western_pennsylvania_city
-                    filtered_year_data = {
-                        num: data for num, data in filtered_year_data.items()
-                        if (data.get("state_prov") or "").lower() in ["delaware", "new jersey", "pa", "pennsylvania"] and
-                        not is_western_pennsylvania_city(data.get("city", ""))
-                    }
-                else:
-                    district_info = DISTRICT_STATES_COMBINED.get(selected_district, {})
-                    allowed_states = []
-                    if district_info:
-                        allowed_states = [s.lower() for s in district_info.get("abbreviations", []) + district_info.get("names", [])]
-                    filtered_year_data = {
-                        num: data for num, data in filtered_year_data.items()
-                        if (data.get("state_prov") or "").lower() in allowed_states
-                    }
+                filtered_year_data = {
+                    num: data for num, data in filtered_year_data.items()
+                    if (data.get("district") or "").upper() == selected_district.upper()
+                }
             elif selected_state and selected_state != "All":
                 filtered_year_data = {
                     num: data for num, data in filtered_year_data.items()
