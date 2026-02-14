@@ -582,6 +582,10 @@ def event_card(event, favorited=False):
     start = event.get("sd", "N/A")
     end = event.get("ed", "N/A")
     event_type = event.get("et", "N/A")
+    district = (event.get("da") or "").strip().upper()
+    if not district:
+        district_key = (event.get("dk") or "").strip()
+        district = district_key[-2:].upper() if len(district_key) >= 2 else ""
 
     # Add week label
     week_label = None
@@ -595,14 +599,26 @@ def event_card(event, favorited=False):
     start_display = format_human_date(start) if start and start != "N/A" else start
     end_display = format_human_date(end) if end and end != "N/A" else end
 
+    if district and isinstance(event_type, str) and "district" in event_type.lower():
+        type_label = f"{district} District Event"
+    elif isinstance(event_type, str) and "regional" in event_type.lower():
+        region_label = (event.get("s") or "").strip().upper()
+        if region_label:
+            type_label = f"{region_label} Regional Event"
+        else:
+            type_label = "Regional Event"
+    else:
+        type_label = event_type
+
     return dbc.Card(
         [
             dbc.CardBody(
                 [
-                    html.H5(event.get("n", "Unknown Event"), className="card-title mb-3"),
+                    html.H5(event.get("n", "Unknown Event"), className="card-title mb-2"),
+                    html.P(event_key, className="card-text text-secondary mb-3"),
                     html.P(location, className="card-text"),
                     html.P(f"{start_display} - {end_display}", className="card-text"),
-                    html.P(f"{week_label} {event_type}" if week_label else f"{event_type}", className="card-text"),
+                    html.P(f"{week_label} {type_label}" if week_label else f"{type_label}", className="card-text"),
                     dbc.Button(
                         "Peek",
                         href=event_url,
@@ -627,70 +643,6 @@ def format_human_date(date_str):
         return dt.strftime("%B %-d, %Y") if os.name != 'nt' else dt.strftime("%B %#d, %Y")
     except Exception:
         return ""
-    
-def is_western_pennsylvania_city(city_name, state=None):
-    """
-    Check if a city is in western Pennsylvania (west of Harrisburg).
-    Returns True if the city is in western Pennsylvania, False otherwise.
-    """
-    if not city_name:
-        return False
-    
-    # If state is provided and it's not PA, return False immediately
-    if state and state.upper() != 'PA':
-        return False
-    
-    city_lower = city_name.lower().strip()
-    
-    # Major western Pennsylvania cities (west of Harrisburg)
-    western_pa_cities = {
-        # Pittsburgh area
-        "pittsburgh", "allegheny", "bethel park", "monroeville", "mckeesport", "new kensington",
-        "greensburg", "latrobe", "jeannette", "connellsville", "uniontown", "washington",
-        "canonsburg", "mcmurray", "peters township", "upper st. clair", "mt. lebanon",
-        "brentwood", "baldwin", "whitehall", "dormont", "carnegie", "robinson township", "cranberry township", "baden",
-        "brownsville", "vanderbilt", "monessen", "murrysville", "bridgeville",
-        
-        # Erie area
-        "erie", "meadville", "oil city", "franklin", "venango", "crawford",
-        
-        # Johnstown area
-        "johnstown", "ebensburg", "cambria", "somerset", "bedford", "blair",
-        
-        # Altoona area
-        "altoona", "huntingdon", "clearfield", "centre", "state college", "bellefonte",
-        
-        # Other western cities
-        "butler", "indiana", "armstrong", "westmoreland", "fayette", "greene",
-        "lawrence", "mercer", "crawford", "mckean", "elk", "forest",
-        "jefferson", "clarion", "venango", "butler county", "indiana county",
-        
-        # Additional cities that are clearly west of Harrisburg
-        "duquesne", "braddock", "swissvale", "edgewood", "forest hills", "wilkinsburg",
-        "east pittsburgh", "turtle creek", "rankin", "homestead", "west homestead",
-        "munhall", "white oak", "north versailles", "plum", "oakmont", "verona",
-        "aspinwall", "fox chapel", "shaler", "ross", "mccandless", "franklin park",
-        "marshall", "pine", "richland", "hampton", "bradford woods", "gibsonia",
-        "wexford", "cranberry", "mars", "valencia", "butler", "hermitage", "sharon",
-        "farrell", "new castle", "ellwood city", "beaver", "beaver falls", "aliquippa",
-        "monaca", "rochester", "new brighton", "beaver county", "lawrence county",
-        "mercer county", "crawford county", "erie county", "warren county",
-        "mckean county", "elk county", "forest county", "jefferson county",
-        "clarion county", "venango county", "butler county", "indiana county",
-        "armstrong county", "westmoreland county", "fayette county", "greene county", "chambersburg",
-        "marion center", "emlenton"
-    }
-    
-    # Check for exact matches first
-    if city_lower in western_pa_cities:
-        return True
-    
-    # Special handling for "warren county" - only match if it's specifically "warren county"
-    # Don't match "warren hills" or other warren locations outside PA
-    if city_lower == "warren county":
-        return True
-    
-    return False
 
 def get_team_data_with_fallback(team_number, target_year, team_database):
     """

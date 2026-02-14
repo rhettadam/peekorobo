@@ -41,7 +41,6 @@ APP_STARTUP_TIME = datetime.now()
 
 current_year = 2026
 
-
 app = dash.Dash(
     __name__,
     meta_tags=[
@@ -1400,11 +1399,16 @@ def update_events_tab_content(
             if not epa_values:
                 continue
     
+            team_count = len(team_entries)
+
             epa_values.sort(reverse=True)
             max_epa = max(epa_values)
             top_8 = np.mean(epa_values[:8]) if len(epa_values) >= 8 else np.mean(epa_values)
             top_24 = np.mean(epa_values[:24]) if len(epa_values) >= 24 else np.mean(epa_values)
-            mean_epa = np.median(epa_values)
+            mean_epa = np.mean(epa_values)
+            median_epa = np.median(epa_values)
+            iqr_epa = np.percentile(epa_values, 75) - np.percentile(epa_values, 25)
+            std_epa = np.std(epa_values)
 
             # Tooltip with truncated name and markdown link
             truncated = truncate_name(name)
@@ -1417,9 +1421,14 @@ def update_events_tab_content(
                 "District": district,
                 "Location": location,
                 "Event Type": event.get("et", "N/A"),
+                "Teams": team_count,
                 "Max ACE": round(max_epa, 2),
                 "Top 8 ACE": round(top_8, 2),
                 "Top 24 ACE": round(top_24, 2),
+                "Mean ACE": round(mean_epa, 2),
+                "Median ACE": round(median_epa, 2),
+                "IQR ACE": round(iqr_epa, 2),
+                "Std Dev ACE": round(std_epa, 2),
             })
     
         return pd.DataFrame(rows).sort_values(by="Top 8 ACE", ascending=False)
@@ -1452,7 +1461,12 @@ def update_events_tab_content(
     if active_tab == "table-tab":
         # Create year-specific databases for the compute function
         year_event_database = {selected_year: {ev["k"]: ev for ev in events_data}}
-        df = compute_event_insights_from_data(year_event_teams, year_event_database, year_team_database, selected_year)
+        df = compute_event_insights_from_data(
+            year_event_teams,
+            year_event_database,
+            year_team_database,
+            selected_year,
+        )
     
         # Sort by "Top 8 ACE"
         df = df.sort_values(by="Top 8 ACE", ascending=False).reset_index(drop=True)
@@ -1463,6 +1477,10 @@ def update_events_tab_content(
             "Top 8 ACE": compute_percentiles(ace_values),
             "Max ACE": compute_percentiles(df["Max ACE"].dropna().values),
             "Top 24 ACE": compute_percentiles(df["Top 24 ACE"].dropna().values),
+            "Mean ACE": compute_percentiles(df["Mean ACE"].dropna().values),
+            "Median ACE": compute_percentiles(df["Median ACE"].dropna().values),
+            "IQR ACE": compute_percentiles(df["IQR ACE"].dropna().values),
+            "Std Dev ACE": compute_percentiles(df["Std Dev ACE"].dropna().values),
         }
         style_data_conditional = get_epa_styling(percentiles_dict)
 
@@ -1525,9 +1543,14 @@ def update_events_tab_content(
                     {"name": "District", "id": "District"},
                     {"name": "Location", "id": "Location"},
                     {"name": "Event Type", "id": "Event Type"},
+                    {"name": "Teams", "id": "Teams"},
                     {"name": "Max ACE", "id": "Max ACE"},
                     {"name": "Top 8 ACE", "id": "Top 8 ACE"},
                     {"name": "Top 24 ACE", "id": "Top 24 ACE"},
+                    {"name": "Mean ACE", "id": "Mean ACE"},
+                    {"name": "Median ACE", "id": "Median ACE"},
+                    {"name": "IQR ACE", "id": "IQR ACE"},
+                    {"name": "Std Dev ACE", "id": "Std Dev ACE"},
                 ],
                 sort_action="native",
                 sort_mode="multi",
@@ -3930,6 +3953,7 @@ def load_teams(
     x_axis,
     y_axis,
     z_axis,
+    
     percentile_mode,
     href
 ):

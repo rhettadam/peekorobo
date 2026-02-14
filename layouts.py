@@ -5664,6 +5664,10 @@ def event_layout(event_key):
     start_date = event.get("sd", "N/A")
     end_date = event.get("ed", "N/A")
     event_type = event.get("et", "N/A")
+    district = (event.get("da") or "").strip().upper()
+    if not district:
+        district_key = (event.get("dk") or "").strip()
+        district = district_key[-2:].upper() if len(district_key) >= 2 else ""
 
     # Calculate week label
     week_label = None
@@ -5677,14 +5681,26 @@ def event_layout(event_key):
     start_display = format_human_date(start_date) if start_date and start_date != "N/A" else start_date
     end_display = format_human_date(end_date) if end_date and end_date != "N/A" else end_date
 
+    if district and isinstance(event_type, str) and "district" in event_type.lower():
+        type_label = f"{district} District Event"
+    elif isinstance(event_type, str) and "regional" in event_type.lower():
+        region_label = (event.get("s") or "").strip().upper()
+        if region_label:
+            type_label = f"{region_label} Regional Event"
+        else:
+            type_label = "Regional Event"
+    else:
+        type_label = event_type
+
     # Header card
     header_card = dbc.Card(
         html.Div([
             dbc.CardBody([
-                html.H2(f"{event_name} ({parsed_year})", className="card-title mb-3", style={"fontWeight": "bold"}),
+                html.H2(f"{event_name} ({parsed_year})", className="card-title mb-2", style={"fontWeight": "bold"}),
+                html.P(event_key, className="card-text text-secondary mb-3"),
                 html.P(f"{event_location}", className="card-text"),
                 html.P(f"{start_display} - {end_display}", className="card-text"),
-                html.P(f"{week_label} {event_type}" if week_label else "", className="card-text"),
+                html.P(f"{week_label} {type_label}" if week_label else "", className="card-text"),
                 dbc.Row([
                     dbc.Col([
                         html.A(
