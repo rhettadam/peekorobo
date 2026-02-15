@@ -6754,9 +6754,24 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
     # Only initialize when Start button is clicked (not on page load)
     if triggered_id != "higher-lower-start-btn" and not game_started:
         teams_cache = teams_cache or {}
+        user_id = session.get("user_id")
+        saved_highscore = 0
+        if user_id:
+            try:
+                with DatabaseConnection() as conn:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "SELECT higher_lower_highscore FROM users WHERE id = %s",
+                        (user_id,),
+                    )
+                    row = cur.fetchone()
+                    if row and row[0] is not None:
+                        saved_highscore = int(row[0])
+            except Exception:
+                pass
         return [], {
             "score": 0,
-            "highscore": 0,
+            "highscore": saved_highscore,
             "wrong_guesses": 0,
             "left_team": None,
             "right_team": None,
@@ -6874,9 +6889,25 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
     left_team = selected_teams[0]
     right_team = selected_teams[1] if len(selected_teams) > 1 else selected_teams[0]
     
+    user_id = session.get("user_id")
+    saved_highscore = 0
+    if user_id:
+        try:
+            with DatabaseConnection() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT higher_lower_highscore FROM users WHERE id = %s",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                if row and row[0] is not None:
+                    saved_highscore = int(row[0])
+        except Exception:
+            pass
+
     new_game_state = {
         "score": 0,
-        "highscore": 0,
+        "highscore": saved_highscore,
         "wrong_guesses": 0,
         "left_team": left_team,
         "right_team": right_team,
@@ -7199,6 +7230,23 @@ def update_game_over_message(game_state):
     
     if not game_over:
         return html.Div(), {"display": "none"}
+
+    user_id = session.get("user_id")
+    if user_id:
+        try:
+            with DatabaseConnection() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    UPDATE users
+                    SET higher_lower_highscore = GREATEST(COALESCE(higher_lower_highscore, 0), %s)
+                    WHERE id = %s
+                    """,
+                    (highscore, user_id),
+                )
+                conn.commit()
+        except Exception:
+            pass
     
     game_over_msg = html.Div([
         html.H3("Game Over!", style={"color": "var(--text-primary)", "marginBottom": "20px"}),

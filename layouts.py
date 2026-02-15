@@ -4894,6 +4894,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
     followers_count = 0
     following_count = 0
     color = "#f9f9f9"
+    higher_lower_highscore = 0
     team_keys = []
     event_keys = []
     followers_user_objs = []
@@ -4907,7 +4908,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
             if is_current_user:
                 # Current user - get full profile data
                 cursor.execute("""
-                    SELECT username, avatar_key, role, team, bio, followers, following, color, email
+                    SELECT username, avatar_key, role, team, bio, followers, following, color, email, higher_lower_highscore
                     FROM users WHERE id = %s
                 """, (target_user_id,))
                 user_row = cursor.fetchone()
@@ -4921,6 +4922,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     following_ids = user_row[6] or []
                     color = user_row[7] or "#f9f9f9"
                     email = user_row[8] or ""
+                    higher_lower_highscore = user_row[9] or 0
                     
                     # Get usernames and avatars for followers
                     if followers_ids:
@@ -4938,7 +4940,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
             else:
                 # Other user - get profile data and check if current user is following
                 cursor.execute("""
-                    SELECT username, avatar_key, role, team, bio, followers, following, color
+                    SELECT username, avatar_key, role, team, bio, followers, following, color, higher_lower_highscore
                     FROM users WHERE id = %s
                 """, (target_user_id,))
                 user_row = cursor.fetchone()
@@ -4953,6 +4955,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     followers_count = len(followers_ids)
                     following_count = len(following_ids)
                     color = user_row[7] or "#ffffff"
+                    higher_lower_highscore = user_row[8] or 0
                     
                     # Get usernames and avatars for followers (for other users too)
                     if followers_ids:
@@ -5027,6 +5030,17 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                         f"Following: {following_count} ",
                         html.Span("▼", id=f"following-arrow-{username}" if username else "following-arrow", style={"cursor": "pointer", "fontSize": "0.75rem", "color": text_color})
                     ], id="profile-following", style={"color": text_color, "fontWeight": "500", "position": "relative"}),
+                ], style={
+                    "fontSize": "0.85rem",
+                    "color": text_color,
+                    "marginTop": "4px",
+                    "display": "flex",
+                    "flexWrap": "wrap"
+                }),
+
+                html.Div([
+                    html.Span("Higher/Lower High Score: ", style={"fontWeight": "500", "color": text_color}),
+                    html.Span(str(higher_lower_highscore), style={"fontWeight": "600", "color": text_color, "marginLeft": "4px"})
                 ], style={
                     "fontSize": "0.85rem",
                     "color": text_color,
@@ -7126,6 +7140,7 @@ def build_match_notifications(event_key, selected_team=None):
 
 def higher_lower_layout():
     """Higher or Lower game layout comparing team ACE values"""
+    is_logged_in = "user_id" in session
     return html.Div([
         topbar(),
         dbc.Container(fluid=True, children=[
@@ -7190,7 +7205,13 @@ def higher_lower_layout():
             # Score and Highscore at top
             html.Div([
                 html.Div([
-                    html.Div("Highscore", style={"fontSize": "0.75rem", "color": "var(--text-secondary)"}),
+                    html.Div([
+                        html.Span("Highscore", style={"fontSize": "0.75rem", "color": "var(--text-secondary)"}),
+                        html.Span(
+                            " • Log in to save your high score",
+                            style={"fontSize": "0.75rem", "color": "var(--text-secondary)", "marginLeft": "6px"},
+                        ) if not is_logged_in else None,
+                    ]),
                     html.Div(id="highscore-display", children="0", style={"fontSize": "1.5rem", "fontWeight": "bold", "color": "var(--text-primary)"})
                 ], style={"textAlign": "center", "flex": 1}),
                 html.Div(style={"width": "2px", "backgroundColor": "white", "height": "40px", "margin": "0 20px"}),
