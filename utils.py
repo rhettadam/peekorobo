@@ -614,7 +614,7 @@ def event_card(event, favorited=False):
         [
             dbc.CardBody(
                 [
-                    html.H5(event.get("n", "Unknown Event"), className="card-title mb-2"),
+                    html.H5(truncate_name(event.get("n", "Unknown Event"), max_length=40), className="card-title mb-2"),
                     html.P(event_key, className="card-text text-secondary mb-3"),
                     html.P(location, className="card-text"),
                     html.P(f"{start_display} - {end_display}", className="card-text"),
