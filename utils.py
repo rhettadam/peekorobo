@@ -15,31 +15,17 @@ from datagather import TEAM_COLORS
 
 current_year = 2025
 
-with open('data/week_ranges.json', 'r', encoding='utf-8') as f:
-    WEEK_RANGES_BY_YEAR = json.load(f)
-
-def get_event_week_label(event_start_date):
-    """Return a string like 'Week 1', 'Week 6', etc. for the event date, or empty string for pre-season/off-season."""
-    year = str(event_start_date.year)
-    week_ranges = WEEK_RANGES_BY_YEAR.get(year)
-    if not week_ranges:
+def get_event_week_label_from_number(week_number):
+    """Return a string like 'Week 1' for a 0-based week index."""
+    if week_number is None:
         return None
-    
-    # Check if date is before the first week range (pre-season)
-    if week_ranges:
-        first_start = date.fromisoformat(week_ranges[0][0])
-        if event_start_date < first_start:
-            return ""
-    
-    # Check if date is within any week range
-    for i, (start, end) in enumerate(week_ranges):
-        start_dt = date.fromisoformat(start)
-        end_dt = date.fromisoformat(end)
-        if start_dt <= event_start_date <= end_dt:
-            return f"Week {i+1}"
-    
-    # If we get here, the date is after all week ranges (off-season)
-    return ""
+    try:
+        week_index = int(week_number)
+    except Exception:
+        return None
+    if week_index < 0:
+        return None
+    return f"Week {week_index + 1}"
 
 def apply_simple_filter(df, filter_query):
     # Only supports simple "{"col"} op value" and "and"/"or"
@@ -563,18 +549,6 @@ def universal_profile_icon_or_toast():
         },
     )
 
-def get_week_number(start_date):
-    year = str(start_date.year)
-    week_ranges = WEEK_RANGES_BY_YEAR.get(year)
-    if not week_ranges:
-        return None
-    for i, (start, end) in enumerate(week_ranges):
-        start_dt = date.fromisoformat(start)
-        end_dt = date.fromisoformat(end)
-        if start_dt <= start_date <= end_dt:
-            return i
-    return None
-
 def event_card(event, favorited=False):
     event_key = event["k"]
     event_url = f"https://www.peekorobo.com/event/{event_key}"
@@ -587,13 +561,8 @@ def event_card(event, favorited=False):
         district_key = (event.get("dk") or "").strip()
         district = district_key[-2:].upper() if len(district_key) >= 2 else ""
 
-    # Add week label
-    week_label = None
-    if start and start != "N/A":
-        try:
-            week_label = get_event_week_label(date.fromisoformat(start))
-        except Exception:
-            week_label = None
+    # Add week label (stored week is 0-based)
+    week_label = get_event_week_label_from_number(event.get("wk"))
 
     # Format dates for display
     start_display = format_human_date(start) if start and start != "N/A" else start

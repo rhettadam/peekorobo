@@ -26,7 +26,7 @@ from datagather import load_data_current_year,load_search_data,load_year_data,ge
 
 from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout
 
-from utils import format_human_date,predict_win_probability,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_week_number,event_card,truncate_name,get_team_data_with_fallback
+from utils import format_human_date,predict_win_probability,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_event_week_label_from_number,event_card,truncate_name,get_team_data_with_fallback
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -1372,16 +1372,9 @@ def update_events_tab_content(
                 full_name = full_name.split(" presented by")[0]
             name = full_name.split(" presented by")[0].strip()
 
-            # --- Week Calculation ---
-            try:
-                start_date = datetime.strptime(event.get("sd", ""), "%Y-%m-%d").date()
-                week_idx = get_week_number(start_date)
-                if week_idx is not None:
-                    week = f"{week_idx+1}"  # FRC weeks are 1-based
-                else:
-                    week = "N/A"
-            except Exception:
-                week = "N/A"
+            # --- Week (stored in DB, 0-based) ---
+            week_label = get_event_week_label_from_number(event.get("wk"))
+            week = week_label.replace("Week ", "") if week_label else "N/A"
 
             # --- District Calculation ---
             district = get_event_district(event) or ""
@@ -1437,7 +1430,7 @@ def update_events_tab_content(
     for ev in events_data:
         ev["_start_date_obj"] = parse_date(ev.get("sd", "1900-01-01"))
         ev["_end_date_obj"] = parse_date(ev.get("ed", "1900-01-01"))
-        ev["w"] = get_week_number(ev["_start_date_obj"])
+        ev["w"] = ev.get("wk")
 
     if selected_week != "all":
         events_data = [ev for ev in events_data if ev.get("w") == selected_week]
@@ -4723,17 +4716,9 @@ def export_event_cards_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, h
         state = ev.get("s", "")
         country = ev.get("co", "")
         
-        # Get week
-        week = "N/A"
-        try:
-            start_date_str = ev.get("sd", "")
-            if start_date_str:
-                start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-                week_idx = get_week_number(start_date)
-                if week_idx is not None:
-                    week = f"{week_idx+1}"
-        except Exception:
-            pass
+        # Get week (stored in DB, 0-based)
+        week_label = get_event_week_label_from_number(ev.get("wk"))
+        week = week_label.replace("Week ", "") if week_label else "N/A"
         
         # Build location string
         location = ", ".join([v for v in [state, country] if v])
@@ -5478,7 +5463,7 @@ def update_team_events(active_tab, store_data):
                             "start_date": event.get("sd", ""),
                             "end_date": event.get("ed", ""),
                             "location": ", ".join(filter(None, [event.get("c", ""), event.get("s", "")])),
-                            "week": None,  # Local data doesn't have week info
+                            "week": event.get("wk"),
                             "year": year,
                         })
             else:
@@ -5492,7 +5477,7 @@ def update_team_events(active_tab, store_data):
                             "start_date": event.get("sd", ""),
                             "end_date": event.get("ed", ""),
                             "location": ", ".join(filter(None, [event.get("c", ""), event.get("s", "")])),
-                            "week": None,  # Local data doesn't have week info
+                            "week": event.get("wk"),
                             "year": year,
                         })
         except Exception:
@@ -5502,33 +5487,11 @@ def update_team_events(active_tab, store_data):
     events.sort(key=lambda ev: ev.get("start_date", ""), reverse=True)
 
     def get_week_display(ev):
-        """Get week display string for an event."""
-        # For TBA API data, use the week field directly
-        if ev.get("week") is not None:
-            return f"Week {ev['week']}"
-        elif ev.get("week") is None and is_history:
+        """Get week display string for an event (0-based week index)."""
+        if ev.get("week") is None and is_history:
             return ""
-        
-        # For local data, calculate week from start date
-        start_date = ev.get("start_date")
-        year = ev.get("year")
-        if not start_date or not year:
-            return "N/A"
-        
-        try:
-            # Convert start_date to date object for the existing get_week_number function
-            if isinstance(start_date, str):
-                event_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-            else:
-                event_date = start_date.date() if hasattr(start_date, 'date') else start_date
-            
-            week_num = get_week_number(event_date)
-            if week_num is not None:
-                return f"Week {week_num + 1}"  # Add 1 since get_week_number returns 0-based index
-            else:
-                return ""
-        except:
-            return "N/A"
+        label = get_event_week_label_from_number(ev.get("week"))
+        return label if label is not None else "N/A"
 
     # Format for Dash table
     events_data = [
@@ -6457,18 +6420,10 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
             # If lookup fails, skip type filter
             pass
 
-    # Week filter: compute week from start_date using shared util get_week_number
+    # Week filter: use stored week (0-based)
     if selected_week != "all":
         try:
-            def compute_week(ev):
-                try:
-                    sd = ev.get("start_date")
-                    if not sd:
-                        return None
-                    return get_week_number(datetime.strptime(sd, "%Y-%m-%d").date())
-                except Exception:
-                    return None
-            events = [ev for ev in events if compute_week(ev) == selected_week]
+            events = [ev for ev in events if ev.get("week") == selected_week]
         except Exception:
             pass
 

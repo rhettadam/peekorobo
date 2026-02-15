@@ -5,7 +5,7 @@ from tenacity import retry, stop_never, wait_exponential, retry_if_exception_typ
 import requests
 import os
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, date
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 import random
@@ -66,6 +66,95 @@ EVENT_BOOSTS = {
     2: 0.9,  # Two events
     3: 1.0    # Three or more events
 }
+
+WEEK_RANGES_BY_YEAR = None
+
+def load_week_ranges():
+    global WEEK_RANGES_BY_YEAR
+    if WEEK_RANGES_BY_YEAR is not None:
+        return WEEK_RANGES_BY_YEAR
+    possible_paths = [
+        'week_ranges.json',
+        'data/week_ranges.json',
+        '../data/week_ranges.json',
+        os.path.join(os.path.dirname(__file__), 'week_ranges.json'),
+        os.path.join(os.path.dirname(__file__), '..', 'data', 'week_ranges.json')
+    ]
+    for path in possible_paths:
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                WEEK_RANGES_BY_YEAR = json.load(f)
+            break
+        except (FileNotFoundError, IOError, json.JSONDecodeError):
+            continue
+    if WEEK_RANGES_BY_YEAR is None:
+        WEEK_RANGES_BY_YEAR = {}
+        print("Warning: Could not load week_ranges.json from any of the attempted paths")
+    return WEEK_RANGES_BY_YEAR
+
+def get_event_week_number(start_date: Optional[str], end_date: Optional[str], event_key: Optional[str] = None) -> Optional[int]:
+    week_ranges_by_year = load_week_ranges()
+    if not week_ranges_by_year:
+        return None
+
+    start_dt = None
+    end_dt = None
+    year = None
+
+    if start_date:
+        try:
+            start_dt = date.fromisoformat(start_date)
+            year = str(start_dt.year)
+        except Exception:
+            start_dt = None
+    if end_date:
+        try:
+            end_dt = date.fromisoformat(end_date)
+            if year is None:
+                year = str(end_dt.year)
+        except Exception:
+            end_dt = None
+    if year is None and event_key and len(event_key) >= 4 and event_key[:4].isdigit():
+        year = event_key[:4]
+
+    if not year:
+        return None
+
+    week_ranges = week_ranges_by_year.get(year)
+    if not week_ranges:
+        return None
+
+    def week_for_date(dt: date) -> Optional[int]:
+        for i, (start, end) in enumerate(week_ranges):
+            try:
+                start_range = date.fromisoformat(start)
+                end_range = date.fromisoformat(end)
+            except Exception:
+                continue
+            if start_range <= dt <= end_range:
+                return i
+        return None
+
+    if start_dt:
+        week = week_for_date(start_dt)
+        if week is not None:
+            return week
+    if end_dt:
+        week = week_for_date(end_dt)
+        if week is not None:
+            return week
+
+    if start_dt and end_dt:
+        for i, (start, end) in enumerate(week_ranges):
+            try:
+                start_range = date.fromisoformat(start)
+                end_range = date.fromisoformat(end)
+            except Exception:
+                continue
+            if start_dt <= end_range and end_dt >= start_range:
+                return i
+
+    return None
 
 @retry(stop=stop_never, wait=wait_exponential(min=0.5, max=5), retry=retry_if_exception_type(Exception))
 def tba_get(endpoint: str):
@@ -168,9 +257,9 @@ def insert_event_data(all_data, year):
             INSERT INTO events (
                 event_key, name, start_date, end_date, event_type,
                 district_key, district_abbrev, district_name,
-                city, state_prov, country, website, webcast_type, webcast_channel
+                city, state_prov, country, website, webcast_type, webcast_channel, week
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (event_key) DO UPDATE SET
                 name = EXCLUDED.name,
                 start_date = EXCLUDED.start_date,
@@ -184,7 +273,8 @@ def insert_event_data(all_data, year):
                 country = EXCLUDED.country,
                 website = EXCLUDED.website,
                 webcast_type = EXCLUDED.webcast_type,
-                webcast_channel = EXCLUDED.webcast_channel
+                webcast_channel = EXCLUDED.webcast_channel,
+                week = EXCLUDED.week
         """, data["event"])
         # Insert teams (filter out teams with null team_number)
         if data["teams"]:
@@ -385,7 +475,7 @@ def get_existing_event_data(event_key):
     cur.execute("""
         SELECT name, start_date, end_date, event_type,
                district_key, district_abbrev, district_name,
-               city, state_prov, country, website, webcast_type, webcast_channel
+               city, state_prov, country, website, webcast_type, webcast_channel, week
         FROM events WHERE event_key = %s
     """, (event_key,))
     event_row = cur.fetchone()
@@ -499,7 +589,8 @@ def data_has_changed(existing, new_data, data_type):
             existing_event[9] != new_event[10] or  # country
             existing_event[10] != new_event[11] or  # website
             existing_event[11] != new_event[12] or # webcast_type
-            existing_event[12] != new_event[13]    # webcast_channel
+            existing_event[12] != new_event[13] or  # webcast_channel
+            existing_event[13] != new_event[14]    # week
         )
     
     elif data_type == "teams":
@@ -722,10 +813,13 @@ def create_event_db(year):
         existing_data = get_existing_event_data(key)
         
         # Fetch new data
+        event_start = event.get("start_date")
+        event_end = event.get("end_date")
+        event_week = get_event_week_number(event_start, event_end, key)
         new_data = {
             "event": (
                 key, event.get("name"),
-                event.get("start_date"), event.get("end_date"),
+                event_start, event_end,
                 event.get("event_type_string"),
                 (event.get("district") or {}).get("key"),
                 (event.get("district") or {}).get("abbreviation"),
@@ -734,7 +828,8 @@ def create_event_db(year):
                 event.get("website"),
                 # Webcast info (store first webcast if available)
                 (event.get("webcasts", [{}]) or [{}])[0].get("type"),
-                (event.get("webcasts", [{}]) or [{}])[0].get("channel")
+                (event.get("webcasts", [{}]) or [{}])[0].get("channel"),
+                event_week
             ),
             "teams": [], "rankings": [], "matches": [], "awards": []
         }
@@ -947,9 +1042,9 @@ def insert_event_data(results, year):
                 INSERT INTO events (
                     event_key, name, start_date, end_date, event_type,
                     district_key, district_abbrev, district_name,
-                    city, state_prov, country, website, webcast_type, webcast_channel
+                    city, state_prov, country, website, webcast_type, webcast_channel, week
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (event_key) DO UPDATE SET
                     name = EXCLUDED.name,
                     start_date = EXCLUDED.start_date,
@@ -963,7 +1058,8 @@ def insert_event_data(results, year):
                     country = EXCLUDED.country,
                     website = EXCLUDED.website,
                     webcast_type = EXCLUDED.webcast_type,
-                    webcast_channel = EXCLUDED.webcast_channel
+                    webcast_channel = EXCLUDED.webcast_channel,
+                    week = EXCLUDED.week
             """, data["event"])
         
         # Update teams if needed
@@ -1446,27 +1542,9 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
 def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, str]:
     # Calculate chronological weight for an event based on its timing in the season
     try:
-        # Load week ranges for the year - try multiple possible paths
-        week_ranges = None
-        possible_paths = [
-            'week_ranges.json',
-            'data/week_ranges.json',
-            '../data/week_ranges.json',
-            os.path.join(os.path.dirname(__file__), 'week_ranges.json'),
-            os.path.join(os.path.dirname(__file__), '..', 'data', 'week_ranges.json')
-        ]
-        
-        for path in possible_paths:
-            try:
-                with open(path, 'r') as f:
-                    week_ranges = json.load(f)
-                #print(f"Successfully loaded week_ranges.json from: {path}")
-                break
-            except (FileNotFoundError, IOError):
-                continue
-        
-        if week_ranges is None:
-            print(f"Warning: Could not load week_ranges.json from any of the attempted paths")
+        # Load week ranges for the year
+        week_ranges = load_week_ranges()
+        if not week_ranges:
             return 1.0, 'unknown'
         
         year_str = str(year)

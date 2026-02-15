@@ -3,7 +3,7 @@ from dash import html, dcc, dash_table
 from datagather import load_year_data,get_team_avatar,get_team_years_participated,TEAM_COLORS
 from flask import session
 from datetime import datetime, date, timedelta, timezone
-from utils import WEEK_RANGES_BY_YEAR,get_team_data_with_fallback,format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability, compute_percentiles, pill, get_event_week_label
+from utils import get_team_data_with_fallback,format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability, compute_percentiles, pill, get_event_week_label_from_number
 import json
 import os
 import re
@@ -3046,11 +3046,16 @@ def events_layout(year=current_year, active_tab="cards-tab"):
         clearable=True,
         className="custom-input-box"
     )
-    # Dynamically generate week options based on year
-    week_ranges = WEEK_RANGES_BY_YEAR.get(str(year), [])
+    # Dynamically generate week options based on stored weeks for the year
+    try:
+        from peekorobo import EVENT_DATABASE
+        year_events = EVENT_DATABASE.get(year, {})
+        weeks = sorted({ev.get("wk") for ev in year_events.values() if ev.get("wk") is not None})
+    except Exception:
+        weeks = []
     week_options = [{"label": "All Wks", "value": "all"}]
-    for i in range(len(week_ranges)):
-        week_options.append({"label": f"Wk {i+1}", "value": i})
+    for wk in weeks:
+        week_options.append({"label": f"Wk {wk + 1}", "value": wk})
     week_dropdown = dcc.Dropdown(
         id="week-dropdown",
         options=week_options,
@@ -3352,14 +3357,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         else:
             event_epa_pills = html.Div() # Ensure it's an empty div if no data, not None
 
-        # Get week label for the event
-        week_label = None
-        if start_date:
-            try:
-                event_start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-                week_label = get_event_week_label(event_start_date)
-            except ValueError:
-                pass
+        # Get week label for the event (stored week is 0-based)
+        week_label = get_event_week_label_from_number(event.get("wk"))
 
         # Handle both data structures for matches
         if has_year_keys:
@@ -3769,7 +3768,7 @@ def get_peekolive_events_categorized(include_all: bool = False):
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT event_key, name, start_date, end_date, webcast_type, webcast_channel, city, state_prov, country
+                SELECT event_key, name, start_date, end_date, webcast_type, webcast_channel, city, state_prov, country, week
                 FROM events
                 WHERE webcast_type IS NOT NULL AND webcast_channel IS NOT NULL
                 ORDER BY start_date NULLS LAST
@@ -3777,7 +3776,7 @@ def get_peekolive_events_categorized(include_all: bool = False):
             )
             rows = cur.fetchall()
             for row in rows:
-                ek, name, sd, ed, wtype, wchan, city, state, country = row
+                ek, name, sd, ed, wtype, wchan, city, state, country, week = row
                 try:
                     year = int(str(ek)[:4])
                 except Exception:
@@ -3796,7 +3795,8 @@ def get_peekolive_events_categorized(include_all: bool = False):
                     "start_date": sd,
                     "end_date": ed,
                     "year": year,
-                    "location": ", ".join([v for v in [city, state, country] if v])
+                    "location": ", ".join([v for v in [city, state, country] if v]),
+                    "week": week
                 }
                 
                 # Categorize events
@@ -5683,13 +5683,8 @@ def event_layout(event_key):
         district_key = (event.get("dk") or "").strip()
         district = district_key[-2:].upper() if len(district_key) >= 2 else ""
 
-    # Calculate week label
-    week_label = None
-    if start_date and start_date != "N/A":
-        try:
-            week_label = get_event_week_label(datetime.strptime(start_date, "%Y-%m-%d").date())
-        except Exception:
-            week_label = None
+    # Calculate week label (stored week is 0-based)
+    week_label = get_event_week_label_from_number(event.get("wk"))
 
     # Format dates for display
     start_display = format_human_date(start_date) if start_date and start_date != "N/A" else start_date
