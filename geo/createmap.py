@@ -108,7 +108,7 @@ def get_team_colors(team_number):
         "secondary": "#c0b8bb"
     }
 
-def load_team_data_optimized(locations_file="2025_geo_teams.json"):
+def load_team_data_optimized(locations_file="2026_geo_teams.json"):
     """Optimized team data loading with caching"""
     def _load_team_data():
         if not os.path.exists(locations_file):
@@ -122,7 +122,7 @@ def load_team_data_optimized(locations_file="2025_geo_teams.json"):
     
     return load_cached_data("team_data.pkl.gz", _load_team_data)
 
-def load_team_data(locations_file="2025_geo_teams.json"):
+def load_team_data(locations_file="2026_geo_teams.json"):
     """Backward compatibility wrapper"""
     return load_team_data_optimized(locations_file)
 
@@ -334,14 +334,14 @@ def generate_team_event_map(output_file="teams_map.html"):
 
     # Load events with caching
     def _load_events():
-        with open("2025_geo_events.json", "r", encoding="utf-8") as f:
+        with open("2026_geo_events.json", "r", encoding="utf-8") as f:
             return json.load(f)
     events_data = load_cached_data("events_data.pkl.gz", _load_events)
     
     # Add week number to each event
     for event in events_data:
         start_date = event.get('start_date')
-        year = str(event.get('year', '2025'))
+        year = str(event.get('year', '2026'))
         if not start_date or year not in week_ranges:
             event['week'] = None
             continue
