@@ -3023,7 +3023,7 @@ def teams_layout(default_year=current_year):
 def events_layout(year=current_year, active_tab="cards-tab"):
     year_dropdown = dcc.Dropdown(
         id="year-dropdown",
-        options=[{"label": str(yr), "value": yr} for yr in reversed(range(2000, 2027))],
+        options=[{"label": str(yr), "value": yr} for yr in reversed(range(1992, 2027))],
         value=year,
         placeholder="Year",
         clearable=False
