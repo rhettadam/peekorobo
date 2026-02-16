@@ -1906,9 +1906,31 @@ def fetch_team_components(team, year):
             print(f"Failed to fetch matches for team {team_key} at event {event_key}: {e}")
             continue
 
-    # Aggregate overall EPA from full event-specific EPAs
-    # This already sums up wins, losses, and ties from each event
-    overall_epa_data = aggregate_overall_epa(event_epa_full, year, team_number)
+    # If there are no matches for this team in the year, fall back to previous year data
+    has_matches = any(epa.get("match_count", 0) > 0 for epa in event_epa_full)
+    overall_epa_data = None
+    if not has_matches:
+        prev_year = year - 1
+        previous_epa = get_existing_team_epa(team_number, prev_year)
+        if previous_epa:
+            overall_epa_data = {
+                "overall": previous_epa.get("normal_epa", 0) or 0.0,
+                "auto": previous_epa.get("auto_epa", 0) or 0.0,
+                "teleop": previous_epa.get("teleop_epa", 0) or 0.0,
+                "endgame": previous_epa.get("endgame_epa", 0) or 0.0,
+                "confidence": previous_epa.get("confidence", 0) or 0.0,
+                "actual_epa": previous_epa.get("epa", 0) or 0.0,
+                "wins": previous_epa.get("wins", 0) or 0,
+                "losses": previous_epa.get("losses", 0) or 0,
+                "ties": previous_epa.get("ties", 0) or 0
+            }
+            event_epa_results = previous_epa.get("event_epas", []) or []
+        else:
+            overall_epa_data = aggregate_overall_epa(event_epa_full, year, team_number)
+    else:
+        # Aggregate overall EPA from full event-specific EPAs
+        # This already sums up wins, losses, and ties from each event
+        overall_epa_data = aggregate_overall_epa(event_epa_full, year, team_number)
 
     return {
         "team_number": team.get("team_number"),

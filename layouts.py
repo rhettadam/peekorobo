@@ -447,11 +447,15 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                 ]
                 district_teams = len(district_team_list)
                 if district_teams > 0:
-                    district_team_list.sort(key=lambda x: x.get("epa", 0), reverse=True)
-                    for i, team in enumerate(district_team_list):
-                        if team.get("team_number") == selected_team.get("team_number"):
-                            district_rank = i + 1
-                            break
+                    valid_epas = [team.get("epa") for team in district_team_list if team.get("epa") not in (None, 0)]
+                    if not valid_epas:
+                        district_rank = "N/A"
+                    else:
+                        district_team_list.sort(key=lambda x: x.get("epa", 0), reverse=True)
+                        for i, team in enumerate(district_team_list):
+                            if team.get("team_number") == selected_team.get("team_number"):
+                                district_rank = i + 1
+                                break
         except Exception as e:
             print(f"Error loading district data: {e}")
         
@@ -476,7 +480,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         ]
         
         # Add district rank card if district data exists
-        if district_rank and district_name and district_teams > 0:
+        if district_name and district_teams > 0:
             rank_cards.append(
                 rank_card(district_name, district_rank, district_teams, f"/teams?year={performance_year}&sort_by=epa")
             )

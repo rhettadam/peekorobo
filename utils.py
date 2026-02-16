@@ -85,9 +85,14 @@ def predict_win_probability(red_info, blue_info):
 def calculate_single_rank(team_data, selected_team):
     # Extract selected team's information
     selected_epa = selected_team.get("epa")
+    valid_epas = [team.get("epa") for team in team_data if team.get("epa") not in (None, 0)]
     
     # If selected team has no EPA data, return N/A for all ranks
     if selected_epa is None:
+        return "N/A", "N/A", "N/A"
+    
+    # If there is no meaningful EPA data for the year, return N/A for all ranks
+    if not valid_epas:
         return "N/A", "N/A", "N/A"
     
     selected_epa = selected_epa or 0  # Convert None/False to 0, but we already checked for None above
