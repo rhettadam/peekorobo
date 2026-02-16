@@ -6143,11 +6143,40 @@ def update_metrics_table(selected_metric, pathname):
     State("challenge-event-db", "data"),
 )
 def update_insights_table(selected_insight, pathname, event_teams, event_db):
+    def normalize_keys(raw_keys):
+        if raw_keys is None:
+            return []
+        if isinstance(raw_keys, list):
+            return raw_keys
+        if isinstance(raw_keys, tuple):
+            return list(raw_keys)
+        if isinstance(raw_keys, str):
+            try:
+                parsed = json.loads(raw_keys)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                pass
+            if raw_keys.startswith("{") and raw_keys.endswith("}"):
+                parts = raw_keys[1:-1].split(",")
+                return [p.strip().strip('"') for p in parts if p.strip()]
+        return [str(raw_keys)]
+
+    def normalize_value(raw_value):
+        if raw_value is None:
+            return None
+        try:
+            return float(raw_value)
+        except Exception:
+            return raw_value
+
     # Helper to get nickname from any event in event_teams
-    def find_nickname_across_events(event_teams, team_number):
-        for teams in event_teams.values():
-            for t in teams:
-                if str(t.get("tk")) == str(team_number):
+    def find_nickname_across_events(event_teams_map, team_number):
+        if not isinstance(event_teams_map, dict):
+            return ""
+        for teams in event_teams_map.values():
+            for t in teams or []:
+                if isinstance(t, dict) and str(t.get("tk")) == str(team_number):
                     return t.get("nn", "")
         return ""
     # Extract year from pathname (should be /challenge/<year>)
@@ -6155,43 +6184,51 @@ def update_insights_table(selected_insight, pathname, event_teams, event_db):
         year = int(pathname.strip("/").split("/")[-1])
     except Exception:
         return None
-    # Load insights
+    if not selected_insight:
+        return html.Div("No data for this insight.", style={"color": "#c00"})
+    # Load insights from DB
     try:
-        with open(os.path.join("data", "insights.json"), "r", encoding="utf-8") as f:
-            all_insights = json.load(f)
-        year_insights = all_insights.get(str(year), [])
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT key_type, keys, value
+                FROM insights_rankings
+                WHERE year = %s AND name = %s
+                ORDER BY value DESC NULLS LAST
+                """,
+                (year, selected_insight),
+            )
+            result_rows = cur.fetchall()
     except Exception:
         return html.Div("No insights data available.", style={"color": "#c00"})
-    # Find the selected insight
-    insight = next((i for i in year_insights if i.get("name") == selected_insight), None)
-    if not insight or not insight.get("data"):
-        return html.Div("No data for this insight.", style={"color": "#c00"})
-    data = insight["data"]
-    # Try to find a rankings list
-    rankings = data.get("rankings")
-    key_type = data.get("key_type", "")
-    if not rankings or not isinstance(rankings, list) or len(rankings) == 0:
+    if not result_rows:
         return html.Div("No rankings data available for this insight.", style={"color": "#c00"})
+    key_type = result_rows[0][0] or ""
+
     # Build table rows
+    event_teams = event_teams or {}
+    event_db = event_db or {}
     rows = []
-    for r in rankings:
-        keys = r.get("keys", [])
-        value = r.get("value", "")
+    for key_type_row, keys, value in result_rows:
+        row_key_type = key_type_row or key_type
+        keys = normalize_keys(keys)
+        value = normalize_value(value)
         if isinstance(keys, list):
             for k in keys:
-                if key_type == "team" and k.startswith("frc"):
+                if row_key_type == "team" and k.startswith("frc"):
                     num = k[3:]
                     nickname = find_nickname_across_events(event_teams, num)
                     label = f"{num} | {nickname}" if nickname else num
                     link = f"/team/{num}/{year}"
                     rows.append({"Team": f"[{label}]({link})", "Value": value})
-                elif key_type == "event":
+                elif row_key_type == "event":
                     event_key = k
                     event_name = event_db.get(event_key, "") if event_db else ""
                     label = f"{event_key} | {event_name}" if event_name else event_key
                     link = f"/event/{event_key}"
                     rows.append({"Event": f"[{label}]({link})", "Value": value})
-                elif key_type == "match":
+                elif row_key_type == "match":
                     match_key = k
                     event_key = match_key.split('_')[0] if '_' in match_key else match_key[:8]
                     match_part = match_key.split('_')[1] if '_' in match_key else match_key[8:]
@@ -6221,19 +6258,19 @@ def update_insights_table(selected_insight, pathname, event_teams, event_db):
                     rows.append({"Keys": k, "Value": value})
         else:
             k = str(keys)
-            if key_type == "team" and k.startswith("frc"):
+            if row_key_type == "team" and k.startswith("frc"):
                 num = k[3:]
                 nickname = find_nickname_across_events(event_teams, num)
                 label = f"{num} | {nickname}" if nickname else num
                 link = f"/team/{num}/{year}"
                 rows.append({"Team": f"[{label}]({link})", "Value": value})
-            elif key_type == "event":
+            elif row_key_type == "event":
                 event_key = k
                 event_name = event_db.get(event_key, "") if event_db else ""
                 label = f"{event_key} | {event_name}" if event_name else event_key
                 link = f"/event/{event_key}"
                 rows.append({"Event": f"[{label}]({link})", "Value": value})
-            elif key_type == "match":
+            elif row_key_type == "match":
                 match_key = k
                 event_key = match_key.split('_')[0] if '_' in match_key else match_key[:8]
                 match_part = match_key.split('_')[1] if '_' in match_key else match_key[8:]

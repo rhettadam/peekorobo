@@ -237,9 +237,6 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         )
     )
     
-    with open("data/notables.json", "r") as f:
-        NOTABLES_DB = json.load(f)
-    
     INCLUDED_CATEGORIES = {
         "notables_hall_of_fame": "Hall of Fame",
         "notables_world_champions": "World Champions",
@@ -249,16 +246,29 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         team_key = f"frc{team_number}"
         category_data = {}
     
-        for year, categories in NOTABLES_DB.items():
-            for category, entries in categories.items():
-                if category in INCLUDED_CATEGORIES:
-                    for entry in entries:
-                        if entry["team"] == team_key:
-                            if category not in category_data:
-                                category_data[category] = {"years": [], "video": None}
-                            category_data[category]["years"].append(int(year))
-                            if category == "notables_hall_of_fame" and "video" in entry:
-                                category_data[category]["video"] = entry["video"]
+        try:
+            with DatabaseConnection() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    SELECT year, category, video
+                    FROM notables
+                    WHERE team_key = %s AND category = ANY(%s)
+                    """,
+                    (team_key, list(INCLUDED_CATEGORIES.keys())),
+                )
+                rows = cur.fetchall()
+        except Exception:
+            rows = []
+
+        for year, category, video in rows:
+            if category not in INCLUDED_CATEGORIES:
+                continue
+            if category not in category_data:
+                category_data[category] = {"years": [], "video": None}
+            category_data[category]["years"].append(int(year))
+            if category == "notables_hall_of_fame" and video:
+                category_data[category]["video"] = video
         return category_data
     
     def generate_notable_badges(team_number):
@@ -1991,11 +2001,21 @@ def insights_details_layout(year):
     ], className="mb-4", style={"background": "var(--card-bg)", "borderRadius": "12px", "padding": "2rem 1rem"})
 
     # --- Insights Section ---
-    # Load insights for the year
+    # Load insights for the year from DB
     try:
-        with open('data/insights.json', 'r', encoding='utf-8') as f:
-            all_insights = json.load(f)
-        year_insights = all_insights.get(str(year), [])
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT name, key_type
+                FROM insights_rankings
+                WHERE year = %s
+                GROUP BY name, key_type
+                ORDER BY name
+                """,
+                (year,),
+            )
+            year_insights = [{"name": row[0], "key_type": row[1]} for row in cur.fetchall()]
     except Exception:
         year_insights = []
 
@@ -2013,23 +2033,30 @@ def insights_details_layout(year):
     # Default to first option if available
     default_insight = insight_options[0]["value"] if insight_options else None
 
-    insights_section = html.Div([
-        html.Hr(),
-        html.H4("Yearly Insights", className="mb-3 mt-4 text-center"),
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("Select Insight Type:"),
-                dcc.Dropdown(
-                    id="insights-dropdown",
-                    options=insight_options,
-                    value=default_insight,
-                    clearable=False,
-                    style={"marginBottom": "1.5rem"}
-                ),
-            ], md=6, xs=12, style={"margin": "0 auto"}),
-        ], className="justify-content-center"),
-        html.Div(id="insights-table-container", style={"marginTop": "1.5rem"}),
-    ]) if insight_options else None
+    if insight_options:
+        insights_section = html.Div([
+            html.Hr(),
+            html.H4("Yearly Insights", className="mb-3 mt-4 text-center"),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label("Select Insight Type:"),
+                    dcc.Dropdown(
+                        id="insights-dropdown",
+                        options=insight_options,
+                        value=default_insight,
+                        clearable=False,
+                        style={"marginBottom": "1.5rem"}
+                    ),
+                ], md=6, xs=12, style={"margin": "0 auto"}),
+            ], className="justify-content-center"),
+            html.Div(id="insights-table-container", style={"marginTop": "1.5rem"}),
+        ])
+    else:
+        insights_section = dbc.Alert(
+            "No insights found for this year. Run data/import_notables_insights.py to load insights into the database.",
+            color="warning",
+            className="mt-4"
+        )
 
     return html.Div(
         [
