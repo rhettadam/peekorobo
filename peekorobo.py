@@ -197,7 +197,8 @@ def update_last_updated_text(n_clicks, n_intervals):
 @app.callback(
     [Output("nav-teams", "className"),
      Output("nav-map", "className"),
-     Output("nav-events", "className")],
+     Output("nav-events", "className"),
+     Output("nav-insights", "className")],
     [Input("url", "pathname")]
 )
 def update_nav_active_state(pathname):
@@ -209,8 +210,9 @@ def update_nav_active_state(pathname):
     teams_active = active_class if pathname and pathname.startswith("/teams") else default_class
     map_active = active_class if pathname and pathname.startswith("/map") else default_class
     events_active = active_class if pathname and pathname.startswith("/events") else default_class
+    insights_active = active_class if pathname and pathname.startswith("/insights") else default_class
     
-    return teams_active, map_active, events_active
+    return teams_active, map_active, events_active, insights_active
 
 @app.callback(
     Output("register-popup", "is_open"),
