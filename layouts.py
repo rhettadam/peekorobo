@@ -2090,7 +2090,7 @@ def insights_details_layout(year):
         ])
     else:
         insights_section = dbc.Alert(
-            "No insights found for this year. Run data/import_notables_insights.py to load insights into the database.",
+            "No insights found for this year.",
             color="warning",
             className="mt-4"
         )
