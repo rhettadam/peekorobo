@@ -19,12 +19,13 @@ import requests
 from urllib.parse import parse_qs, urlencode, quote, unquote
 import json
 import pandas as pd
+from functools import lru_cache
 
 import plotly.graph_objects as go
 
 from datagather import load_data_current_year,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,build_recent_events_section
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,duel_layout,build_recent_events_section
 
 from utils import format_human_date,predict_win_probability,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_event_week_label_from_number,event_card,truncate_name,get_team_data_with_fallback
 
@@ -355,6 +356,9 @@ def display_page(pathname):
     if pathname == "/higher-lower":
         return higher_lower_layout()
 
+    if pathname == "/duel":
+        return duel_layout()
+
     return home_layout
 
 @app.callback(
@@ -374,6 +378,8 @@ def update_tab_title(pathname):
         return 'Events - Peekorobo'
     elif pathname.startswith('/map'):
         return 'Map - Peekorobo'
+    elif pathname.startswith('/duel'):
+        return 'Duel - Peekorobo'
     else:
         return 'Peekorobo'
 
@@ -7398,6 +7404,416 @@ def reset_game(play_again_clicks, teams_data, current_state):
         "left_ace": left_team["ace"],
         "right_ace": right_team["ace"]
     }, no_update
+
+# Duel page helpers and callbacks
+def _parse_duel_team_input(value):
+    if value is None:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+    if value.lower().startswith("frc"):
+        value = value[3:]
+    digits = re.sub(r"[^\d]", "", value)
+    if not digits:
+        return None
+    return int(digits)
+
+def _parse_duel_team_list(value):
+    if not value:
+        return []
+    teams = []
+    for raw in str(value).split(","):
+        cleaned = raw.strip()
+        if not cleaned:
+            continue
+        if cleaned.lower().startswith("frc"):
+            cleaned = cleaned[3:]
+        digits = re.sub(r"[^\d]", "", cleaned)
+        if digits:
+            teams.append(int(digits))
+    return teams
+
+def _parse_duel_years(value):
+    if not value or not str(value).strip():
+        return list(range(1992, current_year + 1))
+    cleaned = str(value).replace(" ", "")
+    years = set()
+    for part in cleaned.split(","):
+        if not part:
+            continue
+        if "-" in part:
+            try:
+                start_str, end_str = part.split("-", 1)
+                start = int(start_str)
+                end = int(end_str)
+            except ValueError:
+                continue
+            if start > end:
+                start, end = end, start
+            for year in range(start, end + 1):
+                years.add(year)
+        else:
+            try:
+                years.add(int(part))
+            except ValueError:
+                continue
+    filtered_years = [y for y in years if 1992 <= y <= current_year]
+    return sorted(filtered_years) if filtered_years else list(range(1992, current_year + 1))
+
+@lru_cache(maxsize=64)
+def _load_duel_year_data(year):
+    if year == current_year:
+        return EVENT_DATABASE.get(year, {}), EVENT_MATCHES.get(year, [])
+    _, event_data, _, _, _, matches = load_year_data(year)
+    return event_data, matches
+
+def _format_duel_match_label(match):
+    comp_level = match.get("cl", "")
+    match_number = match.get("mn", 0)
+    set_number = match.get("sn", 0)
+    if comp_level in {"qf", "sf", "f", "ef"} and set_number:
+        return f"{comp_level.upper()}{set_number}M{match_number}"
+    if comp_level == "qm":
+        return f"Q{match_number}"
+    return f"{comp_level.upper()}{match_number}"
+
+def _format_duel_match_code(event_key, match):
+    comp_level = match.get("cl", "")
+    match_number = match.get("mn", 0)
+    set_number = match.get("sn", 0)
+    if comp_level in {"qf", "sf", "f", "ef"} and set_number:
+        match_part = f"{comp_level}{set_number}m{match_number}"
+    else:
+        match_part = f"{comp_level}{match_number}"
+    return f"{event_key}_{match_part}"
+
+@lru_cache(maxsize=512)
+def _get_team_years_cached(team_number):
+    try:
+        return tuple(get_team_years_participated(team_number))
+    except Exception:
+        return tuple()
+
+def _build_duel_team_spans(teams, team1, team2, base_class, year):
+    spans = []
+    for index, team in enumerate(teams):
+        classes = [base_class]
+        if team == team1:
+            classes.extend(["duel-team-highlight", "duel-team-1"])
+        if team == team2:
+            classes.extend(["duel-team-highlight", "duel-team-2"])
+        spans.append(
+            dcc.Link(
+                str(team),
+                href=f"/team/{team}/{year}",
+                className=" ".join(classes)
+            )
+        )
+        if index < len(teams) - 1:
+            spans.append(html.Span(" ", className="duel-team-space"))
+    return spans
+
+def _build_duel_team_info(team_number):
+    if not team_number:
+        return html.Div("Enter a team number", className="duel-team-info-placeholder")
+
+    nickname = None
+    team_data = SEARCH_TEAM_DATA.get(current_year, {}).get(team_number)
+    if team_data:
+        nickname = team_data.get("nickname")
+    label = f"Team {team_number}"
+    if nickname:
+        label = f"{label} • {nickname}"
+
+    return html.Div([
+        html.Img(src=get_team_avatar(team_number), className="duel-team-info-avatar"),
+        html.Div(label, className="duel-team-info-name")
+    ], className="duel-team-info-content")
+
+@app.callback(
+    [
+        Output("duel-team-1-info", "children"),
+        Output("duel-team-2-info", "children"),
+    ],
+    [
+        Input("duel-team-1-input", "value"),
+        Input("duel-team-2-input", "value"),
+    ],
+    prevent_initial_call=False
+)
+def update_duel_team_info(team1_input, team2_input):
+    team1 = _parse_duel_team_input(team1_input)
+    team2 = _parse_duel_team_input(team2_input)
+    return _build_duel_team_info(team1), _build_duel_team_info(team2)
+
+@app.callback(
+    [
+        Output("duel-team-1-input", "value"),
+        Output("duel-team-2-input", "value"),
+    ],
+    Input("duel-swap-btn", "n_clicks"),
+    [
+        State("duel-team-1-input", "value"),
+        State("duel-team-2-input", "value"),
+    ],
+    prevent_initial_call=True
+)
+def swap_duel_teams(n_clicks, team1_value, team2_value):
+    if not n_clicks:
+        return no_update, no_update
+    return team2_value, team1_value
+
+@app.callback(
+    [
+        Output("duel-matches-together-value", "children"),
+        Output("duel-winrate-together-value", "children"),
+        Output("duel-winrate-together-value", "className"),
+        Output("duel-winrate-together-wlt", "children"),
+        Output("duel-winrate-together-points", "children"),
+        Output("duel-matches-against-value", "children"),
+        Output("duel-winrate-vs-label", "children"),
+        Output("duel-winrate-vs-value", "children"),
+        Output("duel-winrate-vs-value", "className"),
+        Output("duel-winrate-vs-wlt", "children"),
+        Output("duel-winrate-vs-points", "children"),
+        Output("duel-winrate-vs-subtext", "children"),
+        Output("duel-match-list", "children"),
+        Output("duel-status-text", "children"),
+    ],
+    [
+        Input("duel-search-btn", "n_clicks"),
+        Input("duel-swap-btn", "n_clicks"),
+        Input("duel-filter-options", "value"),
+    ],
+    [
+        State("duel-team-1-input", "value"),
+        State("duel-team-2-input", "value"),
+        State("duel-year-filter", "value"),
+    ],
+    prevent_initial_call=True
+)
+def update_duel_results(n_clicks, swap_clicks, filter_options, team1_input, team2_input, year_filter):
+    if not (team1_input or team2_input):
+        return "0", "0%", "duel-stat-value", "0-0-0", "0.0", "0", "Win Rate vs", "0%", "duel-stat-value", "0-0-0", "0.0", "", html.Div(), ""
+
+    team1 = _parse_duel_team_input(team1_input)
+    team2 = _parse_duel_team_input(team2_input)
+
+    if not team1 or not team2 or team1 == team2:
+        status = "Enter two different team numbers to start a duel."
+        return "0", "0%", "duel-stat-value", "0-0-0", "0.0", "0", "Win Rate vs", "0%", "duel-stat-value", "0-0-0", "0.0", "", html.Div(), status
+
+    years = _parse_duel_years(year_filter)
+    filter_options = filter_options or []
+    exclude_quals = "exclude_quals" in filter_options
+    exclude_elims = "exclude_elims" in filter_options
+
+    team1_years = set(_get_team_years_cached(team1))
+    team2_years = set(_get_team_years_cached(team2))
+    if team1_years and team2_years:
+        years = sorted(set(years).intersection(team1_years, team2_years))
+    if not years:
+        status = "No overlapping years found for those teams."
+        return "0", "0%", "duel-stat-value", "0-0-0", "0.0", "0", f"{team1} Win Rate vs {team2}", "0%", "duel-stat-value", "0-0-0", "0.0", "", html.Div(), status
+
+    matches_together = []
+    matches_against = []
+    years_with_duel = set()
+
+    for year in years:
+        try:
+            event_data, matches = _load_duel_year_data(year)
+        except Exception:
+            continue
+
+        for match in matches:
+            red_teams = _parse_duel_team_list(match.get("rt", ""))
+            blue_teams = _parse_duel_team_list(match.get("bt", ""))
+            if not red_teams or not blue_teams:
+                continue
+
+            comp_level = match.get("cl", "")
+            if exclude_quals and comp_level == "qm":
+                continue
+            if exclude_elims and comp_level in {"ef", "qf", "sf", "f"}:
+                continue
+
+            team1_on_red = team1 in red_teams
+            team1_on_blue = team1 in blue_teams
+            team2_on_red = team2 in red_teams
+            team2_on_blue = team2 in blue_teams
+
+            if not ((team1_on_red or team1_on_blue) and (team2_on_red or team2_on_blue)):
+                continue
+
+            if (team1_on_red and team2_on_red) or (team1_on_blue and team2_on_blue):
+                matches_together.append((year, match, red_teams, blue_teams))
+                years_with_duel.add(year)
+            else:
+                matches_against.append((year, match, red_teams, blue_teams))
+                years_with_duel.add(year)
+
+    def _format_percent(numerator, denominator):
+        if denominator <= 0:
+            return "0%"
+        return f"{round((numerator / denominator) * 100)}%"
+
+    def _winrate_class(value, total):
+        if total <= 0:
+            return "duel-stat-value"
+        percent = (value / total) * 100
+        if percent >= 70:
+            return "duel-stat-value duel-winrate-high"
+        if percent >= 45:
+            return "duel-stat-value duel-winrate-mid"
+        return "duel-stat-value duel-winrate-low"
+
+    together_wins = 0
+    together_ties = 0
+    for year, match, red_teams, blue_teams in matches_together:
+        winning_alliance = match.get("wa", "")
+        if not winning_alliance:
+            together_ties += 1
+            continue
+        if winning_alliance == "red" and team1 in red_teams:
+            together_wins += 1
+        elif winning_alliance == "blue" and team1 in blue_teams:
+            together_wins += 1
+
+    together_total = len(matches_together)
+    together_losses = together_total - together_wins - together_ties
+    together_points = together_wins + 0.5 * together_ties
+    together_rate = _format_percent(together_points, together_total)
+    together_class = _winrate_class(together_points, together_total)
+    together_wlt = f"{together_wins}-{together_losses}-{together_ties}"
+    together_points_text = f"{together_points:.1f}"
+
+    against_wins = 0
+    against_losses = 0
+    against_ties = 0
+    for year, match, red_teams, blue_teams in matches_against:
+        winning_alliance = match.get("wa", "")
+        if not winning_alliance:
+            against_ties += 1
+            continue
+        if winning_alliance == "red":
+            if team1 in red_teams:
+                against_wins += 1
+            else:
+                against_losses += 1
+        elif winning_alliance == "blue":
+            if team1 in blue_teams:
+                against_wins += 1
+            else:
+                against_losses += 1
+
+    against_total = len(matches_against)
+    against_points = against_wins + 0.5 * against_ties
+    against_rate = _format_percent(against_points, against_total)
+    against_class = _winrate_class(against_points, against_total)
+    against_wlt = f"{against_wins}-{against_losses}-{against_ties}"
+    against_points_text = f"{against_points:.1f}"
+    opponent_points = against_losses + 0.5 * against_ties
+    opponent_rate = _format_percent(opponent_points, against_total)
+
+    match_rows = []
+    combined_matches = matches_together + matches_against
+    combined_matches.sort(key=lambda item: (item[0], item[1].get("k", "")), reverse=True)
+
+    for year, match, red_teams, blue_teams in combined_matches:
+        event_key = match.get("ek", "event")
+        match_code = _format_duel_match_code(event_key, match)
+        match_label = _format_duel_match_label(match)
+        red_score = match.get("rs", 0)
+        blue_score = match.get("bs", 0)
+
+        team1_on_red = team1 in red_teams
+        team1_on_blue = team1 in blue_teams
+        team2_on_red = team2 in red_teams
+        team2_on_blue = team2 in blue_teams
+        together_match = (team1_on_red and team2_on_red) or (team1_on_blue and team2_on_blue)
+
+        winning_alliance = match.get("wa", "")
+        outcome_text = "Tie"
+        outcome_class = "duel-outcome-tie"
+
+        if together_match:
+            if winning_alliance == "red" and team1_on_red:
+                outcome_text = "Win"
+                outcome_class = "duel-outcome-win"
+            elif winning_alliance == "blue" and team1_on_blue:
+                outcome_text = "Win"
+                outcome_class = "duel-outcome-win"
+            elif winning_alliance:
+                outcome_text = "Loss"
+                outcome_class = "duel-outcome-lose"
+        else:
+            if winning_alliance == "red":
+                if team1_on_red:
+                    outcome_text = str(team1)
+                    outcome_class = "duel-outcome-win"
+                else:
+                    outcome_text = str(team2)
+                    outcome_class = "duel-outcome-lose"
+            elif winning_alliance == "blue":
+                if team1_on_blue:
+                    outcome_text = str(team1)
+                    outcome_class = "duel-outcome-win"
+                else:
+                    outcome_text = str(team2)
+                    outcome_class = "duel-outcome-lose"
+
+        match_rows.append(
+            html.Div([
+                html.Div(str(year), className="duel-table-cell duel-year-col"),
+                html.Div(
+                    dcc.Link(
+                        match_code,
+                        href=f"/match/{event_key}/{match_label}",
+                        className="duel-match-link"
+                    ),
+                    className="duel-table-cell duel-code-col"
+                ),
+                html.Div([
+                    html.Div([
+                        html.Span("Red: ", className="duel-alliance-label duel-red"),
+                        *_build_duel_team_spans(red_teams, team1, team2, "duel-team-number duel-red", year)
+                    ], className="duel-match-alliance"),
+                    html.Div([
+                        html.Span("Blue: ", className="duel-alliance-label duel-blue"),
+                        *_build_duel_team_spans(blue_teams, team1, team2, "duel-team-number duel-blue", year)
+                    ], className="duel-match-alliance"),
+                    html.Div(f"{red_score} - {blue_score} | {match_label}", className="duel-match-score")
+                ], className="duel-table-cell duel-match-col"),
+                html.Div(
+                    html.Span(outcome_text, className=f"duel-outcome-pill {outcome_class}"),
+                    className="duel-table-cell duel-outcome-col"
+                )
+            ], className="duel-table-row")
+        )
+
+    if not match_rows:
+        match_rows = html.Div("No matches found for the current filters.", className="duel-empty")
+
+    status_text = f"Showing {together_total + against_total} matches across {len(years_with_duel)} year(s)."
+
+    return (
+        str(together_total),
+        together_rate,
+        together_class,
+        together_wlt,
+        together_points_text,
+        str(against_total),
+        f"{team1} Win Rate vs {team2}",
+        against_rate,
+        against_class,
+        against_wlt,
+        against_points_text,
+        f"{team2} Win Rate vs {team1}: {opponent_rate}" if against_total else "",
+        match_rows,
+        status_text
+    )
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  

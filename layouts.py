@@ -1337,6 +1337,7 @@ def topbar():
                                         children=[
                                             dbc.DropdownMenuItem("Blog", href="/blog"),
                                             dbc.DropdownMenuItem("Higher or Lower", href="/higher-lower"),
+                                            dbc.DropdownMenuItem("Duel", href="/duel"),
                                             dbc.DropdownMenuItem("Account", href="/login", id="account-link"),
                                             dbc.DropdownMenuItem(divider=True),
                                             dbc.DropdownMenu(
@@ -7474,3 +7475,118 @@ def higher_lower_layout():
             ], style={"maxWidth": "1200px", "margin": "0 auto", "padding": "20px"})
         ], style={"minHeight": "100vh", "backgroundColor": "var(--bg-primary)"})
     ])
+
+def duel_layout():
+    return html.Div([
+        topbar(),
+        dbc.Container(
+            fluid=True,
+            children=[
+                html.Div([
+                    html.Div([
+                        html.H2("Duel", className="duel-title"),
+                        html.P(
+                            "Compare two teams across seasons by head-to-head win rate.",
+                            className="duel-subtitle"
+                        )
+                    ], className="duel-header"),
+                    html.Div([
+                        html.Div(id="duel-team-1-info", className="duel-team-info"),
+                        html.Div(id="duel-team-2-info", className="duel-team-info"),
+                    ], className="duel-team-info-row"),
+                    html.Div([
+                        dbc.Input(
+                            id="duel-team-1-input",
+                            placeholder="Team 1 (e.g., 694)",
+                            type="text",
+                            className="duel-team-input duel-team-input-red"
+                        ),
+                        dbc.Button(
+                            html.I(className="fas fa-exchange-alt"),
+                            id="duel-swap-btn",
+                            color="secondary",
+                            className="duel-swap-btn"
+                        ),
+                        dbc.Input(
+                            id="duel-team-2-input",
+                            placeholder="Team 2 (e.g., 3173)",
+                            type="text",
+                            className="duel-team-input duel-team-input-blue"
+                        ),
+                        dbc.Button(
+                            "Search",
+                            id="duel-search-btn",
+                            color="info",
+                            className="duel-search-btn"
+                        )
+                    ], className="duel-inputs"),
+                    html.Div([
+                        dbc.Checklist(
+                            id="duel-filter-options",
+                            options=[
+                                {"label": "Exclude Quals", "value": "exclude_quals"},
+                                {"label": "Exclude Elims", "value": "exclude_elims"},
+                            ],
+                            value=[],
+                            inline=True,
+                            className="duel-filter-checks"
+                        ),
+                        dbc.Input(
+                            id="duel-year-filter",
+                            placeholder="Years (e.g., 2019-2026 or 2022,2024)",
+                            type="text",
+                            className="duel-year-input"
+                        )
+                    ], className="duel-filters"),
+                    html.Div(id="duel-status-text", className="duel-status"),
+                    html.Div([
+                        html.Div([
+                            html.Div("Matches Together", className="duel-stat-label"),
+                            html.Div("0", id="duel-matches-together-value", className="duel-stat-value")
+                        ], className="duel-stat-card"),
+                        html.Div([
+                            html.Div("Win Rate Together", className="duel-stat-label"),
+                            html.Div("0%", id="duel-winrate-together-value", className="duel-stat-value"),
+                            html.Div([
+                                html.Span("W-L-T: ", className="duel-stat-meta-label"),
+                                html.Span("0-0-0", id="duel-winrate-together-wlt", className="duel-stat-meta-value"),
+                                html.Span(" • ", className="duel-stat-meta-sep"),
+                                html.Span("Pts: ", className="duel-stat-meta-label"),
+                                html.Span("0.0", id="duel-winrate-together-points", className="duel-stat-meta-value"),
+                            ], className="duel-stat-meta")
+                        ], className="duel-stat-card"),
+                        html.Div([
+                            html.Div("Matches Against", className="duel-stat-label"),
+                            html.Div("0", id="duel-matches-against-value", className="duel-stat-value")
+                        ], className="duel-stat-card"),
+                        html.Div([
+                            html.Div("Win Rate vs", id="duel-winrate-vs-label", className="duel-stat-label"),
+                            html.Div("0%", id="duel-winrate-vs-value", className="duel-stat-value"),
+                            html.Div([
+                                html.Span("W-L-T: ", className="duel-stat-meta-label"),
+                                html.Span("0-0-0", id="duel-winrate-vs-wlt", className="duel-stat-meta-value"),
+                                html.Span(" • ", className="duel-stat-meta-sep"),
+                                html.Span("Pts: ", className="duel-stat-meta-label"),
+                                html.Span("0.0", id="duel-winrate-vs-points", className="duel-stat-meta-value"),
+                            ], className="duel-stat-meta"),
+                            html.Div(id="duel-winrate-vs-subtext", className="duel-stat-subtext")
+                        ], className="duel-stat-card")
+                    ], className="duel-stats"),
+                    html.Div([
+                        html.Div([
+                            html.Div("Year", className="duel-table-header-cell duel-year-col"),
+                            html.Div("Code", className="duel-table-header-cell duel-code-col"),
+                            html.Div("Match", className="duel-table-header-cell duel-match-col"),
+                            html.Div("Outcome", className="duel-table-header-cell duel-outcome-col")
+                        ], className="duel-table-header"),
+                        html.Div(
+                            id="duel-match-list",
+                            className="duel-match-list"
+                        )
+                    ], className="duel-table")
+                ], className="duel-page")
+            ],
+            style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"}
+        ),
+        footer
+    ], style={"minHeight": "100vh", "display": "flex", "flexDirection": "column"})
