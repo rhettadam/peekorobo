@@ -1920,9 +1920,9 @@ def fetch_team_components(team, year):
                 "endgame": previous_epa.get("endgame_epa", 0) or 0.0,
                 "confidence": previous_epa.get("confidence", 0) or 0.0,
                 "actual_epa": previous_epa.get("epa", 0) or 0.0,
-                "wins": previous_epa.get("wins", 0) or 0,
-                "losses": previous_epa.get("losses", 0) or 0,
-                "ties": previous_epa.get("ties", 0) or 0
+                "wins": 0,
+                "losses": 0,
+                "ties": 0
             }
             event_epa_results = previous_epa.get("event_epas", []) or []
         else:
