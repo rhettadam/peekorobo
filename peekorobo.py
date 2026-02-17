@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 
 from datagather import load_data_current_year,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,build_recent_events_section
 
 from utils import format_human_date,predict_win_probability,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_event_week_label_from_number,event_card,truncate_name,get_team_data_with_fallback
 
@@ -5400,6 +5400,71 @@ def update_team_insights(active_tab, store_data):
         html.Div(trends_chart, className="trends-chart-container"),
         html.Hr(style={"margin": "30px 0"}),
     ])
+
+@app.callback(
+    Output("recent-events-section", "children"),
+    Input("recent-events-table-style-toggle", "value"),
+    State("team-insights-store", "data"),
+    suppress_callback_exceptions=True,
+)
+def update_recent_events_section(table_style, store_data):
+    if not store_data:
+        return dash.no_update
+    team_number = store_data.get("team_number")
+    performance_year = store_data.get("performance_year") or current_year
+    if not team_number:
+        return dash.no_update
+    try:
+        performance_year = int(performance_year)
+    except (TypeError, ValueError):
+        performance_year = current_year
+
+    if performance_year == current_year:
+        year_team_data = TEAM_DATABASE.get(performance_year, {})
+        event_database = EVENT_DATABASE
+        event_teams = EVENT_TEAMS
+        event_matches = EVENT_MATCHES
+        event_awards = EVENT_AWARDS
+        event_rankings = EVENT_RANKINGS
+    else:
+        (
+            year_team_data,
+            year_event_data,
+            year_event_teams,
+            year_event_rankings,
+            year_event_awards,
+            year_event_matches,
+        ) = load_year_data(performance_year)
+        event_database = {performance_year: year_event_data}
+        event_teams = year_event_teams
+        event_matches = year_event_matches
+        event_awards = year_event_awards
+        event_rankings = year_event_rankings
+
+    epa_data = {
+        str(team_num): {
+            "epa": data.get("epa", 0),
+            "auto_epa": data.get("auto_epa", 0),
+            "teleop_epa": data.get("teleop_epa", 0),
+            "endgame_epa": data.get("endgame_epa", 0),
+            "event_epas": json.loads(data["event_epas"]) if isinstance(data.get("event_epas"), str) else data.get("event_epas", []),
+        }
+        for team_num, data in year_team_data.items()
+    }
+
+    return build_recent_events_section(
+        f"frc{team_number}",
+        int(team_number),
+        epa_data,
+        performance_year,
+        event_database,
+        event_teams,
+        event_matches,
+        event_awards,
+        event_rankings,
+        table_style=table_style or "team",
+        include_header=False,
+    )
 
 @app.callback(
     Output("team-events-content", "children"),
