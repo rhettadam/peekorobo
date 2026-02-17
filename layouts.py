@@ -7497,7 +7497,7 @@ def duel_layout():
                     html.Div([
                         dbc.Input(
                             id="duel-team-1-input",
-                            placeholder="Team 1 (e.g., 694)",
+                            placeholder="Team 1 (e.g., 1912)",
                             type="text",
                             className="duel-team-input duel-team-input-red"
                         ),
@@ -7509,7 +7509,7 @@ def duel_layout():
                         ),
                         dbc.Input(
                             id="duel-team-2-input",
-                            placeholder="Team 2 (e.g., 3173)",
+                            placeholder="Team 2 (e.g., 7525)",
                             type="text",
                             className="duel-team-input duel-team-input-blue"
                         ),
