@@ -1169,8 +1169,8 @@ label {
 }
 
 .duel-table-header {
-    background-color: var(--navbar-bg);
-    color: var(--navbar-text);
+    background-color: var(--card-bg);
+    color: var(--text-primary);
     font-weight: 600;
     font-size: 0.85rem;
 }
@@ -1236,12 +1236,13 @@ label {
 }
 
 .duel-match-link {
-    color: var(--navbar-text);
+    color: var(--text-primary);
     text-decoration: none;
     font-weight: 600;
 }
 
 .duel-match-link:hover {
+    color: var(--navbar-hover);
     text-decoration: underline;
 }
 
