@@ -207,6 +207,20 @@ h1, h2, h3, h4, h5, h6, p, span, div {
     color: var(--input-text);
 }
 
+input[type="password"].form-control,
+.custom-input-box input[type="password"] {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--input-text) !important;
+}
+
+#edit-password,
+#profile-edit-form input[type="password"] {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--input-text) !important;
+}
+
 .form-control:focus {
     background-color: var(--input-bg);
     border-color: var(--input-border);
@@ -905,6 +919,17 @@ label {
 #desktop-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a span,
 #mobile-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a span {
     color: var(--text-primary) !important; /* Span text should inherit theme text color */
+}
+
+/* Keep footer pinned to bottom on short pages */
+#page-content > * {
+    min-height: 100vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.site-footer {
+    margin-top: auto;
 }
 
 .compare-team-link:hover {

@@ -1552,6 +1552,7 @@ footer = dbc.Container(
         ], style={"padding": "0"})  # Ensure no padding in columns
     ], style={"margin": "0"}),  # Ensure no margin in rows
     fluid=True,
+    className="site-footer",
     style={
         "backgroundColor": "var(--card-bg)",
         "padding": "10px 0px",
@@ -5256,19 +5257,19 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
             id="profile-edit-form",
             hidden=True,
             children=[
-                html.Label("Username", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
-                dbc.Input(id="edit-username", value=username_display, placeholder="Username", className="mb-2", size="sm"),
-                html.Label("Email (optional)", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
-                dbc.Input(id="edit-email", value=email, placeholder="Email (optional)", className="mb-2", size="sm"),
-                html.Label("New Password (leave blank to keep current)", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
-                dbc.Input(id="edit-password", type="password", placeholder="New Password (leave blank to keep current)", className="mb-2", size="sm", value=""),
-                html.Label("Role", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
-                dbc.Input(id="edit-role", value=role, placeholder="Role", className="mb-2", size="sm"),
-                html.Label("Team", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
-                dbc.Input(id="edit-team", value=team_affil, placeholder="Team", className="mb-2", size="sm"),
-                html.Label("Bio", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
-                dbc.Textarea(id="edit-bio", value=bio, placeholder="Bio", className="mb-2", style={"height": "60px", "fontSize": "0.85rem"}),
-                html.Label("Select Avatar", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
+                html.Label("Username", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "var(--text-primary)"}),
+                dbc.Input(id="edit-username", value=username_display, placeholder="Username", className="mb-2 custom-input-box", size="sm"),
+                html.Label("Email (optional)", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "var(--text-primary)"}),
+                dbc.Input(id="edit-email", value=email, placeholder="Email (optional)", className="mb-2 custom-input-box", size="sm"),
+                html.Label("New Password (leave blank to keep current)", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "var(--text-primary)"}),
+                dbc.Input(id="edit-password", type="text", placeholder="New Password (leave blank to keep current)", className="mb-2 custom-input-box", size="sm", value="", style={"backgroundColor": "var(--input-bg)", "color": "var(--input-text)", "borderColor": "var(--input-border)"}),
+                html.Label("Role", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "var(--text-primary)"}),
+                dbc.Input(id="edit-role", value=role, placeholder="Role", className="mb-2 custom-input-box", size="sm"),
+                html.Label("Team", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "var(--text-primary)"}),
+                dbc.Input(id="edit-team", value=team_affil, placeholder="Team", className="mb-2 custom-input-box", size="sm"),
+                html.Label("Bio", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "var(--text-primary)"}),
+                dbc.Textarea(id="edit-bio", value=bio, placeholder="Bio", className="mb-2 custom-input-box", style={"height": "60px", "fontSize": "0.85rem"}),
+                html.Label("Select Avatar", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "var(--text-primary)"}),
                 dcc.Dropdown(
                     id="edit-avatar-key",
                     options=[
@@ -5279,9 +5280,10 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     ],
                     value=avatar_key,
                     clearable=False,
+                    className="custom-input-box",
                     style={"width": "200px", "fontSize": "0.75rem"}
                 ),
-                html.Label("Change Card Background Color", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "#fff"}),
+                html.Label("Change Card Background Color", style={"fontSize": "0.75rem", "fontWeight": "600", "marginTop": "6px", "color": "var(--text-primary)"}),
                 html.Div([
                     dmc.ColorPicker(
                         id="edit-bg-color",
@@ -5291,18 +5293,18 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     ),
                     dmc.Space(h=10),
                     html.Div([
-                        html.Span("Current: ", style={"fontSize": "0.7rem", "color": "#ccc"}),
+                        html.Span("Current: ", style={"fontSize": "0.7rem", "color": "var(--text-secondary)"}),
                         html.Span(
                             color,
                             id="current-color-display",
                             style={
                                 "fontSize": "0.7rem",
-                                "color": "#fff",
+                                "color": "var(--text-primary)",
                                 "fontFamily": "monospace",
                                 "backgroundColor": color,
                                 "padding": "2px 6px",
                                 "borderRadius": "3px",
-                                "border": "1px solid #666"
+                                "border": "1px solid var(--input-border)"
                             }
                         )
                     ], style={"marginTop": "4px"})
