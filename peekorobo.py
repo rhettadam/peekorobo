@@ -4220,7 +4220,7 @@ def load_teams(
     for t in teams_data:
         team_num = t.get("team_number")
         rank = epa_ranks.get(str(team_num), {}).get("rank", "N/A")
-        record = f"{t.get('wins', 0)} - {t.get('losses', 0)} - {t.get('ties', 0)} - {t.get('dq', 0)}"
+        record = f"{t.get('wins', 0)} - {t.get('losses', 0)} - {t.get('ties', 0)}"
         nickname = t.get('nickname', 'Unknown')
         nickname_safe = nickname.replace('"', "'")
         truncated = truncate_name(nickname)
