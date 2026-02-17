@@ -7301,7 +7301,10 @@ def higher_lower_layout():
                         html.Label("Country", style={"color": "var(--text-primary)", "fontWeight": "bold", "marginBottom": "5px", "fontSize": "0.9rem"}),
                         dcc.Dropdown(
                             id="higher-lower-country-dropdown",
-                            options=[{"label": "All", "value": "All"}] + (json.load(open('data/countries.json', 'r', encoding='utf-8')) if os.path.exists('data/countries.json') else []),
+                            options=[{"label": "All", "value": "All"}] + [
+                                c for c in (json.load(open('data/countries.json', 'r', encoding='utf-8')) if os.path.exists('data/countries.json') else [])
+                                if (c.get("value") or "").lower() != "all"
+                            ],
                             value="All",
                             clearable=False,
                             placeholder="Select Country",

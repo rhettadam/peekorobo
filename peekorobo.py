@@ -6943,10 +6943,14 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
         }
         return teams_list, new_game_state, True, teams_cache
     
-    # Pick two random teams
-    selected_teams = random.sample(teams_list, min(2, len(teams_list)))
-    left_team = selected_teams[0]
-    right_team = selected_teams[1] if len(selected_teams) > 1 else selected_teams[0]
+    team_lookup = {t["team_number"]: t for t in teams_list}
+    rotation_queue = [t["team_number"] for t in teams_list]
+    random.shuffle(rotation_queue)
+
+    left_num = rotation_queue.pop(0)
+    right_num = rotation_queue.pop(0) if rotation_queue else left_num
+    left_team = team_lookup[left_num]
+    right_team = team_lookup[right_num]
     
     user_id = session.get("user_id")
     saved_highscore = 0
@@ -6971,7 +6975,9 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
         "left_team": left_team,
         "right_team": right_team,
         "left_ace": left_team["ace"],
-        "right_ace": right_team["ace"]
+        "right_ace": right_team["ace"],
+        "rotation_queue": rotation_queue,
+        "rotation_size": len(teams_list),
     }
     
     return teams_list, new_game_state, True, teams_cache
@@ -7094,19 +7100,45 @@ def pick_new_right_team(trigger_clicks, current_state, teams_data):
     # Clear the flag
     game_state.pop("needs_new_right_team", None)
     
-    # Get current right team number to exclude it
     right_team = game_state.get("right_team")
-    if not right_team:
+    left_team = game_state.get("left_team")
+    if not right_team or not left_team:
         return no_update
-    
-    # Pick a new random team - only iterate through teams_data here
-    current_right_num = right_team["team_number"]
-    available_teams = [t for t in teams_data if t["team_number"] != current_right_num]
-    
-    if available_teams:
-        new_right_team = random.choice(available_teams)
+
+    rotation_queue = game_state.get("rotation_queue") or []
+    total_teams = game_state.get("rotation_size") or len(teams_data)
+    min_rotation_size = 10
+
+    if not rotation_queue:
+        if total_teams <= min_rotation_size:
+            game_state["wrong_guesses"] = 3
+            game_state["rotation_exhausted"] = True
+            return game_state
+        rotation_queue = [t["team_number"] for t in teams_data]
+        random.shuffle(rotation_queue)
+        left_num = left_team.get("team_number")
+        if rotation_queue and left_num is not None and rotation_queue[0] == left_num:
+            rotation_queue.append(rotation_queue.pop(0))
+
+    next_num = rotation_queue.pop(0) if rotation_queue else None
+    left_num = left_team.get("team_number")
+    if next_num == left_num:
+        rotation_queue.append(next_num)
+        next_num = rotation_queue.pop(0) if rotation_queue else None
+        if next_num == left_num:
+            next_num = None
+    if next_num is None:
+        game_state["wrong_guesses"] = 3
+        game_state["rotation_exhausted"] = True
+        game_state["rotation_queue"] = rotation_queue
+        return game_state
+
+    team_lookup = {t["team_number"]: t for t in teams_data}
+    new_right_team = team_lookup.get(next_num)
+    if new_right_team:
         game_state["right_team"] = new_right_team
         game_state["right_ace"] = new_right_team["ace"]
+    game_state["rotation_queue"] = rotation_queue
     
     return game_state
 
