@@ -3968,7 +3968,6 @@ def load_teams(
         "search": "",
         "x": "teleop_epa",
         "y": "auto+endgame",
-        "z": "ace",
         "tab": "table-tab",
         "district": "All"
     }
