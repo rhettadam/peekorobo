@@ -1924,7 +1924,7 @@ def fetch_team_components(team, year):
                 "losses": 0,
                 "ties": 0
             }
-            event_epa_results = previous_epa.get("event_epas", []) or []
+            event_epa_results = []
         else:
             overall_epa_data = aggregate_overall_epa(event_epa_full, year, team_number)
     else:
