@@ -1323,11 +1323,24 @@ def endgame_2015(breakdown, index):
     return 0.0
 
 def auto_2026(breakdowns, team_count):
-    """Calculate auto score for 2026 matches - placeholder implementation."""
+    """Calculate auto score for 2026 matches."""
     def score_per_breakdown(b):
-        # Placeholder: return 0 until 2026 game details are released
-        # This will be updated when the 2026 FRC game is announced
-        return 0.0
+        hub = b.get("hubScore", {}) if isinstance(b, dict) else {}
+        auto_fuel_points = hub.get("autoPoints", hub.get("autoCount", 0))
+
+        # Auto climb: 15 points per robot, max 2 robots
+        auto_tower_points = b.get("autoTowerPoints")
+        if auto_tower_points is None:
+            auto_tower_robots = [
+                b.get("autoTowerRobot1", "None"),
+                b.get("autoTowerRobot2", "None"),
+                b.get("autoTowerRobot3", "None"),
+            ]
+            climbed = sum(1 for status in auto_tower_robots if status and status != "None")
+            auto_tower_points = min(2, climbed) * 15
+
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return (auto_fuel_points + auto_tower_points) * scaling_factor
 
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)
@@ -1357,11 +1370,12 @@ def auto_2026(breakdowns, team_count):
     return round(statistics.mean(trimmed_scores), 2)
 
 def teleop_2026(breakdowns, team_count):
-    """Calculate teleop score for 2026 matches - placeholder implementation."""
+    """Calculate teleop score for 2026 matches."""
     def score_per_breakdown(b):
-        # Placeholder: return 0 until 2026 game details are released
-        # This will be updated when the 2026 FRC game is announced
-        return 0.0
+        hub = b.get("hubScore", {}) if isinstance(b, dict) else {}
+        teleop_fuel_points = hub.get("teleopPoints", hub.get("teleopCount", 0))
+        scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
+        return teleop_fuel_points * scaling_factor
 
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)
@@ -1391,7 +1405,20 @@ def teleop_2026(breakdowns, team_count):
     return round(statistics.mean(trimmed_scores), 2)
 
 def endgame_2026(breakdown, index):
-    """Calculate endgame score for 2026 matches - placeholder implementation."""
-    # Placeholder: return 0 until 2026 game details are released
-    # This will be updated when the 2026 FRC game is announced
-    return 0.0
+    """Calculate endgame score for 2026 matches."""
+    if not isinstance(breakdown, dict):
+        return 0.0
+
+    robot_endgame = breakdown.get(f"endGameTowerRobot{index}", "None")
+    endgame_points = {
+        "L1": 10, "l1": 10, "Level1": 10, "level1": 10,
+        "L2": 20, "l2": 20, "Level2": 20, "level2": 20,
+        "L3": 30, "l3": 30, "Level3": 30, "level3": 30,
+    }.get(robot_endgame, 0)
+
+    if endgame_points == 0:
+        tower_points = breakdown.get("endGameTowerPoints")
+        if tower_points:
+            endgame_points = tower_points / 3
+
+    return endgame_points
