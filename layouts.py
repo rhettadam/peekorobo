@@ -578,22 +578,15 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                     # --- Trends Chart (moved above recent events) ---
                     build_trends_chart(team_number, year, performance_year, team_database, event_database, years_participated),
                     html.Div([
-                        html.Div([
-                            html.H3("Recent Events", style={"margin": "0", "color": "var(--text-secondary)", "fontWeight": "bold"}),
-                            html.Div([
-                                html.Label("Table Style:", style={"fontWeight": "bold", "color": "var(--text-primary)", "marginRight": "12px"}),
-                                dcc.RadioItems(
-                                    id="recent-events-table-style-toggle",
-                                    options=[
-                                        {"label": "Both Alliances", "value": "both"},
-                                        {"label": "Team Focus", "value": "team"}
-                                    ],
-                                    value="team",
-                                    inline=True,
-                                    labelStyle={"marginRight": "15px", "color": "var(--text-primary)"}
-                                )
-                            ], style={"display": "flex", "alignItems": "center"})
-                        ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginTop": "2rem", "marginBottom": "1rem"}),
+                        html.H3(
+                            "Recent Events",
+                            style={
+                                "marginTop": "2rem",
+                                "marginBottom": "1rem",
+                                "color": "var(--text-secondary)",
+                                "fontWeight": "bold"
+                            }
+                        ),
                         html.Div(
                             id="recent-events-section",
                             children=build_recent_events_section(
@@ -606,7 +599,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                                 event_matches,
                                 event_awards,
                                 event_rankings,
-                                table_style="team",
+                                table_style="both",
                                 include_header=False,
                             )
                         )
