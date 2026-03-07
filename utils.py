@@ -79,7 +79,7 @@ def predict_win_probability(red_info, blue_info):
     diff = red_eff - blue_eff
     scale = (0.06 + 0.3 * (1 - reliability))
     p_red = 1 / (1 + math.exp(-scale * diff))
-    p_red = max(0.15, min(0.90, p_red))  # clip for calibration
+    p_red = max(0.02, min(0.98, p_red))  # clip for calibration
     return p_red, 1 - p_red
 
 def calculate_single_rank(team_data, selected_team):
