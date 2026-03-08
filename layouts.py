@@ -36,7 +36,7 @@ def get_team_district_options():
     except Exception:
         return []
 
-def get_team_card_colors_with_text(team_number):
+def get_team_card_colors_with_text(team_number, muted=False):
     """Get team colors and appropriate text color for card with cleaner, more subtle styling."""
     try:
         colors = TEAM_COLORS.get(str(team_number), {})
@@ -53,18 +53,22 @@ def get_team_card_colors_with_text(team_number):
         def rgb_to_hex(rgb):
             return '#{:02x}{:02x}{:02x}'.format(*rgb)
         
-        def adjust_color_brightness(hex_color, factor):
+        def adjust_color_brightness(hex_color, factor, saturation_factor=0.7):
             rgb = hex_to_rgb(hex_color)
             h, s, v = colorsys.rgb_to_hsv(rgb[0]/255, rgb[1]/255, rgb[2]/255)
             # Increase brightness and reduce saturation for a cleaner look
             v = min(1.0, v * factor)
-            s = max(0.1, s * 0.7)  # Reduce saturation for softer look
+            s = max(0.1, s * saturation_factor)  # Reduce saturation for softer look
             new_rgb = colorsys.hsv_to_rgb(h, s, v)
             return rgb_to_hex(tuple(int(c * 255) for c in new_rgb))
         
         # Create softer versions of the team colors
-        soft_primary = adjust_color_brightness(primary, 1.3)  # Lighter version
-        soft_secondary = adjust_color_brightness(secondary, 0.8)  # Darker, more muted version
+        if muted:
+            soft_primary = adjust_color_brightness(primary, 1.1, saturation_factor=0.4)
+            soft_secondary = adjust_color_brightness(secondary, 0.7, saturation_factor=0.35)
+        else:
+            soft_primary = adjust_color_brightness(primary, 1.3)  # Lighter version
+            soft_secondary = adjust_color_brightness(secondary, 0.8)  # Darker, more muted version
         
         # Create a subtle gradient at an angle (diagonal)
         gradient = f"linear-gradient(135deg, {soft_primary} 0%, {soft_secondary} 100%)"
@@ -312,7 +316,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
     badges = generate_notable_badges(team_number)
     
     # Get team card colors with appropriate text color
-    background_gradient, text_color = get_team_card_colors_with_text(team_number)
+    background_gradient, text_color = get_team_card_colors_with_text(team_number, muted=True)
     
         # Team Info Card
     team_card = dbc.Card(
@@ -2291,7 +2295,7 @@ def ace_legend_layout():
         },
     )
 
-def create_team_card(team, year, avatar_url, epa_ranks):
+def create_team_card(team, year, avatar_url, epa_ranks, muted=False):
     team_number = str(team.get("team_number"))
     epa_data = epa_ranks.get(team_number, {})
     nickname = team.get("nickname", "Unknown")
@@ -2300,7 +2304,7 @@ def create_team_card(team, year, avatar_url, epa_ranks):
     rank = epa_data.get("rank", "N/A")
     
     # Get team colors for background and text color
-    background_gradient, text_color = get_team_card_colors_with_text(team_number)
+    background_gradient, text_color = get_team_card_colors_with_text(team_number, muted=muted)
 
     return dbc.Card(
         [
@@ -2422,7 +2426,7 @@ def create_team_card_spotlight(team, year_team_database, event_year):
         team_url = f"/team/{t_num}/{event_year}"
         
         # Get team colors for background and text color
-        background_gradient, text_color = get_team_card_colors_with_text(t_num)
+        background_gradient, text_color = get_team_card_colors_with_text(t_num, muted=True)
 
         # === Card Layout ===
         card_body = dbc.CardBody(
@@ -2538,7 +2542,7 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
     team_url = f"/team/{t_num}/{event_year}"
     
     # Get team colors for background and text color
-    background_gradient, text_color = get_team_card_colors_with_text(t_num)
+    background_gradient, text_color = get_team_card_colors_with_text(t_num, muted=True)
 
     # === Card Layout ===
     card_body = dbc.CardBody(
@@ -3091,7 +3095,8 @@ def events_layout(year=current_year, active_tab="cards-tab"):
         options=[{"label": str(yr), "value": yr} for yr in reversed(range(1992, 2027))],
         value=year,
         placeholder="Year",
-        clearable=False
+        clearable=False,
+        className="custom-input-box"
     )
     event_type_dropdown = dcc.Dropdown(
         id="event-type-dropdown",
@@ -3126,7 +3131,8 @@ def events_layout(year=current_year, active_tab="cards-tab"):
         options=week_options,
         placeholder="Week",
         value="all",
-        clearable=False
+        clearable=False,
+        className="custom-input-box"
     )
     district_dropdown = dcc.Dropdown(
         id="district-dropdown",
@@ -3190,8 +3196,8 @@ def events_layout(year=current_year, active_tab="cards-tab"):
                 html.Div(sort_toggle, style={"flex": "1"}),
                 sort_direction_toggle
             ], style={
-                "flex": "1 1 200px", 
-                "minWidth": "200px", 
+                "flex": "0 0 150px", 
+                "minWidth": "150px", 
                 "display": "flex", 
                 "alignItems": "center",
                 "backgroundColor": "var(--input-bg)",
@@ -3858,6 +3864,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 {"if": {"column_id": "Blue Alliance"}, "textDecoration": "none"},
                 {"if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Score"}, "borderBottom": "1px solid var(--text-primary)"},
                 {"if": {"filter_query": '{team_alliance} = "Blue"', "column_id": "Blue Score"}, "borderBottom": "1px solid var(--text-primary)"},
+                {"if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Pred Score"}, "borderBottom": "1px solid var(--text-primary)"},
+                {"if": {"filter_query": '{team_alliance} = "Blue"', "column_id": "Blue Pred Score"}, "borderBottom": "1px solid var(--text-primary)"},
             ]
 
         table = html.Div(

@@ -4253,6 +4253,7 @@ def load_teams(
                 selected_year,
                 get_team_avatar(t.get("team_number"), selected_year),
                 epa_ranks,
+                muted=True,
             )
             for t in teams_data[:3] if t.get("team_number")
         ],

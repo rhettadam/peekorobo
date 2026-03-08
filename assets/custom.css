@@ -291,6 +291,251 @@ input[type="password"].form-control,
     background-image: none !important;
 }
 
+/* React-Select v5 (Dash >= 2.14) */
+.Select__control,
+.Select__control:hover,
+.Select__control--is-focused,
+.Select__control--menu-is-open {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--input-text) !important;
+    box-shadow: none !important;
+}
+
+.Select__input,
+.Select__input input {
+    color: var(--input-text) !important;
+}
+
+.Select__input input {
+    background-color: transparent !important;
+}
+
+.Select__value-container,
+.Select__input-container,
+.Select__single-value,
+.Select__placeholder,
+.Select__indicator,
+.Select__dropdown-indicator,
+.Select__clear-indicator {
+    color: var(--input-text) !important;
+}
+
+.Select__menu {
+    background-color: var(--dropdown-bg) !important;
+    border: 1px solid var(--dropdown-border) !important;
+    color: var(--dropdown-text) !important;
+    z-index: 9999;
+}
+
+.Select__menu-list {
+    background-color: var(--dropdown-bg) !important;
+}
+
+.Select__option {
+    background-color: var(--dropdown-bg) !important;
+    color: var(--dropdown-text) !important;
+}
+
+.Select__option--is-focused {
+    background-color: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+}
+
+.Select__option--is-selected {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+}
+
+/* React-Select v5 with different prefix casing */
+.select__control,
+.select__control:hover,
+.select__control--is-focused,
+.select__control--menu-is-open,
+.react-select__control,
+.react-select__control:hover,
+.react-select__control--is-focused,
+.react-select__control--menu-is-open {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--input-text) !important;
+    box-shadow: none !important;
+}
+
+.select__menu,
+.select__menu-list,
+.select__option,
+.react-select__menu,
+.react-select__menu-list,
+.react-select__option {
+    background-color: var(--dropdown-bg) !important;
+    color: var(--dropdown-text) !important;
+}
+
+.select__option--is-focused,
+.react-select__option--is-focused {
+    background-color: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+}
+
+.select__option--is-selected,
+.react-select__option--is-selected {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+}
+
+.select__single-value,
+.select__placeholder,
+.select__indicator,
+.select__dropdown-indicator,
+.select__clear-indicator,
+.react-select__single-value,
+.react-select__placeholder,
+.react-select__indicator,
+.react-select__dropdown-indicator,
+.react-select__clear-indicator {
+    color: var(--input-text) !important;
+}
+
+.select__input,
+.select__input input,
+.react-select__input,
+.react-select__input input {
+    color: var(--input-text) !important;
+    background-color: transparent !important;
+}
+
+/* Generic react-select classnames (css-*) */
+.custom-input-box [class*="-control"],
+.custom-input-box [class*="-control"]:hover,
+.custom-input-box [class*="-control"][class*="-is-focused"],
+.custom-input-box [class*="-control"][class*="-menu-is-open"] {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    box-shadow: none !important;
+}
+
+.custom-input-box [class*="-singleValue"],
+.custom-input-box [class*="-placeholder"],
+.custom-input-box [class*="-input"] {
+    color: var(--input-text) !important;
+}
+
+.custom-input-box [class*="-menu"],
+.custom-input-box [class*="-menu-list"],
+.custom-input-box [class*="-option"] {
+    background-color: var(--dropdown-bg) !important;
+    color: var(--dropdown-text) !important;
+}
+
+.custom-input-box [class*="-option"][class*="-is-focused"] {
+    background-color: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+}
+
+.custom-input-box [class*="-option"][class*="-is-selected"] {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+}
+
+.custom-input-box [class*="-multiValue"] {
+    background-color: var(--bg-secondary) !important;
+}
+
+.custom-input-box [class*="-multiValueLabel"] {
+    color: var(--text-primary) !important;
+}
+
+.custom-input-box [class*="-multiValueRemove"] {
+    color: var(--text-secondary) !important;
+}
+
+.custom-input-box [class*="-multiValueRemove"]:hover {
+    background-color: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Force theme background for event filters */
+#event-type-dropdown,
+#district-dropdown,
+#year-dropdown,
+#week-dropdown {
+    color: var(--input-text) !important;
+}
+
+#event-type-dropdown .Select-control,
+#district-dropdown .Select-control,
+#year-dropdown .Select-control,
+#week-dropdown .Select-control,
+#event-type-dropdown [class*="-control"],
+#district-dropdown [class*="-control"],
+#year-dropdown [class*="-control"],
+#week-dropdown [class*="-control"] {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+}
+
+#event-type-dropdown [class*="-singleValue"],
+#district-dropdown [class*="-singleValue"],
+#year-dropdown [class*="-singleValue"],
+#week-dropdown [class*="-singleValue"],
+#event-type-dropdown [class*="-placeholder"],
+#district-dropdown [class*="-placeholder"],
+#year-dropdown [class*="-placeholder"],
+#week-dropdown [class*="-placeholder"] {
+    color: var(--input-text) !important;
+}
+
+/* Force dropdown control background for any dropdown id */
+[id$="-dropdown"] {
+    background-color: var(--input-bg) !important;
+}
+
+[id$="-dropdown"] .Select__control,
+[id$="-dropdown"] .Select-control,
+[id$="-dropdown"] [class*="-control"] {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+}
+
+[id$="-dropdown"] .Select__value-container,
+[id$="-dropdown"] [class*="-valueContainer"] {
+    background-color: transparent !important;
+}
+
+[id$="-dropdown"] [class*="-input"],
+[id$="-dropdown"] [class*="-input"] input {
+    background-color: transparent !important;
+    color: var(--input-text) !important;
+}
+
+/* Ensure dropdown search input text follows theme */
+[id$="-dropdown"] input,
+[id$="-dropdown"] input::placeholder {
+    color: var(--input-text) !important;
+}
+
+.Select__indicator-separator {
+    background-color: var(--input-border) !important;
+}
+
+.Select__multi-value {
+    background-color: var(--bg-secondary) !important;
+}
+
+.Select__multi-value__label {
+    color: var(--text-primary) !important;
+}
+
+.Select__multi-value__remove {
+    color: var(--text-secondary) !important;
+}
+
+.Select__multi-value__remove:hover {
+    background-color: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+}
+
 /* Remove wrapper backgrounds - Dash wraps Select in a div */
 .Select > div,
 .Select > div > div {
