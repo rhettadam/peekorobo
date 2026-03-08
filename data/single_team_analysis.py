@@ -4,7 +4,7 @@ import requests
 import os
 import math
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from tenacity import retry, stop_never, wait_exponential, retry_if_exception_type, stop_after_attempt
 from dotenv import load_dotenv
 import random
@@ -95,6 +95,50 @@ def get_team_events(team_number, year):
     conn.close()
     return events
 
+def _predicted_time_to_datetime(predicted_time):
+    if not predicted_time:
+        return None
+    if isinstance(predicted_time, datetime):
+        return predicted_time if predicted_time.tzinfo else predicted_time.replace(tzinfo=timezone.utc)
+    if isinstance(predicted_time, (int, float)):
+        return datetime.fromtimestamp(predicted_time, tz=timezone.utc)
+    if isinstance(predicted_time, str):
+        try:
+            if predicted_time.isdigit():
+                return datetime.fromtimestamp(int(predicted_time), tz=timezone.utc)
+            return datetime.fromisoformat(predicted_time.replace("Z", "+00:00"))
+        except Exception:
+            return None
+    return None
+
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
+def get_team_played_events(team_number, year):
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT event_key, red_score, blue_score, winning_alliance, predicted_time
+        FROM event_matches
+        WHERE LEFT(event_key, 4) = %s
+          AND (%s = ANY(string_to_array(red_teams, ',')) OR %s = ANY(string_to_array(blue_teams, ',')))
+        """,
+        (str(year), str(team_number), str(team_number)),
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    played_events = set()
+    now_utc = datetime.now(timezone.utc)
+    for event_key, red_score, blue_score, winning_alliance, predicted_time in rows:
+        if (red_score and red_score > 0) or (blue_score and blue_score > 0) or winning_alliance in ("red", "blue"):
+            played_events.add(event_key)
+            continue
+        predicted_dt = _predicted_time_to_datetime(predicted_time)
+        if predicted_dt and predicted_dt <= now_utc:
+            played_events.add(event_key)
+    return list(played_events)
+
 @retry(stop=stop_never, wait=wait_exponential(min=0.5, max=5), retry=retry_if_exception_type(Exception))
 def tba_get(endpoint: str):
     api_key = random.choice(API_KEYS)
@@ -145,9 +189,9 @@ def calculate_confidence(consistency: float, dominance: float, event_boost: floa
     total_matches = wins + losses
     if total_matches > 0:
         win_rate = wins / total_matches
-        record_alignment = 0.7 + (win_rate * 0.3)
+        record_alignment = 0.5 + (win_rate * 0.5)
     else:
-        record_alignment = 0.7
+        record_alignment = 0.5
     
     raw_confidence = (
         CONFIDENCE_WEIGHTS["consistency"] * consistency +
@@ -206,18 +250,27 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             teleop_func = teleop_2025
             endgame_func = endgame_2025
 
+        early_match_target = 5
+
         for match in matches:
             if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
                 continue
 
             match_count += 1
+            early_weight = min(1.0, match_count / early_match_target) if match_count > 0 else 0.0
             alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
             opponent_alliance = "blue" if alliance == "red" else "red"
 
+            red_score = match["alliances"]["red"]["score"]
+            blue_score = match["alliances"]["blue"]["score"]
+            predicted_time = match.get("predicted_time")
+            if red_score == 0 and blue_score == 0 and predicted_time:
+                predicted_dt = _predicted_time_to_datetime(predicted_time)
+                if predicted_dt and predicted_dt > datetime.now(timezone.utc):
+                    continue
+
             # Track wins/losses/ties
             if year == "2015":
-                red_score = match["alliances"]["red"]["score"]
-                blue_score = match["alliances"]["blue"]["score"]
                 if alliance == "red":
                     if red_score > blue_score:
                         event_wins += 1
@@ -234,9 +287,6 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                         event_ties += 1
             else:
                 # Determine win/loss/tie based on scores instead of winning_alliance
-                red_score = match["alliances"]["red"]["score"]
-                blue_score = match["alliances"]["blue"]["score"]
-                
                 # Handle disqualifications (score of 0) as ties
                 if red_score == 0 or blue_score == 0:
                     event_ties += 1
@@ -281,12 +331,12 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                 if endgame_epa is None:
                     endgame_epa = 0.0
                 if overall_epa == 0.0 and auto_epa == 0.0 and teleop_epa == 0.0 and endgame_epa == 0.0:
-                    overall_epa = actual_overall
-                    auto_epa = auto
-                    endgame_epa = endgame
-                    teleop_epa = teleop
+                    overall_epa = actual_overall * early_weight
+                    auto_epa = auto * early_weight
+                    endgame_epa = endgame * early_weight
+                    teleop_epa = teleop * early_weight
                     continue
-                K = 0.4
+                K = 0.4 * early_weight
                 try:
                     delta_teleop = K * (teleop - teleop_epa)
                 except Exception as e:
@@ -334,12 +384,12 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                 norm_margin = (scaled_margin + 1) / 1.3
                 dominance_scores.append(min(1.0, max(0.0, norm_margin)))
                 match_importance = importance.get(match.get("comp_level", "qm"), 1.0)
-                decay = 1.0
+                decay = early_weight
                 if overall_epa == 0.0 and auto_epa == 0.0 and teleop_epa == 0.0 and endgame_epa == 0.0:
-                    overall_epa = actual_overall
-                    auto_epa = actual_auto
-                    endgame_epa = actual_endgame
-                    teleop_epa = actual_teleop
+                    overall_epa = actual_overall * early_weight
+                    auto_epa = actual_auto * early_weight
+                    endgame_epa = actual_endgame * early_weight
+                    teleop_epa = actual_teleop * early_weight
                     continue
                 K = 0.4
                 K *= match_importance * decay
@@ -370,13 +420,13 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             stdev = statistics.stdev(contributions)
             consistency = max(0.0, 1.0 - stdev / (peak + 1e-6))
         else:
-            consistency = 1.0
+            consistency = 0.7
 
         dominance = min(1., statistics.mean(dominance_scores)) if dominance_scores else 0.0
 
-        # Get total number of events for this team
-        event_keys = get_team_events(team_number, int(year))
-        total_events = len(event_keys)
+        # Get total number of played events for this team
+        played_event_keys = get_team_played_events(team_number, int(year))
+        total_events = len(played_event_keys)
 
         # Calculate event boost based on number of events
         event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])

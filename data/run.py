@@ -1407,11 +1407,14 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             teleop_func = teleop_2025
             endgame_func = endgame_2025
 
+        early_match_target = 5
+
         for match in matches:
             if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
                 continue
 
             match_count += 1
+            early_weight = min(1.0, match_count / early_match_target) if match_count > 0 else 0.0
             alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
             opponent_alliance = "blue" if alliance == "red" else "red"
 
@@ -1501,12 +1504,12 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                 if endgame_epa is None:
                     endgame_epa = 0.0
                 if overall_epa == 0.0 and auto_epa == 0.0 and teleop_epa == 0.0 and endgame_epa == 0.0:
-                    overall_epa = actual_overall
-                    auto_epa = auto
-                    endgame_epa = endgame
-                    teleop_epa = teleop
+                    overall_epa = actual_overall * early_weight
+                    auto_epa = auto * early_weight
+                    endgame_epa = endgame * early_weight
+                    teleop_epa = teleop * early_weight
                     continue
-                K = 0.4
+                K = 0.4 * early_weight
                 # Fallback: always ensure teleop_epa is a float
                 try:
                     delta_teleop = K * (teleop - teleop_epa)
@@ -1557,12 +1560,12 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                 norm_margin = (scaled_margin + 1) / 1.3
                 dominance_scores.append(min(1.0, max(0.0, norm_margin)))
                 match_importance = importance.get(match.get("comp_level", "qm"), 1.0)
-                decay = 1.0
+                decay = early_weight
                 if overall_epa == 0.0 and auto_epa == 0.0 and teleop_epa == 0.0 and endgame_epa == 0.0:
-                    overall_epa = actual_overall
-                    auto_epa = actual_auto
-                    endgame_epa = actual_endgame
-                    teleop_epa = actual_teleop
+                    overall_epa = actual_overall * early_weight
+                    auto_epa = actual_auto * early_weight
+                    endgame_epa = actual_endgame * early_weight
+                    teleop_epa = actual_teleop * early_weight
                     continue
                 K = 0.4
                 K *= match_importance * decay
@@ -1607,12 +1610,6 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         # Calculate confidence using universal function
         raw_confidence, confidence, record_alignment = calculate_confidence(consistency, dominance, event_boost, team_number, event_wins, event_losses, int(year))
         actual_epa = (overall_epa * confidence) if overall_epa is not None else 0.0
-
-        # Early-season dampening to avoid single-match spikes
-        early_match_target = 5
-        early_weight = min(1.0, match_count / early_match_target) if match_count > 0 else 0.0
-        overall_epa *= early_weight
-        actual_epa *= early_weight
 
         # Get years of experience for display
         years = get_team_experience(team_number, int(year))
