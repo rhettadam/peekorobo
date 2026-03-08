@@ -3693,8 +3693,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     pred_red = pred_blue = "N/A"
                     pred_winner = "Tie"
 
-                pred_red_score = round(sum(t.get("epa", 0) for t in red_team_info), 2) if red_team_info else "N/A"
-                pred_blue_score = round(sum(t.get("epa", 0) for t in blue_team_info), 2) if blue_team_info else "N/A"
         
                 winner = match.get("wa") or "Tie"
                 winner = winner.title() if winner else "Tie"
@@ -3715,8 +3713,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                         "Blue Alliance": format_team_list(blue_str),
                         "Red Score": red_score_display,
                         "Blue Score": blue_score_display,
-                        "Red Pred Score": pred_red_score,
-                        "Blue Pred Score": pred_blue_score,
                         "Winner": winner,
                         "Pred Winner": pred_winner,
                         "Red Pred": pred_red,
@@ -3747,8 +3743,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                         "Blue Alliance": format_team_list(blue_str),
                         "Red Score": red_score_display,
                         "Blue Score": blue_score_display,
-                        "Red Pred Score": pred_red_score,
-                        "Blue Pred Score": pred_blue_score,
                         "Winner": winner,
                         "Prediction": f"{team_prediction}".strip(),
                         "Prediction %": team_prediction_percent,
@@ -3772,8 +3766,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
                 {"name": "Red Score", "id": "Red Score"},
                 {"name": "Blue Score", "id": "Blue Score"},
-                {"name": "Red Pred Score", "id": "Red Pred Score"},
-                {"name": "Blue Pred Score", "id": "Blue Pred Score"},
                 {"name": "Winner", "id": "Winner"},
                 {"name": "Pred Winner", "id": "Pred Winner"},
                 {"name": "Red Pred", "id": "Red Pred"},
@@ -3788,8 +3780,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 {"if": {"column_id": "Blue Alliance"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
                 {"if": {"column_id": "Red Score"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
                 {"if": {"column_id": "Blue Score"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
-                {"if": {"column_id": "Red Pred Score"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
-                {"if": {"column_id": "Blue Pred Score"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
                 {"if": {"filter_query": "{Red Prediction %} >= 45 && {Red Prediction %} < 50", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lowneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
                 {"if": {"filter_query": "{Red Prediction %} >= 50 && {Red Prediction %} < 55", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-highneutral)", "fontWeight": "bold", "color": "var(--text-primary)"},
                 {"if": {"filter_query": "{Red Prediction %} >= 55 && {Red Prediction %} <= 65", "column_id": "Red Pred"}, "backgroundColor": "var(--table-row-prediction-lightgreen)", "color": "var(--text-primary)"},
@@ -3830,8 +3820,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 {"name": "Blue Alliance", "id": "Blue Alliance", "presentation": "markdown"},
                 {"name": "Red Score", "id": "Red Score"},
                 {"name": "Blue Score", "id": "Blue Score"},
-                {"name": "Red Pred Score", "id": "Red Pred Score"},
-                {"name": "Blue Pred Score", "id": "Blue Pred Score"},
                 {"name": "Prediction", "id": "Prediction"},
                 {"name": "Outcome", "id": "Outcome"},
             ]
@@ -3854,8 +3842,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 {"if": {"column_id": "Blue Alliance"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
                 {"if": {"column_id": "Red Score"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
                 {"if": {"column_id": "Blue Score"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
-                {"if": {"column_id": "Red Pred Score"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
-                {"if": {"column_id": "Blue Pred Score"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
                 {"if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Alliance"}, "backgroundColor": "rgba(220, 53, 69, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
                 {"if": {"filter_query": '{team_alliance} = "Blue"', "column_id": "Blue Alliance"}, "backgroundColor": "rgba(13, 110, 253, 0.1)", "color": "var(--text-primary)", "fontWeight": "bold"},
                 {"if": {"column_id": "Video"}, "textDecoration": "none"},
@@ -3864,8 +3850,6 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 {"if": {"column_id": "Blue Alliance"}, "textDecoration": "none"},
                 {"if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Score"}, "borderBottom": "1px solid var(--text-primary)"},
                 {"if": {"filter_query": '{team_alliance} = "Blue"', "column_id": "Blue Score"}, "borderBottom": "1px solid var(--text-primary)"},
-                {"if": {"filter_query": '{team_alliance} = "Red"', "column_id": "Red Pred Score"}, "borderBottom": "1px solid var(--text-primary)"},
-                {"if": {"filter_query": '{team_alliance} = "Blue"', "column_id": "Blue Pred Score"}, "borderBottom": "1px solid var(--text-primary)"},
             ]
 
         table = html.Div(
