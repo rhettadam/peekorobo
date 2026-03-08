@@ -5,7 +5,7 @@ from tenacity import retry, stop_never, wait_exponential, retry_if_exception_typ
 import requests
 import os
 import concurrent.futures
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 import random
@@ -429,6 +429,50 @@ def get_team_events(team_number, year):
     cur.close()
     conn.close()
     return events
+
+def _predicted_time_to_datetime(predicted_time):
+    if not predicted_time:
+        return None
+    if isinstance(predicted_time, datetime):
+        return predicted_time if predicted_time.tzinfo else predicted_time.replace(tzinfo=timezone.utc)
+    if isinstance(predicted_time, (int, float)):
+        return datetime.fromtimestamp(predicted_time, tz=timezone.utc)
+    if isinstance(predicted_time, str):
+        try:
+            if predicted_time.isdigit():
+                return datetime.fromtimestamp(int(predicted_time), tz=timezone.utc)
+            return datetime.fromisoformat(predicted_time.replace("Z", "+00:00"))
+        except Exception:
+            return None
+    return None
+
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
+def get_team_played_events(team_number, year):
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT event_key, red_score, blue_score, winning_alliance, predicted_time
+        FROM event_matches
+        WHERE LEFT(event_key, 4) = %s
+          AND (%s = ANY(string_to_array(red_teams, ',')) OR %s = ANY(string_to_array(blue_teams, ',')))
+        """,
+        (str(year), str(team_number), str(team_number)),
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    played_events = set()
+    now_utc = datetime.now(timezone.utc)
+    for event_key, red_score, blue_score, winning_alliance, predicted_time in rows:
+        if (red_score and red_score > 0) or (blue_score and blue_score > 0) or winning_alliance in ("red", "blue"):
+            played_events.add(event_key)
+            continue
+        predicted_dt = _predicted_time_to_datetime(predicted_time)
+        if predicted_dt and predicted_dt <= now_utc:
+            played_events.add(event_key)
+    return list(played_events)
 
 def get_teams_for_year(year):
     # Return a list of all teams that played in a given year, using teams table for profile data
@@ -1253,11 +1297,11 @@ def calculate_confidence(consistency: float, dominance: float, event_boost: floa
     total_matches = wins + losses
     if total_matches > 0:
         win_rate = wins / total_matches
-        # Scale win rate to be between 0.7 and 1.0
-        # 0% win rate = 0.7, 50% win rate = 0.85, 100% win rate = 1.0
-        record_alignment = 0.7 + (win_rate * 0.3)
+        # Scale win rate to be between 0.5 and 1.0
+        # 0% win rate = 0.5, 50% win rate = 0.75, 100% win rate = 1.0
+        record_alignment = 0.5 + (win_rate * 0.5)
     else:
-        record_alignment = 0.7  # Default to middle value if no matches
+        record_alignment = 0.5  # Default to lower value if no matches
     
     raw_confidence = (
         CONFIDENCE_WEIGHTS["consistency"] * consistency +
@@ -1325,10 +1369,30 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
             opponent_alliance = "blue" if alliance == "red" else "red"
 
+            red_score = match["alliances"]["red"]["score"]
+            blue_score = match["alliances"]["blue"]["score"]
+            predicted_time = match.get("predicted_time")
+            if red_score == 0 and blue_score == 0 and predicted_time:
+                predicted_ts = None
+                if isinstance(predicted_time, int):
+                    predicted_ts = predicted_time
+                elif isinstance(predicted_time, str):
+                    try:
+                        if predicted_time.isdigit():
+                            predicted_ts = int(predicted_time)
+                        else:
+                            predicted_ts = datetime.fromisoformat(predicted_time.replace("Z", "+00:00")).timestamp()
+                    except Exception:
+                        predicted_ts = None
+                elif isinstance(predicted_time, datetime):
+                    predicted_ts = predicted_time.timestamp()
+
+                if predicted_ts and predicted_ts > time.time():
+                    # Skip unplayed matches (0-0) so they don't count as ties
+                    continue
+
             # Track wins/losses/ties (existing logic) ...
             if year == "2015":
-                red_score = match["alliances"]["red"]["score"]
-                blue_score = match["alliances"]["blue"]["score"]
                 if alliance == "red":
                     if red_score > blue_score:
                         event_wins += 1
@@ -1345,9 +1409,6 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                         event_ties += 1
             else:
                 # Determine win/loss/tie based on scores instead of winning_alliance
-                red_score = match["alliances"]["red"]["score"]
-                blue_score = match["alliances"]["blue"]["score"]
-                
                 # Handle disqualifications (score of 0) as ties
                 if red_score == 0 or blue_score == 0:
                     event_ties += 1
@@ -1486,15 +1547,15 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             stdev = statistics.stdev(contributions)
             consistency = max(0.0, 1.0 - stdev / (peak + 1e-6))
         else:
-            consistency = 1.0
+            consistency = 0.7
 
         dominance = min(1., statistics.mean(dominance_scores)) if dominance_scores else 0.0
 
-        # Get total number of events for this team
-        event_keys = get_team_events(team_number, int(year))
-        total_events = len(event_keys)
+        # Get total number of played events for this team
+        played_event_keys = get_team_played_events(team_number, int(year))
+        total_events = len(played_event_keys)
 
-        # Calculate event boost based on number of events
+        # Calculate event boost based on number of played events
         event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])
         
         # Calculate confidence using universal function
