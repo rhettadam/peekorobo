@@ -2093,34 +2093,8 @@ def restart_heroku_app():
         print(f"Error restarting app: {e}")
 
 def reload_app_cache():
-    reload_url = os.environ.get("CACHE_RELOAD_URL")
-    if not reload_url:
-        app_name = os.environ.get("HEROKU_APP_NAME")
-        if app_name:
-            # Support either a Heroku app name or a full/public URL/domain
-            if app_name.startswith("http://") or app_name.startswith("https://"):
-                reload_url = app_name
-            elif "." in app_name or "/" in app_name:
-                reload_url = f"https://{app_name.lstrip('/')}"
-            else:
-                reload_url = f"https://{app_name}.herokuapp.com"
-        else:
-            print("CACHE_RELOAD_URL or HEROKU_APP_NAME not set, skipping cache reload")
-            return
-    if "admin/reload-cache" not in reload_url:
-        reload_url = reload_url.rstrip("/") + "/admin/reload-cache"
-
-    token = os.environ.get("CACHE_RELOAD_TOKEN")
-    headers = {"X-Cache-Token": token} if token else {}
-    try:
-        print(f"Reloading app cache via {reload_url}")
-        response = requests.post(reload_url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            print(f"Successfully reloaded app cache via {reload_url}")
-        else:
-            print(f"Failed to reload app cache: {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"Error reloading app cache: {e}")
+    # Revert to restarting the Heroku app (legacy behavior)
+    restart_heroku_app()
 
 def main():
     print("\nEPA Calculator")
