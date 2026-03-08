@@ -60,6 +60,25 @@ app = dash.Dash(
 server = app.server
 server.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-placeholder-key")
 
+def reload_global_cache():
+    global TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES
+    global SEARCH_TEAM_DATA, SEARCH_EVENT_DATA, APP_STARTUP_TIME
+    TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data_current_year()
+    SEARCH_TEAM_DATA, SEARCH_EVENT_DATA = load_search_data()
+    APP_STARTUP_TIME = datetime.now()
+    _load_duel_year_data.cache_clear()
+    _get_team_years_cached.cache_clear()
+
+@server.route("/admin/reload-cache", methods=["POST"])
+def admin_reload_cache():
+    token = os.getenv("CACHE_RELOAD_TOKEN")
+    if token:
+        provided = flask.request.headers.get("X-Cache-Token") or flask.request.args.get("token")
+        if provided != token:
+            return flask.jsonify({"status": "unauthorized"}), 401
+    reload_global_cache()
+    return flask.jsonify({"status": "ok"})
+
 def serve_layout():
     return dmc.MantineProvider(
         theme={

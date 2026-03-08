@@ -1562,6 +1562,12 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         raw_confidence, confidence, record_alignment = calculate_confidence(consistency, dominance, event_boost, team_number, event_wins, event_losses, int(year))
         actual_epa = (overall_epa * confidence) if overall_epa is not None else 0.0
 
+        # Early-season dampening to avoid single-match spikes
+        early_match_target = 5
+        early_weight = min(1.0, match_count / early_match_target) if match_count > 0 else 0.0
+        overall_epa *= early_weight
+        actual_epa *= early_weight
+
         # Get years of experience for display
         years = get_team_experience(team_number, int(year))
         veteran_boost = get_veteran_boost(years)
@@ -2043,6 +2049,29 @@ def restart_heroku_app():
     except Exception as e:
         print(f"Error restarting app: {e}")
 
+def reload_app_cache():
+    reload_url = os.environ.get("CACHE_RELOAD_URL")
+    if not reload_url:
+        app_name = os.environ.get("HEROKU_APP_NAME")
+        if app_name:
+            reload_url = f"https://{app_name}.herokuapp.com"
+        else:
+            print("CACHE_RELOAD_URL or HEROKU_APP_NAME not set, skipping cache reload")
+            return
+    if "admin/reload-cache" not in reload_url:
+        reload_url = reload_url.rstrip("/") + "/admin/reload-cache"
+
+    token = os.environ.get("CACHE_RELOAD_TOKEN")
+    headers = {"X-Cache-Token": token} if token else {}
+    try:
+        response = requests.post(reload_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            print(f"Successfully reloaded app cache via {reload_url}")
+        else:
+            print(f"Failed to reload app cache: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"Error reloading app cache: {e}")
+
 def main():
     print("\nEPA Calculator")
     print("="*20)
@@ -2056,8 +2085,8 @@ def main():
             return
             
         fetch_and_store_team_data(year)
-        # Restart the app after successful data update
-        restart_heroku_app()
+        # Reload app cache after successful data update
+        reload_app_cache()
             
     except KeyboardInterrupt:
         print("\nInterrupted by user (Ctrl+C)")
@@ -2087,8 +2116,8 @@ if __name__ == "__main__":
                 print("Year must be an integer.")
                 sys.exit(1)
             fetch_and_store_team_data(year)
-            # Restart the app after successful data update
-            restart_heroku_app()
+            # Reload app cache after successful data update
+            reload_app_cache()
         else:
             main()
     except KeyboardInterrupt:
