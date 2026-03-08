@@ -2087,7 +2087,8 @@ def insights_details_layout(year):
                         options=insight_options,
                         value=default_insight,
                         clearable=False,
-                        style={"marginBottom": "1.5rem"}
+                        style={"marginBottom": "1.5rem"},
+                        className="custom-input-box"
                     ),
                 ], md=6, xs=12, style={"margin": "0 auto"}),
             ], className="justify-content-center"),
@@ -6536,7 +6537,8 @@ def focused_peekolive_layout(event_key):
                                     options=[{"label": "All Teams", "value": "all"}] + get_event_teams(event_key),
                                     value="all",
                                     placeholder="Select a team to filter matches...",
-                                    style={"marginBottom": "15px"}
+                                    style={"marginBottom": "15px"},
+                                    className="custom-input-box"
                                 )
                             ]),
                             html.Div(id="match-notifications", children=build_match_notifications(event_key), style={

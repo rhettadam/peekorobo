@@ -69,7 +69,7 @@ def reload_global_cache():
     _load_duel_year_data.cache_clear()
     _get_team_years_cached.cache_clear()
 
-@server.route("/admin/reload-cache", methods=["POST"])
+@server.route("/admin/reload-cache", methods=["GET", "POST"])
 def admin_reload_cache():
     token = os.getenv("CACHE_RELOAD_TOKEN")
     if token:
@@ -77,6 +77,8 @@ def admin_reload_cache():
         if provided != token:
             return flask.jsonify({"status": "unauthorized"}), 401
     reload_global_cache()
+    if flask.request.method == "GET":
+        return flask.Response("Cache reloaded", mimetype="text/plain")
     return flask.jsonify({"status": "ok"})
 
 def serve_layout():
@@ -1545,7 +1547,8 @@ def update_events_tab_content(
                 ],
                 value=25,
                 clearable=False,
-                style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+                style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"},
+                className="custom-input-box"
             ),
         ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
 
@@ -1859,7 +1862,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 ],
                 value=10,
                 clearable=False,
-                style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+                style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"},
+                className="custom-input-box"
             ),
         ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
 
@@ -1911,7 +1915,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                     ],
                     value="overall",
                     clearable=False,
-                    style={"width": "200px"}
+                    style={"width": "200px"},
+                    className="custom-input-box"
                 )
             ], md=3, className="d-flex align-items-center"),
             dbc.Col([
@@ -1970,7 +1975,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                         id="team-filter",
                         options=[{"label": "All Teams", "value": "ALL"}] + team_filter_options,
                         value="ALL",
-                        clearable=False
+                        clearable=False,
+                        className="custom-input-box"
                     )
                 ], md=4),
                 dbc.Col([
@@ -2140,7 +2146,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 ],
                 value=15,
                 clearable=False,
-                style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+                style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"},
+                className="custom-input-box"
             ),
         ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
 
@@ -2192,7 +2199,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 value=default_team_values,
                 multi=True,
                 placeholder="Select teams...",
-                style={"marginBottom": "10px"}
+                style={"marginBottom": "10px"},
+                className="custom-input-box"
             ),
             dbc.ButtonGroup(
                 [
@@ -2614,7 +2622,8 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             ],
             value=10,
             clearable=False,
-            style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+            style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"},
+            className="custom-input-box"
         ),
     ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
 
@@ -3332,7 +3341,8 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             ],
             value=10,
             clearable=False,
-            style={"width": "65px", "display": "inline-block", "marginRight": "10px", "fontSize": "0.85rem"}
+            style={"width": "65px", "display": "inline-block", "marginRight": "10px", "fontSize": "0.85rem"},
+            className="custom-input-box"
         ),
         html.Label("Playoff rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
         dcc.Dropdown(
@@ -3345,7 +3355,8 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             ],
             value=10,
             clearable=False,
-            style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+            style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"},
+            className="custom-input-box"
         ),
     ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px", "gap": "10px"})
 
@@ -5590,7 +5601,8 @@ def update_team_events(active_tab, store_data):
                 ],
                 value=10,
                 clearable=False,
-                style={"width": "65px", "display": "inline-block", "marginRight": "20px", "fontSize": "0.85rem"}
+                style={"width": "65px", "display": "inline-block", "marginRight": "20px", "fontSize": "0.85rem"},
+                className="custom-input-box"
             ),
         ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
     ])
@@ -5720,7 +5732,8 @@ def update_team_awards(active_tab, store_data):
                     ],
                     value=10,
                     clearable=False,
-                    style={"width": "65px", "display": "inline-block", "marginRight": "20px", "fontSize": "0.85rem"}
+                    style={"width": "65px", "display": "inline-block", "marginRight": "20px", "fontSize": "0.85rem"},
+                    className="custom-input-box"
                 ),
             ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"}),
             banner_section
@@ -6105,7 +6118,8 @@ def update_metrics_table(selected_metric, pathname):
             ],
             value=20,
             clearable=False,
-            style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"}
+            style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"},
+            className="custom-input-box"
         ),
     ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
 
@@ -6384,7 +6398,8 @@ def update_insights_table(selected_insight, pathname, event_teams, event_db):
                 ],
                 value=20,
                 clearable=False,
-                style={"width": "65px", "display": "inline-block", "marginRight": "20px", "fontSize": "0.85rem"}
+            style={"width": "65px", "display": "inline-block", "marginRight": "20px", "fontSize": "0.85rem"},
+            className="custom-input-box"
             ),
         ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
     ])
