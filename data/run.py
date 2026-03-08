@@ -559,6 +559,46 @@ def get_existing_event_data(event_key):
         "awards": awards
     }
 
+def event_has_started(event_key, start_date):
+    try:
+        now = datetime.now(timezone.utc)
+        if start_date:
+            try:
+                start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+                if start_date_obj > now.date():
+                    return False
+            except Exception:
+                pass
+
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT red_score, blue_score, winning_alliance, predicted_time
+            FROM event_matches
+            WHERE event_key = %s
+            """,
+            (event_key,),
+        )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        if not rows:
+            return True  # No match data yet; allow initial load
+
+        for red_score, blue_score, winning_alliance, _ in rows:
+            if (red_score and red_score > 0) or (blue_score and blue_score > 0) or winning_alliance in ("red", "blue"):
+                return True
+
+        predicted_times = [_predicted_time_to_datetime(r[3]) for r in rows]
+        predicted_times = [pt for pt in predicted_times if pt is not None]
+        if predicted_times and min(predicted_times) > now:
+            return False
+        return True
+    except Exception:
+        return True
+
 def get_existing_team_epa(team_number, year):
     # Get existing team EPA data from database for comparison
     conn = get_pg_connection()
@@ -811,6 +851,7 @@ def create_event_db(year):
     
     events_to_process = []
     events_skipped = 0
+    events_skipped_future = 0
     
     print(f"Checking {len(events)} events for updates...")
     
@@ -821,6 +862,11 @@ def create_event_db(year):
             
         event_key = event["key"]
         
+        # Skip events that haven't started yet to avoid unnecessary updates
+        if not event_has_started(event_key, event.get("start_date")):
+            events_skipped_future += 1
+            continue
+
         # Get existing data for comparison
         existing_data = get_existing_event_data(event_key)
         
@@ -846,7 +892,7 @@ def create_event_db(year):
         # For ongoing or recent events, check if data has changed
         events_to_process.append(event)
 
-    print(f"Processing {len(events_to_process)} events, skipping {events_skipped} completed events")
+    print(f"Processing {len(events_to_process)} events, skipping {events_skipped} completed events, {events_skipped_future} future events")
     print(f"DEBUG: Events to process: {[e['key'] for e in events_to_process[:5]]}")  # Show first 5 event keys
 
     def fetch_and_compare(event):
