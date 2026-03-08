@@ -2100,7 +2100,13 @@ def reload_app_cache():
     if not reload_url:
         app_name = os.environ.get("HEROKU_APP_NAME")
         if app_name:
-            reload_url = f"https://{app_name}.herokuapp.com"
+            # Support either a Heroku app name or a full/public URL/domain
+            if app_name.startswith("http://") or app_name.startswith("https://"):
+                reload_url = app_name
+            elif "." in app_name or "/" in app_name:
+                reload_url = f"https://{app_name.lstrip('/')}"
+            else:
+                reload_url = f"https://{app_name}.herokuapp.com"
         else:
             print("CACHE_RELOAD_URL or HEROKU_APP_NAME not set, skipping cache reload")
             return
@@ -2110,6 +2116,7 @@ def reload_app_cache():
     token = os.environ.get("CACHE_RELOAD_TOKEN")
     headers = {"X-Cache-Token": token} if token else {}
     try:
+        print(f"Reloading app cache via {reload_url}")
         response = requests.post(reload_url, headers=headers, timeout=10)
         if response.status_code == 200:
             print(f"Successfully reloaded app cache via {reload_url}")
