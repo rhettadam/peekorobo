@@ -1374,8 +1374,9 @@ def teleop_2026(breakdowns, team_count):
     def score_per_breakdown(b):
         hub = b.get("hubScore", {}) if isinstance(b, dict) else {}
         teleop_fuel_points = hub.get("teleopPoints", hub.get("teleopCount", 0))
+        endgame_fuel_points = hub.get("endgamePoints", hub.get("endgameCount", 0))
         scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
-        return teleop_fuel_points * scaling_factor
+        return (teleop_fuel_points + endgame_fuel_points) * scaling_factor
 
     scores = [score_per_breakdown(b) for b in breakdowns]
     n = len(scores)
