@@ -307,7 +307,8 @@ def load_data():
         # Matches
         event_cursor.execute("""
             SELECT match_key, event_key, comp_level, match_number, set_number, 
-                   red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time
+                   red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time,
+                   red_win_prob, blue_win_prob
             FROM event_matches
             ORDER BY event_key, match_number
         """)
@@ -315,7 +316,8 @@ def load_data():
         EVENT_MATCHES = {}
         for row in event_cursor.fetchall():
             match_key, event_key, comp_level, match_number, set_number, \
-            red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time = row
+            red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time, \
+            red_win_prob, blue_win_prob = row
             year = int(event_key[:4])
             match_data = compress_dict({
                 "k": match_key,
@@ -329,7 +331,9 @@ def load_data():
                 "bs": blue_score,
                 "wa": winning_alliance,
                 "yt": youtube_key,
-                "pt": predicted_time
+                "pt": predicted_time,
+                "rp": red_win_prob,
+                "bp": blue_win_prob
             })
             EVENT_MATCHES.setdefault(year, []).append(match_data)
 
@@ -553,7 +557,8 @@ def load_data_current_year():
         # Matches for current year
         event_cursor.execute("""
             SELECT match_key, event_key, comp_level, match_number, set_number, 
-                   red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time
+                   red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time,
+                   red_win_prob, blue_win_prob
             FROM event_matches
             WHERE event_key LIKE %s
             ORDER BY event_key, match_number
@@ -562,7 +567,8 @@ def load_data_current_year():
         EVENT_MATCHES = {current_year: []}
         for row in event_cursor.fetchall():
             match_key, event_key, comp_level, match_number, set_number, \
-            red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time = row
+            red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time, \
+            red_win_prob, blue_win_prob = row
             match_data = compress_dict({
                 "k": match_key,
                 "ek": event_key,
@@ -575,7 +581,9 @@ def load_data_current_year():
                 "bs": blue_score,
                 "wa": winning_alliance,
                 "yt": youtube_key,
-                "pt": predicted_time
+                "pt": predicted_time,
+                "rp": red_win_prob,
+                "bp": blue_win_prob
             })
             EVENT_MATCHES[current_year].append(match_data)
 
@@ -775,7 +783,8 @@ def load_year_data(year):
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT match_key, event_key, comp_level, match_number, set_number, 
-                       red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time
+                       red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time,
+                       red_win_prob, blue_win_prob
                 FROM event_matches
                 WHERE event_key LIKE %s
                 ORDER BY event_key, match_number
@@ -783,7 +792,8 @@ def load_year_data(year):
             for row in cursor.fetchall():
                 (
                     match_key, event_key, comp_level, match_number, set_number,
-                    red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time
+                    red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time,
+                    red_win_prob, blue_win_prob
                 ) = row
                 EVENT_MATCHES.append(compress_dict({
                     "k": match_key,
@@ -797,7 +807,9 @@ def load_year_data(year):
                     "bs": blue_score,
                     "wa": winning_alliance,
                     "yt": youtube_key,
-                    "pt": predicted_time
+                    "pt": predicted_time,
+                    "rp": red_win_prob,
+                    "bp": blue_win_prob
                 }))
 
     return team_data, event_data, dict(EVENT_TEAMS), dict(EVENT_RANKINGS), EVENTS_AWARDS, EVENT_MATCHES

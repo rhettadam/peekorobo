@@ -27,7 +27,7 @@ from datagather import load_data_current_year,load_search_data,load_year_data,ge
 
 from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,duel_layout,build_recent_events_section
 
-from utils import format_human_date,predict_win_probability,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_event_week_label_from_number,event_card,truncate_name,get_team_data_with_fallback
+from utils import format_human_date,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_event_week_label_from_number,event_card,truncate_name,get_team_data_with_fallback
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -2007,8 +2007,8 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             win_probs = []
             hardest = None
             easiest = None
-            hardest_prob = 1.0
-            easiest_prob = 0.0
+            hardest_prob = None
+            easiest_prob = None
             for m in team_matches:
                 # Determine alliance
                 if str(team_num) in m.get("rt", "").split(","):
@@ -2026,25 +2026,20 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 avg_opp_ace = opp_ace / opp_count if opp_count else 0
                 opp_aces.append(avg_opp_ace)
                 # Win probability
-                red_info = [
-                    {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
-                    for t in m.get("rt", "").split(",") if t.strip().isdigit()
-                ]
-                blue_info = [
-                    {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
-                    for t in m.get("bt", "").split(",") if t.strip().isdigit()
-                ]
-                p_red, p_blue = predict_win_probability(red_info, blue_info)
+                p_red = m.get("rp")
+                p_blue = m.get("bp")
+                if p_red is None or p_blue is None:
+                    continue
                 win_prob = p_red if alliance == "red" else p_blue
                 win_probs.append(win_prob)
-                if win_prob < hardest_prob:
+                if hardest_prob is None or win_prob < hardest_prob:
                     hardest_prob = win_prob
                     hardest = m
-                if win_prob > easiest_prob:
+                if easiest_prob is None or win_prob > easiest_prob:
                     easiest_prob = win_prob
                     easiest = m
             avg_opp_ace = sum(opp_aces) / len(opp_aces) if opp_aces else 0
-            avg_win_prob = sum(win_probs) / len(win_probs) if win_probs else 0
+            avg_win_prob = sum(win_probs) / len(win_probs) if win_probs else None
             sos_metric = avg_win_prob  # SoS: 0 = lose all, 1 = win all
             # Build row
             team_data = team_lookup.get(team_num_int, {})
@@ -2059,17 +2054,17 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             team_sos_rows.append({
                 "Team #": int(team_num_int) if team_num_int else 0,
                 "Nickname": nickname_link,
-                "SoS": round(sos_metric, 2),
+                "SoS": round(sos_metric, 2) if sos_metric is not None else None,
                 "Avg Opponent ACE": round(avg_opp_ace, 2),
-                "Avg Win Prob": round(avg_win_prob, 2),
+                "Avg Win Prob": round(avg_win_prob, 2) if avg_win_prob is not None else None,
                 "Hardest Match": match_label(hardest),
-                "Hardest Win Prob": round(hardest_prob, 2),
+                "Hardest Win Prob": round(hardest_prob, 2) if hardest_prob is not None else None,
                 "Easiest Match": match_label(easiest),
-                "Easiest Win Prob": round(easiest_prob, 2),
+                "Easiest Win Prob": round(easiest_prob, 2) if easiest_prob is not None else None,
                 "# Matches": len(team_matches),
             })
         # Sort by SoS (ascending: hardest at bottom, easiest at top)
-        team_sos_rows.sort(key=lambda r: r["SoS"], reverse=True)
+        team_sos_rows.sort(key=lambda r: r["SoS"] if r["SoS"] is not None else -1, reverse=True)
         sos_columns = [
             {"name": "Team #", "id": "Team #", "type": "numeric"},
             {"name": "Nickname", "id": "Nickname", "presentation": "markdown"},
@@ -2361,25 +2356,19 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                         alliance = "blue"
                         opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
                     
-                    # Win probability
-                    red_info = [
-                        {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
-                        for t in m.get("rt", "").split(",") if t.strip().isdigit()
-                    ]
-                    blue_info = [
-                        {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
-                        for t in m.get("bt", "").split(",") if t.strip().isdigit()
-                    ]
-                    p_red, p_blue = predict_win_probability(red_info, blue_info)
+                    p_red = m.get("rp")
+                    p_blue = m.get("bp")
+                    if p_red is None or p_blue is None:
+                        continue
                     win_prob = p_red if alliance == "red" else p_blue
                     win_probs.append(win_prob)
                 
-                avg_win_prob = sum(win_probs) / len(win_probs) if win_probs else 0
-                team_sos[team_num] = round(avg_win_prob, 2)  # SoS: 0 = lose all, 1 = win all
+                avg_win_prob = sum(win_probs) / len(win_probs) if win_probs else None
+                team_sos[team_num] = round(avg_win_prob, 2) if avg_win_prob is not None else None  # SoS: 0 = lose all, 1 = win all
         else:
-            # Fallback to simplified calculation if no match data
+            # No match data available for SoS
             for team_num in team_numbers:
-                team_sos[team_num] = 0.5  # Default to 50% win probability
+                team_sos[team_num] = None
         
         # Sort teams by event-specific ACE  for spotlight cards
         sorted_teams = sorted(
@@ -2403,7 +2392,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             overall_ace_rank = overall_rank_map.get(int(tnum), None)
             
             # Get SoS
-            sos_value = team_sos.get(tnum, 0)
+            sos_value = team_sos.get(tnum)
             
             # Calculate ACE improvement from overall to event
             overall_team_data = year_team_data.get(event_year, {}).get(int(tnum), {})
@@ -2727,20 +2716,24 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
             else:
                 label = label.upper()
     
-            red_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
-            blue_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
-
-            # Use simple prediction
-            p_red, p_blue = predict_win_probability(red_info, blue_info)
-            
-            if p_red == 0.5 and p_blue == 0.5:
-                pred_red = "50%"
-                pred_blue = "50%"
-                pred_winner = "Tie"
+            p_red = match.get("rp")
+            p_blue = match.get("bp")
+            if p_red is None or p_blue is None:
+                pred_red = "N/A"
+                pred_blue = "N/A"
+                pred_winner = "N/A"
             else:
-                pred_red = f"{p_red:.0%}"
-                pred_blue = f"{p_blue:.0%}"
-                pred_winner = "Red" if p_red > p_blue else "Blue"
+                if abs(p_red - 0.5) < 1e-6:
+                    pred_winner = "Tie"
+                else:
+                    pred_winner = "Red" if p_red > p_blue else "Blue"
+
+                if abs(p_red - 0.5) < 1e-6 and abs(p_blue - 0.5) < 1e-6:
+                    pred_red = "50%"
+                    pred_blue = "50%"
+                else:
+                    pred_red = f"{p_red:.0%}"
+                    pred_blue = f"{p_blue:.0%}"
 
             yid = match.get("yt")
             video_link = f"[▶](https://www.youtube.com/watch?v={yid})" if yid else "N/A"
@@ -2761,8 +2754,8 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
                     "Pred Winner": pred_winner,
                     "Red Pred": f"{pred_red}",
                     "Blue Pred": f"{pred_blue}",
-                    "Red Prediction %": p_red * 100,  # For conditional styling
-                    "Blue Prediction %": p_blue * 100,  # For conditional styling
+                    "Red Prediction %": p_red * 100 if p_red is not None else None,
+                    "Blue Prediction %": p_blue * 100 if p_blue is not None else None,
                 })
             else:
                 # Team focus view - only show selected team's alliance
@@ -2774,11 +2767,11 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
                     if selected_team in red_str.split(","):
                         team_alliance = "Red"
                         team_prediction = pred_red
-                        team_prediction_percent = p_red * 100
+                        team_prediction_percent = p_red * 100 if p_red is not None else None
                     elif selected_team in blue_str.split(","):
                         team_alliance = "Blue"
                         team_prediction = pred_blue
-                        team_prediction_percent = p_blue * 100
+                        team_prediction_percent = p_blue * 100 if p_blue is not None else None
                 
                 rows.append({
                     "Video": video_link,
@@ -3459,20 +3452,14 @@ def update_compare_teams_table(selected_teams, mode, radar_toggles, epa_data, ev
                 score = m.get("bs", 0)
                 opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
             scores.append(score)
-            # Win probability
-            red_info = [
-                {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
-                for t in m.get("rt", "").split(",") if t.strip().isdigit()
-            ]
-            blue_info = [
-                {"team_number": int(t), "epa": epa_data.get(str(t), {}).get("epa", 0), "confidence": epa_data.get(str(t), {}).get("confidence", 0.7)}
-                for t in m.get("bt", "").split(",") if t.strip().isdigit()
-            ]
-            p_red, p_blue = predict_win_probability(red_info, blue_info)
+            p_red = m.get("rp")
+            p_blue = m.get("bp")
+            if p_red is None or p_blue is None:
+                continue
             win_prob = p_red if alliance == "red" else p_blue
             win_probs.append(win_prob)
         avg_score_map[tnum_str] = sum(scores) / len(scores) if scores else 0
-        sos_map[tnum_str] = sum(win_probs) / len(win_probs) if win_probs else 0
+        sos_map[tnum_str] = sum(win_probs) / len(win_probs) if win_probs else None
 
     # Handle alliance mode - calculate combined stats for multiple alliances
     alliance_rows = []
@@ -3528,7 +3515,7 @@ def update_compare_teams_table(selected_teams, mode, radar_toggles, epa_data, ev
             "Nickname": nickname_link,
             "Rank": rank_info.get("rk", "N/A"),
             "W-L-T": f"{rank_info.get('w', 'N/A')}-{rank_info.get('l', 'N/A')}-{rank_info.get('t', 'N/A')}",
-            "SoS": sos_map.get(str(tnum), 0),
+            "SoS": sos_map.get(str(tnum)),
             "RAW": float(epa.get('normal_epa', 0)),
             "Auto": float(epa.get('auto_epa', 0)),
             "Teleop": float(epa.get('teleop_epa', 0)),

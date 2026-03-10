@@ -69,6 +69,7 @@ EVENT_BOOSTS = {
 
 WEEK_RANGES_BY_YEAR = None
 
+
 def load_week_ranges():
     global WEEK_RANGES_BY_YEAR
     if WEEK_RANGES_BY_YEAR is not None:
@@ -852,6 +853,10 @@ def create_event_db(year):
     events_to_process = []
     events_skipped = 0
     events_skipped_future = 0
+    try:
+        is_historical = int(year) < datetime.now().year
+    except Exception:
+        is_historical = False
     
     print(f"Checking {len(events)} events for updates...")
     
@@ -876,18 +881,19 @@ def create_event_db(year):
             events_to_process.append(event)
             continue
         
-        # Check if event has ended
-        end_date = existing_data["event"][2]  # end_date
-        if end_date:
-            try:
-                end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
-                if end_date_obj < datetime.now():
-                    # Event has ended, skip unless it's very recent (within last 7 days)
-                    if (datetime.now() - end_date_obj).days > 7:
-                        events_skipped += 1
-                        continue
-            except Exception:
-                pass  # Bad date format, process anyway
+        # Check if event has ended (skip only for current-season updates)
+        if not is_historical:
+            end_date = existing_data["event"][2]  # end_date
+            if end_date:
+                try:
+                    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+                    if end_date_obj < datetime.now():
+                        # Event has ended, skip unless it's very recent (within last 7 days)
+                        if (datetime.now() - end_date_obj).days > 7:
+                            events_skipped += 1
+                            continue
+                except Exception:
+                    pass  # Bad date format, process anyway
         
         # For ongoing or recent events, check if data has changed
         events_to_process.append(event)
@@ -1315,6 +1321,13 @@ def fetch_and_store_team_data(year):
         if len(failed_teams) > 10:
             print(f"  ... and {len(failed_teams) - 10} more")
 
+    # Calculate and store match predictions after team EPAs are up to date
+    if not shutdown_event.is_set():
+        try:
+            calculate_and_store_match_predictions(year)
+        except Exception as e:
+            print(f"Failed to calculate match predictions for {year}: {e}")
+
 def get_team_experience(team_number: int, up_to_year: int) -> int:
     # Determine how many years a team has competed up to and including up_to_year.
     try:
@@ -1365,6 +1378,112 @@ def calculate_confidence(consistency: float, dominance: float, event_boost: floa
     
     capped_confidence = max(0.0, min(1.0, raw_confidence))
     return raw_confidence, capped_confidence, record_alignment
+
+def _effective_epa(team_infos: List[Dict]) -> float:
+    if not team_infos:
+        return 0.0
+    weighted_epas = []
+    for t in team_infos:
+        epa = t.get("epa", 0) or 0
+        conf = t.get("confidence", 0) or 0
+        reliability = 1.0 * conf
+        weighted_epas.append(epa * reliability)
+    return float(sum(weighted_epas) / len(weighted_epas)) if weighted_epas else 0.0
+
+def predict_win_probability(red_info: List[Dict], blue_info: List[Dict]) -> tuple[float, float]:
+    red_eff = _effective_epa(red_info)
+    blue_eff = _effective_epa(blue_info)
+    all_infos = (red_info or []) + (blue_info or [])
+    reliability = float(sum(t.get("confidence", 0) or 0 for t in all_infos) / len(all_infos)) if all_infos else 0.0
+
+    if red_eff + blue_eff == 0:
+        return 0.5, 0.5
+
+    diff = red_eff - blue_eff
+    scale = (0.06 + 0.3 * (1 - reliability))
+    p_red = 1 / (1 + math.exp(-scale * diff))
+    p_red = max(0.02, min(0.98, p_red))
+    return p_red, 1 - p_red
+
+def _load_team_prediction_lookup(year: int) -> Dict[int, Dict[str, float]]:
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT team_number, epa, confidence
+            FROM team_epas
+            WHERE year = %s
+            """,
+            (year,),
+        )
+        return {row[0]: {"epa": row[1] or 0.0, "confidence": row[2] or 0.0} for row in cur.fetchall()}
+    finally:
+        cur.close()
+        conn.close()
+
+def _team_prediction_info(team_number: int, current_year_lookup: Dict[int, Dict[str, float]], prev_year_lookup: Dict[int, Dict[str, float]]) -> Dict[str, float]:
+    data = current_year_lookup.get(team_number)
+    if data and data.get("epa", 0):
+        return data
+    data = prev_year_lookup.get(team_number)
+    if data and data.get("epa", 0):
+        return data
+    return {"epa": 0.0, "confidence": 0.7}
+
+def calculate_and_store_match_predictions(year: int):
+    if shutdown_event.is_set():
+        return
+
+    current_lookup = _load_team_prediction_lookup(year)
+    prev_lookup = _load_team_prediction_lookup(year - 1)
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT match_key, red_teams, blue_teams
+            FROM event_matches
+            WHERE LEFT(event_key, 4) = %s
+            """,
+            (str(year),),
+        )
+        match_rows = cur.fetchall()
+
+        updates = []
+        for match_key, red_teams, blue_teams in match_rows:
+            red_list = [int(t) for t in (red_teams or "").split(",") if t.strip().isdigit()]
+            blue_list = [int(t) for t in (blue_teams or "").split(",") if t.strip().isdigit()]
+            if not red_list or not blue_list:
+                updates.append((None, None, match_key))
+                continue
+
+            red_info = [
+                _team_prediction_info(t, current_lookup, prev_lookup) for t in red_list
+            ]
+            blue_info = [
+                _team_prediction_info(t, current_lookup, prev_lookup) for t in blue_list
+            ]
+
+            p_red, p_blue = predict_win_probability(red_info, blue_info)
+            updates.append((p_red, p_blue, match_key))
+
+        if updates:
+            cur.executemany(
+                """
+                UPDATE event_matches
+                SET red_win_prob = %s,
+                    blue_win_prob = %s
+                WHERE match_key = %s
+                """,
+                updates,
+            )
+        conn.commit()
+        print(f"Stored match predictions for {len(updates)} matches in {year}.")
+    finally:
+        cur.close()
+        conn.close()
 
 def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) -> Dict:
     try:
@@ -1480,10 +1599,11 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             team_count = len(team_keys)
             index = team_keys.index(team_key) + 1
 
-            breakdown = match.get("score_breakdown", {})
+            breakdown = match.get("score_breakdown")
+            legacy_year = 1992 <= year_int <= 2014
 
-            # --- Legacy years: no breakdown, use alliance score ---
-            if breakdown is None and 1992 <= year_int <= 2014:
+            # --- Legacy years: use alliance score ---
+            if legacy_year:
                 auto = 0
                 endgame = 0
                 scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
@@ -2020,21 +2140,25 @@ def fetch_team_components(team, year):
     has_matches = any(epa.get("match_count", 0) > 0 for epa in event_epa_full)
     overall_epa_data = None
     if not has_matches:
-        prev_year = year - 1
-        previous_epa = get_existing_team_epa(team_number, prev_year)
-        if previous_epa:
-            overall_epa_data = {
-                "overall": previous_epa.get("normal_epa", 0) or 0.0,
-                "auto": previous_epa.get("auto_epa", 0) or 0.0,
-                "teleop": previous_epa.get("teleop_epa", 0) or 0.0,
-                "endgame": previous_epa.get("endgame_epa", 0) or 0.0,
-                "confidence": previous_epa.get("confidence", 0) or 0.0,
-                "actual_epa": previous_epa.get("epa", 0) or 0.0,
-                "wins": 0,
-                "losses": 0,
-                "ties": 0
-            }
-            event_epa_results = []
+        use_prev_year_fallback = year >= datetime.now().year
+        if use_prev_year_fallback:
+            prev_year = year - 1
+            previous_epa = get_existing_team_epa(team_number, prev_year)
+            if previous_epa:
+                overall_epa_data = {
+                    "overall": previous_epa.get("normal_epa", 0) or 0.0,
+                    "auto": previous_epa.get("auto_epa", 0) or 0.0,
+                    "teleop": previous_epa.get("teleop_epa", 0) or 0.0,
+                    "endgame": previous_epa.get("endgame_epa", 0) or 0.0,
+                    "confidence": previous_epa.get("confidence", 0) or 0.0,
+                    "actual_epa": previous_epa.get("epa", 0) or 0.0,
+                    "wins": 0,
+                    "losses": 0,
+                    "ties": 0
+                }
+                event_epa_results = []
+            else:
+                overall_epa_data = aggregate_overall_epa(event_epa_full, year, team_number)
         else:
             overall_epa_data = aggregate_overall_epa(event_epa_full, year, team_number)
     else:

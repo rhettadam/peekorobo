@@ -1,5 +1,4 @@
 import numpy as np
-import math
 import os
 from collections import defaultdict
 import re
@@ -52,35 +51,6 @@ def apply_simple_filter(df, filter_query):
                 df = df[pd.to_numeric(df[col], errors='coerce') <= float(val)]
             # Add more ops as needed
     return df
-
-#### PREDICTIONS
-
-def effective_epa(team_infos):
-        if not team_infos:
-            return 0
-        
-        weighted_epas = []
-        for t in team_infos:
-            epa = t["epa"]
-            conf = t["confidence"]
-            reliability = 1.0 * conf
-            weighted_epas.append(epa * reliability)
-        
-        return np.mean(weighted_epas)
-
-def predict_win_probability(red_info, blue_info):
-    red_eff = effective_epa(red_info)
-    blue_eff = effective_epa(blue_info)
-    reliability = np.mean([t["confidence"] for t in red_info + blue_info]) if red_info + blue_info else 0
-    
-    if red_eff + blue_eff == 0:
-        return 0.5, 0.5
-    
-    diff = red_eff - blue_eff
-    scale = (0.06 + 0.3 * (1 - reliability))
-    p_red = 1 / (1 + math.exp(-scale * diff))
-    p_red = max(0.02, min(0.98, p_red))  # clip for calibration
-    return p_red, 1 - p_red
 
 def calculate_single_rank(team_data, selected_team):
     # Extract selected team's information
