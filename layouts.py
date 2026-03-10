@@ -3,7 +3,21 @@ from dash import html, dcc, dash_table
 from datagather import load_year_data,get_team_avatar,get_team_years_participated,TEAM_COLORS
 from flask import session
 from datetime import datetime, date, timedelta, timezone
-from utils import get_team_data_with_fallback,format_human_date,calculate_single_rank,sort_key,get_user_avatar,user_team_card,get_contrast_text_color,get_available_avatars,DatabaseConnection,get_epa_styling,predict_win_probability, compute_percentiles, pill, get_event_week_label_from_number
+from utils import (
+    get_team_data_with_fallback,
+    format_human_date,
+    calculate_single_rank,
+    sort_key,
+    get_user_avatar,
+    user_team_card,
+    get_contrast_text_color,
+    get_available_avatars,
+    DatabaseConnection,
+    get_epa_styling,
+    compute_percentiles,
+    pill,
+    get_event_week_label_from_number,
+)
 import json
 import os
 import re
@@ -3566,30 +3580,26 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 else:
                     continue  # Team not in this match
                 
-                # Get prediction for this match
-                red_str = match.get("rt", "")
-                blue_str = match.get("bt", "")
-                red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
-                blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
-                
-                if red_team_info and blue_team_info:
-                    p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
-                    
-                    if winner == "tie" or winner == "":
-                        # Only count as correct if prediction is 50%
-                        team_prediction = p_red if team_alliance == "red" else p_blue
-                        if abs(team_prediction - 0.5) < 0.01:  # Within 1% of 50%
-                            total += 1
-                            correct += 1
-                        else:
-                            excluded_ties += 1
-                    elif winner in ["red", "blue"]:
+                p_red = match.get("rp")
+                p_blue = match.get("bp")
+                if p_red is None or p_blue is None:
+                    continue
+
+                if winner == "tie" or winner == "":
+                    # Only count as correct if prediction is 50%
+                    team_prediction = p_red if team_alliance == "red" else p_blue
+                    if abs(team_prediction - 0.5) < 0.01:  # Within 1% of 50%
                         total += 1
-                        team_prediction = p_red if team_alliance == "red" else p_blue
-                        
-                        # Check if prediction was correct
-                        if (team_alliance == winner and team_prediction > 0.5) or (team_alliance != winner and team_prediction < 0.5):
-                            correct += 1
+                        correct += 1
+                    else:
+                        excluded_ties += 1
+                elif winner in ["red", "blue"]:
+                    total += 1
+                    team_prediction = p_red if team_alliance == "red" else p_blue
+                    
+                    # Check if prediction was correct
+                    if (team_alliance == winner and team_prediction > 0.5) or (team_alliance != winner and team_prediction < 0.5):
+                        correct += 1
             
             acc = (correct / total * 100) if total > 0 else 0
             return correct, total, acc, excluded_ties
@@ -3676,23 +3686,23 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 # Add match link
                 match_url = f"/match/{event_key}/{label}"
                 match_label_md = f"[{label}]({match_url})"
-                red_team_info = [get_team_epa_info(t) for t in red_str.split(",") if t.strip().isdigit()]
-                blue_team_info = [get_team_epa_info(t) for t in blue_str.split(",") if t.strip().isdigit()]
-                if red_team_info and blue_team_info:
-                    # Use simple prediction
-                    p_red, p_blue = predict_win_probability(red_team_info, blue_team_info)
-                    if p_red == 0.5 and p_blue == 0.5:
+                p_red = match.get("rp")
+                p_blue = match.get("bp")
+                if p_red is None or p_blue is None:
+                    pred_red = pred_blue = "N/A"
+                    pred_winner = "N/A"
+                else:
+                    if abs(p_red - 0.5) < 1e-6:
+                        pred_winner = "Tie"
+                    else:
+                        pred_winner = "Red" if p_red > p_blue else "Blue"
+
+                    if abs(p_red - 0.5) < 1e-6 and abs(p_blue - 0.5) < 1e-6:
                         pred_red = "50%"
                         pred_blue = "50%"
-                        pred_winner = "Tie"
                     else:
                         pred_red = f"{p_red:.0%}"
                         pred_blue = f"{p_blue:.0%}"
-                        pred_winner = "Red" if p_red > p_blue else "Blue"
-                else:
-                    p_red = p_blue = None
-                    pred_red = pred_blue = "N/A"
-                    pred_winner = "Tie"
 
         
                 winner = match.get("wa") or "Tie"
@@ -4472,7 +4482,11 @@ def match_layout(event_key, match_key):
     red_epas = [get_team_epa_breakdown(t) for t in red_teams]
     blue_epas = [get_team_epa_breakdown(t) for t in blue_teams]
 
-    p_red, p_blue = predict_win_probability(red_epas, blue_epas)
+    p_red = match.get("rp")
+    p_blue = match.get("bp")
+    if p_red is None or p_blue is None:
+        p_red = 0.5
+        p_blue = 0.5
 
     # Projected/actual scores
     pred_red_score = sum(t["epa"] for t in red_epas)
