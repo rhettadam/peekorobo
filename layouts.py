@@ -5066,6 +5066,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
     following_count = 0
     color = "#f9f9f9"
     higher_lower_highscore = 0
+    api_key = None
     team_keys = []
     event_keys = []
     followers_user_objs = []
@@ -5079,7 +5080,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
             if is_current_user:
                 # Current user - get full profile data
                 cursor.execute("""
-                    SELECT username, avatar_key, role, team, bio, followers, following, color, email, higher_lower_highscore
+                    SELECT username, avatar_key, role, team, bio, followers, following, color, email, higher_lower_highscore, api_key
                     FROM users WHERE id = %s
                 """, (target_user_id,))
                 user_row = cursor.fetchone()
@@ -5094,6 +5095,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     color = user_row[7] or "#f9f9f9"
                     email = user_row[8] or ""
                     higher_lower_highscore = user_row[9] or 0
+                    api_key = user_row[10] or None
                     
                     # Get usernames and avatars for followers
                     if followers_ids:
@@ -5218,6 +5220,37 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                     "marginTop": "4px",
                     "display": "flex",
                     "flexWrap": "wrap"
+                }),
+
+                html.Div([
+                    html.Button(
+                        "API Key",
+                        id="open-api-key-modal",
+                        style={
+                            "backgroundColor": "#2D2D2D",
+                            "border": "0px solid #000000",
+                            "borderRadius": "4px",
+                            "padding": "6px 12px",
+                            "color": "#ffffff",
+                            "fontWeight": "600",
+                            "fontSize": "0.75rem",
+                            "textDecoration": "none",
+                            "cursor": "pointer",
+                            "display": "inline-block"
+                        }
+                    ),
+                    html.Span(
+                        "View or generate your API key.",
+                        style={"marginLeft": "8px", "fontSize": "0.75rem", "color": text_color}
+                    )
+                ], style={
+                    "fontSize": "0.85rem",
+                    "color": text_color,
+                    "marginTop": "8px",
+                    "display": "flex",
+                    "flexWrap": "wrap",
+                    "alignItems": "center",
+                    "gap": "4px"
                 }),
         
                 html.Div(bio, id="profile-bio", style={
@@ -5536,6 +5569,66 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
     # Add favorites store only for current user
     if is_current_user:
         layout_components.append(dcc.Store(id="favorites-store", data={"deleted": []}))
+        layout_components.append(
+            dbc.Modal(
+                [
+                    dbc.ModalHeader(dbc.ModalTitle("API Key")),
+                    dbc.ModalBody([
+                        html.P("Keep this key private.", style={"fontSize": "0.85rem", "marginBottom": "8px"}),
+                        dbc.Input(
+                            id="api-key-input",
+                            value=api_key or "",
+                            placeholder="Generate to create a key",
+                            readonly=True,
+                            size="sm",
+                            className="custom-input-box",
+                            style={
+                                "fontFamily": "monospace",
+                                "fontSize": "0.85rem"
+                            }
+                        ),
+                        html.Div(id="api-key-status", style={"marginTop": "8px", "fontSize": "0.8rem"})
+                    ]),
+                    dbc.ModalFooter([
+                        html.Button(
+                            "Generate API Key",
+                            id="generate-api-key-btn",
+                            style={
+                                "backgroundColor": "#2D2D2D",
+                                "border": "0px solid #000000",
+                                "borderRadius": "4px",
+                                "padding": "6px 12px",
+                                "color": "#ffffff",
+                                "fontWeight": "600",
+                                "fontSize": "0.75rem",
+                                "textDecoration": "none",
+                                "cursor": "pointer",
+                                "display": "inline-block"
+                            }
+                        ),
+                        html.Button(
+                            "Close",
+                            id="close-api-key-modal",
+                            style={
+                                "marginLeft": "8px",
+                                "backgroundColor": "#cccccc",
+                                "border": "0px solid #000000",
+                                "borderRadius": "4px",
+                                "padding": "6px 12px",
+                                "color": "#000000",
+                                "fontWeight": "600",
+                                "fontSize": "0.75rem",
+                                "textDecoration": "none",
+                                "cursor": "pointer",
+                                "display": "inline-block"
+                            }
+                        )
+                    ])
+                ],
+                id="api-key-modal",
+                is_open=False
+            )
+        )
     
     layout_components.extend([
         followers_popover,

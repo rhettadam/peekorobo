@@ -15,6 +15,7 @@ from datetime import datetime, date
 
 import re
 import random
+import secrets
 import requests
 from urllib.parse import parse_qs, urlencode, quote, unquote
 import json
@@ -925,6 +926,54 @@ def handle_profile_edit(
         )
 
     return [dash.no_update] * 18
+
+@app.callback(
+    Output("api-key-modal", "is_open"),
+    Input("open-api-key-modal", "n_clicks"),
+    Input("close-api-key-modal", "n_clicks"),
+    State("api-key-modal", "is_open"),
+    prevent_initial_call=True
+)
+def toggle_api_key_modal(open_clicks, close_clicks, is_open):
+    triggered_id = ctx.triggered_id
+    if triggered_id == "open-api-key-modal":
+        return True
+    if triggered_id == "close-api-key-modal":
+        return False
+    return is_open
+
+@app.callback(
+    Output("api-key-input", "value"),
+    Output("api-key-status", "children"),
+    Input("generate-api-key-btn", "n_clicks"),
+    State("user-session", "data"),
+    prevent_initial_call=True
+)
+def handle_api_key_generation(_, session_data):
+    user_id = session_data if isinstance(session_data, str) else session_data.get("user_id") if session_data else None
+    if not user_id:
+        return dash.no_update, "Please log in to generate a key."
+
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT api_key FROM users WHERE id = %s", (user_id,))
+            row = cur.fetchone()
+            existing_key = row[0] if row else None
+            if existing_key:
+                return existing_key, "API key already generated."
+
+            for _ in range(5):
+                new_key = secrets.token_urlsafe(32)
+                cur.execute("SELECT 1 FROM users WHERE api_key = %s", (new_key,))
+                if not cur.fetchone():
+                    cur.execute("UPDATE users SET api_key = %s WHERE id = %s", (new_key, user_id))
+                    conn.commit()
+                    return new_key, "API key generated."
+
+            return dash.no_update, "Unable to generate a unique key."
+    except Exception:
+        return dash.no_update, "Error generating API key."
     
 @app.callback(
     Output({"type": "follow-user", "user_id": MATCH}, "children"),
