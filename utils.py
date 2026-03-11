@@ -14,6 +14,14 @@ from datagather import TEAM_COLORS
 
 current_year = 2025
 
+# Demo teams (9970-9999) are excluded from ranking totals and comparisons
+def is_demo_team(team_number):
+    try:
+        n = int(team_number)
+        return 9970 <= n <= 9999
+    except (TypeError, ValueError):
+        return False
+
 def get_event_week_label_from_number(week_number):
     """Return a string like 'Week 1' for a 0-based week index."""
     if week_number is None:
@@ -55,16 +63,19 @@ def apply_simple_filter(df, filter_query):
 def calculate_single_rank(team_data, selected_team):
     # Extract selected team's information
     selected_epa = selected_team.get("epa")
-    valid_epas = [team.get("epa") for team in team_data if team.get("epa") not in (None, 0)]
-    
+    valid_epas = [
+        team.get("epa") for team in team_data
+        if team.get("epa") not in (None, 0) and not is_demo_team(team.get("team_number"))
+    ]
+
     # If selected team has no EPA data, return N/A for all ranks
     if selected_epa is None:
         return "N/A", "N/A", "N/A"
-    
+
     # If there is no meaningful EPA data for the year, return N/A for all ranks
     if not valid_epas:
         return "N/A", "N/A", "N/A"
-    
+
     selected_epa = selected_epa or 0  # Convert None/False to 0, but we already checked for None above
     selected_country = (selected_team.get("country") or "").lower()
     selected_state = (selected_team.get("state_prov") or "").lower()
@@ -76,12 +87,15 @@ def calculate_single_rank(team_data, selected_team):
     for team in team_data:
         if team.get("team_number") == selected_team.get("team_number"):
             continue
+        # Exclude demo teams (9970-9999) from rank comparison
+        if is_demo_team(team.get("team_number")):
+            continue
 
         team_epa = team.get("epa")
         # Skip teams with no EPA data for comparison
         if team_epa is None:
             continue
-            
+
         team_epa = team_epa or 0
         team_country = (team.get("country") or "").lower()
         team_state = (team.get("state_prov") or "").lower()
@@ -123,17 +137,18 @@ def calculate_all_ranks(year, data):
     # Sort by the chosen ranking metric - teams with EPA first, then by EPA value
     teams_data = sorted(teams_data, key=lambda x: (not x.get("has_epa", False), x.get("sort_metric", 0)), reverse=True)
 
-    # Compute percentiles for display using `display_ace` only (excluding None values)
-    values = [team.get("display_ace") for team in teams_data if team.get("display_ace") is not None]
+    # Exclude demo teams (9970-9999) from percentile and rank calculations
+    rankable_teams = [t for t in teams_data if not is_demo_team(t.get("team_number"))]
+    values = [team.get("display_ace") for team in rankable_teams if team.get("display_ace") is not None]
     percentiles = {p: np.percentile(values, int(p)) for p in ["99", "95", "90", "75", "50", "25"]} if values else {p: 0 for p in ["99", "95", "90", "75", "50", "25"]}
 
     rank = 1
     for team in teams_data:
         team_number = str(team["team_number"])
         ace = team["display_ace"]
-        
-        # Only assign rank if team has EPA data, otherwise use "N/A"
-        if team.get("has_epa", False):
+
+        # Only assign rank if team has EPA data and is not a demo team, otherwise use "N/A"
+        if team.get("has_epa", False) and not is_demo_team(team.get("team_number")):
             current_rank = rank
             rank += 1
         else:

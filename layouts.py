@@ -7,6 +7,7 @@ from utils import (
     get_team_data_with_fallback,
     format_human_date,
     calculate_single_rank,
+    is_demo_team,
     sort_key,
     get_user_avatar,
     user_team_card,
@@ -446,21 +447,23 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         },
     )
     def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state, year_data, selected_team):
-        # Calculate total counts for each category
-        total_teams = len(year_data)
-        country_teams = len([team for team in year_data.values() if team.get("country", "").lower() == country.lower()])
-        state_teams = len([team for team in year_data.values() if team.get("state_prov", "").lower() == state.lower()])
-        
+        # Exclude demo teams (9970-9999) from totals
+        real_teams = [t for t in year_data.values() if not is_demo_team(t.get("team_number"))]
+        # Calculate total counts for each category (excluding demo teams)
+        total_teams = len(real_teams)
+        country_teams = len([team for team in real_teams if team.get("country", "").lower() == country.lower()])
+        state_teams = len([team for team in real_teams if team.get("state_prov", "").lower() == state.lower()])
+
         # Use stored district data for district ranking
         district_rank = None
         district_name = None
         district_teams = 0
-        
-        try:  
+
+        try:
             district_name = selected_team.get("district")
             if district_name:
                 district_team_list = [
-                    team for team in year_data.values()
+                    team for team in real_teams
                     if team.get("district") == district_name
                 ]
                 district_teams = len(district_team_list)
