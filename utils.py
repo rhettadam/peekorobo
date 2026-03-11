@@ -14,6 +14,16 @@ from datagather import TEAM_COLORS
 
 current_year = 2025
 
+# TBA uses year-prefixed district keys (e.g. 2024fim). Normalize to base code (FIM).
+def normalize_district_key(key):
+    """Extract base district code from TBA key. '2024fim' -> 'FIM', 'fim' -> 'FIM'."""
+    if not key or not isinstance(key, str):
+        return None
+    s = key.strip()
+    if len(s) > 4 and s[:4].isdigit():
+        return s[4:].upper()
+    return s.upper() if s else None
+
 # Demo teams (9970-9999) are excluded from ranking totals and comparisons
 def is_demo_team(team_number):
     try:

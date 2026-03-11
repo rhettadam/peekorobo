@@ -1,0 +1,72 @@
+{
+  "ISR": {
+    "display_name": "Israel",
+    "names": ["Israel"],
+    "abbreviations": ["Israel"]
+  },
+  "CA": {
+    "display_name": "FIRST California",
+    "names": ["California"],
+    "abbreviations": ["CA"]
+  },
+  "FMA": {
+    "display_name": "FIRST Mid-Atlantic",
+    "names": ["Delaware", "New Jersey", "Pennsylvania"],
+    "abbreviations": ["DE", "NJ", "PA"]
+  },
+  "FCH": {
+    "display_name": "FIRST Chesapeake",
+    "names": ["Maryland", "Virginia", "District of Columbia"],
+    "abbreviations": ["MD", "VA", "DC"]
+  },
+  "FIM": {
+    "display_name": "FIRST In Michigan",
+    "names": ["Michigan"],
+    "abbreviations": ["MI"]
+  },
+  "FNC": {
+    "display_name": "FIRST North Carolina",
+    "names": ["North Carolina"],
+    "abbreviations": ["NC"]
+  },
+  "FIT": {
+    "display_name": "FIRST In Texas",
+    "names": ["Texas", "New Mexico"],
+    "abbreviations": ["TX", "NM"]
+  },
+  "PNW": {
+    "display_name": "Pacific Northwest",
+    "names": ["Washington", "Oregon"],
+    "abbreviations": ["WA", "OR"]
+  },
+  "ONT": {
+    "display_name": "FIRST Canada - Ontario",
+    "names": ["Ontario"],
+    "abbreviations": ["Ontario"]
+  },
+  "FIN": {
+    "display_name": "FIRST Indiana Robotics",
+    "names": ["Indiana"],
+    "abbreviations": ["IN"]
+  },
+  "NE": {
+    "display_name": "NE FIRST",
+    "names": ["Connecticut", "Massachusetts", "Maine", "New Hampshire", "Vermont"],
+    "abbreviations": ["CT", "MA", "ME", "NH", "VT"]
+  },
+  "FSC": {
+    "display_name": "FIRST South Carolina",
+    "names": ["South Carolina"],
+    "abbreviations": ["SC"]
+  },
+  "PCH": {
+    "display_name": "Peachtree",
+    "names": ["Georgia"],
+    "abbreviations": ["GA"]
+  },
+  "WIN": {
+    "display_name": "FIRST Wisconsin",
+    "names": ["Wisconsin"],
+    "abbreviations": ["WI"]
+  }
+}

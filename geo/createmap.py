@@ -34,7 +34,7 @@ DISTRICT_STATES = {
     "ONT": ["Ontario"],
     "FMA": ["Delaware", "New Jersey", "Pennsylvania"],
     "ISR": ["Israel"],
-    "CHS": ["Maryland", "Virginia", "District of Columbia"],
+    "FCH": ["Maryland", "Virginia", "District of Columbia"],
     "FIT": ["Texas", "New Mexico"],
     "PCH": ["Georgia"],
     "PNW": ["Washington", "Oregon"],
@@ -44,7 +44,7 @@ DISTRICT_STATES = {
     "FIN": ["Indiana"],
     "NE": ["Connecticut", "Massachusetts", "Maine", "New Hampshire", "Vermont"],
     "CA": ["California"],  # California district added
-    "WSC": ["Wisconsin"],
+    "WIN": ["Wisconsin"],
 }
 
 # District colors
@@ -52,7 +52,7 @@ DISTRICT_COLORS = {
     "ONT": "#1f77b4",  # blue
     "FMA": "#ff7f0e",  # orange
     "ISR": "#2ca02c",  # green
-    "CHS": "#d62728",  # red
+    "FCH": "#d62728",  # red
     "FIT": "#9467bd",  # purple
     "PCH": "#8c564b",  # brown
     "PNW": "#e377c2",  # pink
@@ -62,7 +62,7 @@ DISTRICT_COLORS = {
     "FIN": "#ff9896",  # light red
     "NE": "#98df8a",   # light green
     "CA": "#00bfff",   # Deep Sky Blue for California
-    "WSC": "#ff7f0e",  # orange
+    "WIN": "#ff7f0e",  # orange
 }
 
 def load_cached_data(cache_file, load_func, *args, **kwargs):

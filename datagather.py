@@ -149,20 +149,35 @@ def load_data():
     with DatabaseConnection() as conn:
         team_cursor = conn.cursor()
         
-        # Get all team EPA data
-        team_cursor.execute("""
-            SELECT te.team_number, te.year,
-                   t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
-                   te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
-                   te.wins, te.losses, te.ties, te.event_epas
-            FROM team_epas te
-            LEFT JOIN teams t ON te.team_number = t.team_number
-            ORDER BY te.year, te.team_number
-        """)
+        # Get all team EPA data (district from teams or districts table when normalized)
+        try:
+            team_cursor.execute("""
+                SELECT te.team_number, te.year,
+                       t.nickname, t.city, t.state_prov, t.country, t.website,
+                       COALESCE(t.district, d.display_name, d.name) AS district,
+                       t.district_key,
+                       te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
+                       te.wins, te.losses, te.ties, te.event_epas
+                FROM team_epas te
+                LEFT JOIN teams t ON te.team_number = t.team_number
+                LEFT JOIN districts d ON t.district_key = d.district_key
+                ORDER BY te.year, te.team_number
+            """)
+        except Exception:
+            team_cursor.execute("""
+                SELECT te.team_number, te.year,
+                       t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
+                       NULL::text AS district_key,
+                       te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
+                       te.wins, te.losses, te.ties, te.event_epas
+                FROM team_epas te
+                LEFT JOIN teams t ON te.team_number = t.team_number
+                ORDER BY te.year, te.team_number
+            """)
         
         team_data = {}
         for row in team_cursor.fetchall():
-            team_number, year, nickname, city, state_prov, country, website, district, \
+            team_number, year, nickname, city, state_prov, country, website, district, district_key, \
             normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
             wins, losses, ties, event_epas = row
             
@@ -175,6 +190,7 @@ def load_data():
                 "country": country,
                 "website": website,
                 "district": district,
+                "district_key": district_key,
                 "normal_epa": normal_epa,
                 "epa": epa,
                 "confidence": confidence,
@@ -403,20 +419,36 @@ def load_data_current_year():
         team_cursor = conn.cursor()
         
         # Get only current year team EPA data
-        team_cursor.execute("""
-            SELECT te.team_number, te.year,
-                   t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
-                   te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
-                   te.wins, te.losses, te.event_epas
-            FROM team_epas te
-            LEFT JOIN teams t ON te.team_number = t.team_number
-            WHERE te.year = %s
-            ORDER BY te.team_number
-        """, (current_year,))
+        try:
+            team_cursor.execute("""
+                SELECT te.team_number, te.year,
+                       t.nickname, t.city, t.state_prov, t.country, t.website,
+                       COALESCE(t.district, d.display_name, d.name) AS district,
+                       t.district_key,
+                       te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
+                       te.wins, te.losses, te.event_epas
+                FROM team_epas te
+                LEFT JOIN teams t ON te.team_number = t.team_number
+                LEFT JOIN districts d ON t.district_key = d.district_key
+                WHERE te.year = %s
+                ORDER BY te.team_number
+            """, (current_year,))
+        except Exception:
+            team_cursor.execute("""
+                SELECT te.team_number, te.year,
+                       t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
+                       NULL::text AS district_key,
+                       te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
+                       te.wins, te.losses, te.event_epas
+                FROM team_epas te
+                LEFT JOIN teams t ON te.team_number = t.team_number
+                WHERE te.year = %s
+                ORDER BY te.team_number
+            """, (current_year,))
         
         team_data = {current_year: {}}
         for row in team_cursor.fetchall():
-            team_number, year, nickname, city, state_prov, country, website, district, \
+            team_number, year, nickname, city, state_prov, country, website, district, district_key, \
             normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
             wins, losses, event_epas = row
             
@@ -429,6 +461,7 @@ def load_data_current_year():
                 "country": country,
                 "website": website,
                 "district": district,
+                "district_key": district_key,
                 "normal_epa": normal_epa,
                 "epa": epa,
                 "confidence": confidence,
@@ -646,19 +679,35 @@ def load_year_data(year):
         # === Load team EPA data for specific year ===
         team_data = {}
         with conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT te.team_number, te.year,
-                       t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
-                       te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
-                       te.wins, te.losses, te.ties, te.event_epas
-                FROM team_epas te
-                LEFT JOIN teams t ON te.team_number = t.team_number
-                WHERE te.year = %s
-                ORDER BY te.team_number
-            """, (year,))
+            try:
+                cursor.execute("""
+                    SELECT te.team_number, te.year,
+                           t.nickname, t.city, t.state_prov, t.country, t.website,
+                           COALESCE(t.district, d.display_name, d.name) AS district,
+                           t.district_key,
+                           te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
+                           te.wins, te.losses, te.ties, te.event_epas
+                    FROM team_epas te
+                    LEFT JOIN teams t ON te.team_number = t.team_number
+                    LEFT JOIN districts d ON t.district_key = d.district_key
+                    WHERE te.year = %s
+                    ORDER BY te.team_number
+                """, (year,))
+            except Exception:
+                cursor.execute("""
+                    SELECT te.team_number, te.year,
+                           t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
+                           NULL::text AS district_key,
+                           te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
+                           te.wins, te.losses, te.ties, te.event_epas
+                    FROM team_epas te
+                    LEFT JOIN teams t ON te.team_number = t.team_number
+                    WHERE te.year = %s
+                    ORDER BY te.team_number
+                """, (year,))
             for row in cursor.fetchall():
                 (
-                    team_number, year, nickname, city, state_prov, country, website, district,
+                    team_number, year, nickname, city, state_prov, country, website, district, district_key,
                     normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
                     wins, losses, ties, event_epas
                 ) = row
@@ -672,6 +721,7 @@ def load_year_data(year):
                     "country": country,
                     "website": website,
                     "district": district,
+                    "district_key": district_key,
                     "normal_epa": normal_epa,
                     "epa": epa,
                     "confidence": confidence,

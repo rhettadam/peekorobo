@@ -26,9 +26,9 @@ import plotly.graph_objects as go
 
 from datagather import load_data_current_year,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,duel_layout,build_recent_events_section
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,duel_layout,build_recent_events_section,get_team_district_options
 
-from utils import format_human_date,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_event_week_label_from_number,event_card,truncate_name,get_team_data_with_fallback
+from utils import format_human_date,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_event_week_label_from_number,event_card,truncate_name,get_team_data_with_fallback,normalize_district_key
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -1375,23 +1375,14 @@ def update_events_tab_content(
         selected_event_types = [selected_event_types]
 
     def get_event_district(event):
-        """Get district for an event using stored district data."""
-        district_abbrev = (event.get("da") or "").strip().upper()
-        if district_abbrev:
-            return district_abbrev
-
+        """Get district for an event. Normalizes 2024fim -> FIM."""
         district_key = (event.get("dk") or "").strip()
-        return district_key[-2:].upper() if len(district_key) >= 2 else None
+        if district_key:
+            return normalize_district_key(district_key)
+        return (event.get("da") or "").strip().upper() or None
 
-    # Get all unique districts from events
-    district_keys = sorted(set(
-        get_event_district(ev) for ev in events_data
-        if get_event_district(ev) is not None
-    ))
-
-    district_options = [{"label": "All", "value": "all"}] + [
-        {"label": dk, "value": dk} for dk in district_keys if dk
-    ]
+    # Use same district names as Teams tab (from districts table)
+    district_options = [{"label": "All", "value": "all"}] + get_team_district_options()
 
     if selected_district and selected_district != "all":
         events_data = [
@@ -4064,10 +4055,11 @@ def load_teams(
         teams_data = [t for t in teams_data if (t.get("country") or "").lower() == selected_country.lower()]
 
     if selected_district and selected_district != "All":
-        teams_data = [
-            t for t in teams_data
-            if (t.get("district") or "").upper() == selected_district.upper()
-        ]
+        sel_norm = (selected_district or "").upper()
+        def _matches(t):
+            dk = normalize_district_key(t.get("district_key")) or (t.get("district") or "").strip().upper()
+            return dk == sel_norm
+        teams_data = [t for t in teams_data if _matches(t)]
     elif selected_state and selected_state != "All":
         teams_data = [t for t in teams_data if (t.get("state_prov") or "").lower() == selected_state.lower()]
 
@@ -6522,16 +6514,16 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
         except Exception:
             pass
 
-    # District filter uses stored district fields
+    # District filter - use normalized district key (same as Events tab)
     if selected_district and selected_district != "all":
         try:
             def get_event_district_from_ev(ev):
-                district_abbrev = (ev.get("district_abbrev") or "").strip().upper()
-                if district_abbrev:
-                    return district_abbrev
-                district_key = (ev.get("district_key") or "").strip()
-                return district_key[-2:].upper() if len(district_key) >= 2 else None
-            events = [ev for ev in events if get_event_district_from_ev(ev) == selected_district]
+                district_key = (ev.get("district_key") or ev.get("dk") or "").strip()
+                if district_key:
+                    return normalize_district_key(district_key)
+                return (ev.get("district_abbrev") or ev.get("da") or "").strip().upper() or None
+            sel_norm = (selected_district or "").upper()
+            events = [ev for ev in events if get_event_district_from_ev(ev) == sel_norm]
         except Exception:
             pass
 
@@ -6877,9 +6869,10 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
                 }
             
             if selected_district and selected_district != "All":
+                sel_norm = (selected_district or "").upper()
                 filtered_year_data = {
                     num: data for num, data in filtered_year_data.items()
-                    if (data.get("district") or "").upper() == selected_district.upper()
+                    if (normalize_district_key(data.get("district_key")) or (data.get("district") or "").strip().upper()) == sel_norm
                 }
             elif selected_state and selected_state != "All":
                 filtered_year_data = {

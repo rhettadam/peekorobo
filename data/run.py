@@ -248,11 +248,40 @@ def get_pg_connection():
     active_connections.append(conn)
     return conn
 
+def _normalize_district_key(key):
+    """TBA uses 2024fim; normalize to FIM."""
+    if not key or len(key) <= 4:
+        return key
+    if key[:4].isdigit():
+        return key[4:].upper()
+    return key.upper()
+
+
+def upsert_district(cur, district_key, district_abbrev, district_name):
+    """Upsert district into districts table (if it exists). Normalizes 2024fim -> FIM."""
+    if not district_key:
+        return
+    base_key = _normalize_district_key(district_key)
+    if not base_key:
+        return
+    try:
+        cur.execute("""
+            INSERT INTO districts (district_key, name, abbreviation, state_names, state_abbrevs)
+            VALUES (%s, %s, %s, '[]'::jsonb, '[]'::jsonb)
+            ON CONFLICT (district_key) DO UPDATE SET
+                name = COALESCE(NULLIF(EXCLUDED.name, ''), districts.name),
+                abbreviation = COALESCE(NULLIF(EXCLUDED.abbreviation, ''), districts.abbreviation)
+        """, (base_key, district_name or base_key, district_abbrev or base_key))
+    except Exception:
+        pass  # districts table may not exist yet
+
 def insert_event_data(all_data, year):
     # Insert event, teams, rankings, matches, and awards into PostgreSQL
     conn = get_pg_connection()
     cur = conn.cursor()
     for i, data in enumerate(tqdm(all_data, desc=f'Inserting {year} events')):
+        ev = data["event"]
+        upsert_district(cur, ev[4], ev[5], ev[6])  # district_key, district_abbrev, district_name
         # Insert event
         cur.execute("""
             INSERT INTO events (
@@ -1134,6 +1163,8 @@ def insert_event_data(results, year):
         
         # Update event if needed
         if updates["event"]:
+            ev = data["event"]
+            upsert_district(cur, ev[4], ev[5], ev[6])
             cur.execute("""
                 INSERT INTO events (
                     event_key, name, start_date, end_date, event_type,

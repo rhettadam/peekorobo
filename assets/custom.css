@@ -89,7 +89,7 @@
     --alert-text: #e9ecef;
     --toast-bg: #2d2d2d;
     --toast-border: #495057;
-    --toast-text: #e9ecef;
+    --toast-text: #111111;
     --modal-bg: #2d2d2d;
     --modal-border: #495057;
     --modal-text: #e9ecef;
@@ -326,15 +326,19 @@ input[type="password"].form-control,
     border: 1px solid var(--dropdown-border) !important;
     color: var(--dropdown-text) !important;
     z-index: 9999;
+    max-height: 400px !important;
+    min-width: 380px !important;
 }
 
 .Select__menu-list {
     background-color: var(--dropdown-bg) !important;
+    max-height: 400px !important;
 }
 
 .Select__option {
     background-color: var(--dropdown-bg) !important;
     color: var(--dropdown-text) !important;
+    white-space: nowrap !important;
 }
 
 .Select__option--is-focused {
@@ -370,6 +374,19 @@ input[type="password"].form-control,
 .react-select__option {
     background-color: var(--dropdown-bg) !important;
     color: var(--dropdown-text) !important;
+}
+
+.select__menu,
+.select__menu-list,
+.react-select__menu,
+.react-select__menu-list {
+    max-height: 400px !important;
+    min-width: 380px !important;
+}
+
+.select__option,
+.react-select__option {
+    white-space: nowrap !important;
 }
 
 .select__option--is-focused,
@@ -426,6 +443,17 @@ input[type="password"].form-control,
 .custom-input-box [class*="-option"] {
     background-color: var(--dropdown-bg) !important;
     color: var(--dropdown-text) !important;
+}
+
+/* All dropdown menus: longer (more options) and wider (no wrap) */
+.custom-input-box [class*="-menu"],
+.custom-input-box [class*="-menu-list"] {
+    max-height: 400px !important;
+    min-width: 380px !important;
+}
+
+.custom-input-box [class*="-option"] {
+    white-space: nowrap !important;
 }
 
 .custom-input-box [class*="-option"][class*="-is-focused"] {
@@ -554,6 +582,8 @@ input[type="password"].form-control,
     background-color: var(--dropdown-bg) !important;
     border-color: var(--dropdown-border) !important;
     color: var(--dropdown-text) !important;
+    max-height: 400px !important;
+    min-width: 380px !important;
 }
 
 .Select-option {

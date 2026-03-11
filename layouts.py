@@ -8,6 +8,7 @@ from utils import (
     format_human_date,
     calculate_single_rank,
     is_demo_team,
+    normalize_district_key,
     sort_key,
     get_user_avatar,
     user_team_card,
@@ -34,20 +35,19 @@ current_year = 2026
 DEFAULT_TIMEZONE = 'America/Chicago'  # Central Time
 
 def get_team_district_options():
+    """District options for dropdown. Uses districts table from database."""
     try:
         with DatabaseConnection() as conn:
             cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT DISTINCT district
-                FROM teams
-                WHERE district IS NOT NULL
-                ORDER BY district
-                """
-            )
-            districts = [row[0] for row in cur.fetchall()]
+            cur.execute("""
+                SELECT district_key, COALESCE(display_name, name) AS label
+                FROM districts
+                WHERE district_key !~ '^[0-9]{4}'
+                ORDER BY COALESCE(display_name, name)
+            """)
+            rows = cur.fetchall()
             cur.close()
-        return [{"label": d, "value": d} for d in districts if d]
+            return [{"label": row[1], "value": row[0]} for row in rows if row[0]]
     except Exception:
         return []
 
@@ -461,11 +461,15 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
 
         try:
             district_name = selected_team.get("district")
-            if district_name:
-                district_team_list = [
-                    team for team in real_teams
-                    if team.get("district") == district_name
-                ]
+            district_key = normalize_district_key(selected_team.get("district_key")) or selected_team.get("district_key")
+            if district_name or district_key:
+                def same_district(t):
+                    t_norm = normalize_district_key(t.get("district_key")) or (t.get("district") or "").strip().upper()
+                    if district_key and t_norm:
+                        return t_norm == district_key
+                    return district_name and (t.get("district") == district_name)
+                district_team_list = [team for team in real_teams if same_district(team)]
+                district_name = district_name or (district_key or "")
                 district_teams = len(district_team_list)
                 if district_teams > 0:
                     valid_epas = [team.get("epa") for team in district_team_list if team.get("epa") not in (None, 0)]
@@ -2836,9 +2840,9 @@ def teams_layout(default_year=current_year):
     filters_row = html.Div(
         [
             html.Div(teams_year_dropdown, style={"flex": "0 0 80px", "minWidth": "80px"}),
-            html.Div(country_dropdown, style={"flex": "1 1 100px", "minWidth": "100px"}),
-            html.Div(state_dropdown, style={"flex": "1 1 120px", "minWidth": "120px"}),
-            html.Div(district_dropdown, style={"flex": "1 1 80px", "minWidth": "80px"}),
+            html.Div(country_dropdown, style={"flex": "1 1 140px", "minWidth": "120px"}),
+            html.Div(state_dropdown, style={"flex": "1 1 160px", "minWidth": "140px"}),
+            html.Div(district_dropdown, style={"flex": "1 1 140px", "minWidth": "120px"}),
             html.Div(percentile_toggle, style={"flex": "1 1 100px", "display": "flex", "alignItems": "center"}),
         ],
         style={
@@ -3207,9 +3211,9 @@ def events_layout(year=current_year, active_tab="cards-tab"):
     filters_row = html.Div(
         [
             html.Div(year_dropdown, style={"flex": "0 0 60px", "minWidth": "60px"}),
-            html.Div(event_type_dropdown, style={"flex": "1 1 150px", "minWidth": "140px"}),
+            html.Div(event_type_dropdown, style={"flex": "1 1 200px", "minWidth": "180px"}),
             html.Div(week_dropdown, style={"flex": "0 0 80px", "minWidth": "80px"}),
-            html.Div(district_dropdown, style={"flex": "1 1 80px", "minWidth": "80px"}),
+            html.Div(district_dropdown, style={"flex": "1 1 140px", "minWidth": "120px"}),
             html.Div([
                 html.Div(sort_toggle, style={"flex": "1"}),
                 sort_direction_toggle
