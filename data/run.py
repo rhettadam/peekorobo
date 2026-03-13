@@ -917,21 +917,8 @@ def create_event_db(year):
             events_to_process.append(event)
             continue
         
-        # Check if event has ended (skip only for current-season updates)
-        if not is_historical:
-            end_date = existing_data["event"][2]  # end_date
-            if end_date:
-                try:
-                    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
-                    if end_date_obj < datetime.now():
-                        # Event has ended, skip unless it's very recent (within last 7 days)
-                        if (datetime.now() - end_date_obj).days > 7:
-                            events_skipped += 1
-                            continue
-                except Exception:
-                    pass  # Bad date format, process anyway
-        
-        # For ongoing or recent events, check if data has changed
+        # Process event (we need to fetch matches for match_cache even if event ended -
+        # teams need match_cache for EPA calculation)
         events_to_process.append(event)
 
     print(f"Processing {len(events_to_process)} events, skipping {events_skipped} completed events, {events_skipped_future} future events")
@@ -973,14 +960,11 @@ def create_event_db(year):
                 print(f"DEBUG: No teams found for event {key} - continuing with event data only")
                 # Don't return None - continue processing the event even without teams
             else:
-                # Skip events with B in team numbers
-                has_b_teams = any(f"frc{t.get('team_number')}".endswith("B") for t in teams)
-                if has_b_teams:
-                    print(f"DEBUG: Skipping event {key} due to B teams")
-                    return None  # Skip this event entirely
-
-                # Append team data (skip teams with null team_number)
+                # Filter out B teams (use team_key - the canonical TBA identifier) but don't skip the event
                 for t in teams:
+                    team_key_str = t.get("team_key", f"frc{t.get('team_number')}")
+                    if team_key_str.endswith("B"):
+                        continue  # Skip B team, don't add to event_teams
                     team_number = t.get("team_number")
                     if team_number is None:
                         print(f"DEBUG: Skipping team with null team_number in event {key}: {t.get('nickname', 'Unknown')}")
