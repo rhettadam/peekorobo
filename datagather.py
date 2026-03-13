@@ -149,24 +149,30 @@ def load_data():
     with DatabaseConnection() as conn:
         team_cursor = conn.cursor()
         
-        # Get all team EPA data (district from teams or districts table when normalized)
+        # Get all team EPA data (district display from districts table via district_key)
         try:
             team_cursor.execute("""
                 SELECT te.team_number, te.year,
                        t.nickname, t.city, t.state_prov, t.country, t.website,
-                       COALESCE(t.district, d.display_name, d.name) AS district,
+                       COALESCE(d.display_name, d.name) AS district,
                        t.district_key,
                        te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
                        te.wins, te.losses, te.ties, te.event_epas
                 FROM team_epas te
                 LEFT JOIN teams t ON te.team_number = t.team_number
-                LEFT JOIN districts d ON t.district_key = d.district_key
+                LEFT JOIN districts d ON (
+                    CASE WHEN t.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
+                         THEN UPPER(SUBSTRING(t.district_key FROM 5))
+                         ELSE UPPER(TRIM(t.district_key))
+                    END
+                ) = d.district_key
                 ORDER BY te.year, te.team_number
             """)
         except Exception:
             team_cursor.execute("""
                 SELECT te.team_number, te.year,
-                       t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
+                       t.nickname, t.city, t.state_prov, t.country, t.website,
+                       NULL::text AS district,
                        NULL::text AS district_key,
                        te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
                        te.wins, te.losses, te.ties, te.event_epas
@@ -423,20 +429,26 @@ def load_data_current_year():
             team_cursor.execute("""
                 SELECT te.team_number, te.year,
                        t.nickname, t.city, t.state_prov, t.country, t.website,
-                       COALESCE(t.district, d.display_name, d.name) AS district,
+                       COALESCE(d.display_name, d.name) AS district,
                        t.district_key,
                        te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
                        te.wins, te.losses, te.event_epas
                 FROM team_epas te
                 LEFT JOIN teams t ON te.team_number = t.team_number
-                LEFT JOIN districts d ON t.district_key = d.district_key
+                LEFT JOIN districts d ON (
+                    CASE WHEN t.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
+                         THEN UPPER(SUBSTRING(t.district_key FROM 5))
+                         ELSE UPPER(TRIM(t.district_key))
+                    END
+                ) = d.district_key
                 WHERE te.year = %s
                 ORDER BY te.team_number
             """, (current_year,))
         except Exception:
             team_cursor.execute("""
                 SELECT te.team_number, te.year,
-                       t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
+                       t.nickname, t.city, t.state_prov, t.country, t.website,
+                       NULL::text AS district,
                        NULL::text AS district_key,
                        te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
                        te.wins, te.losses, te.event_epas
@@ -683,20 +695,26 @@ def load_year_data(year):
                 cursor.execute("""
                     SELECT te.team_number, te.year,
                            t.nickname, t.city, t.state_prov, t.country, t.website,
-                           COALESCE(t.district, d.display_name, d.name) AS district,
+                           COALESCE(d.display_name, d.name) AS district,
                            t.district_key,
                            te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
                            te.wins, te.losses, te.ties, te.event_epas
                     FROM team_epas te
                     LEFT JOIN teams t ON te.team_number = t.team_number
-                    LEFT JOIN districts d ON t.district_key = d.district_key
+                    LEFT JOIN districts d ON (
+                        CASE WHEN t.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
+                             THEN UPPER(SUBSTRING(t.district_key FROM 5))
+                             ELSE UPPER(TRIM(t.district_key))
+                        END
+                    ) = d.district_key
                     WHERE te.year = %s
                     ORDER BY te.team_number
                 """, (year,))
             except Exception:
                 cursor.execute("""
                     SELECT te.team_number, te.year,
-                           t.nickname, t.city, t.state_prov, t.country, t.website, t.district,
+                           t.nickname, t.city, t.state_prov, t.country, t.website,
+                           NULL::text AS district,
                            NULL::text AS district_key,
                            te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
                            te.wins, te.losses, te.ties, te.event_epas
