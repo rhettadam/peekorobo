@@ -896,10 +896,17 @@ def create_event_db(year):
             
         event_key = event["key"]
         
-        # Skip events that haven't started yet to avoid unnecessary updates
-        if not event_has_started(event_key, event.get("start_date")):
-            events_skipped_future += 1
-            continue
+        # Skip events that haven't started yet (use start_date only - don't query event_matches
+        # or we can get stuck with stale 0-0 data and never fetch updates)
+        start_date = event.get("start_date")
+        if start_date:
+            try:
+                start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+                if start_date_obj > datetime.now(timezone.utc).date():
+                    events_skipped_future += 1
+                    continue
+            except Exception:
+                pass
 
         # Get existing data for comparison
         existing_data = get_existing_event_data(event_key)
