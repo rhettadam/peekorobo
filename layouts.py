@@ -4754,6 +4754,17 @@ def match_layout(event_key, match_key):
         footer
     ])
 
+def _format_recommendation_reasons(reasons, team_data, favorite_teams):
+    """Build human-readable reason text from contributing factors."""
+    if not reasons:
+        return "Recommended for you"
+    # Primary reason (first/highest impact)
+    primary = reasons[0]
+    if len(reasons) > 1:
+        return f"{primary} · {reasons[1]}"
+    return primary
+
+
 def generate_team_recommendations(team_database, favorite_teams, user_team_affil, text_color):
     """Generate personalized team recommendations based on user preferences and data."""
     recommendations = []
@@ -4768,6 +4779,7 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
     
     # Get user's team location info
     user_team_location = None
+    user_team_state = ""
     if user_team_affil and user_team_affil != "####":
         try:
             user_team_num = int(user_team_affil)
@@ -4778,15 +4790,17 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
                     "country": user_team_data.get("country", ""),
                     "city": user_team_data.get("city", "")
                 }
+                user_team_state = user_team_location.get("state", "")
         except ValueError:
             pass
     
     # Get favorite teams' characteristics
     favorite_team_epas = []
-    favorite_team_locations = []
     favorite_team_states = set()
     favorite_team_countries = set()
     favorite_team_cities = set()
+    favorite_team_districts = set()
+    favorite_team_nums = []
     
     for team_key in favorite_teams:
         try:
@@ -4797,13 +4811,10 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
                 state = team_data.get("state_prov", "")
                 country = team_data.get("country", "")
                 city = team_data.get("city", "")
+                district = team_data.get("district", "") or team_data.get("district_key", "")
                 
                 favorite_team_epas.append(epa)
-                favorite_team_locations.append({
-                    "state": state,
-                    "country": country,
-                    "city": city
-                })
+                favorite_team_nums.append(team_num)
                 
                 if state:
                     favorite_team_states.add(state)
@@ -4811,6 +4822,8 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
                     favorite_team_countries.add(country)
                 if city:
                     favorite_team_cities.add(city)
+                if district:
+                    favorite_team_districts.add(normalize_district_key(district) or str(district).strip().upper())
         except ValueError:
             continue
     
@@ -4818,7 +4831,9 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
     avg_favorite_epa = sum(favorite_team_epas) / len(favorite_team_epas) if favorite_team_epas else 0
     min_favorite_epa = min(favorite_team_epas) if favorite_team_epas else 0
     max_favorite_epa = max(favorite_team_epas) if favorite_team_epas else 0
-    epa_range = max_favorite_epa - min_favorite_epa
+    
+    # For users with no favorites: use affiliated team's region, or suggest top teams
+    use_affil_only = len(favorite_teams) == 0 and user_team_location
     
     # Generate recommendations
     candidate_teams = []
@@ -4832,65 +4847,93 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
         team_state = team_data.get("state_prov", "")
         team_country = team_data.get("country", "")
         team_city = team_data.get("city", "")
-        team_nickname = team_data.get("nickname", "")
+        team_district = team_data.get("district", "") or team_data.get("district_key", "")
+        team_district_norm = normalize_district_key(team_district) or str(team_district).strip().upper() if team_district else ""
         
-        # Calculate recommendation score
+        # Calculate recommendation score and track reasons
         score = 0
+        reasons = []
         
-        # Location-based scoring (considering ALL favorite teams)
+        # Location-based (user's affiliated team)
         if user_team_location:
-            if team_state == user_team_location["state"]:
+            if team_state == user_team_location["state"] and user_team_location["state"]:
                 score += 50
-            if team_country == user_team_location["country"]:
+                reasons.append(f"Same region as your team" + (f" ({user_team_state})" if user_team_state else ""))
+            if team_country == user_team_location["country"] and user_team_location["country"]:
                 score += 30
+                if not any("region" in r or "country" in r for r in reasons):
+                    reasons.append(f"Same country as your team")
         
-        # Performance-based scoring (considering ALL favorite teams)
+        # Regional bonus (favorite teams' locations)
+        if not use_affil_only:
+            if team_city in favorite_team_cities and favorite_team_cities:
+                score += 60
+                reasons.append("Same city as a favorite")
+            if team_state in favorite_team_states:
+                score += 40
+                if not any("city" in r for r in reasons):
+                    reasons.append(f"Same state as a favorite")
+            if team_country in favorite_team_countries:
+                score += 25
+                if not any("state" in r or "city" in r for r in reasons):
+                    reasons.append("Same country as a favorite")
+        
+        # District matching
+        if team_district_norm and favorite_team_districts and team_district_norm in favorite_team_districts:
+            score += 45
+            reasons.append("Same district as a favorite")
+        
+        # Performance-based (similar ACE to favorites)
         if favorite_team_epas:
-            # Check if team fits within the range of favorite teams
             if min_favorite_epa <= team_epa <= max_favorite_epa:
-                score += 50  # High score for teams within favorite range
+                score += 50
+                reasons.append(f"Similar ACE to your favorites ({team_epa:.0f})")
             else:
-                # Calculate distance from favorite range
-                if team_epa < min_favorite_epa:
-                    epa_distance = min_favorite_epa - team_epa
-                else:
-                    epa_distance = team_epa - max_favorite_epa
-                
+                epa_distance = min_favorite_epa - team_epa if team_epa < min_favorite_epa else team_epa - max_favorite_epa
                 if epa_distance < 10:
                     score += 30
+                    reasons.append(f"ACE close to your favorites")
                 elif epa_distance < 20:
                     score += 15
         
-        # Regional bonus for ALL favorite team locations
-        if team_state in favorite_team_states:
-            score += 40  # Higher score for exact state matches
-        if team_country in favorite_team_countries:
-            score += 25  # Good score for same country
-        
-        # City-level matching (bonus for exact city matches)
-        if team_city in favorite_team_cities:
-            score += 60  # Very high score for same city
-        
-        # High performer bonus (if user likes high performers)
-        if team_epa > 100 and max_favorite_epa > 80:  # Top tier teams, if user likes good teams
+        # Top performer (if user likes strong teams)
+        if favorite_team_epas and team_epa > 100 and max_favorite_epa > 80:
             score += 35
-        elif team_epa > 80 and avg_favorite_epa > 60:  # Good teams, if user likes decent teams
+            if not any("ACE" in r or "Similar" in r for r in reasons):
+                reasons.append("Top-tier performer")
+        elif favorite_team_epas and team_epa > 80 and avg_favorite_epa > 60:
             score += 20
+            if not any("ACE" in r or "Similar" in r or "Top-tier" in r for r in reasons):
+                reasons.append("Strong performer")
         
-        # Diversity bonus (if user has diverse favorites, suggest diverse teams)
-        if len(favorite_team_states) > 2:  # User likes teams from multiple states
-            if team_state not in favorite_team_states:
-                score += 15  # Bonus for new states
-        elif len(favorite_team_states) == 1:  # User likes teams from one state
-            if team_state in favorite_team_states:
-                score += 25  # Higher bonus for same state
+        # For users with no favorites: regional discovery
+        if use_affil_only and team_state == user_team_state and user_team_state:
+            score += 40
+            if not reasons:
+                reasons.append(f"Team in your region ({team_state})")
+        
+        # Rising talent (above average but not in favorites yet)
+        if team_epa >= 60 and team_epa < 100 and favorite_team_epas and avg_favorite_epa > 50:
+            if not any("ACE" in r or "Similar" in r for r in reasons):
+                score += 10
         
         if score > 0:
             candidate_teams.append({
                 "team_num": team_num,
                 "team_data": team_data,
-                "score": score
+                "score": score,
+                "reasons": reasons[:3]  # Keep top 3 reasons
             })
+    
+    # Fallback: if no personalized matches, suggest top teams by ACE
+    if not candidate_teams:
+        all_teams = [
+            {"team_num": tn, "team_data": td, "score": td.get("epa", 0), "reasons": ["Top performer this season"]}
+            for tn, td in current_year_data.items()
+            if str(tn) not in favorite_teams and td.get("epa", 0) > 0
+        ]
+        all_teams.sort(key=lambda x: x["score"], reverse=True)
+        candidate_teams = all_teams[:6]
     
     # Sort by score and take top 6
     candidate_teams.sort(key=lambda x: x["score"], reverse=True)
@@ -4900,7 +4943,7 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
     for team_info in top_teams:
         team_num = team_info["team_num"]
         team_data = team_info["team_data"]
-        score = team_info["score"]
+        reasons = team_info.get("reasons", [])
         
         # Get team colors
         background_gradient, card_text_color = get_team_card_colors_with_text(str(team_num))
@@ -4908,115 +4951,118 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
         # Get avatar
         avatar_url = get_team_avatar(team_num, 2025)
         
-        reason_text = "Recommended for you"
+        reason_text = _format_recommendation_reasons(reasons, team_data, favorite_teams)
         
-        card = html.Div([
-            # Header with avatar and team info
-            html.Div([
+        # Location line (city, state)
+        loc_parts = [p for p in [team_data.get("city"), team_data.get("state_prov")] if p]
+        location_str = ", ".join(loc_parts) if loc_parts else ""
+        
+        card = html.A(
+            href=f"/team/{team_num}/{current_year}",
+            className="team-recommendation-link",
+            style={"textDecoration": "none", "color": "inherit"},
+            children=[
                 html.Div([
-                    html.Img(
-                        src=avatar_url,
-                        style={
-                            "width": "50px",
-                            "height": "50px",
-                            "objectFit": "contain",
-                            "borderRadius": "10px",
-                            "backgroundColor": "rgba(255, 255, 255, 0.1)",
-                            "padding": "4px"
-                        }
-                    ),
+                    # Header with avatar and team info
                     html.Div([
-                        html.H4(f"#{team_num}", style={
-                            "margin": "0 0 2px 0",
-                            "fontSize": "1.2rem",
-                            "fontWeight": "700",
-                            "color": card_text_color,
-                            "lineHeight": "1.2"
-                        }),
-                        html.P(team_data.get("nickname", ""), style={
-                            "margin": "0",
-                            "fontSize": "0.85rem",
+                        html.Div([
+                            html.Img(
+                                src=avatar_url,
+                                style={
+                                    "width": "52px",
+                                    "height": "52px",
+                                    "objectFit": "contain",
+                                    "borderRadius": "12px",
+                                    "backgroundColor": "rgba(255, 255, 255, 0.12)",
+                                    "padding": "4px"
+                                }
+                            ),
+                            html.Div([
+                                html.H4(f"#{team_num}", style={
+                                    "margin": "0 0 2px 0",
+                                    "fontSize": "1.25rem",
+                                    "fontWeight": "700",
+                                    "color": card_text_color,
+                                    "lineHeight": "1.2"
+                                }),
+                                html.P(team_data.get("nickname", ""), style={
+                                    "margin": "0",
+                                    "fontSize": "0.9rem",
+                                    "color": card_text_color,
+                                    "opacity": "0.92",
+                                    "fontWeight": "500",
+                                    "lineHeight": "1.3"
+                                }),
+                                html.P(location_str, style={
+                                    "margin": "2px 0 0 0",
+                                    "fontSize": "0.75rem",
+                                    "color": card_text_color,
+                                    "opacity": "0.7",
+                                    "fontWeight": "400",
+                                    "lineHeight": "1.2"
+                                }) if location_str else None
+                            ], style={"marginLeft": "14px", "flex": "1"})
+                        ], style={"display": "flex", "alignItems": "center"}),
+                        
+                        # ACE score badge
+                        html.Div([
+                            html.Span("ACE", style={
+                                "fontSize": "0.7rem",
+                                "fontWeight": "600",
+                                "color": card_text_color,
+                                "opacity": "0.85",
+                                "textTransform": "uppercase",
+                                "letterSpacing": "0.5px"
+                            }),
+                            html.Br(),
+                            html.Span(f"{team_data.get('epa', 0):.1f}", style={
+                                "fontSize": "1.15rem",
+                                "fontWeight": "700",
+                                "color": card_text_color,
+                                "lineHeight": "1.2"
+                            })
+                        ], style={
+                            "textAlign": "center",
+                            "backgroundColor": "rgba(255, 255, 255, 0.12)",
+                            "padding": "8px 14px",
+                            "borderRadius": "10px",
+                            "minWidth": "64px"
+                        })
+                    ], style={
+                        "display": "flex",
+                        "justifyContent": "space-between",
+                        "alignItems": "center",
+                        "padding": "18px 18px 10px 18px"
+                    }),
+                    
+                    # Recommendation reason badge
+                    html.Div([
+                        html.Span(reason_text, style={
+                            "fontSize": "0.78rem",
                             "color": card_text_color,
                             "opacity": "0.9",
-                            "fontWeight": "400",
-                            "lineHeight": "1.3"
+                            "fontWeight": "500",
+                            "lineHeight": "1.4",
+                            "display": "inline-block",
+                            "padding": "4px 10px",
+                            "backgroundColor": "rgba(255, 255, 255, 0.15)",
+                            "borderRadius": "6px"
                         })
-                    ], style={"marginLeft": "12px", "flex": "1"})
-                ], style={"display": "flex", "alignItems": "center"}),
-                
-                # ACE score badge
-                html.Div([
-                    html.Span("ACE", style={
-                        "fontSize": "0.7rem",
-                        "fontWeight": "600",
-                        "color": card_text_color,
-                        "opacity": "0.8",
-                        "textTransform": "uppercase",
-                        "letterSpacing": "0.5px"
+                    ], style={
+                        "padding": "0 18px 14px 18px"
                     }),
-                    html.Br(),
-                    html.Span(f"{team_data.get('epa', 0):.1f}", style={
-                        "fontSize": "1.1rem",
-                        "fontWeight": "700",
-                        "color": card_text_color,
-                        "lineHeight": "1.2"
-                    })
-                ], style={
-                    "textAlign": "center",
-                    "backgroundColor": "rgba(255, 255, 255, 0.1)",
-                    "padding": "8px 12px",
-                    "borderRadius": "8px",
-                    "minWidth": "60px"
+                ], className="team-recommendation-card", style={
+                    "background": background_gradient,
+                    "borderRadius": "16px",
+                    "overflow": "hidden",
+                    "boxShadow": "0 8px 24px rgba(0, 0, 0, 0.12)",
+                    "transition": "all 0.25s ease",
+                    "cursor": "pointer",
+                    "position": "relative",
+                    "border": "1px solid rgba(255, 255, 255, 0.08)"
                 })
-            ], style={
-                "display": "flex",
-                "justifyContent": "space-between",
-                "alignItems": "center",
-                "padding": "16px 16px 12px 16px"
-            }),
-            
-            # Recommendation reason
-            html.Div([
-                html.Span(reason_text, style={
-                    "fontSize": "0.75rem",
-                    "color": card_text_color,
-                    "opacity": "0.8",
-                    "fontWeight": "400",
-                    "lineHeight": "1.4"
-                })
-            ], style={
-                "padding": "0 16px 12px 16px"
-            }),
-            
-            # Modern button
-            html.A(
-                "Peek",
-                href=f"/team/{team_num}/{current_year}",
-                style={
-                    "display": "block",
-                    "textAlign": "center",
-                    "padding": "10px 16px",
-                    "backgroundColor": "rgba(255, 255, 255, 0.15)",
-                    "color": card_text_color,
-                    "textDecoration": "none",
-                    "borderRadius": "8px",
-                    "fontSize": "0.85rem",
-                    "fontWeight": "600",
-                    "transition": "all 0.2s ease",
-                    "margin": "0 16px 16px 16px",
-                    "border": "1px solid rgba(255, 255, 255, 0.2)",
-                    "backdropFilter": "blur(10px)"
-                }
-            )
-        ], style={
-            "background": background_gradient,
-            "borderRadius": "16px",
-            "overflow": "hidden",
-            "boxShadow": "0 8px 25px rgba(0, 0, 0, 0.15)",
-            "transition": "all 0.3s ease",
-            "cursor": "pointer",
-            "position": "relative"
-        })
+            ]
+        )
         
         recommendations.append(card)
     
@@ -5781,9 +5827,9 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                         "alignItems": "center",
                         "gap": "8px"
                     }),
-                    html.P("Based on your location, favorite teams, and performance patterns", style={
+                    html.P("Personalized picks based on your favorites, region, district, and similar ACE ratings", style={
                         "color": "var(--text-secondary)",
-                        "opacity": "0.8",
+                        "opacity": "0.9",
                         "fontSize": "0.9rem",
                         "marginBottom": "20px"
                     })
@@ -5792,7 +5838,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                 # Generate team recommendations
                 html.Div([
                     *generate_team_recommendations(TEAM_DATABASE, team_keys, team_affil, text_color)
-                ], style={
+                ], className="team-recommendations-grid", style={
                     "display": "grid",
                     "gridTemplateColumns": "repeat(auto-fill, minmax(280px, 1fr))",
                     "gap": "20px",

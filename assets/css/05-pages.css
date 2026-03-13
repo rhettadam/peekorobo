@@ -379,6 +379,29 @@
     white-space: nowrap;
 }
 
+/* Team recommendation cards (profile) - equal height */
+.team-recommendations-grid {
+    align-items: stretch;
+    grid-auto-rows: 175px;
+}
+
+.team-recommendation-link {
+    display: flex;
+}
+
+.team-recommendation-card {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+
+.team-recommendation-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
 /* Similar teams, trends */
 .similar-teams-container {
     display: grid;
