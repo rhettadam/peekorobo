@@ -896,15 +896,15 @@ def create_event_db(year):
             
         event_key = event["key"]
         
-        # Skip events that haven't started yet (use start_date only - don't query event_matches
-        # or we can get stuck with stale 0-0 data and never fetch updates)
+        # Track future events for logging, but DO process them so team schedules and
+        # event_teams stay up-to-date when teams add new events to their schedule.
+        # Future events will have empty matches/rankings/awards until they start.
         start_date = event.get("start_date")
         if start_date:
             try:
                 start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
                 if start_date_obj > datetime.now(timezone.utc).date():
                     events_skipped_future += 1
-                    continue
             except Exception:
                 pass
 
@@ -921,7 +921,7 @@ def create_event_db(year):
         # teams need match_cache for EPA calculation)
         events_to_process.append(event)
 
-    print(f"Processing {len(events_to_process)} events, skipping {events_skipped} completed events, {events_skipped_future} future events")
+    print(f"Processing {len(events_to_process)} events (including {events_skipped_future} future events for team schedules)")
     print(f"DEBUG: Events to process: {[e['key'] for e in events_to_process[:5]]}")  # Show first 5 event keys
 
     def fetch_and_compare(event):
