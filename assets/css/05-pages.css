@@ -1,0 +1,754 @@
+/* Higher or Lower Game */
+.higher-lower-filters-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 15px;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.higher-lower-filter-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
+.higher-lower-filter-item label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.higher-lower-filter-dropdown {
+    min-width: 120px;
+    width: 100%;
+}
+
+.higher-lower-start-container {
+    display: flex;
+    align-items: flex-end;
+}
+
+.higher-lower-start-button {
+    padding: 10px 30px !important;
+    font-size: 1rem !important;
+    white-space: nowrap;
+}
+
+/* Duel page */
+.duel-page {
+    color: var(--text-primary);
+}
+
+.duel-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.duel-title {
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.duel-subtitle {
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.duel-inputs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 20px 0 10px;
+}
+
+.duel-team-info-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 10px;
+}
+
+.duel-team-info {
+    min-width: 240px;
+    background-color: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    justify-content: center;
+}
+
+.duel-team-info-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.duel-team-info-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    object-fit: cover;
+}
+
+.duel-team-info-name {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.duel-team-info-placeholder {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.duel-team-input {
+    max-width: 220px;
+    min-width: 160px;
+    border-radius: 10px !important;
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    border: 2px solid var(--card-bg);
+}
+
+.duel-team-input-red {
+    border-color: #ff4d4d;
+}
+
+.duel-team-input-blue {
+    border-color: #4da3ff;
+}
+
+.duel-search-btn {
+    padding: 8px 24px !important;
+    font-weight: 600;
+    border-radius: 10px !important;
+    background-color: #FFDD00 !important;
+    color: #222 !important;
+    border: none !important;
+}
+
+.duel-search-btn:hover,
+.duel-search-btn:focus,
+.duel-swap-btn:hover,
+.duel-swap-btn:focus {
+    background-color: #f5d300 !important;
+    color: #222 !important;
+}
+
+.duel-search-btn:active,
+.duel-swap-btn:active {
+    background-color: #e6c600 !important;
+    color: #222 !important;
+}
+
+.duel-swap-btn {
+    border-radius: 999px !important;
+    padding: 8px 12px !important;
+    min-width: 40px;
+    background-color: #FFDD00 !important;
+    color: #222 !important;
+    border: none !important;
+}
+
+.duel-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 10px;
+}
+
+.duel-filter-checks .form-check {
+    margin-right: 12px;
+}
+
+.duel-year-input {
+    max-width: 260px;
+    min-width: 200px;
+    border-radius: 10px !important;
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .duel-team-input::placeholder,
+[data-theme="dark"] .duel-year-input::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.9;
+}
+
+.duel-status {
+    text-align: center;
+    color: var(--text-secondary);
+    margin: 6px 0 18px;
+}
+
+.duel-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.duel-stat-card {
+    background-color: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+}
+
+.duel-stat-label {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+}
+
+.duel-stat-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+}
+
+.duel-winrate-high { color: #7dff9b; }
+.duel-winrate-mid { color: #ffd35a; }
+.duel-winrate-low { color: #ff9090; }
+
+.duel-stat-subtext,
+.duel-stat-meta,
+.duel-stat-meta-label {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    margin-top: 4px;
+}
+
+.duel-stat-meta-value {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.duel-stat-meta-sep {
+    color: var(--text-secondary);
+}
+
+.duel-table {
+    background-color: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.duel-table-header,
+.duel-table-row {
+    display: grid;
+    grid-template-columns: 80px 190px 1fr 140px;
+    gap: 10px;
+    align-items: center;
+    padding: 12px 16px;
+}
+
+.duel-table-header {
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.duel-table-header-cell,
+.duel-table-cell {
+    font-size: 0.9rem;
+}
+
+.duel-table-row {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.duel-match-alliance {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.duel-alliance-label { font-weight: 600; }
+.duel-red { color: #ff4d4d; }
+.duel-blue { color: #4da3ff; }
+.duel-team-number { font-weight: 600; color: inherit; text-decoration: none; }
+.duel-team-number:hover { text-decoration: underline; }
+
+.duel-team-highlight {
+    padding: 2px 6px;
+    border-radius: 8px;
+}
+
+.duel-team-1 { background-color: rgba(255, 77, 77, 0.2); }
+.duel-team-2 { background-color: rgba(77, 163, 255, 0.2); }
+
+.duel-match-score {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    margin-top: 4px;
+}
+
+.duel-match-link {
+    color: var(--text-primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.duel-match-link:hover {
+    color: var(--navbar-hover);
+    text-decoration: underline;
+}
+
+.duel-outcome-pill {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-align: center;
+    min-width: 70px;
+}
+
+.duel-outcome-win {
+    background-color: rgba(40, 167, 69, 0.25);
+    color: #7dff9b;
+}
+
+.duel-outcome-lose {
+    background-color: rgba(220, 53, 69, 0.25);
+    color: #ff9090;
+}
+
+.duel-outcome-tie {
+    background-color: rgba(160, 160, 160, 0.25);
+    color: #d0d0d0;
+}
+
+.duel-empty {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-secondary);
+}
+
+/* Rank cards */
+.rank-card-container {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 0 8px;
+}
+
+.rank-card {
+    flex-grow: 2;
+    flex-shrink: 0;
+    flex-basis: 0;
+    max-width: 100%;
+    min-width: 300px;
+}
+
+.rank-card .card-body {
+    text-align: center;
+    padding: 10px 12px;
+    background-color: var(--card-bg);
+    border-radius: 10px;
+    box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.rank-card-label {
+    font-size: 0.9rem;
+    color: #888;
+    margin-bottom: 4px;
+    line-height: 1.2;
+}
+
+.rank-card-value {
+    font-size: clamp(1.1rem, 2.5vw, 1.6rem);
+    font-weight: bold;
+    color: #007BFF;
+    text-decoration: underline;
+    white-space: nowrap;
+}
+
+/* Similar teams, trends */
+.similar-teams-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.trends-chart-container {
+    margin: 20px 0;
+    padding: 20px;
+    background-color: var(--card-bg);
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+}
+
+/* Search preview */
+#desktop-search-preview .dbc-row[style*="background-color: #ffdd00"] a,
+#mobile-search-preview .dbc-row[style*="background-color: #ffdd00"] a {
+    color: black !important;
+}
+
+#desktop-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a,
+#desktop-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a span,
+#mobile-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a,
+#mobile-search-preview .dbc-row:not([style*="background-color: #ffdd00"]) a span {
+    color: var(--text-primary) !important;
+}
+
+/* Alliance bracket */
+.alliance-bracket-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+}
+
+/* Insights */
+.insights-number {
+    font-size: 1.6rem;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.insights-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.insights-metric {
+    text-align: center;
+    padding: 10px;
+}
+
+.insights-summary {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+.view-team-btn-hover:hover {
+    background-color: white !important;
+    color: black !important;
+}
+
+.insights-game-link:hover {
+    color: var(--navbar-hover) !important;
+    text-decoration: underline !important;
+}
+
+.peekolive-nav-link:hover {
+    color: var(--navbar-hover) !important;
+}
+
+/* Event status indicators */
+.ongoing-indicator,
+.upcoming-indicator,
+.completed-indicator {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    z-index: 10;
+}
+
+.ongoing-indicator {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    animation: pulse-glow 2s infinite;
+    box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+}
+
+.upcoming-indicator {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+    animation: slow-pulse 3s infinite;
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+}
+
+.completed-indicator {
+    background: linear-gradient(135deg, #dc3545, #e83e8c);
+    box-shadow: 0 0 10px rgba(220, 53, 69, 0.3);
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.1);
+        box-shadow: 0 0 20px rgba(40, 167, 69, 0.8);
+    }
+}
+
+@keyframes slow-pulse {
+    0%, 80% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+    }
+    40% {
+        opacity: 0.6;
+        transform: scale(1.05);
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.7);
+    }
+}
+
+/* Peekolive */
+.peekolive-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    cursor: pointer;
+}
+
+.peekolive-card:hover {
+    transform: translateY(-8px) !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15) !important;
+    border-color: var(--navbar-hover) !important;
+}
+
+.peekolive-card:hover .card-header a {
+    color: var(--navbar-hover) !important;
+}
+
+/* Notifications */
+.notification-item {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+
+.notification-item:hover {
+    background-color: var(--bg-secondary);
+    border-color: var(--navbar-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.notification-teams {
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.notification-score {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    opacity: 0.9;
+}
+
+.notification-item.completed {
+    border-left: 4px solid #28a745;
+}
+
+.notification-item.upcoming {
+    border-left: 4px solid #ffc107;
+}
+
+/* Event stream */
+#event-stream {
+    position: relative;
+    overflow: hidden;
+}
+
+#event-stream iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+#match-notifications {
+    overflow: hidden;
+    position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+#match-notifications::-webkit-scrollbar {
+    width: 6px;
+}
+
+#match-notifications::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#match-notifications::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 3px;
+}
+
+#match-notifications::-webkit-scrollbar-thumb:hover {
+    background-color: var(--text-secondary);
+}
+
+#match-notifications .notification-item {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+}
+
+/* Status dot */
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+    animation: pulse 2s infinite;
+}
+
+.status-dot.status-ongoing {
+    background-color: #28a745;
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+}
+
+.status-dot.status-upcoming {
+    background-color: #ffc107;
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+}
+
+.status-dot.status-completed {
+    background-color: #dc3545;
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+}
+
+.status-dot.status-unknown {
+    background-color: #6c757d;
+    box-shadow: 0 0 0 0 rgba(108, 117, 125, 0.7);
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.7);
+    }
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(0, 0, 0, 0);
+    }
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+    }
+}
+
+/* Team cards */
+.team-card {
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.team-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.team-card:hover::before {
+    opacity: 1;
+}
+
+.team-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15) !important;
+}
+
+.team-card img {
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+    background-image: url('/assets/avatars/stock.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.team-card:hover img {
+    transform: scale(1.08);
+}
+
+.team-card .card-body {
+    position: relative;
+    z-index: 1;
+}
+
+#team-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+#team-list::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 3px;
+}
+
+#team-list::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+}
+
+#team-list::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* Match cards */
+.match-card {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.match-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+#all-matches::-webkit-scrollbar {
+    width: 6px;
+}
+
+#all-matches::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 3px;
+}
+
+#all-matches::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+}
+
+#all-matches::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}

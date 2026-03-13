@@ -1,0 +1,115 @@
+/* Theme Variables */
+:root {
+    /* Base colors */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-tertiary: #ffffff;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-muted: #6c757d;
+    --border-color: #dee2e6;
+
+    /* Component colors */
+    --navbar-bg: #353535;
+    --navbar-text: #ffffff;
+    --navbar-hover: #ffdd00;
+    --card-bg: #f0f2f4;
+    --card-border: #dee2e6;
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
+    --input-text: #212529;
+    --table-bg: #ffffff;
+    --table-border: #dee2e6;
+    --table-stripe: #f8f9fa;
+    --dropdown-bg: #ffffff;
+    --dropdown-border: #dee2e6;
+    --dropdown-text: #212529;
+    --alert-bg: #f8f9fa;
+    --alert-border: #dee2e6;
+    --alert-text: #212529;
+    --toast-bg: #ffffff;
+    --toast-border: #dee2e6;
+    --toast-text: #212529;
+    --modal-bg: #ffffff;
+    --modal-border: #dee2e6;
+    --modal-text: #212529;
+    --tooltip-bg: #212529;
+    --tooltip-text: #ffffff;
+
+    /* Table highlight colors */
+    --table-row-red: #ff9999;
+    --table-row-blue: #b3d1ff;
+    --table-row-green: #d4edda;
+    --table-row-yellow: #fff9c4;
+    --table-row-pink: #f8d7da;
+    --table-row-prediction-green: #80cfa9;
+    --table-row-prediction-red: #f5a6a6;
+    --table-row-prediction-lowneutral: #ffa366;
+    --table-row-prediction-highneutral: #ffd966;
+    --table-row-prediction-lightgreen: #8fd4a8;
+    --table-row-prediction-lightergreen: #b6dfc1;
+    --table-row-prediction-lightestgreen: #c9e8d0;
+    --table-row-prediction-darkgreen: #68c990;
+    --table-row-prediction-deepgreen: #41be77;
+    --table-row-prediction-lightred: #eaa7aa;
+    --table-row-prediction-lighterred: #f1bfc2;
+    --table-row-prediction-lightestred: #f7d4d7;
+    --table-row-prediction-darkred: #e39091;
+    --table-row-prediction-deepred: #dc7878;
+}
+
+[data-theme="dark"] {
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #2d2d2d;
+    --bg-tertiary: #212529;
+    --text-primary: #e9ecef;
+    --text-secondary: #adb5bd;
+    --text-muted: #6c757d;
+    --border-color: #495057;
+
+    --navbar-bg: #121212;
+    --navbar-text: #ffffff;
+    --navbar-hover: #ffdd00;
+    --card-bg: #2d2d2d;
+    --card-border: #495057;
+    --input-bg: #2d2d2d;
+    --input-border: #495057;
+    --input-text: #e9ecef;
+    --table-bg: #2d2d2d;
+    --table-border: #495057;
+    --table-stripe: #3d3d3d;
+    --dropdown-bg: #2d2d2d;
+    --dropdown-border: #495057;
+    --dropdown-text: #e9ecef;
+    --alert-bg: #2d2d2d;
+    --alert-border: #495057;
+    --alert-text: #e9ecef;
+    --toast-bg: #2d2d2d;
+    --toast-border: #495057;
+    --toast-text: #111111;
+    --modal-bg: #2d2d2d;
+    --modal-border: #495057;
+    --modal-text: #e9ecef;
+    --tooltip-bg: #e9ecef;
+    --tooltip-text: #212529;
+
+    --table-row-red: #77222299;
+    --table-row-blue: #30466999;
+    --table-row-green: #234d3690;
+    --table-row-yellow: #4d4a2390;
+    --table-row-pink: #4d232f90;
+    --table-row-prediction-green: #245c3a;
+    --table-row-prediction-red: #5c1f1f90;
+    --table-row-prediction-lowneutral: #99660099;
+    --table-row-prediction-highneutral: #cc990099;
+    --table-row-prediction-lightgreen: #2b624499;
+    --table-row-prediction-lightergreen: #2e6f4b99;
+    --table-row-prediction-lightestgreen: #3c866099;
+    --table-row-prediction-darkgreen: #1f4c3499;
+    --table-row-prediction-deepgreen: #18583e99;
+    --table-row-prediction-lightred: #9a282899;
+    --table-row-prediction-lighterred: #b62f2f99;
+    --table-row-prediction-lightestred: #d0494999;
+    --table-row-prediction-darkred: #7a1f1f99;
+    --table-row-prediction-deepred: #51151599;
+}

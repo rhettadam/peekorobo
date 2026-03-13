@@ -99,10 +99,10 @@ app.clientside_callback(
         // Fade out
         wrapper.classList.add('fade-out');
         
-        // Fade back in after a short delay
+        // Wait for fade-out to complete and layout to update before fading in
         setTimeout(function() {
             wrapper.classList.remove('fade-out');
-        }, 200); // Half the CSS transition duration for smooth effect
+        }, 400);
 
         return window.dash_clientside.no_update;
     }
@@ -125,6 +125,9 @@ app.index_string = '''
             const savedTheme = localStorage.getItem('theme') || 'dark';
             document.documentElement.setAttribute('data-theme', savedTheme);
         </script>
+        <style id="critical-page-transition">
+            #page-content-animated-wrapper { opacity: 0; }
+        </style>
     </head>
     <body>
         {%app_entry%}

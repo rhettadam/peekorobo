@@ -1,0 +1,322 @@
+/* Desktop */
+@media (min-width: 768px) {
+    .navbar-nav {
+        margin: 0 auto;
+    }
+
+    .navbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    #mobile-search-input,
+    #mobile-search-button {
+        display: none;
+    }
+
+    .higher-lower-filter-item:nth-child(1) {
+        flex: 0 0 100px;
+    }
+
+    .higher-lower-filter-item:nth-child(2) {
+        flex: 0 0 180px;
+        margin-left: 20px;
+    }
+
+    .higher-lower-filter-item:nth-child(3) {
+        flex: 0 0 180px;
+    }
+
+    .higher-lower-filter-item:nth-child(4) {
+        flex: 0 0 150px;
+    }
+
+    .higher-lower-filter-item:nth-child(5) {
+        flex: 0 0 auto;
+    }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .navbar-collapse {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .navbar-toggler {
+        margin-left: auto;
+        margin-right: 10px;
+    }
+
+    .navbar-brand-custom {
+        margin-right: auto;
+    }
+
+    .ms-auto {
+        margin-left: auto !important;
+    }
+
+    .desktop-search {
+        display: none;
+    }
+
+    .container-fluid {
+        padding: 15px;
+    }
+
+    .desktop-left-section,
+    .desktop-right-section {
+        width: 100%;
+    }
+
+    .logo-search-container {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .home-image {
+        margin-top: 20px;
+    }
+
+    body {
+        font-size: 14px;
+    }
+
+    .mobile-search-group {
+        flex-grow: 1;
+        min-width: 0;
+    }
+
+    .peekolive-card {
+        height: 320px !important;
+    }
+
+    .peekolive-card:hover {
+        transform: translateY(-4px) !important;
+    }
+
+    .dash-table-container {
+        font-size: 12px;
+    }
+
+    .dash-spreadsheet-inner .dash-spreadsheet-cell {
+        padding: 4px 6px !important;
+        min-width: 60px !important;
+        max-width: 100px !important;
+    }
+
+    .export-buttons {
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+
+    .export-buttons .btn {
+        font-size: 0.8rem;
+        padding: 4px 8px;
+    }
+}
+
+@media (max-width: 767px) {
+    .axis-dropdown-row {
+        flex-wrap: wrap !important;
+        row-gap: 10px;
+    }
+
+    .axis-dropdown-row > .col-auto,
+    .axis-dropdown-row > .col-3 {
+        flex: 1 1 100%;
+        max-width: 100%;
+    }
+
+    .axis-dropdown-row .custom-input-box {
+        width: 100% !important;
+    }
+
+    .higher-lower-filters-container {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 15px;
+        gap: 12px;
+    }
+
+    .higher-lower-filter-item {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+
+    .higher-lower-filter-dropdown {
+        width: 100% !important;
+        min-width: 100% !important;
+    }
+
+    .higher-lower-filter-dropdown .Select-control,
+    .higher-lower-filter-dropdown .Select-input,
+    .higher-lower-filter-dropdown .Select-placeholder,
+    .higher-lower-filter-dropdown .Select-value {
+        min-height: 44px !important;
+        line-height: 44px !important;
+        font-size: 16px !important;
+    }
+
+    .higher-lower-filter-dropdown .Select-input > input {
+        padding: 12px 0 !important;
+    }
+
+    .higher-lower-start-container {
+        width: 100%;
+        margin-top: 5px;
+    }
+
+    .higher-lower-start-button {
+        width: 100% !important;
+        padding: 12px 30px !important;
+        font-size: 1.1rem !important;
+    }
+
+    #higher-lower-game-container {
+        min-height: auto !important;
+        padding: 10px !important;
+    }
+
+    .higher-lower-team-panel {
+        padding: 20px 10px !important;
+        min-width: 0 !important;
+    }
+
+    #left-team-avatar-container img,
+    #right-team-avatar-container img {
+        width: 120px !important;
+        height: 120px !important;
+    }
+
+    #left-team-name,
+    #right-team-name {
+        font-size: 1.1rem !important;
+    }
+
+    #left-team-ace {
+        font-size: 2rem !important;
+    }
+
+    #right-team-ace-container {
+        font-size: 2rem !important;
+    }
+
+    .higher-lower-btn {
+        padding: 10px 20px !important;
+        font-size: 1rem !important;
+        margin: 5px !important;
+    }
+
+    #higher-lower-buttons-container {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+    }
+
+    .higher-lower-vs {
+        font-size: 1.5rem !important;
+        padding: 5px 15px !important;
+    }
+
+    #score-display,
+    #highscore-display {
+        font-size: 1.2rem !important;
+    }
+
+    .insights-responsive-row > .col-md-6 {
+        border-right: none !important;
+        margin-bottom: 2rem !important;
+    }
+
+    .insights-number {
+        font-size: 1.3rem !important;
+    }
+
+    .insights-label {
+        font-size: 0.95rem !important;
+        white-space: nowrap;
+    }
+
+    .insights-metric {
+        padding: 0.5rem 0.2rem !important;
+    }
+
+    .insights-summary {
+        font-size: 0.95rem !important;
+    }
+}
+
+/* Duel responsive */
+@media (max-width: 900px) {
+    .duel-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .duel-table-header,
+    .duel-table-row {
+        grid-template-columns: 70px 140px 1fr 110px;
+    }
+}
+
+@media (max-width: 600px) {
+    .duel-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .duel-table-header,
+    .duel-table-row {
+        grid-template-columns: 1fr;
+    }
+
+    .duel-table-header {
+        display: none;
+    }
+
+    .duel-table-row {
+        padding: 16px;
+        gap: 6px;
+    }
+
+    .rank-card {
+        min-width: 100px;
+    }
+
+    .alliance-bracket-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px 6px !important;
+        padding: 0 2px;
+    }
+
+    .alliance-card {
+        padding: 6px 4px !important;
+        margin-bottom: 8px !important;
+        border-radius: 8px !important;
+    }
+
+    .alliance-card > div:first-child {
+        font-size: 1em !important;
+        margin-bottom: 2px !important;
+    }
+
+    .alliance-badge {
+        padding: 2px 8px !important;
+        font-size: 0.92em !important;
+        min-width: 36px !important;
+        margin-right: 4px !important;
+        border-radius: 6px !important;
+    }
+
+    .alliance-team-box {
+        padding: 2px 4px !important;
+        min-width: 28px !important;
+        font-size: 0.92em !important;
+        margin: 1px !important;
+        border-radius: 4px !important;
+    }
+
+    .alliance-card .markdown-text,
+    .alliance-card .markdown-text * {
+        font-size: 0.95em !important;
+    }
+}

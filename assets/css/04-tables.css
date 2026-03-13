@@ -1,0 +1,118 @@
+/* Tables */
+.table {
+    color: var(--text-primary);
+    background-color: var(--table-bg);
+    border-color: var(--table-border);
+}
+
+/* Export buttons */
+.export-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.export-buttons .btn {
+    font-size: 0.875rem;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.export-buttons .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Dash DataTable */
+.dash-spreadsheet-pagination {
+    background-color: var(--card-bg) !important;
+    color: var(--text-primary) !important;
+    border-top: 1px solid var(--input-border) !important;
+    padding: 10px !important;
+}
+
+.dash-spreadsheet-pagination .Select-control {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+}
+
+.dash-spreadsheet-pagination .Select-value-label {
+    color: var(--text-primary) !important;
+}
+
+.dash-spreadsheet-menu {
+    background-color: var(--card-bg) !important;
+    border: 1px solid var(--input-border) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.dash-spreadsheet-menu .dash-spreadsheet-menu-item {
+    color: var(--text-primary) !important;
+    padding: 8px 12px !important;
+}
+
+.dash-spreadsheet-menu .dash-spreadsheet-menu-item:hover {
+    background-color: var(--navbar-hover) !important;
+    color: #000 !important;
+}
+
+/* No table row hover effect - use transparent overlay so conditional formatting stays visible */
+.dash-table-container .dash-spreadsheet-inner table,
+.dash-spreadsheet-container .dash-spreadsheet-inner table {
+    --hover: transparent !important;
+    --selected-background: transparent !important;
+}
+
+.dash-table-container .dash-header .column-header--sort {
+    color: var(--navbar-text) !important;
+    transition: color 0.2s;
+}
+
+.dash-table-container .dash-header .column-header--sort:hover,
+.dash-table-container .dash-header .column-header--sort:focus {
+    color: #FFDD00 !important;
+}
+
+.dash-table-container .dash-header .column-header--sort.is-active {
+    color: #FFDD00 !important;
+}
+
+.dash-table-container .dash-filter .dash-filter-icon {
+    color: #FFDD00 !important;
+    fill: #FFDD00 !important;
+}
+
+.dash-table-container .dash-filter .dash-filter-icon:hover {
+    color: #FFDD00 !important;
+    fill: #FFDD00 !important;
+    opacity: 0.8;
+}
+
+.dash-table-container .dash-filter input {
+    color: #FFDD00 !important;
+}
+
+.dash-table-container .dash-filter input::placeholder {
+    color: var(--text-primary) !important;
+    opacity: 0.1;
+    transition: opacity 0.2s ease;
+}
+
+.dash-table-container .dash-filter input:hover::placeholder,
+.dash-table-container .dash-filter input:focus::placeholder {
+    opacity: 0.7 !important;
+}
+
+#search-toggle:hover {
+    background-color: var(--input-bg) !important;
+    border: 1px solid var(--input-border) !important;
+    transform: scale(1.05);
+}
+
+#search-toggle:active {
+    transform: scale(0.95);
+}

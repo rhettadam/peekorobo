@@ -1,0 +1,66 @@
+/* Global styles */
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+#page-content {
+    flex-grow: 1;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6, p, span, div {
+    color: var(--text-primary);
+}
+
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+/* Links */
+a, a:active {
+    color: #007bff;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+a:hover, a:focus {
+    color: #339cff;
+    text-decoration: none;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+img:hover {
+    transform: scale(1.01);
+    transition: transform 0.3s ease;
+}
