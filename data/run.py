@@ -615,7 +615,7 @@ def event_has_started(event_key, start_date):
         conn.close()
 
         if not rows:
-            return True  # No match data yet; allow initial load
+            return True  # No match data yet; allow initial load (create_event_db needs this to process new events)
 
         for red_score, blue_score, winning_alliance, _ in rows:
             if (red_score and red_score > 0) or (blue_score and blue_score > 0) or winning_alliance in ("red", "blue"):
@@ -2146,7 +2146,13 @@ def fetch_team_components(team, year):
             matches = match_cache.get(event_key, [])
             if not matches:
                 continue  # Skip if no matches in cache
-            
+
+            # Skip events that haven't started yet (or have no meaningful scores)
+            # This prevents newly added future events with scheduled matches from affecting EPA
+            event_start_date = get_event_start_date_from_db(event_key)
+            if not event_has_started(event_key, event_start_date):
+                continue  # Exclude from event_epas and total EPA
+
             # Calculate EPA for this event (which includes wins/losses/ties for the event)
             event_epa = calculate_event_epa(matches, team_key, team_number)
             event_epa["event_key"] = event_key  # Ensure event_key is included

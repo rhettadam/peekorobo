@@ -139,6 +139,57 @@ def get_team_played_events(team_number, year):
             played_events.add(event_key)
     return list(played_events)
 
+def get_event_start_date_from_db(event_key: str):
+    """Get event start date from database."""
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT start_date FROM events WHERE event_key = %s", (event_key,))
+        event_row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if event_row and event_row[0]:
+            return event_row[0]
+        return None
+    except Exception as e:
+        print(f"Error getting start date for {event_key}: {e}")
+        return None
+
+def event_should_count_for_epa(event_key: str, start_date, matches: list) -> bool:
+    """Return True if this event should be included in EPA (has started and has meaningful scores).
+    Excludes future events and events where all matches have 0-0 scores."""
+    now = datetime.now(timezone.utc)
+    # Event start date in future - exclude
+    if start_date:
+        try:
+            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+            if start_date_obj > now.date():
+                return False
+        except Exception:
+            pass
+
+    if not matches:
+        return False
+
+    # Check if any match has actual scores (from in-memory match data)
+    for match in matches:
+        red_score = match.get("alliances", {}).get("red", {}).get("score") or 0
+        blue_score = match.get("alliances", {}).get("blue", {}).get("score") or 0
+        winning_alliance = match.get("winning_alliance")
+        if (red_score and red_score > 0) or (blue_score and blue_score > 0) or winning_alliance in ("red", "blue"):
+            return True
+
+    # All matches have 0-0 - check if they're all scheduled in the future
+    predicted_times = []
+    for match in matches:
+        pt = _predicted_time_to_datetime(match.get("predicted_time"))
+        if pt:
+            predicted_times.append(pt)
+    if predicted_times and min(predicted_times) > now:
+        return False  # All matches in future - event hasn't started
+
+    return False  # No meaningful scores yet
+
 @retry(stop=stop_never, wait=wait_exponential(min=0.5, max=5), retry=retry_if_exception_type(Exception))
 def tba_get(endpoint: str):
     api_key = random.choice(API_KEYS)
@@ -687,8 +738,13 @@ def analyze_single_team(team_key: str, year: int):
         try:
             # Normal case - fetch matches directly for this team
             matches = tba_get(f"team/{team_key}/event/{event_key}/matches")
-            
+
             if matches:
+                # Skip events that haven't started yet (or have no meaningful scores)
+                start_date = get_event_start_date_from_db(event_key)
+                if not event_should_count_for_epa(event_key, start_date, matches):
+                    continue  # Exclude from event_epas and total EPA
+
                 # Calculate overall wins/losses/ties from matches
                 for match in matches:
                     # Normal case - check the original team key
