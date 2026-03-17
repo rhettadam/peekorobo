@@ -1,0 +1,11 @@
+[project]
+name = "peekorobo-api"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "dotenv>=0.9.9",
+    "fastapi>=0.129.0",
+    "sqlalchemy>=2.0.46",
+]
