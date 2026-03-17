@@ -1370,36 +1370,6 @@ def topbar():
                                             style={"background": "none", "border": "none", "padding": "0.5rem 1rem"},
                                         )
                                     ),
-                                    # Peekolive link - mobile version
-                                    dbc.NavItem(
-                                        html.A(
-                                            [
-                                                html.Span("Try", style={
-                                                    "fontWeight": "600",
-                                                    "fontSize": "0.9rem",
-                                                    "letterSpacing": "0.5px",
-                                                    "color": "white"
-                                                }),
-                                                " ",
-                                                html.Img(
-                                                    src="/assets/peekolive.png",
-                                                    style={"height": "20px", "width": "auto", "marginLeft": "4px", "marginRight": "4px"}
-                                                )
-                                            ],
-                                            href="/events/peekolive",
-                                            style={
-                                                "color": "var(--navbar-text)",
-                                                "textDecoration": "none",
-                                                "display": "flex",
-                                                "alignItems": "center",
-                                                "justifyContent": "center",
-                                                "padding": "0.5rem 1rem",
-                                                "transition": "color 0.2s ease"
-                                            },
-                                            className="peekolive-nav-link"
-                                        ),
-                                        className="d-md-none"  # Only show on mobile
-                                    ),
                                 ],
                                 navbar=True,
                                 className="justify-content-center",
@@ -1410,38 +1380,6 @@ def topbar():
                     id="navbar-collapse",
                     is_open=False,
                     navbar=True,
-                ),
-
-                # Peekolive link - desktop version
-                dbc.Col(
-                    html.A(
-                        [
-                            html.Span("Try", style={
-                                "fontWeight": "600",
-                                "fontSize": "0.95rem",
-                                "letterSpacing": "0.5px",
-                                "color": "white"
-                            }),
-                            " ",
-                            html.Img(
-                                src="/assets/peekolive.png",
-                                style={"height": "24px", "width": "auto", "marginLeft": "6px", "marginRight": "6px"}
-                            )
-                        ],
-                        href="/events/peekolive",
-                        style={
-                            "color": "var(--navbar-text)",
-                            "textDecoration": "none",
-                            "display": "flex",
-                            "alignItems": "center",
-                            "padding": "0.5rem 1rem",
-                            "transition": "color 0.2s ease",
-                            "whiteSpace": "nowrap"
-                        },
-                        className="peekolive-nav-link"
-                    ),
-                    width="auto",
-                    className="d-none d-md-block align-self-center",
                 ),
 
                 dbc.Col(
