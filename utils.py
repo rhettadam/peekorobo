@@ -72,10 +72,10 @@ def apply_simple_filter(df, filter_query):
 
 def calculate_single_rank(team_data, selected_team):
     # Extract selected team's information
-    selected_epa = selected_team.get("epa")
+    selected_epa = selected_team.get("ace")
     valid_epas = [
-        team.get("epa") for team in team_data
-        if team.get("epa") not in (None, 0) and not is_demo_team(team.get("team_number"))
+        team.get("ace") for team in team_data
+        if team.get("ace") not in (None, 0) and not is_demo_team(team.get("team_number"))
     ]
 
     # If selected team has no EPA data, return N/A for all ranks
@@ -101,7 +101,7 @@ def calculate_single_rank(team_data, selected_team):
         if is_demo_team(team.get("team_number")):
             continue
 
-        team_epa = team.get("epa")
+        team_epa = team.get("ace")
         # Skip teams with no EPA data for comparison
         if team_epa is None:
             continue
@@ -136,7 +136,7 @@ def calculate_all_ranks(year, data):
     teams_data = list(year_data.values())
 
     for team in teams_data:
-        epa = team.get("epa")
+        epa = team.get("ace")
         
         # For display: this is the "Total ACE"
         team["display_ace"] = epa
@@ -631,7 +631,7 @@ def get_team_data_with_fallback(team_number, target_year, team_database):
     team_data = team_database.get(target_year, {}).get(team_number)
     
     # Check if we have valid data (not None and has meaningful stats)
-    if team_data and team_data.get("epa", 0) > 0:
+    if team_data and team_data.get("ace", 0) > 0:
         return team_data, target_year
     
     # If no data or zero stats, try previous year
@@ -644,7 +644,7 @@ def get_team_data_with_fallback(team_number, target_year, team_database):
                 team_database[previous_year] = prev_team_data
             
             prev_team_data = team_database.get(previous_year, {}).get(team_number)
-            if prev_team_data and prev_team_data.get("epa", 0) > 0:
+            if prev_team_data and prev_team_data.get("ace", 0) > 0:
                 return prev_team_data, previous_year
         except Exception:
             pass  # If loading previous year fails, continue with current data

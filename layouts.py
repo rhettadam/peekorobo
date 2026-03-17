@@ -190,27 +190,27 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
 
     epa_data = {
         str(team_num): {
-            "epa": data.get("epa", 0),
-            "auto_epa": data.get("auto_epa", 0),
-            "teleop_epa": data.get("teleop_epa", 0),
-            "endgame_epa": data.get("endgame_epa", 0),
-            "event_epas": json.loads(data["event_epas"]) if isinstance(data.get("event_epas"), str) else data.get("event_epas", [])
+            "ace": data.get("ace", 0),
+            "auto_raw": data.get("auto_raw", 0),
+            "teleop_raw": data.get("teleop_raw", 0),
+            "endgame_raw": data.get("endgame_raw", 0),
+            "event_perf": json.loads(data["event_perf"]) if isinstance(data.get("event_perf"), str) else data.get("event_perf", [])
         }
         for team_num, data in year_data.items()
     }
 
 
-    raw_values = [data.get("normal_epa", 0) for data in year_data.values()]
-    auto_values = [data.get("auto_epa", 0) for data in year_data.values()]
-    teleop_values = [data.get("teleop_epa", 0) for data in year_data.values()]
-    endgame_values = [data.get("endgame_epa", 0) for data in year_data.values()]
-    ace_values = [data.get("epa", 0) for data in year_data.values()]
+    raw_values = [data.get("raw", 0) for data in year_data.values()]
+    auto_values = [data.get("auto_raw", 0) for data in year_data.values()]
+    teleop_values = [data.get("teleop_raw", 0) for data in year_data.values()]
+    endgame_values = [data.get("endgame_raw", 0) for data in year_data.values()]
+    ace_values = [data.get("ace", 0) for data in year_data.values()]
 
     percentiles_dict = {
-        "epa": compute_percentiles(raw_values),
-        "auto_epa": compute_percentiles(auto_values),
-        "teleop_epa": compute_percentiles(teleop_values),
-        "endgame_epa": compute_percentiles(endgame_values),
+        "raw": compute_percentiles(raw_values),
+        "auto_raw": compute_percentiles(auto_values),
+        "teleop_raw": compute_percentiles(teleop_values),
+        "endgame_raw": compute_percentiles(endgame_values),
         "ace": compute_percentiles(ace_values),
     }
 
@@ -472,11 +472,11 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                 district_name = district_name or (district_key or "")
                 district_teams = len(district_team_list)
                 if district_teams > 0:
-                    valid_epas = [team.get("epa") for team in district_team_list if team.get("epa") not in (None, 0)]
+                    valid_epas = [team.get("ace") for team in district_team_list if team.get("ace") not in (None, 0)]
                     if not valid_epas:
                         district_rank = "N/A"
                     else:
-                        district_team_list.sort(key=lambda x: x.get("epa", 0), reverse=True)
+                        district_team_list.sort(key=lambda x: x.get("ace", 0), reverse=True)
                         for i, team in enumerate(district_team_list):
                             if team.get("team_number") == selected_team.get("team_number"):
                                 district_rank = i + 1
@@ -499,16 +499,16 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         district_label = district_name if district_name else "District"
         district_rank_val = district_rank if (district_key and district_teams > 0) else "N/A"
         district_total_val = district_teams if (district_key and district_teams > 0) else "N/A"
-        district_href = f"/teams?year={performance_year}&district={district_key}&sort_by=epa" if district_key else f"/teams?year={performance_year}&sort_by=epa"
+        district_href = f"/teams?year={performance_year}&district={district_key}&sort_by=ace" if district_key else f"/teams?year={performance_year}&sort_by=ace"
 
         return html.Div([
             html.Div([
                 html.Div("Rankings", className="rank-unified-header"),
                 html.Div([
-                    rank_tile("Global", global_rank, total_teams, f"/teams?year={performance_year}&sort_by=epa"),
-                    rank_tile(country, country_rank, country_teams, f"/teams?year={performance_year}&country={country}&sort_by=epa"),
+                    rank_tile("Global", global_rank, total_teams, f"/teams?year={performance_year}&sort_by=ace"),
+                    rank_tile(country, country_rank, country_teams, f"/teams?year={performance_year}&country={country}&sort_by=ace"),
                     rank_tile(district_label, district_rank_val, district_total_val, district_href),
-                    rank_tile(state, state_rank, state_teams, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa"),
+                    rank_tile(state, state_rank, state_teams, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=ace"),
                 ], className="rank-unified-grid"),
             ], className="rank-unified-card"),
         ], className="mb-4")
@@ -534,12 +534,12 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         conf_color = "#555"        # Gray for confidence
         total_color = "#673ab7"     # Deep Purple for ACE
     
-        total = selected_team.get("epa", 0)
-        normal_epa = selected_team.get("normal_epa", 0)
+        total = selected_team.get("ace", 0)
+        raw_val = selected_team.get("raw", 0)
         confidence = selected_team.get("confidence", 0)
-        auto = selected_team.get("auto_epa", 0)
-        teleop = selected_team.get("teleop_epa", 0)
-        endgame = selected_team.get("endgame_epa", 0)
+        auto = selected_team.get("auto_raw", 0)
+        teleop = selected_team.get("teleop_raw", 0)
+        endgame = selected_team.get("endgame_raw", 0)
         wins = selected_team.get("wins", 0)
         losses = selected_team.get("losses", 0)
         ties = selected_team.get("ties", 0)
@@ -560,7 +560,7 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                 pill("Auto", f"{auto:.1f}", auto_color),
                 pill("Teleop", f"{teleop:.1f}", teleop_color),
                 pill("Endgame", f"{endgame:.1f}", endgame_color),
-                pill("RAW", f"{normal_epa:.1f}", norm_color),
+                pill("RAW", f"{raw_val:.1f}", norm_color),
                 pill("Confidence", f"{confidence:.2f}", conf_color),
                 pill("ACE", f"{total:.1f}", total_color),
             ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
@@ -1238,6 +1238,157 @@ def predictions_blog_layout():
         footer
     ], style={"minHeight": "100vh", "display": "flex", "flexDirection": "column"})
 
+
+def api_docs_layout():
+    """Static API documentation page."""
+    base_url = "https://peekorobo.com/api"
+    endpoints = [
+        {
+            "method": "GET",
+            "path": "/",
+            "desc": "Health check. Returns a simple hello message.",
+            "params": [],
+        },
+        {
+            "method": "GET",
+            "path": "/teams",
+            "desc": "List teams with optional filters.",
+            "params": [
+                ("limit", "int", "Max results (1–100, default 100)"),
+                ("city", "string", "Filter by city"),
+                ("country", "string", "Filter by country"),
+                ("team_number", "int", "Filter by team number"),
+                ("next_team_number", "int", "Pagination cursor"),
+            ],
+        },
+        {
+            "method": "GET",
+            "path": "/events/{year}",
+            "desc": "List events for a given year.",
+            "params": [
+                ("year", "path", "Year (e.g. 2025)"),
+                ("city", "string", "Filter by city"),
+                ("state_prov", "string", "Filter by state/province"),
+                ("country", "string", "Filter by country"),
+                ("limit", "int", "Max results"),
+            ],
+        },
+        {
+            "method": "GET",
+            "path": "/team_epas/{team_number}",
+            "desc": "Get team performance data (ACE, RAW, event breakdowns). Returns team_number and team_perfs: a list of per-year records.",
+            "params": [
+                ("team_number", "path", "Team number (e.g. 254)"),
+                ("year", "int", "Filter by year (optional)"),
+            ],
+            "response_fields": [
+                ("team_number", "int", "Team number"),
+                ("team_perfs", "array", "List of per-year records. Each item: year, raw, ace, confidence, auto_raw, teleop_raw, endgame_raw, wins, losses, ties, event_perf"),
+                ("raw", "float", "RAW (unadjusted) EPA for that year"),
+                ("ace", "float", "ACE (Adjusted Contribution Estimate) for that year"),
+                ("event_perf", "array", "Per-event breakdown: event_key, raw, auto_raw, teleop_raw, endgame_raw, confidence, ace"),
+            ],
+        },
+        {
+            "method": "GET",
+            "path": "/event_teams",
+            "desc": "Get teams registered for events.",
+            "params": [],
+        },
+        {
+            "method": "GET",
+            "path": "/event_rankings",
+            "desc": "Get event rankings.",
+            "params": [],
+        },
+        {
+            "method": "GET",
+            "path": "/event_matches",
+            "desc": "Get event matches.",
+            "params": [],
+        },
+        {
+            "method": "GET",
+            "path": "/event_awards",
+            "desc": "Get event awards.",
+            "params": [],
+        },
+        {
+            "method": "GET",
+            "path": "/authorize",
+            "desc": "Verify API key. Returns {\"authorized\": true} if valid.",
+            "params": [],
+        },
+    ]
+    code_style = {
+        "backgroundColor": "var(--bg-secondary)",
+        "border": "1px solid var(--border-color)",
+        "borderRadius": "6px",
+        "padding": "12px 16px",
+        "fontFamily": "monospace",
+        "fontSize": "0.9rem",
+        "color": "var(--text-primary)",
+    }
+    return html.Div([
+        topbar(),
+        dbc.Container([
+            html.Div([
+                html.H1("API Documentation",
+                    style={"fontSize": "2.5em", "marginBottom": "15px", "color": "var(--text-primary)"}),
+                html.P("REST API for Peekorobo team and event data. All endpoints require authentication.",
+                    style={"fontSize": "1.2em", "color": "var(--text-secondary)", "marginBottom": "30px"}),
+
+                html.H2("Base URL", style={"color": "var(--text-primary)", "marginTop": "30px", "marginBottom": "10px", "fontSize": "1.4em"}),
+                html.Div([
+                    html.Code(base_url, style={"fontSize": "1.1em", "color": "#ffdd00"})
+                ], style=code_style),
+
+                html.H2("Authentication", style={"color": "var(--text-primary)", "marginTop": "30px", "marginBottom": "10px", "fontSize": "1.4em"}),
+                html.P("Include your API key in the request header:", style={"color": "var(--text-primary)"}),
+                html.Div([
+                    html.Code("X-API-Key: your-api-key", style={"fontSize": "1em", "color": "#ffdd00"})
+                ], style=code_style),
+                html.P("API keys are issued to registered users. Get one from your Account settings.",
+                    style={"color": "var(--text-secondary)", "marginTop": "8px", "marginBottom": "30px"}),
+
+                html.H2("Endpoints", style={"color": "var(--text-primary)", "marginTop": "30px", "marginBottom": "20px", "fontSize": "1.4em"}),
+                html.Div([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.Div([
+                                html.Span(ep["method"], style={
+                                    "fontWeight": "bold",
+                                    "padding": "4px 8px",
+                                    "borderRadius": "4px",
+                                    "fontSize": "0.85em",
+                                    "marginRight": "10px",
+                                    "backgroundColor": "#22c55e" if ep["method"] == "GET" else "#3b82f6",
+                                    "color": "white",
+                                }),
+                                html.Code(f"{base_url}{ep['path']}", style={"fontSize": "1em", "color": "#ffdd00"}),
+                            ], style={"marginBottom": "8px"}),
+                            html.P(ep["desc"], style={"color": "var(--text-secondary)", "marginBottom": "0" if not ep.get("params") and not ep.get("response_fields") else "12px"}),
+                            (html.Ul([
+                                html.Li([html.Code(p[0]), " (", html.Span(p[1], style={"color": "var(--text-muted)"}), "): ", p[2]])
+                                for p in ep["params"]
+                            ], style={"color": "var(--text-primary)", "fontSize": "0.95em", "marginBottom": "12px"}) if ep.get("params") else None),
+                            (html.Div([
+                                html.Small("Response fields: ", style={"color": "var(--text-muted)", "fontWeight": "bold"}),
+                                html.Ul([
+                                    html.Li([html.Code(rf[0]), " (", html.Span(rf[1], style={"color": "var(--text-muted)"}), "): ", rf[2]])
+                                    for rf in ep["response_fields"]
+                                ], style={"color": "var(--text-primary)", "fontSize": "0.9em", "marginBottom": "0", "marginTop": "4px"})
+                            ]) if ep.get("response_fields") else None),
+                        ], style={"padding": "16px"})
+                    ], style={"backgroundColor": "var(--card-bg)", "border": "1px solid var(--border-color)", "marginBottom": "16px"})
+                    for ep in endpoints
+                ]),
+            ], style={"maxWidth": "900px", "margin": "0 auto", "padding": "40px 20px"})
+        ], fluid=True, style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"}),
+        footer
+    ], style={"minHeight": "100vh", "display": "flex", "flexDirection": "column"})
+
+
 def topbar():
     return dbc.Navbar(
         dbc.Container(
@@ -1335,6 +1486,7 @@ def topbar():
                                         className="custom-navlink",
                                         children=[
                                             dbc.DropdownMenuItem("Blog", href="/blog"),
+                                            dbc.DropdownMenuItem("API Docs", href="/api-docs"),
                                             dbc.DropdownMenuItem("Higher or Lower", href="/higher-lower"),
                                             dbc.DropdownMenuItem("Duel", href="/duel"),
                                             dbc.DropdownMenuItem("Account", href="/login", id="account-link"),
@@ -2335,7 +2487,7 @@ def create_team_card_spotlight(team, year_team_database, event_year):
         if epa_rank == "N/A":
             # Fallback: calculate rank from current year data
             team_epas = [
-                (tnum, data.get("epa", 0))
+                (tnum, data.get("ace", 0))
                 for tnum, data in all_teams.items()
                 if isinstance(data, dict)
             ]
@@ -2343,7 +2495,7 @@ def create_team_card_spotlight(team, year_team_database, event_year):
             rank_map = {tnum: i + 1 for i, (tnum, _) in enumerate(team_epas)}
             epa_rank = rank_map.get(t_num, "N/A")
 
-        team_epa = team_data.get("epa", 0)
+        team_epa = team_data.get("ace", 0)
         epa_display = f"{team_epa:.1f}"
 
         # === Avatar and link ===
@@ -2459,7 +2611,7 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
     location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
     
     # Calculate event-specific rank
-    team_event_epa = event_team_data.get("epa", 0)
+    team_event_epa = event_team_data.get("ace", 0)
     event_rank = event_rank_map.get(team_event_epa, "N/A")
     
     # === Avatar and link ===
@@ -2769,12 +2921,12 @@ def teams_layout(default_year=current_year):
             {"name": "ACE Rank", "id": "ace_rank", "type": "numeric"},
             {"name": "Team #", "id": "team_number", "type": "numeric"},
             {"name": "Nickname", "id": "nickname", "presentation": "markdown"},
-            {"name": "RAW", "id": "epa", "type": "numeric"},
+            {"name": "RAW", "id": "raw", "type": "numeric"},
             {"name": "Confidence", "id": "confidence", "type": "numeric"},
             {"name": "ACE", "id": "ace", "type": "numeric"},
-            {"name": "Auto", "id": "auto_epa", "type": "numeric"},
-            {"name": "Teleop", "id": "teleop_epa", "type": "numeric"},
-            {"name": "Endgame", "id": "endgame_epa", "type": "numeric"},
+            {"name": "Auto", "id": "auto_raw", "type": "numeric"},
+            {"name": "Teleop", "id": "teleop_raw", "type": "numeric"},
+            {"name": "Endgame", "id": "endgame_raw", "type": "numeric"},
             {"name": "Favorites", "id": "favorites", "type": "numeric"},
             {"name": "Record", "id": "record"},
         ],
@@ -3320,7 +3472,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         event_epa_pills = None
         if year >= 2015:
             # Access event_epas from the specific team's data within the epa_data dictionary
-            team_specific_event_epas = epa_data.get(str(team_number), {}).get("event_epas", [])
+            team_specific_event_epas = epa_data.get(str(team_number), {}).get("event_perf", [])
             # Handle both event key formats (with and without "frc" prefix)
             event_key_clean = event_key.replace("frc", "") if event_key.startswith("frc") else event_key
             event_epa = next((e for e in team_specific_event_epas if str(e.get("event_key")) == str(event_key_clean)), None)
@@ -3334,12 +3486,12 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 total_color = "#673ab7" # Purple
                 event_epa_pills = html.Div([
                     html.Div([
-                        pill("Auto", f"{event_epa['auto']:.1f}", auto_color),
-                        pill("Teleop", f"{event_epa['teleop']:.1f}", teleop_color),
-                        pill("Endgame", f"{event_epa['endgame']:.1f}", endgame_color),
-                        pill("RAW", f"{event_epa['overall']:.1f}", norm_color),
-                        pill("Conf", f"{event_epa['confidence']:.2f}", conf_color),
-                        pill("ACE", f"{event_epa['actual_epa']:.1f}", total_color),
+                        pill("Auto", f"{event_epa.get('auto_raw', 0):.1f}", auto_color),
+                        pill("Teleop", f"{event_epa.get('teleop_raw', 0):.1f}", teleop_color),
+                        pill("Endgame", f"{event_epa.get('endgame_raw', 0):.1f}", endgame_color),
+                        pill("RAW", f"{event_epa.get('raw', 0):.1f}", norm_color),
+                        pill("Conf", f"{event_epa.get('confidence', 0):.2f}", conf_color),
+                        pill("ACE", f"{event_epa.get('ace', 0):.1f}", total_color),
                         
                     ], style={
                         "display": "flex", 
@@ -3419,22 +3571,22 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             t_data = epa_data.get(t_key.strip(), {})
             # Handle both event key formats (with and without "frc" prefix)
             event_key_clean = event_key.replace("frc", "") if event_key.startswith("frc") else event_key
-            event_epa = next((e for e in t_data.get("event_epas", []) if e.get("event_key") == event_key_clean), None)
-            if event_epa and event_epa.get("overall", 0) != 0:
+            event_epa = next((e for e in t_data.get("event_perf", []) if e.get("event_key") == event_key_clean), None)
+            if event_epa and event_epa.get("ace", 0) != 0:
                 return {
                     "team_number": int(t_key.strip()),
-                    "epa": event_epa.get("overall", 0),
+                    "ace": event_epa.get("ace", 0),
                     "confidence": event_epa.get("confidence", 0.7),
                     "consistency": event_epa.get("consistency", 0)
                 }
             
             # If no event-specific stats, try to get team's overall stats
-            if t_data.get("epa") not in (None, ""):
-                epa_val = t_data.get("epa", 0)
+            if t_data.get("ace") not in (None, "") or t_data.get("raw") not in (None, ""):
+                epa_val = t_data.get("ace", 0)
                 conf_val = t_data.get("confidence", 0.7)
                 return {
                     "team_number": int(t_key.strip()),
-                    "epa": epa_val,
+                    "ace": epa_val,
                     "confidence": conf_val,
                     "consistency": t_data.get("consistency", 0)
                 }
@@ -3451,13 +3603,13 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 
                 return {
                     "team_number": int(t_key.strip()),
-                    "epa": team_data.get("epa", 0),
+                    "epa": team_data.get("ace", 0),
                     "confidence": team_data.get("confidence", 0.7),
                     "consistency": team_data.get("consistency", 0)
                 }
             except Exception:
                 # Final fallback
-                return {"team_number": int(t_key.strip()), "epa": 0, "confidence": 0.7, "consistency": 0}
+                return {"team_number": int(t_key.strip()), "ace": 0, "confidence": 0.7, "consistency": 0}
 
         # Filter to only show matches the team played in
         matches = [
@@ -4360,31 +4512,31 @@ def match_layout(event_key, match_key):
 
     def get_team_epa_breakdown(t):
         t_data = team_db.get(int(t), {})
-        event_epas = t_data.get("event_epas", [])
+        event_epas = t_data.get("event_perf", [])
         if isinstance(event_epas, str):
             try:
                 event_epas = json.loads(event_epas)
             except Exception:
                 event_epas = []
         event_epa = next((e for e in event_epas if e.get("event_key") == event_key), None)
-        if event_epa and event_epa.get("actual_epa", 0) != 0:
+        if event_epa and event_epa.get("ace", 0) != 0:
             return {
-                "auto_epa": event_epa.get("auto", 0),
-                "teleop_epa": event_epa.get("teleop", 0),
-                "endgame_epa": event_epa.get("endgame", 0),
+                "auto_raw": event_epa.get("auto_raw", 0),
+                "teleop_raw": event_epa.get("teleop_raw", 0),
+                "endgame_raw": event_epa.get("endgame_raw", 0),
                 "confidence": event_epa.get("confidence", 0.7),
-                "epa": event_epa.get("actual_epa", 0),
-                "normal_epa": event_epa.get("overall", 0),
+                "ace": event_epa.get("ace", 0),
+                "raw": event_epa.get("raw", 0),
                 "nickname": t_data.get("nickname", ""),
                 "team_number": t_data.get("team_number", t),
             }
         return {
-            "auto_epa": t_data.get("auto_epa", 0),
-            "teleop_epa": t_data.get("teleop_epa", 0),
-            "endgame_epa": t_data.get("endgame_epa", 0),
+            "auto_raw": t_data.get("auto_raw", 0),
+            "teleop_raw": t_data.get("teleop_raw", 0),
+            "endgame_raw": t_data.get("endgame_raw", 0),
             "confidence": t_data.get("confidence", 0.7),
-            "epa": t_data.get("epa", 0),
-            "normal_epa": t_data.get("normal_epa", 0),
+            "ace": t_data.get("ace", 0),
+            "raw": t_data.get("raw", 0),
             "nickname": t_data.get("nickname", ""),
             "team_number": t_data.get("team_number", t),
         }
@@ -4403,15 +4555,15 @@ def match_layout(event_key, match_key):
     pred_blue_score = sum(t["epa"] for t in blue_epas)
 
     # Percentile coloring for ACE using app-wide logic
-    all_epas = [t.get("epa", 0) for t in team_db.values() if t.get("epa") is not None]
-    percentiles_dict = {"epa": compute_percentiles(all_epas)}
+    all_epas = [t.get("ace", 0) for t in team_db.values() if t.get("ace") is not None or t.get("raw") is not None]
+    percentiles_dict = {"ace": compute_percentiles(all_epas)}
 
     # Build breakdown data for DataTable
     phases = [
-        ("Auto", "auto_epa"),
-        ("Teleop", "teleop_epa"),
-        ("Endgame", "endgame_epa"),
-        ("RAW", "normal_epa"),
+        ("Auto", "auto_raw"),
+        ("Teleop", "teleop_raw"),
+        ("Endgame", "endgame_raw"),
+        ("RAW", "raw"),
         ("Confidence", "confidence"),
     ]
     # Build columns for red and blue tables
@@ -4459,22 +4611,22 @@ def match_layout(event_key, match_key):
     # Add Total row (ACE)
     red_total_row = {"Phase": "ACE"}
     for t in red_epas:
-        red_total_row[f"red_{t['team_number']}"] = round(t["epa"], 2)
+        red_total_row[f"red_{t['team_number']}"] = round(t["ace"], 2)
     red_total_row["Red Predicted"] = round(pred_red_score, 2)
     red_total_row["Red Actual"] = red_score
     red_data.append(red_total_row)
 
     blue_total_row = {"Phase": "ACE"}
     for t in blue_epas:
-        blue_total_row[f"blue_{t['team_number']}"] = round(t["epa"], 2)
+        blue_total_row[f"blue_{t['team_number']}"] = round(t["ace"], 2)
     blue_total_row["Blue Predicted"] = round(pred_blue_score, 2)
     blue_total_row["Blue Actual"] = blue_score
     blue_data.append(blue_total_row)
 
     # Percentile coloring for all stats
     all_stats = {
-        k: [t.get(k if k != "normal_epa" else "epa", 0) for t in team_db.values() if t.get(k if k != "normal_epa" else "epa") is not None]
-        for k in ["auto_epa", "teleop_epa", "endgame_epa", "confidence", "epa", "normal_epa"]
+        k: [t.get(k, 0) for t in team_db.values() if t.get(k) is not None]
+        for k in ["auto_raw", "teleop_raw", "endgame_raw", "confidence", "ace", "raw"]
     }
     percentiles_dict = {k: compute_percentiles(v) for k, v in all_stats.items()}
 
@@ -4499,7 +4651,7 @@ def match_layout(event_key, match_key):
                 })
     # ACE row for red table
     ace_percentiles = percentiles_dict["epa"]
-    ace_rules = get_epa_styling({"epa": ace_percentiles})
+    ace_rules = get_epa_styling({"ace": ace_percentiles})
     for t in red_epas:
         col_id = f"red_{t['team_number']}"
         for rule in ace_rules:
@@ -4710,7 +4862,7 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
             team_num = int(team_key)
             team_data = current_year_data.get(team_num, {})
             if team_data:
-                epa = team_data.get("epa", 0)
+                epa = team_data.get("ace", 0)
                 state = team_data.get("state_prov", "")
                 country = team_data.get("country", "")
                 city = team_data.get("city", "")
@@ -4746,7 +4898,7 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
         if str(team_num) in favorite_teams:
             continue
             
-        team_epa = team_data.get("epa", 0)
+        team_epa = team_data.get("ace", 0)
         team_state = team_data.get("state_prov", "")
         team_country = team_data.get("country", "")
         team_city = team_data.get("city", "")
@@ -4831,9 +4983,9 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
     # Fallback: if no personalized matches, suggest top teams by ACE
     if not candidate_teams:
         all_teams = [
-            {"team_num": tn, "team_data": td, "score": td.get("epa", 0), "reasons": ["Top performer this season"]}
+            {"team_num": tn, "team_data": td, "score": td.get("ace", 0), "reasons": ["Top performer this season"]}
             for tn, td in current_year_data.items()
-            if str(tn) not in favorite_teams and td.get("epa", 0) > 0
+            if str(tn) not in favorite_teams and td.get("ace", 0) > 0
         ]
         all_teams.sort(key=lambda x: x["score"], reverse=True)
         candidate_teams = all_teams[:6]
@@ -4918,7 +5070,7 @@ def generate_team_recommendations(team_database, favorite_teams, user_team_affil
                                 "letterSpacing": "0.5px"
                             }),
                             html.Br(),
-                            html.Span(f"{team_data.get('epa', 0):.1f}", style={
+                            html.Span(f"{team_data.get('ace', 0):.1f}", style={
                                 "fontSize": "1.15rem",
                                 "fontWeight": "700",
                                 "color": card_text_color,
@@ -5330,13 +5482,13 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
     # Build team cards
     epa_data = {
         str(team_num): {
-            "epa": data.get("epa", 0),
-            "normal_epa": data.get("normal_epa", 0),
-            "auto_epa": data.get("auto_epa", 0),
-            "teleop_epa": data.get("teleop_epa", 0),
-            "endgame_epa": data.get("endgame_epa", 0),
+            "ace": data.get("ace", 0),
+            "raw": data.get("raw", 0),
+            "auto_raw": data.get("auto_raw", 0),
+            "teleop_raw": data.get("teleop_raw", 0),
+            "endgame_raw": data.get("endgame_raw", 0),
             "confidence": data.get("confidence", 0),
-            "event_epas": data.get("event_epas", []),
+            "event_perf": data.get("event_perf", []),
         }
         for team_num, data in TEAM_DATABASE.get(current_year, {}).items()
     }
@@ -5373,12 +5525,12 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                 }
             )
 
-        epa = team_data.get("epa", 0)
-        teleop = team_data.get("teleop_epa", 0)
-        auto = team_data.get("auto_epa", 0)
-        endgame = team_data.get("endgame_epa", 0)
+        epa = team_data.get("ace", 0)
+        teleop = team_data.get("teleop_raw", 0)
+        auto = team_data.get("auto_raw", 0)
+        endgame = team_data.get("endgame_raw", 0)
         confidence = team_data.get("confidence", 0)
-        normal_epa = team_data.get("normal_epa", 0)
+        normal_epa = team_data.get("raw", 0)
         wins = team_data.get("wins", 0)
         losses = team_data.get("losses", 0)
         ties = team_data.get("ties", 0)
@@ -5811,26 +5963,26 @@ def event_layout(event_key):
             team_num = team.get("tk")
             team_data = TEAM_DATABASE.get(parsed_year, {}).get(team_num, {})
             if team_data:
-                # Handle event_epas whether it's a string or list
-                event_epas = team_data.get("event_epas", [])
-                if isinstance(event_epas, str):
+                # Handle event_perf whether it's a string or list
+                event_perf = team_data.get("event_perf", [])
+                if isinstance(event_perf, str):
                     try:
-                        event_epas = json.loads(event_epas)
+                        event_perf = json.loads(event_perf)
                     except json.JSONDecodeError:
-                        event_epas = []
+                        event_perf = []
                 # Find event-specific data for this team at this event
                 event_specific_epa = next(
-                    (e for e in event_epas if e.get("event_key") == event_key),
+                    (e for e in event_perf if e.get("event_key") == event_key),
                     None
                 )
                 # Fallback to overall data if event-specific is missing
-                if event_specific_epa and event_specific_epa.get("actual_epa", 0) != 0:
+                if event_specific_epa and event_specific_epa.get("ace", 0) != 0:
                     event_epa_data[str(team_num)] = {
-                        "normal_epa": event_specific_epa.get("overall", 0),
-                        "epa": event_specific_epa.get("actual_epa", 0),
-                        "auto_epa": event_specific_epa.get("auto", 0),
-                        "teleop_epa": event_specific_epa.get("teleop", 0),
-                        "endgame_epa": event_specific_epa.get("endgame", 0),
+                        "raw": event_specific_epa.get("raw", 0),
+                        "ace": event_specific_epa.get("ace", 0),
+                        "auto_raw": event_specific_epa.get("auto_raw", 0),
+                        "teleop_raw": event_specific_epa.get("teleop_raw", 0),
+                        "endgame_raw": event_specific_epa.get("endgame_raw", 0),
                         "confidence": event_specific_epa.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
                     }
                 else:
@@ -5838,21 +5990,21 @@ def event_layout(event_key):
                     fallback_team_data, actual_year = get_team_data_with_fallback(team_num, parsed_year, TEAM_DATABASE)
                     if fallback_team_data:
                         event_epa_data[str(team_num)] = {
-                            "epa": fallback_team_data.get("epa", 0),
-                            "normal_epa": fallback_team_data.get("normal_epa", 0),
-                            "auto_epa": fallback_team_data.get("auto_epa", 0),
-                            "teleop_epa": fallback_team_data.get("teleop_epa", 0),
-                            "endgame_epa": fallback_team_data.get("endgame_epa", 0),
+                            "ace": fallback_team_data.get("ace", 0),
+                            "raw": fallback_team_data.get("raw", 0),
+                            "auto_raw": fallback_team_data.get("auto_raw", 0),
+                            "teleop_raw": fallback_team_data.get("teleop_raw", 0),
+                            "endgame_raw": fallback_team_data.get("endgame_raw", 0),
                             "confidence": fallback_team_data.get("confidence", 0.7),
                         }
                     else:
                         # Final fallback to original data
                         event_epa_data[str(team_num)] = {
-                            "epa": team_data.get("epa", 0),
-                            "normal_epa": team_data.get("normal_epa", 0),
-                            "auto_epa": team_data.get("auto_epa", 0),
-                            "teleop_epa": team_data.get("teleop_epa", 0),
-                            "endgame_epa": team_data.get("endgame_epa", 0),
+                            "ace": team_data.get("ace", 0),
+                            "raw": team_data.get("raw", 0),
+                            "auto_raw": team_data.get("auto_raw", 0),
+                            "teleop_raw": team_data.get("teleop_raw", 0),
+                            "endgame_raw": team_data.get("endgame_raw", 0),
                             "confidence": team_data.get("confidence", 0.7),
                         }
         
@@ -5873,36 +6025,36 @@ def event_layout(event_key):
                 team_num = team.get("tk")
                 team_data = year_team_data.get(team_num, {})
                 if team_data:
-                    # Handle event_epas whether it's a string or list
-                    event_epas = team_data.get("event_epas", [])
-                    if isinstance(event_epas, str):
+                    # Handle event_perf whether it's a string or list
+                    event_perf = team_data.get("event_perf", [])
+                    if isinstance(event_perf, str):
                         try:
-                            event_epas = json.loads(event_epas)
+                            event_perf = json.loads(event_perf)
                         except json.JSONDecodeError:
-                            event_epas = []
+                            event_perf = []
                     # Find event-specific data for this team at this event
                     event_specific_epa = next(
-                        (e for e in event_epas if e.get("event_key") == event_key),
+                        (e for e in event_perf if e.get("event_key") == event_key),
                         None
                     )
                     # Fallback to overall data if event-specific is missing
-                    if event_specific_epa and event_specific_epa.get("actual_epa", 0) != 0:
+                    if event_specific_epa and event_specific_epa.get("ace", 0) != 0:
                         event_epa_data[str(team_num)] = {
-                            "normal_epa": event_specific_epa.get("overall", 0),
-                            "epa": event_specific_epa.get("actual_epa", 0),
-                            "auto_epa": event_specific_epa.get("auto", 0),
-                            "teleop_epa": event_specific_epa.get("teleop", 0),
-                            "endgame_epa": event_specific_epa.get("endgame", 0),
+                            "raw": event_specific_epa.get("raw", 0),
+                            "ace": event_specific_epa.get("ace", 0),
+                            "auto_raw": event_specific_epa.get("auto_raw", 0),
+                            "teleop_raw": event_specific_epa.get("teleop_raw", 0),
+                            "endgame_raw": event_specific_epa.get("endgame_raw", 0),
                             "confidence": event_specific_epa.get("confidence", 0.7),
                         }
                     else:
                         # Use overall performance metrics from year_team_data
                         event_epa_data[str(team_num)] = {
-                            "epa": team_data.get("epa", 0),
-                            "normal_epa": team_data.get("normal_epa"),
-                            "auto_epa": team_data.get("auto_epa", 0),
-                            "teleop_epa": team_data.get("teleop_epa", 0),
-                            "endgame_epa": team_data.get("endgame_epa", 0),
+                            "ace": team_data.get("ace", 0),
+                            "raw": team_data.get("raw"),
+"auto_raw": team_data.get("auto_raw", 0),
+                "teleop_raw": team_data.get("teleop_raw", 0),
+                            "endgame_raw": team_data.get("endgame_raw", 0),
                             "confidence": team_data.get("confidence", 0.7),
                         }
             
@@ -6101,14 +6253,15 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
         return None
     # If a specific year is selected, show event-by-event ACE
     if year:
-        event_epas = team_data.get("event_epas", [])
-        if isinstance(event_epas, str):
+        event_perf = team_data.get("event_perf", [])
+        if isinstance(event_perf, str):
             try:
-                event_epas = json.loads(event_epas)
+                event_perf = json.loads(event_perf)
             except Exception:
-                event_epas = []
-        if not event_epas:
-            return html.Div("No event data available for this team in this year.")
+                event_perf = []
+        if not event_perf:
+            nickname = team_data.get("nickname", "Unknown")
+            return html.Div(f"No event data available for Team {team_number} ({nickname}) in {performance_year}.")
         def get_event_date(event_epa):
             event_key = event_epa.get("event_key", "")
             # Try to get start date from event_database
@@ -6118,16 +6271,16 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
                 if start_date:
                     return start_date
             return event_key  # fallback
-        sorted_events = sorted(event_epas, key=get_event_date)
+        sorted_events = sorted(event_perf, key=get_event_date)
         
         # Filter out events with 0 stats (all components are 0)
         filtered_events = []
         for event in sorted_events:
-            ace = max(0.0, event.get("actual_epa", event.get("epa", 0)))
+            ace = max(0.0, event.get("ace", 0))
             auto = max(0.0, event.get("auto", 0))
             teleop = max(0.0, event.get("teleop", 0))
             endgame = max(0.0, event.get("endgame", 0))
-            raw = max(0.0, event.get("overall", event.get("normal_epa", 0)))
+            raw = max(0.0, event.get("raw", 0))
             
             # Only include events that have at least one non-zero stat
             if ace > 0 or auto > 0 or teleop > 0 or endgame > 0 or raw > 0:
@@ -6137,12 +6290,12 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
             return html.Div("No event data with valid stats available for this team in this year.")
         
         event_codes = [event.get("event_key", "") for event in filtered_events]
-        ace_values = [max(0.0, event.get("actual_epa", event.get("epa", 0))) for event in filtered_events]
+        ace_values = [max(0.0, event.get("ace", 0)) for event in filtered_events]
         auto_values = [max(0.0, event.get("auto", 0)) for event in filtered_events]
         teleop_values = [max(0.0, event.get("teleop", 0)) for event in filtered_events]
         endgame_values = [max(0.0, event.get("endgame", 0)) for event in filtered_events]
         confidence_values = [min(1.0, max(0.0, event.get("confidence", 0))) for event in filtered_events]
-        raw_values = [max(0.0, event.get("overall", event.get("normal_epa", 0))) for event in filtered_events]
+        raw_values = [max(0.0, event.get("raw", 0)) for event in filtered_events]
         if not ace_values:
             return html.Div("No valid event data found.")
         # Linear extrapolation for 2 predicted points using all events
@@ -6409,22 +6562,22 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
             # Only extract the team's summary for each year
             if year_key == current_year:
                 team_year_data = team_database.get(year_key, {}).get(team_number, {})
-                ace_values = [max(0.0, data.get("epa", 0)) for data in team_database.get(year_key, {}).values()]
+                ace_values = [max(0.0, data.get("ace", 0)) for data in team_database.get(year_key, {}).values()]
             else:
                 try:
                     year_team_data, *_ = load_year_data(year_key)
                     team_year_data = year_team_data.get(team_number, {})
-                    ace_values = [max(0.0, data.get("epa", 0)) for data in year_team_data.values()]
+                    ace_values = [max(0.0, data.get("ace", 0)) for data in year_team_data.values()]
                 except Exception:
                     team_year_data = {}
                     ace_values = []
             if team_year_data:
-                ace = max(0.0, team_year_data.get("epa", 0))
-                auto = max(0.0, team_year_data.get("auto_epa", 0))
-                teleop = max(0.0, team_year_data.get("teleop_epa", 0))
-                endgame = max(0.0, team_year_data.get("endgame_epa", 0))
+                ace = max(0.0, team_year_data.get("ace", 0))
+                auto = max(0.0, team_year_data.get("auto_raw", 0))
+                teleop = max(0.0, team_year_data.get("teleop_raw", 0))
+                endgame = max(0.0, team_year_data.get("endgame_raw", 0))
                 confidence = min(1.0, max(0.0, team_year_data.get("confidence", 0)))
-                epa = max(0.0, team_year_data.get("normal_epa", 0))
+                epa = max(0.0, team_year_data.get("raw", 0))
                 # Compute percentile for ACE in this year
                 if ace_values:
                     sorted_ace = sorted(ace_values)
@@ -6437,7 +6590,7 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
                     "auto": auto,
                     "teleop": teleop,
                     "endgame": endgame,
-                    "epa": epa,
+                    "raw": epa,
                     "confidence": confidence,
                     "percentile": percentile
                 })
@@ -6458,7 +6611,7 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
                     ys["auto"],
                     ys["teleop"],
                     ys["endgame"],
-                    ys["epa"],
+                    ys["raw"],
                     ys["confidence"],
                     ys["ace"],
                     ys["percentile"]

@@ -397,35 +397,35 @@ def insert_team_epa(result, year):
         """
         INSERT INTO team_epas (
             team_number, year,
-            normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-            wins, losses, ties, event_epas
+            raw, ace, confidence, auto_raw, teleop_raw, endgame_raw,
+            wins, losses, ties, event_perf
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (team_number, year) DO UPDATE SET
-            normal_epa = EXCLUDED.normal_epa,
-            epa = EXCLUDED.epa,
+            raw = EXCLUDED.raw,
+            ace = EXCLUDED.ace,
             confidence = EXCLUDED.confidence,
-            auto_epa = EXCLUDED.auto_epa,
-            teleop_epa = EXCLUDED.teleop_epa,
-            endgame_epa = EXCLUDED.endgame_epa,
+            auto_raw = EXCLUDED.auto_raw,
+            teleop_raw = EXCLUDED.teleop_raw,
+            endgame_raw = EXCLUDED.endgame_raw,
             wins = EXCLUDED.wins,
             losses = EXCLUDED.losses,
             ties = EXCLUDED.ties,
-            event_epas = EXCLUDED.event_epas
+            event_perf = EXCLUDED.event_perf
         """,
         (
             result.get("team_number"),
             year,
-            result.get("normal_epa"),
-            result.get("epa"),
+            result.get("raw"),
+            result.get("ace"),
             result.get("confidence"),
-            result.get("auto_epa"),
-            result.get("teleop_epa"),
-            result.get("endgame_epa"),
+            result.get("auto_raw"),
+            result.get("teleop_raw"),
+            result.get("endgame_raw"),
             result.get("wins"),
             result.get("losses"),
             result.get("ties"),
-            json.dumps(result.get("event_epas", [])),
+            json.dumps(result.get("event_perf", [])),
         ),
     )
     conn.commit()
@@ -636,8 +636,8 @@ def get_existing_team_epa(team_number, year):
     
     cur.execute(
         """
-        SELECT normal_epa, epa, confidence,
-               auto_epa, teleop_epa, endgame_epa, wins, losses, ties, event_epas
+        SELECT raw, ace, confidence,
+               auto_raw, teleop_raw, endgame_raw, wins, losses, ties, event_perf
         FROM team_epas WHERE team_number = %s AND year = %s
         """,
         (team_number, year),
@@ -648,34 +648,32 @@ def get_existing_team_epa(team_number, year):
     conn.close()
     
     if row:
-        # Handle event_epas field - it might be a JSON string or already parsed list
-        event_epas_raw = row[9]
-        if event_epas_raw is None:
-            event_epas = []
-        elif isinstance(event_epas_raw, str):
+        event_perf_raw = row[9]
+        if event_perf_raw is None:
+            event_perf = []
+        elif isinstance(event_perf_raw, str):
             try:
-                event_epas = json.loads(event_epas_raw)
+                event_perf = json.loads(event_perf_raw)
             except (json.JSONDecodeError, TypeError):
-                event_epas = []
-        elif isinstance(event_epas_raw, list):
-            event_epas = event_epas_raw
+                event_perf = []
+        elif isinstance(event_perf_raw, list):
+            event_perf = event_perf_raw
         else:
-            event_epas = []
-        # Fallback for NoneType EPA fields
-        auto_epa = row[3] if row[3] is not None else 0.0
-        teleop_epa = row[4] if row[4] is not None else 0.0
-        endgame_epa = row[5] if row[5] is not None else 0.0
+            event_perf = []
+        auto_raw = row[3] if row[3] is not None else 0.0
+        teleop_raw = row[4] if row[4] is not None else 0.0
+        endgame_raw = row[5] if row[5] is not None else 0.0
         return {
-            "normal_epa": row[0],
-            "epa": row[1],
+            "raw": row[0],
+            "ace": row[1],
             "confidence": row[2],
-            "auto_epa": auto_epa,
-            "teleop_epa": teleop_epa,
-            "endgame_epa": endgame_epa,
+            "auto_raw": auto_raw,
+            "teleop_raw": teleop_raw,
+            "endgame_raw": endgame_raw,
             "wins": row[6],
             "losses": row[7],
             "ties": row[8],
-            "event_epas": event_epas
+            "event_perf": event_perf
         }
     return None
 
@@ -817,28 +815,26 @@ def data_has_changed(existing, new_data, data_type):
         if not existing:
             return True
 
-        # Patch: ensure all EPA fields are never None
-        def safe_float(val):
-            return val if val is not None else 0.0
-        for key in ["normal_epa", "epa", "confidence", "auto_epa", "teleop_epa", "endgame_epa"]:
+        # Patch: ensure all perf fields are never None
+        for key in ["raw", "ace", "confidence", "auto_raw", "teleop_raw", "endgame_raw"]:
             if existing.get(key) is None:
                 existing[key] = 0.0
             if new_data.get(key) is None:
                 new_data[key] = 0.0
 
-        # Compare key EPA values with tolerance for floating point differences
+        # Compare key values with tolerance for floating point differences
         def float_equal(a, b, tolerance=0.01):
             a = a if a is not None else 0.0
             b = b if b is not None else 0.0
             return abs(a - b) < tolerance
 
         if (
-            not float_equal(existing.get("normal_epa"), new_data.get("normal_epa")) or
-            not float_equal(existing.get("epa"), new_data.get("epa")) or
+            not float_equal(existing.get("raw"), new_data.get("raw")) or
+            not float_equal(existing.get("ace"), new_data.get("ace")) or
             not float_equal(existing.get("confidence"), new_data.get("confidence")) or
-            not float_equal(existing.get("auto_epa"), new_data.get("auto_epa")) or
-            not float_equal(existing.get("teleop_epa"), new_data.get("teleop_epa")) or
-            not float_equal(existing.get("endgame_epa"), new_data.get("endgame_epa")) or
+            not float_equal(existing.get("auto_raw"), new_data.get("auto_raw")) or
+            not float_equal(existing.get("teleop_raw"), new_data.get("teleop_raw")) or
+            not float_equal(existing.get("endgame_raw"), new_data.get("endgame_raw")) or
             existing.get("wins", 0) != new_data.get("wins", 0) or
             existing.get("losses", 0) != new_data.get("losses", 0) or
             existing.get("ties", 0) != new_data.get("ties", 0) or
@@ -846,20 +842,20 @@ def data_has_changed(existing, new_data, data_type):
         ):
             return True
         
-        # Compare event_epas (this is more complex)
-        existing_event_epas = {epa.get("event_key"): epa for epa in existing["event_epas"]}
-        new_event_epas = {epa.get("event_key"): epa for epa in new_data["event_epas"]}
+        # Compare event_perf
+        existing_event_perf = {p.get("event_key"): p for p in existing.get("event_perf", [])}
+        new_event_perf = {p.get("event_key"): p for p in new_data.get("event_perf", [])}
         
-        if set(existing_event_epas.keys()) != set(new_event_epas.keys()):
+        if set(existing_event_perf.keys()) != set(new_event_perf.keys()):
             return True
         
-        for event_key, new_epa in new_event_epas.items():
-            if event_key not in existing_event_epas:
+        for event_key, new_epa in new_event_perf.items():
+            if event_key not in existing_event_perf:
                 return True
             
-            existing_epa = existing_event_epas[event_key]
+            existing_epa = existing_event_perf[event_key]
             if (
-                not float_equal(existing_epa.get("overall", 0), new_epa.get("overall", 0)) or
+                not float_equal(existing_epa.get("raw", 0), new_epa.get("raw", 0)) or
                 not float_equal(existing_epa.get("confidence", 0), new_epa.get("confidence", 0)) or
                 existing_epa.get("match_count", 0) != new_epa.get("match_count", 0)
             ):
@@ -1406,7 +1402,7 @@ def _effective_epa(team_infos: List[Dict]) -> float:
         return 0.0
     weighted_epas = []
     for t in team_infos:
-        epa = t.get("epa", 0) or 0
+        epa = t.get("ace", 0) or 0
         conf = t.get("confidence", 0) or 0
         reliability = 1.0 * conf
         weighted_epas.append(epa * reliability)
@@ -1433,25 +1429,25 @@ def _load_team_prediction_lookup(year: int) -> Dict[int, Dict[str, float]]:
     try:
         cur.execute(
             """
-            SELECT team_number, epa, confidence
+            SELECT team_number, ace, confidence
             FROM team_epas
             WHERE year = %s
             """,
             (year,),
         )
-        return {row[0]: {"epa": row[1] or 0.0, "confidence": row[2] or 0.0} for row in cur.fetchall()}
+        return {row[0]: {"ace": row[1] or 0.0, "confidence": row[2] or 0.0} for row in cur.fetchall()}
     finally:
         cur.close()
         conn.close()
 
 def _team_prediction_info(team_number: int, current_year_lookup: Dict[int, Dict[str, float]], prev_year_lookup: Dict[int, Dict[str, float]]) -> Dict[str, float]:
     data = current_year_lookup.get(team_number)
-    if data and data.get("epa", 0):
+    if data and data.get("ace", 0):
         return data
     data = prev_year_lookup.get(team_number)
-    if data and data.get("epa", 0):
+    if data and data.get("ace", 0):
         return data
-    return {"epa": 0.0, "confidence": 0.7}
+    return {"ace": 0.0, "confidence": 0.7}
 
 def calculate_and_store_match_predictions(year: int):
     if shutdown_event.is_set():
@@ -1724,8 +1720,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
 
         if not match_count:
             return {
-                "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-                "confidence": 0.0, "actual_epa": 0.0,
+                "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+                "confidence": 0.0, "ace": 0.0,
                 "match_count": 0, "raw_confidence": 0.0,
                 "consistency": 0.0, "dominance": 0.0,
                 "event_boost": 0.0, "veteran_boost": 0.0,
@@ -1758,12 +1754,12 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         veteran_boost = get_veteran_boost(years)
 
         return {
-            "overall": round(overall_epa, 2) if overall_epa is not None else 0.0,
-            "auto": round(auto_epa, 2) if auto_epa is not None else 0.0,
-            "teleop": round(teleop_epa, 2) if teleop_epa is not None else 0.0,
-            "endgame": round(endgame_epa, 2) if endgame_epa is not None else 0.0,
+            "raw": round(overall_epa, 2) if overall_epa is not None else 0.0,
+            "auto_raw": round(auto_epa, 2) if auto_epa is not None else 0.0,
+            "teleop_raw": round(teleop_epa, 2) if teleop_epa is not None else 0.0,
+            "endgame_raw": round(endgame_epa, 2) if endgame_epa is not None else 0.0,
             "confidence": round(confidence, 2),
-            "actual_epa": round(actual_epa, 2),
+            "ace": round(actual_epa, 2),
             "match_count": match_count,
             "raw_confidence": raw_confidence,
             "consistency": consistency,
@@ -1782,8 +1778,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         traceback.print_exc()
         print(f"Locals: {locals()}")
         return {
-            "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-            "confidence": 0.0, "actual_epa": 0.0,
+            "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+            "confidence": 0.0, "ace": 0.0,
             "match_count": 0, "raw_confidence": 0.0,
             "consistency": 0.0, "dominance": 0.0,
             "event_boost": 0.0, "veteran_boost": 0.0,
@@ -1901,16 +1897,16 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
     try:
         if not event_epas:
             return {
-                "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-                "confidence": 0.0, "actual_epa": 0.0,
+                "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+                "confidence": 0.0, "ace": 0.0,
                 "wins": 0, "losses": 0, "ties": 0
             }
 
         # Check if this is a demo team (9970-9999) - return zeroed overall stats
         if team_number is not None and 9970 <= team_number <= 9999:
             return {
-                "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-                "confidence": 0.0, "actual_epa": 0.0,
+                "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+                "confidence": 0.0, "ace": 0.0,
                 "wins": 0, "losses": 0, "ties": 0,
                 "confidence_components": {
                     "consistency": 0.0,
@@ -1925,13 +1921,13 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
         # Filter out events with no valid matches or zero EPAs
         valid_events = [
             epa_data for epa_data in event_epas 
-            if epa_data.get("match_count", 0) > 0 and (epa_data.get("overall", 0) or 0) > 0
+            if epa_data.get("match_count", 0) > 0 and (epa_data.get("raw", 0) or 0) > 0
         ]
 
         if not valid_events:
             return {
-                "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-                "confidence": 0.0, "actual_epa": 0.0,
+                "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+                "confidence": 0.0, "ace": 0.0,
                 "wins": 0, "losses": 0, "ties": 0,
                 "confidence_components": {
                     "consistency": 0.0,
@@ -1982,11 +1978,11 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
             effective_weight = chronological_weight * match_count
             
             # Fallback for NoneType values
-            overall = epa_data.get("overall", 0.0) or 0.0
-            auto = epa_data.get("auto", 0.0) or 0.0
-            teleop = epa_data.get("teleop", 0.0) or 0.0
-            endgame = epa_data.get("endgame", 0.0) or 0.0
-            actual_epa = epa_data.get("actual_epa", 0.0) or 0.0
+            overall = epa_data.get("raw", 0.0) or 0.0
+            auto = epa_data.get("auto_raw", 0.0) or 0.0
+            teleop = epa_data.get("teleop_raw", 0.0) or 0.0
+            endgame = epa_data.get("endgame_raw", 0.0) or 0.0
+            actual_epa = epa_data.get("ace", 0.0) or 0.0
             confidence = epa_data.get("confidence", 0.0) or 0.0
             consistency = epa_data.get("consistency", 0.0) or 0.0
             dominance = epa_data.get("dominance", 0.0) or 0.0
@@ -2016,8 +2012,8 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
 
         if total_weighted_match_count == 0:
             return {
-                "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-                "confidence": 0.0, "actual_epa": 0.0,
+                "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+                "confidence": 0.0, "ace": 0.0,
                 "wins": 0, "losses": 0, "ties": 0,
                 "confidence_components": {
                     "consistency": 0.0,
@@ -2062,12 +2058,12 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
         final_confidence = max(0.0, min(1.0, raw_confidence))
 
         return {
-            "overall": round(total_overall / total_weighted_match_count, 2),
-            "auto": round(total_auto / total_weighted_match_count, 2),
-            "teleop": round(total_teleop / total_weighted_match_count, 2),
-            "endgame": round(total_endgame / total_weighted_match_count, 2),
+            "raw": round(total_overall / total_weighted_match_count, 2),
+            "auto_raw": round(total_auto / total_weighted_match_count, 2),
+            "teleop_raw": round(total_teleop / total_weighted_match_count, 2),
+            "endgame_raw": round(total_endgame / total_weighted_match_count, 2),
             "confidence": round(final_confidence, 2),
-            "actual_epa": round((total_overall / total_weighted_match_count) * final_confidence, 2),
+            "ace": round((total_overall / total_weighted_match_count) * final_confidence, 2),
             "wins": total_wins,
             "losses": total_losses,
             "ties": total_ties,
@@ -2149,15 +2145,15 @@ def fetch_team_components(team, year):
             event_epa["event_key"] = event_key  # Ensure event_key is included
             # Keep full data for aggregation
             event_epa_full.append(event_epa)
-            # Only keep essential fields for final event_epas
+            # Only keep essential fields for final event_perf
             simplified_event_epa = {
                 "event_key": event_key,
-                "overall": event_epa["overall"],
-                "auto": event_epa["auto"],
-                "teleop": event_epa["teleop"],
-                "endgame": event_epa["endgame"],
+                "raw": event_epa["raw"],
+                "auto_raw": event_epa["auto_raw"],
+                "teleop_raw": event_epa["teleop_raw"],
+                "endgame_raw": event_epa["endgame_raw"],
                 "confidence": event_epa["confidence"],
-                "actual_epa": event_epa["actual_epa"]
+                "ace": event_epa["ace"]
             }
             event_epa_results.append(simplified_event_epa)
         except Exception as e:
@@ -2174,12 +2170,12 @@ def fetch_team_components(team, year):
             previous_epa = get_existing_team_epa(team_number, prev_year)
             if previous_epa:
                 overall_epa_data = {
-                    "overall": previous_epa.get("normal_epa", 0) or 0.0,
-                    "auto": previous_epa.get("auto_epa", 0) or 0.0,
-                    "teleop": previous_epa.get("teleop_epa", 0) or 0.0,
-                    "endgame": previous_epa.get("endgame_epa", 0) or 0.0,
+                    "raw": previous_epa.get("raw", 0) or 0.0,
+                    "auto_raw": previous_epa.get("auto_raw", 0) or 0.0,
+                    "teleop_raw": previous_epa.get("teleop_raw", 0) or 0.0,
+                    "endgame_raw": previous_epa.get("endgame_raw", 0) or 0.0,
                     "confidence": previous_epa.get("confidence", 0) or 0.0,
-                    "actual_epa": previous_epa.get("epa", 0) or 0.0,
+                    "ace": previous_epa.get("ace", 0) or 0.0,
                     "wins": 0,
                     "losses": 0,
                     "ties": 0
@@ -2201,16 +2197,16 @@ def fetch_team_components(team, year):
         "state_prov": team.get("state_prov"),
         "country": team.get("country"),
         "website": team.get("website"),
-        "normal_epa": overall_epa_data.get("overall", 0),
+        "raw": overall_epa_data.get("raw", 0),
         "confidence": overall_epa_data.get("confidence", 0),
-        "epa": overall_epa_data.get("actual_epa", 0),
-        "auto_epa": overall_epa_data.get("auto", 0),
-        "teleop_epa": overall_epa_data.get("teleop", 0),
-        "endgame_epa": overall_epa_data.get("endgame", 0),
+        "ace": overall_epa_data.get("ace", 0),
+        "auto_raw": overall_epa_data.get("auto_raw", 0),
+        "teleop_raw": overall_epa_data.get("teleop_raw", 0),
+        "endgame_raw": overall_epa_data.get("endgame_raw", 0),
         "wins": overall_epa_data.get("wins", 0),
         "losses": overall_epa_data.get("losses", 0),
         "ties": overall_epa_data.get("ties", 0),
-        "event_epas": event_epa_results, # List of event-specific EPA results
+        "event_perf": event_epa_results,
     }
 
 # Single team analysis has been moved to single_team_analysis.py

@@ -29,7 +29,7 @@ import time
 
 from datagather import load_data_current_year,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,duel_layout,build_recent_events_section,get_team_district_options
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,duel_layout,build_recent_events_section,get_team_district_options,api_docs_layout
 
 from utils import format_human_date,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_event_week_label_from_number,event_card,truncate_name,get_team_data_with_fallback,normalize_district_key
 
@@ -378,6 +378,9 @@ def display_page(pathname):
 
     if pathname == "/duel":
         return duel_layout()
+
+    if pathname == "/api-docs":
+        return api_docs_layout()
 
     return home_layout
 
@@ -1461,7 +1464,7 @@ def update_events_tab_content(
             for t in team_entries:
                 team_number = t["tk"]
                 team_data, actual_year = get_team_data_with_fallback(team_number, selected_year, team_database)
-                if team_data and team_data.get("epa") is not None:
+                if team_data and team_data.get("ace") is not None:
                     epa_values.append(team_data["epa"])
     
             if not epa_values:
@@ -1794,7 +1797,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         team_epas = []
         for tnum, team_data in TEAM_DATABASE.get(event_year, {}).items():
             if team_data:
-                team_epas.append((tnum, team_data.get("epa", 0)))
+                team_epas.append((tnum, team_data.get("ace", 0)))
     else:
         # Load data for other years on-demand
         try:
@@ -1802,7 +1805,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             team_epas = []
             for tnum, team_data in year_team_data.items():
                 if team_data:
-                    team_epas.append((tnum, team_data.get("epa", 0)))
+                    team_epas.append((tnum, team_data.get("ace", 0)))
         except Exception as e:
             return dbc.Alert(f"Error loading team data for year {event_year}: {str(e)}", color="danger"), query_string
         
@@ -1811,11 +1814,11 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
     rank_map = {tnum: i+1 for i, (tnum, _) in enumerate(team_epas)}
 
     # Get all performance values for percentile calculations
-    ace_values = [data.get("epa", 0) for data in epa_data.values()]
+    ace_values = [data.get("ace", 0) for data in epa_data.values()]
     confidence_values = [data.get("confidence", 0) for data in epa_data.values()]
-    auto_values = [data.get("auto_epa", 0) for data in epa_data.values()]
-    teleop_values = [data.get("teleop_epa", 0) for data in epa_data.values()]
-    endgame_values = [data.get("endgame_epa", 0) for data in epa_data.values()]
+    auto_values = [data.get("auto_raw", 0) for data in epa_data.values()]
+    teleop_values = [data.get("teleop_raw", 0) for data in epa_data.values()]
+    endgame_values = [data.get("endgame_raw", 0) for data in epa_data.values()]
 
     percentiles_dict = {
         "ACE": compute_percentiles(ace_values),
@@ -1850,7 +1853,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 "Ties": rank_info.get("t", None),
                 "DQ": rank_info.get("dq", None),
                 "ACE Rank": rank_map.get(int(tstr), None),
-                "ACE": epa_data.get(tstr, {}).get("epa", None),
+                "ACE": epa_data.get(tstr, {}).get("ace", None),
             })
 
         data_rows.sort(key=lambda r: safe_int(r["Rank"]))
@@ -1979,7 +1982,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             global_teams_data = list(year_team_data.get(event_year, {}).values())
         
         # Calculate global rankings
-        global_teams_data.sort(key=lambda t: t.get("epa", 0), reverse=True)
+        global_teams_data.sort(key=lambda t: t.get("ace", 0), reverse=True)
         global_rank_map = {t.get("team_number"): i + 1 for i, t in enumerate(global_teams_data)}
         
         # Add global rankings to year_team_data
@@ -1990,7 +1993,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         # Sort teams by overall ACE from year_team_database for spotlight cards
         sorted_teams = sorted(
             event_teams,
-            key=lambda t: year_team_data.get(event_year, {}).get(int(t.get("tk")), {}).get("epa", 0),
+            key=lambda t: year_team_data.get(event_year, {}).get(int(t.get("tk")), {}).get("ace", 0),
             reverse=True
         )
         top_3 = sorted_teams[:3]
@@ -2088,7 +2091,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                 opp_ace = 0
                 opp_count = 0
                 for opp in opp_teams:
-                    opp_ace += epa_data.get(str(opp), {}).get("epa", 0)
+                    opp_ace += epa_data.get(str(opp), {}).get("ace", 0)
                     opp_count += 1
                 avg_opp_ace = opp_ace / opp_count if opp_count else 0
                 opp_aces.append(avg_opp_ace)
@@ -2229,7 +2232,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             for t in event_teams
         ]
         # Default: top 2 teams by ACE
-        sorted_teams = sorted(event_teams, key=lambda t: epa_data.get(str(t["tk"]), {}).get("epa", 0), reverse=True)
+        sorted_teams = sorted(event_teams, key=lambda t: epa_data.get(str(t["tk"]), {}).get("ace", 0), reverse=True)
         default_team_values = [str(t["tk"]) for t in sorted_teams[:2]]
         # Use a Store to keep selection in sync
         compare_layout = html.Div([
@@ -2316,7 +2319,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             if team_data:
                 # Use fallback data for ranking
                 fallback_team_data, _ = get_team_data_with_fallback(tnum, event_year, year_team_data)
-                epa_value = fallback_team_data.get("epa", 0) if fallback_team_data else 0
+                epa_value = fallback_team_data.get("ace", 0) if fallback_team_data else 0
                 team_epas.append((tnum, epa_value))
         team_epas.sort(key=lambda x: x[1], reverse=True)
         rank_map = {tnum: i+1 for i, (tnum, _) in enumerate(team_epas)}
@@ -2325,7 +2328,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         def get_team_epa_for_sorting(t):
             tnum = int(t.get("tk"))
             team_data, _ = get_team_data_with_fallback(tnum, event_year, year_team_data)
-            return team_data.get("epa", 0) if team_data else 0
+            return team_data.get("ace", 0) if team_data else 0
         
         sorted_teams = sorted(event_teams, key=get_team_epa_for_sorting, reverse=True)
         
@@ -2344,12 +2347,12 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                 "ACE Rank": rank_map.get(int(tnum), None),
                 "Team #": int(tnum) if tnum else 0,
                 "Nickname": nickname_link,
-                "RAW": team_data.get('normal_epa', 0),
+                "RAW": team_data.get('raw', 0),
                 "Confidence": team_data.get('confidence', 0),
-                "ACE": team_data.get('epa', 0),
-                "Auto": team_data.get('auto_epa', 0),
-                "Teleop": team_data.get('teleop_epa', 0),
-                "Endgame": team_data.get('endgame_epa', 0),
+                "ACE": team_data.get('ace', 0),
+                "Auto": team_data.get('auto_raw', 0),
+                "Teleop": team_data.get('teleop_raw', 0),
+                "Endgame": team_data.get('endgame_raw', 0),
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
         
@@ -2359,11 +2362,11 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         # Use global percentiles for coloring (with fallback data)
         if event_year == current_year:
             global_teams = TEAM_DATABASE.get(event_year, {}).values()
-            global_epa_values = [t.get("epa", 0) for t in global_teams]
+            global_epa_values = [t.get("ace", 0) for t in global_teams]
             global_confidence_values = [t.get("confidence", 0) for t in global_teams]
-            global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
-            global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
-            global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
+            global_auto_values = [t.get("auto_raw", 0) for t in global_teams]
+            global_teleop_values = [t.get("teleop_raw", 0) for t in global_teams]
+            global_endgame_values = [t.get("endgame_raw", 0) for t in global_teams]
         else:
             # For non-current years, use fallback data for percentile calculations
             global_epa_values = []
@@ -2377,15 +2380,15 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                     # Use fallback data for percentile calculations
                     fallback_team_data, _ = get_team_data_with_fallback(tnum, event_year, year_team_data)
                     if fallback_team_data:
-                        global_epa_values.append(fallback_team_data.get("epa", 0))
+                        global_epa_values.append(fallback_team_data.get("ace", 0))
                         global_confidence_values.append(fallback_team_data.get("confidence", 0))
-                        global_auto_values.append(fallback_team_data.get("auto_epa", 0))
-                        global_teleop_values.append(fallback_team_data.get("teleop_epa", 0))
-                        global_endgame_values.append(fallback_team_data.get("endgame_epa", 0))
+                        global_auto_values.append(fallback_team_data.get("auto_raw", 0))
+                        global_teleop_values.append(fallback_team_data.get("teleop_raw", 0))
+                        global_endgame_values.append(fallback_team_data.get("endgame_raw", 0))
         
     else:  # stats_type == "event"
         # Use event-specific data for ranking within the event
-        event_epa_values = [data.get("epa", 0) for data in epa_data.values()]
+        event_epa_values = [data.get("ace", 0) for data in epa_data.values()]
         event_epa_values.sort(reverse=True)
         event_rank_map = {epa_val: i+1 for i, epa_val in enumerate(event_epa_values)}
         
@@ -2393,7 +2396,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         overall_team_epas = []
         for tnum, team_data in year_team_data.get(event_year, {}).items():
             if team_data:
-                overall_team_epas.append((tnum, team_data.get("epa", 0)))
+                overall_team_epas.append((tnum, team_data.get("ace", 0)))
         overall_team_epas.sort(key=lambda x: x[1], reverse=True)
         overall_rank_map = {tnum: i+1 for i, (tnum, _) in enumerate(overall_team_epas)}
         
@@ -2440,7 +2443,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         # Sort teams by event-specific ACE  for spotlight cards
         sorted_teams = sorted(
             event_teams,
-            key=lambda t: epa_data.get(str(t.get("tk")), {}).get("epa", 0),
+            key=lambda t: epa_data.get(str(t.get("tk")), {}).get("ace", 0),
             reverse=True
         )
         
@@ -2452,7 +2455,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             event_team_data = epa_data.get(tstr, {})
             
             # Find rank for this team's event ACE 
-            team_event_epa = event_team_data.get("epa", 0)
+            team_event_epa = event_team_data.get("ace", 0)
             event_rank = event_rank_map.get(team_event_epa, None)
             
             # Get overall ACE rank
@@ -2463,8 +2466,8 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             
             # Calculate ACE improvement from overall to event
             overall_team_data = year_team_data.get(event_year, {}).get(int(tnum), {})
-            overall_ace = overall_team_data.get('epa', 0)
-            event_ace = event_team_data.get('epa', 0)
+            overall_ace = overall_team_data.get('ace', 0)
+            event_ace = event_team_data.get('ace', 0)
             ace_improvement = event_ace - overall_ace
             
             nickname = t.get('nn', 'Unknown')
@@ -2476,12 +2479,12 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                 "ACE Rank": overall_ace_rank,
                 "Team #": int(tnum) if tnum else 0,
                 "Nickname": nickname_link,
-                "RAW": event_team_data.get('normal_epa', 0),
+                "RAW": event_team_data.get('raw', 0),
                 "Confidence": event_team_data.get('confidence', 0),
-                "ACE": event_team_data.get('epa', 0),
-                "Auto": event_team_data.get('auto_epa', 0),
-                "Teleop": event_team_data.get('teleop_epa', 0),
-                "Endgame": event_team_data.get('endgame_epa', 0),
+                "ACE": event_team_data.get('ace', 0),
+                "Auto": event_team_data.get('auto_raw', 0),
+                "Teleop": event_team_data.get('teleop_raw', 0),
+                "Endgame": event_team_data.get('endgame_raw', 0),
                 "SoS": round(sos_value, 2),
                 "ACE Δ": round(ace_improvement, 2),
                 "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
@@ -2492,9 +2495,9 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         
         # Use event-specific percentiles for coloring
         event_confidence_values = [data.get("confidence", 0) for data in epa_data.values()]
-        event_auto_values = [data.get("auto_epa", 0) for data in epa_data.values()]
-        event_teleop_values = [data.get("teleop_epa", 0) for data in epa_data.values()]
-        event_endgame_values = [data.get("endgame_epa", 0) for data in epa_data.values()]
+        event_auto_values = [data.get("auto_raw", 0) for data in epa_data.values()]
+        event_teleop_values = [data.get("teleop_raw", 0) for data in epa_data.values()]
+        event_endgame_values = [data.get("endgame_raw", 0) for data in epa_data.values()]
         sos_values = list(team_sos.values())
         
         # Calculate ACE improvement values
@@ -2504,8 +2507,8 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             tstr = str(tnum)
             event_team_data = epa_data.get(tstr, {})
             overall_team_data = year_team_data.get(event_year, {}).get(int(tnum), {})
-            overall_ace = overall_team_data.get('epa', 0)
-            event_ace = event_team_data.get('epa', 0)
+            overall_ace = overall_team_data.get('ace', 0)
+            event_ace = event_team_data.get('ace', 0)
             ace_improvement_values.append(round(event_ace - overall_ace, 2))
         
 
@@ -2742,7 +2745,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         info = epa_data.get(str(t_key.strip()), {})
         
         # If event_epa_data is missing (even if confidence exists), fallback to team database
-        if not info or info.get("epa", 0) == 0:
+        if not info or info.get("ace", 0) == 0:
             # Fallback to team database for the specific year
             if event_year == current_year:
                 team_data = TEAM_DATABASE.get(event_year, {}).get(int(t_key), {})
@@ -2754,13 +2757,13 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
                     team_data = {}
             return {
                 "team_number": int(t_key.strip()),
-                "epa": team_data.get("epa", 0),
+                "epa": team_data.get("ace", 0),
                 "confidence": team_data.get("confidence", 0.7),
             }
         # Use event-specific data, but ensure confidence has a reasonable fallback
         return {
             "team_number": int(t_key.strip()),
-            "epa": info.get("epa", 0),
+            "epa": info.get("ace", 0),
             "confidence": info.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
         }
     
@@ -3537,9 +3540,9 @@ def update_compare_teams_table(selected_teams, mode, radar_toggles, epa_data, ev
             alliance_teams = selected_teams[alliance_idx * 3:(alliance_idx + 1) * 3]
             
             # Calculate combined alliance stats
-            combined_auto = sum(float(epa_data.get(str(tnum), {}).get('auto_epa', 0)) for tnum in alliance_teams)
-            combined_teleop = sum(float(epa_data.get(str(tnum), {}).get('teleop_epa', 0)) for tnum in alliance_teams)
-            combined_endgame = sum(float(epa_data.get(str(tnum), {}).get('endgame_epa', 0)) for tnum in alliance_teams)
+            combined_auto = sum(float(epa_data.get(str(tnum), {}).get('auto_raw', 0)) for tnum in alliance_teams)
+            combined_teleop = sum(float(epa_data.get(str(tnum), {}).get('teleop_raw', 0)) for tnum in alliance_teams)
+            combined_endgame = sum(float(epa_data.get(str(tnum), {}).get('endgame_raw', 0)) for tnum in alliance_teams)
             combined_ace = sum(float(epa_data.get(str(tnum), {}).get('epa', 0)) for tnum in alliance_teams)
             combined_raw = sum(float(epa_data.get(str(tnum), {}).get('normal_epa', 0)) for tnum in alliance_teams)
             combined_confidence = sum(float(epa_data.get(str(tnum), {}).get('confidence', 0)) for tnum in alliance_teams) / 3.0
@@ -3584,9 +3587,9 @@ def update_compare_teams_table(selected_teams, mode, radar_toggles, epa_data, ev
             "W-L-T": f"{rank_info.get('w', 'N/A')}-{rank_info.get('l', 'N/A')}-{rank_info.get('t', 'N/A')}",
             "SoS": sos_map.get(str(tnum)),
             "RAW": float(epa.get('normal_epa', 0)),
-            "Auto": float(epa.get('auto_epa', 0)),
-            "Teleop": float(epa.get('teleop_epa', 0)),
-            "Endgame": float(epa.get('endgame_epa', 0)),
+            "Auto": float(epa.get('auto_raw', 0)),
+            "Teleop": float(epa.get('teleop_raw', 0)),
+            "Endgame": float(epa.get('endgame_raw', 0)),
             "Confidence": float(epa.get('confidence', 0)),
             "ACE": float(epa.get('epa', 0)),
         })
@@ -3600,10 +3603,10 @@ def update_compare_teams_table(selected_teams, mode, radar_toggles, epa_data, ev
     else:
         year_team_data, _, _, _, _, _ = load_year_data(event_year)
         global_teams = year_team_data.values()
-    global_ace_values = [t.get("epa", 0) for t in global_teams]
-    global_auto_values = [t.get("auto_epa", 0) for t in global_teams]
-    global_teleop_values = [t.get("teleop_epa", 0) for t in global_teams]
-    global_endgame_values = [t.get("endgame_epa", 0) for t in global_teams]
+    global_ace_values = [t.get("ace", 0) for t in global_teams]
+    global_auto_values = [t.get("auto_raw", 0) for t in global_teams]
+    global_teleop_values = [t.get("teleop_raw", 0) for t in global_teams]
+    global_endgame_values = [t.get("endgame_raw", 0) for t in global_teams]
     global_confidence_values = [t.get("confidence", 0) for t in global_teams]
     percentiles_dict = {
         "Auto": compute_percentiles(global_auto_values),
@@ -3634,12 +3637,12 @@ def update_compare_teams_table(selected_teams, mode, radar_toggles, epa_data, ev
     for t in event_teams:
         tnum = str(t["tk"])
         epa = epa_data.get(tnum, {})
-        all_team_stats["Auto"].append(float(epa.get("auto_epa", 0)))
-        all_team_stats["Teleop"].append(float(epa.get("teleop_epa", 0)))
-        all_team_stats["Endgame"].append(float(epa.get("endgame_epa", 0)))
+        all_team_stats["Auto"].append(float(epa.get("auto_raw", 0)))
+        all_team_stats["Teleop"].append(float(epa.get("teleop_raw", 0)))
+        all_team_stats["Endgame"].append(float(epa.get("endgame_raw", 0)))
         all_team_stats["Confidence"].append(float(epa.get("confidence", 0)))
-        all_team_stats["RAW"].append(float(epa.get("normal_epa", 0)))
-        all_team_stats["ACE"].append(float(epa.get("epa", 0)))
+        all_team_stats["RAW"].append(float(epa.get("raw", 0)))
+        all_team_stats["ACE"].append(float(epa.get("ace", 0)))
         all_team_stats["Avg Score"].append(avg_score_map.get(tnum, 0))
         all_team_stats["SoS"].append(sos_map.get(tnum, 0))
     # Compute min/max for each stat
@@ -4178,18 +4181,18 @@ def load_teams(
     # Use filtered data only if toggle is on
     extract_used = extract_valid if "filtered" in percentile_mode else extract_global
     
-    overall_percentiles = compute_percentiles(extract_used("epa"))
-    auto_percentiles = compute_percentiles(extract_used("auto_epa"))
-    teleop_percentiles = compute_percentiles(extract_used("teleop_epa"))
-    endgame_percentiles = compute_percentiles(extract_used("endgame_epa"))
+    overall_percentiles = compute_percentiles(extract_used("ace"))
+    auto_percentiles = compute_percentiles(extract_used("auto_raw"))
+    teleop_percentiles = compute_percentiles(extract_used("teleop_raw"))
+    endgame_percentiles = compute_percentiles(extract_used("endgame_raw"))
     confidence_percentiles = compute_percentiles(extract_used("confidence"))
     
     percentiles_dict = {
         "ace": overall_percentiles,
         "confidence": confidence_percentiles,
-        "auto_epa": auto_percentiles,
-        "teleop_epa": teleop_percentiles,
-        "endgame_epa": endgame_percentiles,
+        "auto_raw": auto_percentiles,
+        "teleop_raw": teleop_percentiles,
+        "endgame_raw": endgame_percentiles,
     }
 
     style_data_conditional = get_epa_styling(percentiles_dict)
@@ -4245,11 +4248,11 @@ def load_teams(
         ]
 
     def get_axis_value(team, axis):
-        auto = abs(team.get("auto_epa") or 0)
-        teleop = abs(team.get("teleop_epa") or 0)
-        endgame = abs(team.get("endgame_epa") or 0)
-        ace = abs(team.get("epa") or 0)
-        raw = abs(team.get("normal_epa") or 0)
+        auto = abs(team.get("auto_raw") or 0)
+        teleop = abs(team.get("teleop_raw") or 0)
+        endgame = abs(team.get("endgame_raw") or 0)
+        ace = abs(team.get("ace") or 0)
+        raw = abs(team.get("raw") or 0)
         team_number = team.get("team_number", 0)
         confidence = team.get("confidence", 0)
         wins = team.get("wins", 0)
@@ -4300,12 +4303,12 @@ def load_teams(
             "ace_rank": rank,
             "team_number": int(team_num) if team_num else 0,
             "nickname": nickname_link,
-            "epa": round(abs(t.get("normal_epa") or 0), 2),  # RAW column shows normal_epa
+            "raw": round(abs(t.get("raw") or 0), 2),
             "confidence": t.get("confidence", 0),
-            "ace": round(abs(t.get("epa") or 0), 2),  # ACE column shows epa
-            "auto_epa": round(abs(t.get("auto_epa") or 0), 2),
-            "teleop_epa": round(abs(t.get("teleop_epa") or 0), 2),
-            "endgame_epa": round(abs(t.get("endgame_epa") or 0), 2),
+            "ace": round(abs(t.get("ace") or 0), 2),
+            "auto_raw": round(abs(t.get("auto_raw") or 0), 2),
+            "teleop_raw": round(abs(t.get("teleop_raw") or 0), 2),
+            "endgame_raw": round(abs(t.get("endgame_raw") or 0), 2),
             "favorites": favorites_count,
             "record": record,
         })
@@ -4394,7 +4397,7 @@ def load_teams(
                     "x": x_val,
                     "y": y_val,
                     "z": z_val,
-                    "epa": t.get("epa") or 0,
+                    "ace": t.get("ace") or 0,
                     "team": f"{t.get('team_number')} - {t.get('nickname', '')}",
                     "team_number": str(t.get("team_number")),
                 })
@@ -5329,7 +5332,7 @@ def update_team_insights(active_tab, store_data):
     # Create performance trends chart based on URL type
     if year:  # Specific year view - show event-by-event ACE
         # Get team's event data for the specific year
-        event_epas = team_data.get("event_epas", [])
+        event_epas = team_data.get("event_perf", [])
         if isinstance(event_epas, str):
             try:
                 event_epas = json.loads(event_epas)
@@ -5337,7 +5340,8 @@ def update_team_insights(active_tab, store_data):
                 event_epas = []
         
         if not event_epas:
-            return "No event data available for this team in this year."
+            nickname = team_data.get("nickname", "Unknown")
+            return f"No event data available for Team {team_number} ({nickname}) in {performance_year}."
         
         # Sort events by actual event dates
         def get_event_date(event_epa):
@@ -5362,11 +5366,11 @@ def update_team_insights(active_tab, store_data):
         for event in sorted_events:
             event_key = event.get("event_key", "")
             if event_key in event_database.get(performance_year, {}):
-                ace_value = event.get("overall", 0)
-                auto_value = event.get("auto", 0)
-                teleop_value = event.get("teleop", 0)
-                endgame_value = event.get("endgame", 0)
-                raw_value = event.get("normal_epa", 0)
+                ace_value = event.get("ace", 0)
+                auto_value = event.get("auto_raw", 0)
+                teleop_value = event.get("teleop_raw", 0)
+                endgame_value = event.get("endgame_raw", 0)
+                raw_value = event.get("raw", 0)
                 
                 # Only include events that have at least one non-zero stat
                 if ace_value > 0 or auto_value > 0 or teleop_value > 0 or endgame_value > 0 or raw_value > 0:
@@ -6884,7 +6888,7 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
             filtered_year_data = {}
             for team_num, team_data in year_data.items():
                 if isinstance(team_data, dict):
-                    ace = team_data.get("epa")
+                    ace = team_data.get("ace")
                     if ace is not None and ace > 0:  # Only include teams with valid ACE
                         filtered_year_data[team_num] = team_data
             
@@ -6909,7 +6913,7 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
             
             # Now build minimal teams_list with only the data we need
             for team_num, team_data in filtered_year_data.items():
-                ace = team_data.get("epa")
+                ace = team_data.get("ace")
                 # Pre-compute avatar URL to avoid repeated lookups
                 if 9970 <= team_num <= 9999:
                     avatar_url = "/assets/avatars/bbot.png?v=1"

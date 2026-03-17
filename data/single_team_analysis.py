@@ -457,8 +457,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
 
         if not match_count:
             return {
-                "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-                "confidence": 0.0, "actual_epa": 0.0,
+                "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+                "confidence": 0.0, "ace": 0.0,
                 "match_count": 0, "raw_confidence": 0.0,
                 "consistency": 0.0, "dominance": 0.0,
                 "event_boost": 0.0, "veteran_boost": 0.0,
@@ -491,12 +491,12 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         veteran_boost = get_veteran_boost(years)
 
         return {
-            "overall": round(overall_epa, 2) if overall_epa is not None else 0.0,
-            "auto": round(auto_epa, 2) if auto_epa is not None else 0.0,
-            "teleop": round(teleop_epa, 2) if teleop_epa is not None else 0.0,
-            "endgame": round(endgame_epa, 2) if endgame_epa is not None else 0.0,
+            "raw": round(overall_epa, 2) if overall_epa is not None else 0.0,
+            "auto_raw": round(auto_epa, 2) if auto_epa is not None else 0.0,
+            "teleop_raw": round(teleop_epa, 2) if teleop_epa is not None else 0.0,
+            "endgame_raw": round(endgame_epa, 2) if endgame_epa is not None else 0.0,
             "confidence": round(confidence, 2),
-            "actual_epa": round(actual_epa, 2),
+            "ace": round(actual_epa, 2),
             "match_count": match_count,
             "raw_confidence": raw_confidence,
             "consistency": consistency,
@@ -515,8 +515,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         traceback.print_exc()
         print(f"Locals: {locals()}")
         return {
-            "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-            "confidence": 0.0, "actual_epa": 0.0,
+            "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+            "confidence": 0.0, "ace": 0.0,
             "match_count": 0, "raw_confidence": 0.0,
             "consistency": 0.0, "dominance": 0.0,
             "event_boost": 0.0, "veteran_boost": 0.0,
@@ -529,16 +529,16 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
     try:
         if not event_epas:
             return {
-                "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-                "confidence": 0.0, "actual_epa": 0.0,
+                "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+                "confidence": 0.0, "ace": 0.0,
                 "wins": 0, "losses": 0, "ties": 0
             }
 
         # Check if this is a demo team (9970-9999) - return zeroed overall stats
         if team_number is not None and 9970 <= team_number <= 9999:
             return {
-                "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-                "confidence": 0.0, "actual_epa": 0.0,
+                "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+                "confidence": 0.0, "ace": 0.0,
                 "wins": 0, "losses": 0, "ties": 0,
                 "confidence_components": {
                     "consistency": 0.0,
@@ -553,13 +553,13 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
         # Filter out events with no valid matches or zero EPAs
         valid_events = [
             epa_data for epa_data in event_epas 
-            if epa_data.get("match_count", 0) > 0 and (epa_data.get("overall", 0) or 0) > 0
+            if epa_data.get("match_count", 0) > 0 and (epa_data.get("raw", 0) or 0) > 0
         ]
 
         if not valid_events:
             return {
-                "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-                "confidence": 0.0, "actual_epa": 0.0,
+                "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+                "confidence": 0.0, "ace": 0.0,
                 "wins": 0, "losses": 0, "ties": 0,
                 "confidence_components": {
                     "consistency": 0.0,
@@ -602,11 +602,11 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
             effective_weight = chronological_weight * match_count
             
             # Fallback for NoneType values
-            overall = epa_data.get("overall", 0.0) or 0.0
-            auto = epa_data.get("auto", 0.0) or 0.0
-            teleop = epa_data.get("teleop", 0.0) or 0.0
-            endgame = epa_data.get("endgame", 0.0) or 0.0
-            actual_epa = epa_data.get("actual_epa", 0.0) or 0.0
+            overall = epa_data.get("raw", 0.0) or 0.0
+            auto = epa_data.get("auto_raw", 0.0) or 0.0
+            teleop = epa_data.get("teleop_raw", 0.0) or 0.0
+            endgame = epa_data.get("endgame_raw", 0.0) or 0.0
+            actual_epa = epa_data.get("ace", 0.0) or 0.0
             confidence = epa_data.get("confidence", 0.0) or 0.0
             consistency = epa_data.get("consistency", 0.0) or 0.0
             dominance = epa_data.get("dominance", 0.0) or 0.0
@@ -636,8 +636,8 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
 
         if total_weighted_match_count == 0:
             return {
-                "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-                "confidence": 0.0, "actual_epa": 0.0,
+                "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+                "confidence": 0.0, "ace": 0.0,
                 "wins": 0, "losses": 0, "ties": 0,
                 "confidence_components": {
                     "consistency": 0.0,
@@ -681,12 +681,12 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
         final_confidence = max(0.0, min(1.0, raw_confidence))
 
         return {
-            "overall": round(total_overall / total_weighted_match_count, 2),
-            "auto": round(total_auto / total_weighted_match_count, 2),
-            "teleop": round(total_teleop / total_weighted_match_count, 2),
-            "endgame": round(total_endgame / total_weighted_match_count, 2),
+            "raw": round(total_overall / total_weighted_match_count, 2),
+            "auto_raw": round(total_auto / total_weighted_match_count, 2),
+            "teleop_raw": round(total_teleop / total_weighted_match_count, 2),
+            "endgame_raw": round(total_endgame / total_weighted_match_count, 2),
             "confidence": round(final_confidence, 2),
-            "actual_epa": round((total_overall / total_weighted_match_count) * final_confidence, 2),
+            "ace": round((total_overall / total_weighted_match_count) * final_confidence, 2),
             "wins": total_wins,
             "losses": total_losses,
             "ties": total_ties,
@@ -710,8 +710,8 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
         traceback.print_exc()
         print(f"Locals: {locals()}")
         return {
-            "overall": 0.0, "auto": 0.0, "teleop": 0.0, "endgame": 0.0,
-            "confidence": 0.0, "actual_epa": 0.0,
+            "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+            "confidence": 0.0, "ace": 0.0,
             "wins": 0, "losses": 0, "ties": 0,
             "confidence_components": {
                 "consistency": 0.0,
@@ -822,12 +822,12 @@ def analyze_single_team(team_key: str, year: int):
         print(f"{'='*50}")
         for event_epa in event_epa_results:
             print(f"\nEvent: {event_epa['event_key']}")
-            print(f"  Overall: {event_epa['overall']}")
-            print(f"  Auto: {event_epa['auto']}")
-            print(f"  Teleop: {event_epa['teleop']}")
-            print(f"  Endgame: {event_epa['endgame']}")
+            print(f"  Overall: {event_epa['raw']}")
+            print(f"  Auto: {event_epa['auto_raw']}")
+            print(f"  Teleop: {event_epa['teleop_raw']}")
+            print(f"  Endgame: {event_epa['endgame_raw']}")
             print(f"  Confidence: {event_epa['confidence']}")
-            print(f"  Actual EPA: {event_epa['actual_epa']}")
+            print(f"  Actual EPA: {event_epa['ace']}")
             print(f"  Record: {event_epa['wins']}-{event_epa['losses']}-{event_epa['ties']}")
             print("  Confidence Breakdown:")
             weights = event_epa["weights"]

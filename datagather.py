@@ -156,8 +156,8 @@ def load_data():
                        t.nickname, t.city, t.state_prov, t.country, t.website,
                        COALESCE(d.display_name, d.name) AS district,
                        t.district_key,
-                       te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
-                       te.wins, te.losses, te.ties, te.event_epas
+                       te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
+                       te.wins, te.losses, te.ties, te.event_perf
                 FROM team_epas te
                 LEFT JOIN teams t ON te.team_number = t.team_number
                 LEFT JOIN districts d ON (
@@ -174,8 +174,8 @@ def load_data():
                        t.nickname, t.city, t.state_prov, t.country, t.website,
                        NULL::text AS district,
                        NULL::text AS district_key,
-                       te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
-                       te.wins, te.losses, te.ties, te.event_epas
+                       te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
+                       te.wins, te.losses, te.ties, te.event_perf
                 FROM team_epas te
                 LEFT JOIN teams t ON te.team_number = t.team_number
                 ORDER BY te.year, te.team_number
@@ -184,8 +184,8 @@ def load_data():
         team_data = {}
         for row in team_cursor.fetchall():
             team_number, year, nickname, city, state_prov, country, website, district, district_key, \
-            normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
-            wins, losses, ties, event_epas = row
+            raw, ace, confidence, auto_raw, teleop_raw, endgame_raw, \
+            wins, losses, ties, event_perf = row
             
             raw_team_data = {
                 "team_number": team_number,
@@ -197,26 +197,25 @@ def load_data():
                 "website": website,
                 "district": district,
                 "district_key": district_key,
-                "normal_epa": normal_epa,
-                "epa": epa,
+                "raw": raw,
+                "ace": ace,
                 "confidence": confidence,
-                "auto_epa": auto_epa,
-                "teleop_epa": teleop_epa,
-                "endgame_epa": endgame_epa,
+                "auto_raw": auto_raw,
+                "teleop_raw": teleop_raw,
+                "endgame_raw": endgame_raw,
                 "wins": wins,
                 "losses": losses,
                 "ties": ties,
-                "event_epas": event_epas
+                "event_perf": event_perf
             }
             
-            # Parse event_epas from JSON if it's a string
-            if raw_team_data["event_epas"] is None:
-                raw_team_data["event_epas"] = []
-            elif isinstance(raw_team_data["event_epas"], str):
+            if raw_team_data["event_perf"] is None:
+                raw_team_data["event_perf"] = []
+            elif isinstance(raw_team_data["event_perf"], str):
                 try:
-                    raw_team_data["event_epas"] = json.loads(raw_team_data["event_epas"])
+                    raw_team_data["event_perf"] = json.loads(raw_team_data["event_perf"])
                 except json.JSONDecodeError:
-                    raw_team_data["event_epas"] = []
+                    raw_team_data["event_perf"] = []
             
             # Compress the dictionary
             team = compress_dict(raw_team_data)
@@ -431,8 +430,8 @@ def load_data_current_year():
                        t.nickname, t.city, t.state_prov, t.country, t.website,
                        COALESCE(d.display_name, d.name) AS district,
                        t.district_key,
-                       te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
-                       te.wins, te.losses, te.event_epas
+                       te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
+                       te.wins, te.losses, te.event_perf
                 FROM team_epas te
                 LEFT JOIN teams t ON te.team_number = t.team_number
                 LEFT JOIN districts d ON (
@@ -450,8 +449,8 @@ def load_data_current_year():
                        t.nickname, t.city, t.state_prov, t.country, t.website,
                        NULL::text AS district,
                        NULL::text AS district_key,
-                       te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
-                       te.wins, te.losses, te.event_epas
+                       te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
+                       te.wins, te.losses, te.event_perf
                 FROM team_epas te
                 LEFT JOIN teams t ON te.team_number = t.team_number
                 WHERE te.year = %s
@@ -461,8 +460,8 @@ def load_data_current_year():
         team_data = {current_year: {}}
         for row in team_cursor.fetchall():
             team_number, year, nickname, city, state_prov, country, website, district, district_key, \
-            normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa, \
-            wins, losses, event_epas = row
+            raw, ace, confidence, auto_raw, teleop_raw, endgame_raw, \
+            wins, losses, event_perf = row
             
             raw_team_data = {
                 "team_number": team_number,
@@ -474,25 +473,24 @@ def load_data_current_year():
                 "website": website,
                 "district": district,
                 "district_key": district_key,
-                "normal_epa": normal_epa,
-                "epa": epa,
+                "raw": raw,
+                "ace": ace,
                 "confidence": confidence,
-                "auto_epa": auto_epa,
-                "teleop_epa": teleop_epa,
-                "endgame_epa": endgame_epa,
+                "auto_raw": auto_raw,
+                "teleop_raw": teleop_raw,
+                "endgame_raw": endgame_raw,
                 "wins": wins,
                 "losses": losses,
-                "event_epas": event_epas
+                "event_perf": event_perf
             }
             
-            # Parse event_epas from JSON if it's a string
-            if raw_team_data["event_epas"] is None:
-                raw_team_data["event_epas"] = []
-            elif isinstance(raw_team_data["event_epas"], str):
+            if raw_team_data["event_perf"] is None:
+                raw_team_data["event_perf"] = []
+            elif isinstance(raw_team_data["event_perf"], str):
                 try:
-                    raw_team_data["event_epas"] = json.loads(raw_team_data["event_epas"])
+                    raw_team_data["event_perf"] = json.loads(raw_team_data["event_perf"])
                 except json.JSONDecodeError:
-                    raw_team_data["event_epas"] = []
+                    raw_team_data["event_perf"] = []
             
             # Compress the dictionary
             team = compress_dict(raw_team_data)
@@ -697,8 +695,8 @@ def load_year_data(year):
                            t.nickname, t.city, t.state_prov, t.country, t.website,
                            COALESCE(d.display_name, d.name) AS district,
                            t.district_key,
-                           te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
-                           te.wins, te.losses, te.ties, te.event_epas
+                           te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
+                           te.wins, te.losses, te.ties, te.event_perf
                     FROM team_epas te
                     LEFT JOIN teams t ON te.team_number = t.team_number
                     LEFT JOIN districts d ON (
@@ -716,8 +714,8 @@ def load_year_data(year):
                            t.nickname, t.city, t.state_prov, t.country, t.website,
                            NULL::text AS district,
                            NULL::text AS district_key,
-                           te.normal_epa, te.epa, te.confidence, te.auto_epa, te.teleop_epa, te.endgame_epa,
-                           te.wins, te.losses, te.ties, te.event_epas
+                           te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
+                           te.wins, te.losses, te.ties, te.event_perf
                     FROM team_epas te
                     LEFT JOIN teams t ON te.team_number = t.team_number
                     WHERE te.year = %s
@@ -726,8 +724,8 @@ def load_year_data(year):
             for row in cursor.fetchall():
                 (
                     team_number, year, nickname, city, state_prov, country, website, district, district_key,
-                    normal_epa, epa, confidence, auto_epa, teleop_epa, endgame_epa,
-                    wins, losses, ties, event_epas
+                    raw, ace, confidence, auto_raw, teleop_raw, endgame_raw,
+                    wins, losses, ties, event_perf
                 ) = row
 
                 raw_team_data = {
@@ -740,16 +738,16 @@ def load_year_data(year):
                     "website": website,
                     "district": district,
                     "district_key": district_key,
-                    "normal_epa": normal_epa,
-                    "epa": epa,
+                    "raw": raw,
+                    "ace": ace,
                     "confidence": confidence,
-                    "auto_epa": auto_epa,
-                    "teleop_epa": teleop_epa,
-                    "endgame_epa": endgame_epa,
+                    "auto_raw": auto_raw,
+                    "teleop_raw": teleop_raw,
+                    "endgame_raw": endgame_raw,
                     "wins": wins,
                     "losses": losses,
                     "ties": ties,
-                    "event_epas": safe_json_load(event_epas)
+                    "event_perf": safe_json_load(event_perf)
                 }
 
                 team_data[team_number] = compress_dict(raw_team_data)

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Query, Path, Depends, Header, HTTPException, status
 from query.teams import TeamQuery, TeamResponse
 from query.events import EventQuery, EventResponse
-from query.team_epas import TeamEpaRequest, TeamEpaResponse
+from query.team_epas import TeamPerfRequest, TeamPerfResponse
 from data.db import SessionLocal
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -82,7 +82,7 @@ async def get_events(year : Annotated[int , Path(title="Events from this year")]
     return EventResponse(events=[], next=None)
 
 @app.get("/team_epas/{team_number}", dependencies=[Depends(verify_api_key)])
-async def get_team_epas(team_number : Annotated[int, Path(title="Team number")], query : Annotated[TeamEpaRequest, Query()], db : Session = Depends(get_db)) -> TeamEpaResponse:
+async def get_team_epas(team_number : Annotated[int, Path(title="Team number")], query : Annotated[TeamPerfRequest, Query()], db : Session = Depends(get_db)) -> TeamPerfResponse:
     return team_epas.get_team_epa(db,team_number, query)
 
 @app.get("/event_teams", dependencies=[Depends(verify_api_key)])
