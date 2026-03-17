@@ -5,6 +5,7 @@ Run with: uvicorn run_combined:app --host 0.0.0.0 --port $PORT
 import os
 import sys
 import traceback
+import importlib.util
 
 def _log(msg: str) -> None:
     print(f"[run_combined] {msg}", flush=True)
@@ -14,10 +15,13 @@ _db_url = os.environ.get("DATABASE_URL", "")
 os.environ.setdefault("DB_URL", _db_url)
 _log(f"DB_URL set: {bool(_db_url)}")
 
-# Add peekorobo-api to path so its imports resolve
-_api_dir = os.path.join(os.path.dirname(__file__), "peekorobo-api")
+# Load API from peekorobo-api/main.py by path (avoids sys.path / "main" conflicts)
+_api_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "peekorobo-api")
+_api_main_path = os.path.join(_api_dir, "main.py")
+_log(f"API path: {_api_main_path}, exists: {os.path.exists(_api_main_path)}")
+
+# Add peekorobo-api to path so its sub-imports (query.*, data.*) resolve
 sys.path.insert(0, _api_dir)
-_log(f"API dir: {_api_dir}, exists: {os.path.exists(_api_dir)}")
 
 try:
     from fastapi import FastAPI
@@ -29,7 +33,10 @@ except Exception as e:
     raise
 
 try:
-    import main as api_main
+    spec = importlib.util.spec_from_file_location("peekorobo_api_main", _api_main_path)
+    api_main = importlib.util.module_from_spec(spec)
+    sys.modules["peekorobo_api_main"] = api_main
+    spec.loader.exec_module(api_main)
     _log("API app import OK")
 except Exception as e:
     _log(f"API import FAILED: {e}")
