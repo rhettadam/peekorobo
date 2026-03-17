@@ -1395,6 +1395,8 @@ def topbar():
             [
                 dcc.Store(id="login-state-ready", data=False),
                 dcc.Store(id="theme-store", data="dark"),  # Store for theme preference
+                html.Div(id="last-updated-text", style={"display": "none"}),
+                html.Div(id="last-updated-text-mobile", style={"display": "none"}),
 
                 dbc.Row(
                     [
@@ -4551,8 +4553,8 @@ def match_layout(event_key, match_key):
         p_blue = 0.5
 
     # Projected/actual scores
-    pred_red_score = sum(t["epa"] for t in red_epas)
-    pred_blue_score = sum(t["epa"] for t in blue_epas)
+    pred_red_score = sum(t["ace"] for t in red_epas)
+    pred_blue_score = sum(t["ace"] for t in blue_epas)
 
     # Percentile coloring for ACE using app-wide logic
     all_epas = [t.get("ace", 0) for t in team_db.values() if t.get("ace") is not None or t.get("raw") is not None]
@@ -4650,12 +4652,12 @@ def match_layout(event_key, match_key):
                     }
                 })
     # ACE row for red table
-    ace_percentiles = percentiles_dict["epa"]
+    ace_percentiles = percentiles_dict["ace"]
     ace_rules = get_epa_styling({"ace": ace_percentiles})
     for t in red_epas:
         col_id = f"red_{t['team_number']}"
         for rule in ace_rules:
-            filter_query = rule["if"]["filter_query"].replace("{epa}", f"{{{col_id}}}")
+            filter_query = rule["if"]["filter_query"].replace("{ace}", f"{{{col_id}}}")
             red_style_data_conditional.append({
                 **rule,
                 "if": {
@@ -4689,7 +4691,7 @@ def match_layout(event_key, match_key):
     for t in blue_epas:
         col_id = f"blue_{t['team_number']}"
         for rule in ace_rules:
-            filter_query = rule["if"]["filter_query"].replace("{epa}", f"{{{col_id}}}")
+            filter_query = rule["if"]["filter_query"].replace("{ace}", f"{{{col_id}}}")
             blue_style_data_conditional.append({
                 **rule,
                 "if": {

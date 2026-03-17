@@ -258,6 +258,14 @@ def toggle_register_popup(pathname, n_dismiss):
     return True
 
 @app.callback(
+    [Output("last-updated-text", "children"), Output("last-updated-text-mobile", "children")],
+    Input("url", "pathname"),
+)
+def _last_updated_noop(pathname):
+    """No-op for removed Last Updated UI; prevents 500s from cached clients."""
+    return "", ""
+
+@app.callback(
     Output("page-content", "children"),
     Input("url", "pathname")
 )
