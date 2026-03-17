@@ -338,45 +338,84 @@
     color: var(--text-secondary);
 }
 
-/* Rank cards */
-.rank-card-container {
+/* Rank unified card - single card with 2x2 grid inside */
+.rank-unified-card {
+    background: linear-gradient(135deg, var(--card-bg) 0%, color-mix(in srgb, var(--card-bg) 95%, var(--text-primary) 5%) 100%);
+    border-radius: 16px;
+    padding: 0;
+    overflow: hidden;
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -2px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    border: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+
+.rank-unified-header {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    padding: 14px 20px;
+    border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.06) 0%, transparent 100%);
+}
+
+.rank-unified-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+}
+
+.rank-tile {
     display: flex;
-    flex-wrap: nowrap;
+    flex-direction: column;
+    align-items: center;
     justify-content: center;
-    gap: 16px;
-    overflow-x: auto;
-    padding: 0 8px;
+    padding: 20px 16px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.2s ease, transform 0.15s ease;
+    border-right: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
 
-.rank-card {
-    flex-grow: 2;
-    flex-shrink: 0;
-    flex-basis: 0;
-    max-width: 100%;
-    min-width: 300px;
+.rank-tile:nth-child(2n) {
+    border-right: none;
 }
 
-.rank-card .card-body {
-    text-align: center;
-    padding: 10px 12px;
-    background-color: var(--card-bg);
-    border-radius: 10px;
-    box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
+.rank-tile:nth-child(n+3) {
+    border-bottom: none;
 }
 
-.rank-card-label {
-    font-size: 0.9rem;
-    color: #888;
+.rank-tile:hover {
+    background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+
+.rank-tile:active {
+    transform: scale(0.98);
+}
+
+.rank-tile-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
     margin-bottom: 4px;
+    letter-spacing: 0.02em;
+}
+
+.rank-tile-rank {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #3b82f6;
     line-height: 1.2;
 }
 
-.rank-card-value {
-    font-size: clamp(1.1rem, 2.5vw, 1.6rem);
-    font-weight: bold;
-    color: #007BFF;
-    text-decoration: underline;
-    white-space: nowrap;
+.rank-tile-total {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    opacity: 0.8;
 }
 
 /* Team recommendation cards (profile) - equal height */

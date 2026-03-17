@@ -484,39 +484,33 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
         except Exception as e:
             print(f"Error loading district data: {e}")
         
-        def rank_card(top, rank, total, href):
-            return html.Div(
-                dbc.Card(
-                    dbc.CardBody([
-                        html.P(top, className="rank-card-label", style={"fontWeight": "bold"}),
-                        html.A([
-                            html.Span(str(rank), style={"display": "block", "fontSize": "1.5rem", "fontWeight": "bold", "color": "#007bff"}),
-                            html.Span(f"out of {total}", style={"display": "block", "fontSize": "0.8rem", "opacity": "0.4", "fontweight": "normal"})
-                        ], href=href, className="rank-card-value", style={"textDecoration": "none"})
-                    ]),
-                    className="rank-card"
-                )
+        def rank_tile(label, rank, total, href):
+            return html.A(
+                [
+                    html.Span(label, className="rank-tile-label"),
+                    html.Span(str(rank), className="rank-tile-rank"),
+                    html.Span(f"of {total}", className="rank-tile-total"),
+                ],
+                href=href,
+                className="rank-tile",
             )
 
-        # Build rank cards list
-        rank_cards = [
-            rank_card("Global", global_rank, total_teams, f"/teams?year={performance_year}&sort_by=epa"),
-            rank_card(country, country_rank, country_teams, f"/teams?year={performance_year}&country={country}&sort_by=epa"),
-        ]
-        
-        # Add district rank card if district data exists
-        if district_name and district_teams > 0:
-            rank_cards.append(
-                rank_card(district_name, district_rank, district_teams, f"/teams?year={performance_year}&sort_by=epa")
-            )
-        
-        # Add state rank card (always show state rank)
-        rank_cards.append(
-            rank_card(state, state_rank, state_teams, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa")
-        )
+        # District: use name when team has district, else "District" label with N/A rank (e.g. regional teams)
+        district_label = district_name if district_name else "District"
+        district_rank_val = district_rank if (district_key and district_teams > 0) else "N/A"
+        district_total_val = district_teams if (district_key and district_teams > 0) else "N/A"
+        district_href = f"/teams?year={performance_year}&district={district_key}&sort_by=epa" if district_key else f"/teams?year={performance_year}&sort_by=epa"
 
         return html.Div([
-            html.Div(rank_cards, className="rank-card-container")
+            html.Div([
+                html.Div("Rankings", className="rank-unified-header"),
+                html.Div([
+                    rank_tile("Global", global_rank, total_teams, f"/teams?year={performance_year}&sort_by=epa"),
+                    rank_tile(country, country_rank, country_teams, f"/teams?year={performance_year}&country={country}&sort_by=epa"),
+                    rank_tile(district_label, district_rank_val, district_total_val, district_href),
+                    rank_tile(state, state_rank, state_teams, f"/teams?year={performance_year}&country={country}&state={state}&sort_by=epa"),
+                ], className="rank-unified-grid"),
+            ], className="rank-unified-card"),
         ], className="mb-4")
 
     def build_performance_metrics_card(selected_team, performance_year, percentiles_dict):
@@ -5622,24 +5616,51 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
     # Add favorites store only for current user
     if is_current_user:
         layout_components.append(dcc.Store(id="favorites-store", data={"deleted": []}))
+        layout_components.append(dcc.Store(id="api-key-visible", data=False))
         layout_components.append(
             dbc.Modal(
                 [
                     dbc.ModalHeader(dbc.ModalTitle("API Key")),
                     dbc.ModalBody([
                         html.P("Keep this key private.", style={"fontSize": "0.85rem", "marginBottom": "8px"}),
-                        dbc.Input(
-                            id="api-key-input",
-                            value=api_key or "",
-                            placeholder="Generate to create a key",
-                            readonly=True,
-                            size="sm",
-                            className="custom-input-box",
-                            style={
-                                "fontFamily": "monospace",
-                                "fontSize": "0.85rem"
-                            }
-                        ),
+                        html.Div([
+                            dbc.Input(
+                                id="api-key-input",
+                                value=api_key or "",
+                                placeholder="Generate to create a key",
+                                readonly=True,
+                                size="sm",
+                                type="password",
+                                className="custom-input-box",
+                                style={
+                                    "fontFamily": "monospace",
+                                    "fontSize": "0.85rem",
+                                    "flex": "1",
+                                    "minWidth": "0"
+                                }
+                            ),
+                            html.Button(
+                                id="api-key-toggle-visibility",
+                                children="Show",
+                                title="Show/hide API key",
+                                style={
+                                    "marginLeft": "6px",
+                                    "padding": "6px 10px",
+                                    "fontSize": "0.75rem",
+                                    "backgroundColor": "#2D2D2D",
+                                    "border": "none",
+                                    "borderRadius": "4px",
+                                    "color": "#ffffff",
+                                    "cursor": "pointer",
+                                    "whiteSpace": "nowrap"
+                                }
+                            ),
+                            dcc.Clipboard(
+                                target_id="api-key-input",
+                                title="Copy",
+                                style={"marginLeft": "6px", "display": "inline-block"}
+                            ),
+                        ], style={"display": "flex", "alignItems": "center"}),
                         html.Div(id="api-key-status", style={"marginTop": "8px", "fontSize": "0.8rem"})
                     ]),
                     dbc.ModalFooter([

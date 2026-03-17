@@ -278,8 +278,17 @@
         gap: 6px;
     }
 
-    .rank-card {
-        min-width: 100px;
+    .rank-unified-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .rank-tile {
+        border-right: none;
+        border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+
+    .rank-tile:last-child {
+        border-bottom: none;
     }
 
     .alliance-bracket-grid {

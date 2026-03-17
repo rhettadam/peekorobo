@@ -932,18 +932,26 @@ def handle_profile_edit(
 
 @app.callback(
     Output("api-key-modal", "is_open"),
+    Output("api-key-input", "type"),
+    Output("api-key-toggle-visibility", "children"),
+    Output("api-key-visible", "data"),
     Input("open-api-key-modal", "n_clicks"),
     Input("close-api-key-modal", "n_clicks"),
+    Input("api-key-toggle-visibility", "n_clicks"),
     State("api-key-modal", "is_open"),
+    State("api-key-visible", "data"),
     prevent_initial_call=True
 )
-def toggle_api_key_modal(open_clicks, close_clicks, is_open):
+def toggle_api_key_modal_and_visibility(open_clicks, close_clicks, toggle_clicks, is_open, visible):
     triggered_id = ctx.triggered_id
     if triggered_id == "open-api-key-modal":
-        return True
+        return True, "password", "Show", False
     if triggered_id == "close-api-key-modal":
-        return False
-    return is_open
+        return False, dash.no_update, dash.no_update, dash.no_update
+    if triggered_id == "api-key-toggle-visibility":
+        visible = visible if isinstance(visible, bool) else False
+        return dash.no_update, "text" if not visible else "password", "Hide" if not visible else "Show", not visible
+    return is_open, dash.no_update, dash.no_update, dash.no_update
 
 @app.callback(
     Output("api-key-input", "value"),
