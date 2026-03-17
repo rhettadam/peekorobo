@@ -24,6 +24,9 @@ from functools import lru_cache
 
 import plotly.graph_objects as go
 
+import threading
+import time
+
 from datagather import load_data_current_year,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
 from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,duel_layout,build_recent_events_section,get_team_district_options
@@ -33,13 +36,48 @@ from utils import format_human_date,calculate_all_ranks,calculate_single_rank,ge
 from dotenv import load_dotenv
 load_dotenv()
 
-# Load optimized data: current year data globally + search data with all events
-TEAM_DATABASE, EVENT_DATABASE, EVENT_TEAMS, EVENT_RANKINGS, EVENT_AWARDS, EVENT_MATCHES = load_data_current_year()
+# Mutable containers for current-year data (updated in place so all importers see fresh data)
+TEAM_DATABASE = {}
+EVENT_DATABASE = {}
+EVENT_TEAMS = {}
+EVENT_RANKINGS = {}
+EVENT_AWARDS = []
+EVENT_MATCHES = {}
+
+def _reload_current_year_cache():
+    """Reload current year data from DB into the global caches (updates in place)."""
+    try:
+        td, ed, et, er, ea, em = load_data_current_year()
+        TEAM_DATABASE.clear()
+        TEAM_DATABASE.update(td)
+        EVENT_DATABASE.clear()
+        EVENT_DATABASE.update(ed)
+        EVENT_TEAMS.clear()
+        EVENT_TEAMS.update(et)
+        EVENT_RANKINGS.clear()
+        EVENT_RANKINGS.update(er)
+        EVENT_AWARDS.clear()
+        EVENT_AWARDS.extend(ea)
+        EVENT_MATCHES.clear()
+        EVENT_MATCHES.update(em)
+    except Exception as e:
+        print(f"[peekorobo] Cache reload failed: {e}", flush=True)
+
+# Initial load
+_reload_current_year_cache()
+
+def _cache_reload_loop():
+    """Background loop: reload current-year cache every 10 minutes."""
+    while True:
+        time.sleep(600)  # 10 minutes
+        _reload_current_year_cache()
+        print("[peekorobo] Current-year cache reloaded", flush=True)
+
+_cache_thread = threading.Thread(target=_cache_reload_loop, daemon=True)
+_cache_thread.start()
+
+# Load optimized data: search data with all events (static, loaded once)
 SEARCH_TEAM_DATA, SEARCH_EVENT_DATA = load_search_data()
-
-
-# Store app startup time for "Last Updated" indicator
-APP_STARTUP_TIME = datetime.now()
 
 current_year = 2026
 
@@ -82,8 +120,6 @@ def serve_layout():
             universal_profile_icon_or_toast(),
             html.Div(id='dummy-output', style={'display': 'none'}),
             html.Button(id='page-load-trigger', n_clicks=1, style={'display': 'none'}),
-
-            dcc.Interval(id='last-updated-interval', interval=60000, n_intervals=0)  # Update every minute
         ])
     )
 
@@ -177,26 +213,6 @@ app.clientside_callback(
      Input("page-load-trigger", "n_clicks")],
     prevent_initial_call=True
 )
-
-# Callback to update the "Last Updated" text
-@app.callback(
-    [Output("last-updated-text", "children"),
-     Output("last-updated-text-mobile", "children")],
-    [Input("page-load-trigger", "n_clicks"),
-     Input("last-updated-interval", "n_intervals")]
-)
-def update_last_updated_text(n_clicks, n_intervals):
-    # Calculate time difference
-    time_diff = datetime.now() - APP_STARTUP_TIME
-    
-    if time_diff.total_seconds() < 60:
-        text = f"Updated {int(time_diff.total_seconds())}s ago"
-    elif time_diff.total_seconds() < 3600:
-        text = f"Updated {int(time_diff.total_seconds() // 60)}m ago"
-    else:
-        text = f"Updated {int(time_diff.total_seconds() // 3600)}h ago"
-    
-    return text, text
 
 # Callback to update navigation link styles based on current page
 @app.callback(

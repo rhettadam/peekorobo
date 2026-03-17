@@ -1259,19 +1259,6 @@ def topbar():
                             width="auto",
                             className="align-self-center",
                         ),
-                        # Last Updated indicator - visible on desktop
-                        dbc.Col(
-                            html.Span(
-                                id="last-updated-text",
-                                style={
-                                    "color": "var(--text-secondary)",
-                                    "fontSize": "0.75rem",
-                                    "fontStyle": "italic"
-                                }
-                            ),
-                            width="auto",
-                            className="d-none d-md-block align-self-center",
-                        ),
                         dbc.Col(
                             [
                                 dbc.InputGroup(
@@ -1382,22 +1369,6 @@ def topbar():
                                             className="custom-navlink",
                                             style={"background": "none", "border": "none", "padding": "0.5rem 1rem"},
                                         )
-                                    ),
-                                    # Last Updated indicator - mobile version (only visible on mobile)
-                                    dbc.NavItem(
-                                        html.Span(
-                                            "Loading...",
-                                            id="last-updated-text-mobile",
-                                            style={
-                                                "color": "var(--text-secondary)",
-                                                "fontSize": "0.75rem",
-                                                "fontStyle": "italic",
-                                                "display": "block",
-                                                "textAlign": "center",
-                                                "padding": "0.5rem 1rem"
-                                            }
-                                        ),
-                                        className="d-md-none"  # Only show on mobile
                                     ),
                                     # Peekolive link - mobile version
                                     dbc.NavItem(

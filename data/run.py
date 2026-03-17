@@ -2217,37 +2217,6 @@ def fetch_team_components(team, year):
 # Import the function from the new file
 
 
-def restart_heroku_app():
-    # Restart the Heroku app to reload updated data
-    
-    app_name = os.environ.get("HEROKU_APP_NAME")
-    api_key = os.environ.get("HEROKU_API_KEY")
-    
-    if not app_name or not api_key:
-        print("HEROKU_APP_NAME or HEROKU_API_KEY not set, skipping app restart")
-        return
-    
-    try:
-        url = f"https://api.heroku.com/apps/{app_name}/dynos"
-        headers = {
-            "Accept": "application/vnd.heroku+json; version=3",
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        # Restart all dynos
-        response = requests.delete(url, headers=headers)
-        if response.status_code == 202:
-            print(f"Successfully restarted Heroku app: {app_name}")
-        else:
-            print(f"Failed to restart app: {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"Error restarting app: {e}")
-
-def reload_app_cache():
-    # Revert to restarting the Heroku app (legacy behavior)
-    restart_heroku_app()
-
 def main():
     print("\nEPA Calculator")
     print("="*20)
@@ -2261,9 +2230,7 @@ def main():
             return
             
         fetch_and_store_team_data(year)
-        # Reload app cache after successful data update
-        reload_app_cache()
-            
+
     except KeyboardInterrupt:
         print("\nInterrupted by user (Ctrl+C)")
     except Exception as e:
@@ -2292,8 +2259,6 @@ if __name__ == "__main__":
                 print("Year must be an integer.")
                 sys.exit(1)
             fetch_and_store_team_data(year)
-            # Reload app cache after successful data update
-            reload_app_cache()
         else:
             main()
     except KeyboardInterrupt:
