@@ -1,1 +1,1 @@
-web: gunicorn peekorobo:app
+web: uvicorn run_combined:app --host 0.0.0.0 --port $PORT
