@@ -1200,17 +1200,18 @@ def remove_favorite(n_clicks, store_data, session_data):
     prevent_initial_call=True
 )
 def handle_login(login_clicks, username, password):
+    msg_style = {"color": "var(--text-primary)"}
     if not username or not password:
-        return "Please enter both username and password.", dash.no_update
+        return html.Span("Please enter both username and password.", style=msg_style), dash.no_update
 
     valid, user_id = verify_user(username, password)
     if valid:
         session["user_id"] = user_id
         session["username"] = username
         redirect_url = "/user"
-        return f"Welcome, {username}!", redirect_url
+        return html.Span(f"Welcome, {username}!", style=msg_style), redirect_url
     else:
-        return "❌ Invalid username or password.", dash.no_update
+        return html.Span("Invalid username or password.", style=msg_style), dash.no_update
 
 @app.callback(
     Output("register-message", "children"),
@@ -1219,11 +1220,15 @@ def handle_login(login_clicks, username, password):
     State("register-username", "value"),
     State("register-email", "value"),
     State("register-password", "value"),
+    State("register-confirm-password", "value"),
     prevent_initial_call=True
 )
-def handle_register(register_clicks, username, email, password):
+def handle_register(register_clicks, username, email, password, confirm_password):
+    msg_style = {"color": "var(--text-primary)"}
     if not username or not password:
-        return "Please enter both username and password.", dash.no_update
+        return html.Span("Please enter both username and password.", style=msg_style), dash.no_update
+    if password != confirm_password:
+        return html.Span("Passwords do not match.", style=msg_style), dash.no_update
 
     success, result = register_user(username.strip(), password.strip(), email.strip() if email else None)
     if success:
@@ -1233,15 +1238,89 @@ def handle_register(register_clicks, username, email, password):
         session["user_id"] = user_id
         session["username"] = stored_username
         redirect_url = "/user"
-        return f"Welcome, {stored_username.title()}!", redirect_url
+        return html.Span(f"Welcome, {stored_username.title()}!", style=msg_style), redirect_url
     elif result == "Username already exists.":
         # Double-submit: account was just created, try logging in
         valid, user_id = verify_user(username.strip(), password.strip())
         if valid:
             session["user_id"] = user_id
             session["username"] = username.strip().lower()
-            return f"Welcome, {username.strip().title()}!", "/user"
-    return result, dash.no_update
+            return html.Span(f"Welcome, {username.strip().title()}!", style=msg_style), "/user"
+    return html.Span(result, style=msg_style), dash.no_update
+
+def _toggle_password_type(current_type):
+    """Return (new_type, icon) for password visibility toggle."""
+    if current_type == "text":
+        return "password", html.I(className="fas fa-eye", style={"color": "var(--text-muted)"})
+    return "text", html.I(className="fas fa-eye-slash", style={"color": "var(--text-muted)"})
+
+@app.callback(
+    Output("login-password", "type"),
+    Output("login-password-toggle", "children"),
+    Input("login-password-toggle", "n_clicks"),
+    State("login-password", "type"),
+    prevent_initial_call=True
+)
+def toggle_login_password(n_clicks, current_type):
+    new_type, icon = _toggle_password_type(current_type or "password")
+    return new_type, icon
+
+@app.callback(
+    Output("register-password", "type"),
+    Output("register-password-toggle", "children"),
+    Input("register-password-toggle", "n_clicks"),
+    State("register-password", "type"),
+    prevent_initial_call=True
+)
+def toggle_register_password(n_clicks, current_type):
+    new_type, icon = _toggle_password_type(current_type or "password")
+    return new_type, icon
+
+@app.callback(
+    Output("register-confirm-password", "type"),
+    Output("register-confirm-password-toggle", "children"),
+    Input("register-confirm-password-toggle", "n_clicks"),
+    State("register-confirm-password", "type"),
+    prevent_initial_call=True
+)
+def toggle_register_confirm_password(n_clicks, current_type):
+    new_type, icon = _toggle_password_type(current_type or "password")
+    return new_type, icon
+
+@app.callback(
+    Output("register-pw-requirements", "children"),
+    Input("register-password", "value"),
+    Input("register-confirm-password", "value"),
+    prevent_initial_call=False
+)
+def update_register_pw_requirements(password, confirm_password):
+    """Show password requirements with checkmarks that update as user types."""
+    pw = password or ""
+    confirm = confirm_password or ""
+    checks = [
+        (len(pw) >= 8, "At least 8 characters"),
+        (any(c.isupper() for c in pw), "One uppercase letter"),
+        (any(c.islower() for c in pw), "One lowercase letter"),
+        (any(c.isdigit() for c in pw), "One digit"),
+        (pw and pw == confirm, "Passwords match"),
+    ]
+    items = []
+    for met, label in checks:
+        icon = "✓" if met else "○"
+        color = "#43a047" if met else "var(--text-muted)"
+        items.append(
+            html.Div([
+                html.Span(icon, style={"color": color, "fontWeight": "bold", "marginRight": "8px", "minWidth": "1.2em", "display": "inline-block"}),
+                html.Span(label, style={"color": "var(--text-primary)"}),
+            ], style={"display": "flex", "alignItems": "center", "marginBottom": "6px", "fontSize": "0.9rem"})
+        )
+    return dbc.Card([
+        dbc.CardHeader([
+            html.I(className="fas fa-key me-2", style={"color": "#ffdd00"}),
+            html.Span("Password requirements", style={"fontWeight": "600", "color": "var(--text-primary)"}),
+        ], style={"backgroundColor": "var(--card-bg)", "borderBottom": "1px solid var(--border-color)", "padding": "0.6rem 1rem"}),
+        dbc.CardBody(items, style={"backgroundColor": "var(--card-bg)", "padding": "0.75rem 1rem"})
+    ], style={"border": "1px solid var(--border-color)", "borderRadius": "8px", "overflow": "hidden"})
 
 @app.callback(
     Output("favorite-alert", "children"),

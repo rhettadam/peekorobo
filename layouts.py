@@ -2116,7 +2116,13 @@ def login_layout():
                         ),
                         html.H3("Login", style={"textAlign": "center", "marginBottom": "20px", "color": "var(--text-primary)"}),
                         dbc.Input(id="login-username", type="text", placeholder="Username or Email", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1rem"}),
-                        dbc.Input(id="login-password", type="password", placeholder="Password", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1.5rem"}),
+                        dbc.InputGroup([
+                            dbc.Input(id="login-password", type="password", placeholder="Password", className="custom-input-box"),
+                            dbc.InputGroupText(
+                                dbc.Button(id="login-password-toggle", type="button", children=html.I(className="fas fa-eye"), style={"background": "none", "border": "none", "padding": "0", "color": "var(--text-muted)", "cursor": "pointer"}),
+                                style={"backgroundColor": "var(--input-bg)", "borderColor": "var(--input-border)"}
+                            ),
+                        ], style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1.5rem"}),
                         dbc.Button("Login", id="login-btn", style={
                             "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%", "maxWidth": "500px"
                         }),
@@ -2124,7 +2130,7 @@ def login_layout():
                             html.Span("Don't have an account? ", style={"color": "var(--text-primary)"}),
                             html.A("Register", href="/register", style={"color": "#ffdd00ff", "textDecoration": "underline"})
                         ], style={"textAlign": "center", "marginTop": "1rem"}),
-                        html.Div(id="login-message", style={"textAlign": "center", "marginTop": "1rem", "color": "#333", "fontWeight": "bold"}),
+                        html.Div(id="login-message", style={"textAlign": "center", "marginTop": "1rem", "color": "var(--text-primary)", "fontWeight": "bold"}),
                     ], style={"textAlign": "center", "paddingTop": "50px"})
                 , width=12),
             )
@@ -2153,9 +2159,23 @@ def register_layout():
                             className="home-image"
                         ),
                         html.H3("Register", style={"textAlign": "center", "marginBottom": "20px", "color": "var(--text-primary)"}),
+                        html.Div(id="register-pw-requirements", style={"width": "100%", "maxWidth": "500px", "margin": "0 auto 1rem", "textAlign": "left"}),
                         dbc.Input(id="register-username", type="text", placeholder="Username", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1rem"}),
                         dbc.Input(id="register-email", type="email", placeholder="Email (optional)", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1rem"}),
-                        dbc.Input(id="register-password", type="password", placeholder="Password", className="custom-input-box", style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1.5rem"}),
+                        dbc.InputGroup([
+                            dbc.Input(id="register-password", type="password", placeholder="Password", className="custom-input-box"),
+                            dbc.InputGroupText(
+                                dbc.Button(id="register-password-toggle", type="button", children=html.I(className="fas fa-eye"), style={"background": "none", "border": "none", "padding": "0", "color": "var(--text-muted)", "cursor": "pointer"}),
+                                style={"backgroundColor": "var(--input-bg)", "borderColor": "var(--input-border)"}
+                            ),
+                        ], style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1rem"}),
+                        dbc.InputGroup([
+                            dbc.Input(id="register-confirm-password", type="password", placeholder="Confirm password", className="custom-input-box"),
+                            dbc.InputGroupText(
+                                dbc.Button(id="register-confirm-password-toggle", type="button", children=html.I(className="fas fa-eye"), style={"background": "none", "border": "none", "padding": "0", "color": "var(--text-muted)", "cursor": "pointer"}),
+                                style={"backgroundColor": "var(--input-bg)", "borderColor": "var(--input-border)"}
+                            ),
+                        ], style={"width": "100%", "maxWidth": "500px", "margin": "auto", "marginBottom": "1.5rem"}),
                         dbc.Button("Register", id="register-btn", style={
                             "backgroundColor": "#ffdd00ff", "border": "2px solid #555", "color": "black", "width": "100%", "maxWidth": "500px"
                         }),
@@ -2163,7 +2183,7 @@ def register_layout():
                             html.Span("Already have an account? ", style={"color": "var(--text-primary)"}),
                             html.A("Login", href="/login", style={"color": "#ffdd00ff", "textDecoration": "underline"})
                         ], style={"textAlign": "center", "marginTop": "1rem"}),
-                        html.Div(id="register-message", style={"textAlign": "center", "marginTop": "1rem", "color": "#333", "fontWeight": "bold"}),
+                        html.Div(id="register-message", style={"textAlign": "center", "marginTop": "1rem", "color": "var(--text-primary)", "fontWeight": "bold"}),
                     ], style={"textAlign": "center", "paddingTop": "50px"})
                 , width=12),
             )
