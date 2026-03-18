@@ -5,12 +5,18 @@ from fastapi import FastAPI, Query, Path, Depends, Header, HTTPException, status
 from query.teams import TeamQuery, TeamResponse
 from query.events import EventQuery, EventResponse
 from query.team_epas import TeamPerfRequest, TeamPerfResponse
+from query.event_teams import EventTeamsQuery, EventTeamsResponse
+from query.event_matches import EventMatchesRequest, EventMatchResponse
+from query.event_awards import EventAwardsResponse
 from data.db import SessionLocal
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 import data.models.teams as teams
 import data.models.team_epas as team_epas
+import data.models.event_teams as event_teams
+import data.models.event_matches as event_matches
+import data.models.event_awards as event_awards
 
 load_dotenv()
 
@@ -85,21 +91,34 @@ async def get_events(year : Annotated[int , Path(title="Events from this year")]
 async def get_team_perfs(team_number : Annotated[int, Path(title="Team number")], query : Annotated[TeamPerfRequest, Query()], db : Session = Depends(get_db)) -> TeamPerfResponse:
     return team_epas.get_team_epa(db, team_number, query)
 
-@app.get("/event_teams", dependencies=[Depends(verify_api_key)])
-async def get_event_teams():
-    pass
- 
+@app.get("/event_teams/{event_key}", dependencies=[Depends(verify_api_key)])
+async def get_event_teams(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventTeamsQuery, Query()], db: Session = Depends(get_db)) -> EventTeamsResponse:
+    return event_teams.get_event_teams(db, event_key, query)
+
 @app.get("/event_rankings", dependencies=[Depends(verify_api_key)])
 async def get_event_rankings():
     pass
 
-@app.get("/event_matches", dependencies=[Depends(verify_api_key)])
-async def get_event_matches():
-    pass
+@app.get("/event_matches/{event_key}", dependencies=[Depends(verify_api_key)])
+async def get_event_matches(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventMatchesRequest, Query()], db: Session = Depends(get_db)) -> EventMatchResponse:
+    return event_matches.get_event_matches(db, event_key, query)
 
-@app.get("/event_awards", dependencies=[Depends(verify_api_key)])
-async def get_event_awards():
-    pass
+@app.get("/event_awards/{event_key}", dependencies=[Depends(verify_api_key)])
+async def get_event_awards(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventAwardsResponse:
+    return event_awards.get_event_awards(db, event_key)
+
+# Nested /event/{event_key}/... routes
+@app.get("/event/{event_key}/teams", dependencies=[Depends(verify_api_key)])
+async def get_event_teams_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventTeamsQuery, Query()], db: Session = Depends(get_db)) -> EventTeamsResponse:
+    return event_teams.get_event_teams(db, event_key, query)
+
+@app.get("/event/{event_key}/matches", dependencies=[Depends(verify_api_key)])
+async def get_event_matches_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventMatchesRequest, Query()], db: Session = Depends(get_db)) -> EventMatchResponse:
+    return event_matches.get_event_matches(db, event_key, query)
+
+@app.get("/event/{event_key}/awards", dependencies=[Depends(verify_api_key)])
+async def get_event_awards_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventAwardsResponse:
+    return event_awards.get_event_awards(db, event_key)
 
 @app.get("/authorize", dependencies=[Depends(verify_api_key)])
 async def authorize_user():
