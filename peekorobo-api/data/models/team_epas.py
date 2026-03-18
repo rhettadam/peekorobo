@@ -4,7 +4,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import INT, REAL, select
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from data.db import Base
-from query.team_epas import TeamPerfRequest, TeamPerfResponse, TeamPerfInfo
+from query.team_epas import TeamPerfRequest, TeamPerfResponse, TeamPerfInfo, TeamPerfListRequest, TeamPerfListResponse
 
 class TeamEpa(Base):
     __tablename__ = "team_epas"
@@ -56,3 +56,17 @@ def get_team_epa(db : Session, team_number : int, query: TeamPerfRequest) -> Tea
     result = db.scalars(stmt)
     perfs = list(map(from_db_row, result.all()))
     return TeamPerfResponse(team_number=team_number, team_perfs=perfs)
+
+def get_team_perfs_list(db: Session, query: TeamPerfListRequest) -> TeamPerfListResponse:
+    stmt = select(TeamEpa).where(TeamEpa.year == query.year)
+    if query.next_team_number is not None:
+        stmt = stmt.where(TeamEpa.team_number > query.next_team_number)
+    stmt = stmt.order_by(TeamEpa.team_number).limit(query.limit + 1)
+    result = db.scalars(stmt)
+    rows = result.all()
+    team_perfs_list = [
+        TeamPerfResponse(team_number=r.team_number, team_perfs=[from_db_row(r)])
+        for r in rows[: query.limit]
+    ]
+    next_val = rows[query.limit].team_number if len(rows) > query.limit else None
+    return TeamPerfListResponse(team_perfs=team_perfs_list, next=next_val)

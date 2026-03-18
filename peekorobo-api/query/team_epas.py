@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 
 class TeamPerfInfo(BaseModel):
@@ -20,3 +20,12 @@ class TeamPerfRequest(BaseModel):
 class TeamPerfResponse(BaseModel):
     team_number : int
     team_perfs : List[TeamPerfInfo]
+
+class TeamPerfListRequest(BaseModel):
+    year : int
+    limit : Optional[int] = Field(100, gt=0, le=500)
+    next_team_number : Optional[int] = Field(None, gt=0)
+
+class TeamPerfListResponse(BaseModel):
+    team_perfs : List[TeamPerfResponse]
+    next : Optional[int] = None

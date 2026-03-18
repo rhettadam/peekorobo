@@ -4,10 +4,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Query, Path, Depends, Header, HTTPException, status
 from query.teams import TeamQuery, TeamResponse
 from query.events import EventQuery, EventResponse
-from query.team_epas import TeamPerfRequest, TeamPerfResponse
+from query.team_epas import TeamPerfRequest, TeamPerfResponse, TeamPerfListRequest, TeamPerfListResponse
 from query.event_teams import EventTeamsQuery, EventTeamsResponse
 from query.event_matches import EventMatchesRequest, EventMatchResponse
 from query.event_awards import EventAwardsResponse
+from query.event_rankings import EventRankingsResponse
+from query.team_awards import TeamAwardsResponse
+from query.team_events import TeamEventsResponse
 from data.db import SessionLocal
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -17,6 +20,9 @@ import data.models.team_epas as team_epas
 import data.models.event_teams as event_teams
 import data.models.event_matches as event_matches
 import data.models.event_awards as event_awards
+import data.models.event_rankings as event_rankings
+import data.models.team_awards as team_awards
+import data.models.team_events as team_events
 
 load_dotenv()
 
@@ -87,17 +93,29 @@ async def get_teams(filter_query: Annotated[TeamQuery, Query()], db : Session = 
 async def get_events(year : Annotated[int , Path(title="Events from this year")], query : Annotated[EventQuery, Query()]) -> EventResponse:
     return EventResponse(events=[], next=None)
 
+@app.get("/team_perfs", dependencies=[Depends(verify_api_key)])
+async def get_team_perfs_list(query: TeamPerfListRequest = Depends(), db: Session = Depends(get_db)) -> TeamPerfListResponse:
+    return team_epas.get_team_perfs_list(db, query)
+
 @app.get("/team_perfs/{team_number}", dependencies=[Depends(verify_api_key)])
 async def get_team_perfs(team_number : Annotated[int, Path(title="Team number")], query : Annotated[TeamPerfRequest, Query()], db : Session = Depends(get_db)) -> TeamPerfResponse:
     return team_epas.get_team_epa(db, team_number, query)
+
+@app.get("/team/{team_number}/awards", dependencies=[Depends(verify_api_key)])
+async def get_team_awards(team_number: Annotated[int, Path(title="Team number")], db: Session = Depends(get_db)) -> TeamAwardsResponse:
+    return team_awards.get_team_awards(db, team_number)
+
+@app.get("/team/{team_number}/events", dependencies=[Depends(verify_api_key)])
+async def get_team_events(team_number: Annotated[int, Path(title="Team number")], db: Session = Depends(get_db)) -> TeamEventsResponse:
+    return team_events.get_team_events(db, team_number)
 
 @app.get("/event_teams/{event_key}", dependencies=[Depends(verify_api_key)])
 async def get_event_teams(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventTeamsQuery, Query()], db: Session = Depends(get_db)) -> EventTeamsResponse:
     return event_teams.get_event_teams(db, event_key, query)
 
-@app.get("/event_rankings", dependencies=[Depends(verify_api_key)])
-async def get_event_rankings():
-    pass
+@app.get("/event_rankings/{event_key}", dependencies=[Depends(verify_api_key)])
+async def get_event_rankings(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventRankingsResponse:
+    return event_rankings.get_event_rankings(db, event_key)
 
 @app.get("/event_matches/{event_key}", dependencies=[Depends(verify_api_key)])
 async def get_event_matches(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventMatchesRequest, Query()], db: Session = Depends(get_db)) -> EventMatchResponse:
@@ -119,6 +137,10 @@ async def get_event_matches_nested(event_key: Annotated[str, Path(title="Event k
 @app.get("/event/{event_key}/awards", dependencies=[Depends(verify_api_key)])
 async def get_event_awards_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventAwardsResponse:
     return event_awards.get_event_awards(db, event_key)
+
+@app.get("/event/{event_key}/rankings", dependencies=[Depends(verify_api_key)])
+async def get_event_rankings_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventRankingsResponse:
+    return event_rankings.get_event_rankings(db, event_key)
 
 @app.get("/authorize", dependencies=[Depends(verify_api_key)])
 async def authorize_user():
