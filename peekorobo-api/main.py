@@ -81,9 +81,9 @@ async def get_teams(filter_query: Annotated[TeamQuery, Query()], db : Session = 
 async def get_events(year : Annotated[int , Path(title="Events from this year")], query : Annotated[EventQuery, Query()]) -> EventResponse:
     return EventResponse(events=[], next=None)
 
-@app.get("/team_epas/{team_number}", dependencies=[Depends(verify_api_key)])
-async def get_team_epas(team_number : Annotated[int, Path(title="Team number")], query : Annotated[TeamPerfRequest, Query()], db : Session = Depends(get_db)) -> TeamPerfResponse:
-    return team_epas.get_team_epa(db,team_number, query)
+@app.get("/team_perfs/{team_number}", dependencies=[Depends(verify_api_key)])
+async def get_team_perfs(team_number : Annotated[int, Path(title="Team number")], query : Annotated[TeamPerfRequest, Query()], db : Session = Depends(get_db)) -> TeamPerfResponse:
+    return team_epas.get_team_epa(db, team_number, query)
 
 @app.get("/event_teams", dependencies=[Depends(verify_api_key)])
 async def get_event_teams():
