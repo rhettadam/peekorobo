@@ -219,7 +219,7 @@ async def get_team_awards_by_year(team_number: Annotated[int, Path(title="Team n
 async def get_team_events(team_number: Annotated[int, Path(title="Team number")], query: TeamEventsQuery = Depends(), db: Session = Depends(get_db)) -> TeamEventsResponse:
     return team_events.get_team_events(db, team_number, query)
 
-@app.get("/team/{team_number}/events/{year}", dependencies=[Depends(verify_api_key)])
+@app.get("/team/{team_number}/events/{year}", dependencies=[Depends(verify_api_key)], tags=["Teams"])
 async def get_team_events_by_year(team_number: Annotated[int, Path(title="Team number")], year: Annotated[int, Path(title="Year")], db: Session = Depends(get_db)) -> TeamEventsResponse:
     return team_events.get_team_events(db, team_number, TeamEventsQuery(year=year))
 
@@ -227,7 +227,7 @@ async def get_team_events_by_year(team_number: Annotated[int, Path(title="Team n
 async def get_event_teams(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventTeamsQuery, Query()], db: Session = Depends(get_db)) -> EventTeamsResponse:
     return event_teams.get_event_teams(db, event_key, query)
 
-@app.get("/event_rankings/{event_key}", dependencies=[Depends(verify_api_key)])
+@app.get("/event_rankings/{event_key}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
 async def get_event_rankings(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventRankingsResponse:
     return event_rankings.get_event_rankings(db, event_key)
 
@@ -235,7 +235,7 @@ async def get_event_rankings(event_key: Annotated[str, Path(title="Event key (e.
 async def get_event_matches(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventMatchesRequest, Query()], db: Session = Depends(get_db)) -> EventMatchResponse:
     return event_matches.get_event_matches(db, event_key, query)
 
-@app.get("/event_awards/{event_key}", dependencies=[Depends(verify_api_key)])
+@app.get("/event_awards/{event_key}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
 async def get_event_awards(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventAwardsResponse:
     return event_awards.get_event_awards(db, event_key)
 
@@ -252,7 +252,7 @@ async def get_event_teams_nested(event_key: Annotated[str, Path(title="Event key
 async def get_event_matches_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventMatchesRequest, Query()], db: Session = Depends(get_db)) -> EventMatchResponse:
     return event_matches.get_event_matches(db, event_key, query)
 
-@app.get("/event/{event_key}/awards", dependencies=[Depends(verify_api_key)])
+@app.get("/event/{event_key}/awards", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
 async def get_event_awards_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventAwardsResponse:
     return event_awards.get_event_awards(db, event_key)
 
