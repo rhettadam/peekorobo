@@ -4,6 +4,7 @@ from typing import Optional, List
 # Query model for the team request
 class TeamQuery(BaseModel):
     limit: Optional[int] = Field(100, gt=0, le=100)
+    year: Optional[int] = None
     city: Optional[str]= None
     state_prov: Optional[str] = None
     country : Optional[str] = None

@@ -38,6 +38,10 @@ def to_team_response(input : Teams) -> TeamData:
     
 def get_teams(db : Session, query : TeamQuery) -> TeamResponse:
     whereargs = []
+    stmt = select(Teams)
+    if query.year is not None:
+        from data.models.team_epas import TeamEpa
+        stmt = stmt.join(TeamEpa, Teams.team_number == TeamEpa.team_number).where(TeamEpa.year == query.year)
     if query.city:
         whereargs.append(func.lower(Teams.city) == func.lower(query.city))
     if query.state_prov:
@@ -52,7 +56,9 @@ def get_teams(db : Session, query : TeamQuery) -> TeamResponse:
         whereargs.append(Teams.team_number == query.team_number)
     if query.next_team_number:
         whereargs.append(Teams.team_number > query.next_team_number)
-    stmt = select(Teams).where(*whereargs).limit(query.limit).order_by(Teams.team_number)
+    if whereargs:
+        stmt = stmt.where(*whereargs)
+    stmt = stmt.limit(query.limit).order_by(Teams.team_number)
     result : ScalarResult[Teams] = db.scalars(stmt)
     team_infos : List[TeamData] = list(map(to_team_response, result.all()))
     last_id : Optional[int] = None
