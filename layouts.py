@@ -1338,7 +1338,7 @@ def topbar():
                                         className="custom-navlink",
                                         children=[
                                             dbc.DropdownMenuItem("Blog", href="/blog"),
-                                            dbc.DropdownMenuItem("API Docs", href="/api/docs", target="_blank"),
+                                            dbc.DropdownMenuItem("API Docs", href="https://www.peekorobo.com/api/docs#/", target="_blank"),
                                             dbc.DropdownMenuItem("Higher or Lower", href="/higher-lower"),
                                             dbc.DropdownMenuItem("Duel", href="/duel"),
                                             dbc.DropdownMenuItem("Account", href="/login", id="account-link"),
