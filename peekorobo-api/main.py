@@ -13,7 +13,7 @@ from query.event_teams import EventTeamsQuery, EventTeamsResponse
 from query.event_matches import EventMatchesRequest, EventMatchResponse
 from query.event_awards import EventAwardsResponse
 from query.event_rankings import EventRankingsResponse
-from query.event_perfs import EventPerfsResponse
+from query.event_perfs import EventPerfsResponse, EventPerfInfo
 from query.team_awards import TeamAwardsResponse, TeamAwardsQuery
 from query.team_events import TeamEventsResponse, TeamEventsQuery
 from data.db import SessionLocal
@@ -230,27 +230,7 @@ async def get_team_events(team_number: Annotated[int, Path(title="Team number")]
 async def get_team_events_by_year(team_number: Annotated[int, Path(title="Team number")], year: Annotated[int, Path(title="Year")], db: Session = Depends(get_db)) -> TeamEventsResponse:
     return team_events.get_team_events(db, team_number, TeamEventsQuery(year=year))
 
-@app.get("/event_teams/{event_key}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
-async def get_event_teams(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventTeamsQuery, Query()], db: Session = Depends(get_db)) -> EventTeamsResponse:
-    return event_teams.get_event_teams(db, event_key, query)
-
-@app.get("/event_rankings/{event_key}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
-async def get_event_rankings(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventRankingsResponse:
-    return event_rankings.get_event_rankings(db, event_key)
-
-@app.get("/event_matches/{event_key}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
-async def get_event_matches(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventMatchesRequest, Query()], db: Session = Depends(get_db)) -> EventMatchResponse:
-    return event_matches.get_event_matches(db, event_key, query)
-
-@app.get("/event_awards/{event_key}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
-async def get_event_awards(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventAwardsResponse:
-    return event_awards.get_event_awards(db, event_key)
-
-@app.get("/event_perfs/{event_key}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
-async def get_event_perfs_flat(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventPerfsResponse:
-    return event_perfs.get_event_perfs(db, event_key)
-
-# Nested /event/{event_key}/... routes
+# Event data routes (nested under /event/{event_key}/...)
 @app.get("/event/{event_key}/teams", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
 async def get_event_teams_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventTeamsQuery, Query()], db: Session = Depends(get_db)) -> EventTeamsResponse:
     return event_teams.get_event_teams(db, event_key, query)
@@ -266,6 +246,24 @@ async def get_event_awards_nested(event_key: Annotated[str, Path(title="Event ke
 @app.get("/event/{event_key}/rankings", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
 async def get_event_rankings_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventRankingsResponse:
     return event_rankings.get_event_rankings(db, event_key)
+
+def _parse_team_key(team_key: str) -> int:
+    """Parse team_key (e.g. '254' or 'frc254') to team number."""
+    s = str(team_key).strip().lower()
+    if s.startswith("frc"):
+        s = s[3:]
+    return int(s)
+
+@app.get("/event/{event_key}/event_perfs/{team_key}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
+async def get_event_perf(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], team_key: Annotated[str, Path(title="Team key (e.g. 254 or frc254)")], db: Session = Depends(get_db)) -> EventPerfInfo:
+    try:
+        team_number = _parse_team_key(team_key)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid team key")
+    perf = event_perfs.get_event_perf(db, event_key, team_number)
+    if perf is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event performance not found for this team")
+    return perf
 
 @app.get("/event/{event_key}/event_perfs", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
 async def get_event_perfs(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventPerfsResponse:

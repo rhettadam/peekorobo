@@ -73,3 +73,46 @@ def get_event_perfs(db: Session, event_key: str) -> EventPerfsResponse:
     perfs.sort(key=lambda p: (p.ace if p.ace is not None else 0), reverse=True)
 
     return EventPerfsResponse(event_key=event_key, perfs=perfs)
+
+
+def get_event_perf(db: Session, event_key: str, team_number: int) -> Optional[EventPerfInfo]:
+    """Get a single team's performance at an event. Returns None if not found."""
+    year = _extract_year(event_key)
+    if year is None:
+        return None
+
+    stmt = select(TeamEpa).where(
+        and_(
+            TeamEpa.year == year,
+            TeamEpa.team_number == team_number,
+        )
+    )
+    row = db.scalars(stmt).first()
+    if not row or not row.event_perf:
+        return None
+
+    event_perf_raw = row.event_perf
+    if isinstance(event_perf_raw, str):
+        try:
+            event_perf_raw = json.loads(event_perf_raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if not isinstance(event_perf_raw, list):
+        return None
+
+    for obj in event_perf_raw:
+        if not isinstance(obj, dict):
+            continue
+        if obj.get("event_key") != event_key:
+            continue
+        return EventPerfInfo(
+            team_number=team_number,
+            event_key=event_key,
+            raw=obj.get("raw"),
+            ace=obj.get("ace"),
+            confidence=obj.get("confidence"),
+            auto_raw=obj.get("auto_raw"),
+            teleop_raw=obj.get("teleop_raw"),
+            endgame_raw=obj.get("endgame_raw"),
+        )
+    return None
