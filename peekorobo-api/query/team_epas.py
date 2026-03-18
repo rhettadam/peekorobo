@@ -26,6 +26,7 @@ class TeamPerfListRequest(BaseModel):
     limit : Optional[int] = Field(100, gt=0, le=500)
     next_team_number : Optional[int] = Field(None, gt=0)
     city : Optional[str] = None
+    state_prov : Optional[str] = None
     country : Optional[str] = None
     district_key : Optional[str] = None
 

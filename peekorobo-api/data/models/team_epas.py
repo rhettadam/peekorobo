@@ -60,11 +60,13 @@ def get_team_epa(db : Session, team_number : int, query: TeamPerfRequest) -> Tea
 
 def get_team_perfs_list(db: Session, query: TeamPerfListRequest) -> TeamPerfListResponse:
     stmt = select(TeamEpa).where(TeamEpa.year == query.year)
-    needs_teams_join = query.city or query.country or query.district_key
+    needs_teams_join = query.city or query.state_prov or query.country or query.district_key
     if needs_teams_join:
         stmt = stmt.join(Teams, TeamEpa.team_number == Teams.team_number)
         if query.city:
             stmt = stmt.where(Teams.city == query.city)
+        if query.state_prov:
+            stmt = stmt.where(Teams.state_prov == query.state_prov)
         if query.country:
             stmt = stmt.where(Teams.country == query.country)
         if query.district_key:

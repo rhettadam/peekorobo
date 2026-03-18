@@ -40,6 +40,8 @@ def get_teams(db : Session, query : TeamQuery) -> TeamResponse:
     whereargs = []
     if query.city:
         whereargs.append(Teams.city == query.city)
+    if query.state_prov:
+        whereargs.append(Teams.state_prov == query.state_prov)
     if query.country:
         whereargs.append(Teams.country == query.country)
     if query.district_key:
