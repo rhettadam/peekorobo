@@ -1208,7 +1208,7 @@ def handle_login(login_clicks, username, password):
         session["user_id"] = user_id
         session["username"] = username
         redirect_url = "/user"
-        return f"✅ Welcome, {username}!", redirect_url
+        return f"Welcome, {username}!", redirect_url
     else:
         return "❌ Invalid username or password.", dash.no_update
 
@@ -1225,22 +1225,23 @@ def handle_register(register_clicks, username, email, password):
     if not username or not password:
         return "Please enter both username and password.", dash.no_update
 
-    success, message = register_user(username.strip(), password.strip(), email.strip() if email else None)
+    success, result = register_user(username.strip(), password.strip(), email.strip() if email else None)
     if success:
-        # Auto-login after registration
-        try:
-            with DatabaseConnection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT id FROM users WHERE username = %s", (username.strip(),))
-                user_id = cursor.fetchone()[0]
+        # Use user_id returned from register_user (no need to query again)
+        user_id = result
+        stored_username = username.strip().lower()  # DB stores lowercase
+        session["user_id"] = user_id
+        session["username"] = stored_username
+        redirect_url = "/user"
+        return f"Welcome, {stored_username.title()}!", redirect_url
+    elif result == "Username already exists.":
+        # Double-submit: account was just created, try logging in
+        valid, user_id = verify_user(username.strip(), password.strip())
+        if valid:
             session["user_id"] = user_id
-            session["username"] = username.strip()
-            redirect_url = "/user"
-            return f"✅ Welcome, {username.strip()}!", redirect_url
-        except Exception as e:
-            return "Registration successful but login failed. Please try logging in.", dash.no_update
-    else:
-        return message, dash.no_update
+            session["username"] = username.strip().lower()
+            return f"Welcome, {username.strip().title()}!", "/user"
+    return result, dash.no_update
 
 @app.callback(
     Output("favorite-alert", "children"),

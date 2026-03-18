@@ -302,8 +302,8 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                 html.Span(
                     f" {display_name} ({year_list})",
                     style={
-                        "color": "var(--text-primary)",
-                        "fontSize": "1.2rem",
+                        "color": "white",
+                        "fontSize": "1rem",
                         "fontWeight": "bold",
                         "marginLeft": "5px"
                     }
@@ -315,9 +315,9 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
                 children.append(
                     html.A("Video", href=info["video"], target="_blank", style={
                         "marginLeft": "8px",
-                        "fontSize": "1.1rem",
+                        "fontSize": "1rem",
                         "textDecoration": "underline",
-                        "color": "#fff",
+                        "color": "white",
                         "fontWeight": "normal"
                     })
                 )
