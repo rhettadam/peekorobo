@@ -1,7 +1,7 @@
 import json
 from sqlalchemy.util import NoneType
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy import INT, REAL, select
+from sqlalchemy import INT, REAL, select, func
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from data.db import Base
 from data.models.teams import Teams, _district_match
@@ -64,11 +64,11 @@ def get_team_perfs_list(db: Session, query: TeamPerfListRequest) -> TeamPerfList
     if needs_teams_join:
         stmt = stmt.join(Teams, TeamEpa.team_number == Teams.team_number)
         if query.city:
-            stmt = stmt.where(Teams.city == query.city)
+            stmt = stmt.where(func.lower(Teams.city) == func.lower(query.city))
         if query.state_prov:
-            stmt = stmt.where(Teams.state_prov == query.state_prov)
+            stmt = stmt.where(func.lower(Teams.state_prov) == func.lower(query.state_prov))
         if query.country:
-            stmt = stmt.where(Teams.country == query.country)
+            stmt = stmt.where(func.lower(Teams.country) == func.lower(query.country))
         if query.district_key:
             cond = _district_match(Teams.district_key, query.district_key)
             if cond is not None:

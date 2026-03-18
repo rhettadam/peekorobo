@@ -50,11 +50,11 @@ def build_events_response(event : Events) -> EventData:
 def get_events(db: Session, event_year : int, event_query : EventQuery) -> EventResponse:
     where_clause = []
     if event_query.city is not None:
-        where_clause.append(Events.city == event_query.city)
+        where_clause.append(func.lower(Events.city) == func.lower(event_query.city))
     if event_query.state_prov is not None:
-        where_clause.append(Events.state_prov == event_query.state_prov)
+        where_clause.append(func.lower(Events.state_prov) == func.lower(event_query.state_prov))
     if event_query.country is not None:
-        where_clause.append(Events.country == event_query.country)
+        where_clause.append(func.lower(Events.country) == func.lower(event_query.country))
     if event_query.district_key:
         cond = _district_match(Events.district_key, event_query.district_key)
         if cond is not None:
@@ -77,11 +77,11 @@ def get_event_keys(db: Session, year: int, event_query: EventQuery):
     """Return event keys for a given year, sorted by start_date. Uses same filters as get_events."""
     where_clause = [func.extract('year', Events.start_date) == year]
     if event_query.city is not None:
-        where_clause.append(Events.city == event_query.city)
+        where_clause.append(func.lower(Events.city) == func.lower(event_query.city))
     if event_query.state_prov is not None:
-        where_clause.append(Events.state_prov == event_query.state_prov)
+        where_clause.append(func.lower(Events.state_prov) == func.lower(event_query.state_prov))
     if event_query.country is not None:
-        where_clause.append(Events.country == event_query.country)
+        where_clause.append(func.lower(Events.country) == func.lower(event_query.country))
     if event_query.district_key:
         cond = _district_match(Events.district_key, event_query.district_key)
         if cond is not None:

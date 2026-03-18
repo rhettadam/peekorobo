@@ -39,11 +39,11 @@ def to_team_response(input : Teams) -> TeamData:
 def get_teams(db : Session, query : TeamQuery) -> TeamResponse:
     whereargs = []
     if query.city:
-        whereargs.append(Teams.city == query.city)
+        whereargs.append(func.lower(Teams.city) == func.lower(query.city))
     if query.state_prov:
-        whereargs.append(Teams.state_prov == query.state_prov)
+        whereargs.append(func.lower(Teams.state_prov) == func.lower(query.state_prov))
     if query.country:
-        whereargs.append(Teams.country == query.country)
+        whereargs.append(func.lower(Teams.country) == func.lower(query.country))
     if query.district_key:
         cond = _district_match(Teams.district_key, query.district_key)
         if cond is not None:
