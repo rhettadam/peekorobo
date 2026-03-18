@@ -2,7 +2,9 @@ from typing import Annotated, Optional
 from time import time
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, Path, Depends, Security, HTTPException, status
+from fastapi.responses import HTMLResponse
 from fastapi.security import APIKeyHeader
+from fastapi.openapi.docs import get_swagger_ui_html
 from query.teams import TeamQuery, TeamResponse
 from query.events import EventQuery, EventResponse
 from query.team_epas import TeamPerfRequest, TeamPerfResponse, TeamPerfListRequest, TeamPerfListResponse
@@ -10,6 +12,7 @@ from query.event_teams import EventTeamsQuery, EventTeamsResponse
 from query.event_matches import EventMatchesRequest, EventMatchResponse
 from query.event_awards import EventAwardsResponse
 from query.event_rankings import EventRankingsResponse
+from query.event_perfs import EventPerfsResponse
 from query.team_awards import TeamAwardsResponse, TeamAwardsQuery
 from query.team_events import TeamEventsResponse, TeamEventsQuery
 from data.db import SessionLocal
@@ -22,6 +25,7 @@ import data.models.event_teams as event_teams
 import data.models.event_matches as event_matches
 import data.models.event_awards as event_awards
 import data.models.event_rankings as event_rankings
+import data.models.event_perfs as event_perfs
 import data.models.team_awards as team_awards
 import data.models.team_events as team_events
 
@@ -90,43 +94,128 @@ Information and statistics about FIRST Robotics Competition teams and events. Da
 
 ## Authentication
 
-All endpoints require an API key to be passed in the header **X-API-Key**. If you do not have an API key yet, you can obtain one from your [Account Page](https://www.peekorobo.com/account) on Peekorobo.
+All endpoints require an API key to be passed in the header **X-API-Key**. If you do not have an API key yet, you can obtain one from your [User Page](https://www.peekorobo.com/user) on Peekorobo.
 """
+
+TAGS_METADATA = [
+    {
+        "name": "Teams",
+        "description": "Search teams and retrieve team performance metrics (ACE/RAW), awards, and event history. Filter by year, location, and district.",
+    },
+    {
+        "name": "Events",
+        "description": "List FRC events for a given year. Filter by location and event type.",
+    },
+    {
+        "name": "Event Data",
+        "description": "Retrieve teams, matches, awards, and rankings for a specific event. Use event keys like `2024cmp` or `2025txdal`.",
+    },
+    {
+        "name": "Authentication",
+        "description": "Verify that your API key is valid and accepted by the API.",
+    },
+]
 
 app = FastAPI(
     title=API_TITLE,
     description=API_DESCRIPTION,
+    openapi_tags=TAGS_METADATA,
 )
+
+# Header and footer for Swagger docs (matches peekorobo.com branding)
+SWAGGER_HEADER_HTML = """
+<header class="peekorobo-docs-header" style="
+    background: #212529;
+    padding: 8px 0;
+    box-shadow: 0 2px 2px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+">
+    <div style="max-width: 1460px; margin: 0 auto; padding: 0 15px; display: flex; align-items: center; justify-content: space-between;">
+        <a href="https://www.peekorobo.com/" style="display: flex; align-items: center; text-decoration: none;">
+            <img src="https://www.peekorobo.com/assets/logo.png" alt="Peekorobo" style="height: 40px; width: auto;" />
+        </a>
+        <nav style="display: flex; gap: 1.5rem;">
+            <a href="https://www.peekorobo.com/teams" style="color: rgba(255,255,255,0.9); text-decoration: none;">Teams</a>
+            <a href="https://www.peekorobo.com/events" style="color: rgba(255,255,255,0.9); text-decoration: none;">Events</a>
+            <a href="https://www.peekorobo.com/map" style="color: rgba(255,255,255,0.9); text-decoration: none;">Map</a>
+            <a href="https://www.peekorobo.com/insights" style="color: rgba(255,255,255,0.9); text-decoration: none;">Insights</a>
+            <a href="https://www.peekorobo.com/user" style="color: rgba(255,255,255,0.9); text-decoration: none;">Account</a>
+        </nav>
+    </div>
+</header>
+"""
+
+SWAGGER_FOOTER_HTML = """
+<footer class="peekorobo-docs-footer" style="
+    background: #212529;
+    padding: 10px 0;
+    box-shadow: 0 -1px 2px rgba(0,0,0,0.1);
+    margin-top: auto;
+">
+    <div style="max-width: 1460px; margin: 0 auto; padding: 0 15px; text-align: center;">
+        <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 15px;">
+            Built with
+            <a href="https://www.thebluealliance.com/" target="_blank" rel="noopener" style="color: #3366CC; text-decoration: none;">The Blue Alliance</a>
+            &nbsp;|&nbsp;
+            <a href="https://github.com/rhettadam/peekorobo" target="_blank" rel="noopener" style="color: #3366CC; text-decoration: none;">GitHub</a>
+        </p>
+    </div>
+</footer>
+"""
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    """Custom Swagger UI with Peekorobo header and footer."""
+    # Use relative path so it works when API is mounted at /api (openapi.json -> /api/openapi.json)
+    openapi_url = "openapi.json"
+    html_response = get_swagger_ui_html(
+        openapi_url=openapi_url,
+        title=f"{API_TITLE} - Swagger UI",
+    )
+    html_content = html_response.body.decode()
+    # Inject header and body styles, footer before </body>
+    body_open = '<body style="margin:0; min-height:100vh; display:flex; flex-direction:column;">'
+    html_content = html_content.replace("<body>", body_open + SWAGGER_HEADER_HTML)
+    html_content = html_content.replace(
+        '<div id="swagger-ui"></div>',
+        '<div style="flex: 1;"><div id="swagger-ui"></div></div>',
+    )
+    html_content = html_content.replace("</body>", SWAGGER_FOOTER_HTML + "</body>")
+    return HTMLResponse(html_content)
+
 
 @app.get("/")
 async def hello():
     return {"message": "hello world!"}
 
-@app.get("/teams", dependencies=[Depends(verify_api_key)])
+@app.get("/teams", dependencies=[Depends(verify_api_key)], tags=["Teams"])
 async def get_teams(filter_query: Annotated[TeamQuery, Query()], db : Session = Depends(get_db)) -> TeamResponse:
     return teams.get_teams(db = db, query = filter_query)
 
-@app.get("/events/{year}", response_model=EventResponse, dependencies=[Depends(verify_api_key)])
+@app.get("/events/{year}", response_model=EventResponse, dependencies=[Depends(verify_api_key)], tags=["Events"])
 async def get_events(year : Annotated[int , Path(title="Events from this year")], query : Annotated[EventQuery, Query()]) -> EventResponse:
     return EventResponse(events=[], next=None)
 
-@app.get("/team_perfs", dependencies=[Depends(verify_api_key)])
+@app.get("/team_perfs", dependencies=[Depends(verify_api_key)], tags=["Teams"])
 async def get_team_perfs_list(query: TeamPerfListRequest = Depends(), db: Session = Depends(get_db)) -> TeamPerfListResponse:
     return team_epas.get_team_perfs_list(db, query)
 
-@app.get("/team_perfs/{team_number}", dependencies=[Depends(verify_api_key)])
+@app.get("/team_perfs/{team_number}", dependencies=[Depends(verify_api_key)], tags=["Teams"])
 async def get_team_perfs(team_number : Annotated[int, Path(title="Team number")], query : Annotated[TeamPerfRequest, Query()], db : Session = Depends(get_db)) -> TeamPerfResponse:
     return team_epas.get_team_epa(db, team_number, query)
 
-@app.get("/team/{team_number}/awards", dependencies=[Depends(verify_api_key)])
+@app.get("/team/{team_number}/awards", dependencies=[Depends(verify_api_key)], tags=["Teams"])
 async def get_team_awards(team_number: Annotated[int, Path(title="Team number")], query: TeamAwardsQuery = Depends(), db: Session = Depends(get_db)) -> TeamAwardsResponse:
     return team_awards.get_team_awards(db, team_number, query)
 
-@app.get("/team/{team_number}/awards/{year}", dependencies=[Depends(verify_api_key)])
+@app.get("/team/{team_number}/awards/{year}", dependencies=[Depends(verify_api_key)], tags=["Teams"])
 async def get_team_awards_by_year(team_number: Annotated[int, Path(title="Team number")], year: Annotated[int, Path(title="Year")], db: Session = Depends(get_db)) -> TeamAwardsResponse:
     return team_awards.get_team_awards(db, team_number, TeamAwardsQuery(year=year))
 
-@app.get("/team/{team_number}/events", dependencies=[Depends(verify_api_key)])
+@app.get("/team/{team_number}/events", dependencies=[Depends(verify_api_key)], tags=["Teams"])
 async def get_team_events(team_number: Annotated[int, Path(title="Team number")], query: TeamEventsQuery = Depends(), db: Session = Depends(get_db)) -> TeamEventsResponse:
     return team_events.get_team_events(db, team_number, query)
 
@@ -134,7 +223,7 @@ async def get_team_events(team_number: Annotated[int, Path(title="Team number")]
 async def get_team_events_by_year(team_number: Annotated[int, Path(title="Team number")], year: Annotated[int, Path(title="Year")], db: Session = Depends(get_db)) -> TeamEventsResponse:
     return team_events.get_team_events(db, team_number, TeamEventsQuery(year=year))
 
-@app.get("/event_teams/{event_key}", dependencies=[Depends(verify_api_key)])
+@app.get("/event_teams/{event_key}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
 async def get_event_teams(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventTeamsQuery, Query()], db: Session = Depends(get_db)) -> EventTeamsResponse:
     return event_teams.get_event_teams(db, event_key, query)
 
@@ -142,7 +231,7 @@ async def get_event_teams(event_key: Annotated[str, Path(title="Event key (e.g. 
 async def get_event_rankings(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventRankingsResponse:
     return event_rankings.get_event_rankings(db, event_key)
 
-@app.get("/event_matches/{event_key}", dependencies=[Depends(verify_api_key)])
+@app.get("/event_matches/{event_key}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
 async def get_event_matches(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventMatchesRequest, Query()], db: Session = Depends(get_db)) -> EventMatchResponse:
     return event_matches.get_event_matches(db, event_key, query)
 
@@ -150,12 +239,16 @@ async def get_event_matches(event_key: Annotated[str, Path(title="Event key (e.g
 async def get_event_awards(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventAwardsResponse:
     return event_awards.get_event_awards(db, event_key)
 
+@app.get("/event_perfs/{event_key}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
+async def get_event_perfs_flat(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventPerfsResponse:
+    return event_perfs.get_event_perfs(db, event_key)
+
 # Nested /event/{event_key}/... routes
-@app.get("/event/{event_key}/teams", dependencies=[Depends(verify_api_key)])
+@app.get("/event/{event_key}/teams", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
 async def get_event_teams_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventTeamsQuery, Query()], db: Session = Depends(get_db)) -> EventTeamsResponse:
     return event_teams.get_event_teams(db, event_key, query)
 
-@app.get("/event/{event_key}/matches", dependencies=[Depends(verify_api_key)])
+@app.get("/event/{event_key}/matches", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
 async def get_event_matches_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventMatchesRequest, Query()], db: Session = Depends(get_db)) -> EventMatchResponse:
     return event_matches.get_event_matches(db, event_key, query)
 
@@ -163,10 +256,14 @@ async def get_event_matches_nested(event_key: Annotated[str, Path(title="Event k
 async def get_event_awards_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventAwardsResponse:
     return event_awards.get_event_awards(db, event_key)
 
-@app.get("/event/{event_key}/rankings", dependencies=[Depends(verify_api_key)])
+@app.get("/event/{event_key}/rankings", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
 async def get_event_rankings_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventRankingsResponse:
     return event_rankings.get_event_rankings(db, event_key)
 
-@app.get("/authorize", dependencies=[Depends(verify_api_key)])
+@app.get("/event/{event_key}/event_perfs", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
+async def get_event_perfs(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventPerfsResponse:
+    return event_perfs.get_event_perfs(db, event_key)
+
+@app.get("/authorize", dependencies=[Depends(verify_api_key)], tags=["Authentication"])
 async def authorize_user():
     return {"authorized": True}
