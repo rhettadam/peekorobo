@@ -1,5 +1,8 @@
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
+
+class TeamAwardsQuery(BaseModel):
+    year: Optional[int] = None
 
 class TeamAwardData(BaseModel):
     event_key: str

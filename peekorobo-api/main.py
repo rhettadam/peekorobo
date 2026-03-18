@@ -1,7 +1,8 @@
 from typing import Annotated, Optional
 from time import time
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, Path, Depends, Header, HTTPException, status
+from fastapi import FastAPI, Query, Path, Depends, Security, HTTPException, status
+from fastapi.security import APIKeyHeader
 from query.teams import TeamQuery, TeamResponse
 from query.events import EventQuery, EventResponse
 from query.team_epas import TeamPerfRequest, TeamPerfResponse, TeamPerfListRequest, TeamPerfListResponse
@@ -9,8 +10,8 @@ from query.event_teams import EventTeamsQuery, EventTeamsResponse
 from query.event_matches import EventMatchesRequest, EventMatchResponse
 from query.event_awards import EventAwardsResponse
 from query.event_rankings import EventRankingsResponse
-from query.team_awards import TeamAwardsResponse
-from query.team_events import TeamEventsResponse
+from query.team_awards import TeamAwardsResponse, TeamAwardsQuery
+from query.team_events import TeamEventsResponse, TeamEventsQuery
 from data.db import SessionLocal
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -48,8 +49,10 @@ def get_db():
     finally:
         db.close()
 
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
 def verify_api_key(
-    api_key: Annotated[Optional[str], Header(alias="X-API-Key")] = None,
+    api_key: Optional[str] = Security(api_key_header),
     db: Session = Depends(get_db)
 ):
     if not api_key:
@@ -79,7 +82,21 @@ def verify_api_key(
 
     _auth_cache[api_key] = now
 
-app = FastAPI()
+API_TITLE = "Peekorobo API"
+API_DESCRIPTION = """
+## Overview
+
+Information and statistics about FIRST Robotics Competition teams and events. Data includes team performance metrics (ACE/RAW), event rankings, matches, awards, and more.
+
+## Authentication
+
+All endpoints require an API key to be passed in the header **X-API-Key**. If you do not have an API key yet, you can obtain one from your [Account Page](https://www.peekorobo.com/account) on Peekorobo.
+"""
+
+app = FastAPI(
+    title=API_TITLE,
+    description=API_DESCRIPTION,
+)
 
 @app.get("/")
 async def hello():
@@ -102,12 +119,20 @@ async def get_team_perfs(team_number : Annotated[int, Path(title="Team number")]
     return team_epas.get_team_epa(db, team_number, query)
 
 @app.get("/team/{team_number}/awards", dependencies=[Depends(verify_api_key)])
-async def get_team_awards(team_number: Annotated[int, Path(title="Team number")], db: Session = Depends(get_db)) -> TeamAwardsResponse:
-    return team_awards.get_team_awards(db, team_number)
+async def get_team_awards(team_number: Annotated[int, Path(title="Team number")], query: TeamAwardsQuery = Depends(), db: Session = Depends(get_db)) -> TeamAwardsResponse:
+    return team_awards.get_team_awards(db, team_number, query)
+
+@app.get("/team/{team_number}/awards/{year}", dependencies=[Depends(verify_api_key)])
+async def get_team_awards_by_year(team_number: Annotated[int, Path(title="Team number")], year: Annotated[int, Path(title="Year")], db: Session = Depends(get_db)) -> TeamAwardsResponse:
+    return team_awards.get_team_awards(db, team_number, TeamAwardsQuery(year=year))
 
 @app.get("/team/{team_number}/events", dependencies=[Depends(verify_api_key)])
-async def get_team_events(team_number: Annotated[int, Path(title="Team number")], db: Session = Depends(get_db)) -> TeamEventsResponse:
-    return team_events.get_team_events(db, team_number)
+async def get_team_events(team_number: Annotated[int, Path(title="Team number")], query: TeamEventsQuery = Depends(), db: Session = Depends(get_db)) -> TeamEventsResponse:
+    return team_events.get_team_events(db, team_number, query)
+
+@app.get("/team/{team_number}/events/{year}", dependencies=[Depends(verify_api_key)])
+async def get_team_events_by_year(team_number: Annotated[int, Path(title="Team number")], year: Annotated[int, Path(title="Year")], db: Session = Depends(get_db)) -> TeamEventsResponse:
+    return team_events.get_team_events(db, team_number, TeamEventsQuery(year=year))
 
 @app.get("/event_teams/{event_key}", dependencies=[Depends(verify_api_key)])
 async def get_event_teams(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventTeamsQuery, Query()], db: Session = Depends(get_db)) -> EventTeamsResponse:
