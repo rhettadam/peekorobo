@@ -1,8 +1,20 @@
-from sqlalchemy import Text, select, ScalarResult
+from sqlalchemy import Text, select, ScalarResult, or_, func
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from typing import List, Optional
 from data.db import Base
 from query.teams import TeamQuery, TeamResponse, TeamData
+
+def _district_match(column, district_key: str):
+    """Match district_key (handles 2024fim or FIM format)."""
+    dk = (district_key or "").strip()
+    if not dk:
+        return None
+    if len(dk) > 4 and dk[:4].isdigit():
+        return column.ilike(dk)
+    return or_(
+        column.ilike(dk),
+        (func.length(column) > 4) & (func.substring(column, 5).ilike(dk)),
+    )
 
 class Teams(Base):
     __tablename__="teams"
@@ -30,6 +42,10 @@ def get_teams(db : Session, query : TeamQuery) -> TeamResponse:
         whereargs.append(Teams.city == query.city)
     if query.country:
         whereargs.append(Teams.country == query.country)
+    if query.district_key:
+        cond = _district_match(Teams.district_key, query.district_key)
+        if cond is not None:
+            whereargs.append(cond)
     if query.team_number:
         whereargs.append(Teams.team_number == query.team_number)
     if query.next_team_number:

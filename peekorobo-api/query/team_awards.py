@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 class TeamAwardsQuery(BaseModel):
     year: Optional[int] = None
+    district_key: Optional[str] = None
 
 class TeamAwardData(BaseModel):
     event_key: str

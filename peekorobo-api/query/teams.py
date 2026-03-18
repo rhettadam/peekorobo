@@ -6,6 +6,7 @@ class TeamQuery(BaseModel):
     limit: Optional[int] = Field(100, gt=0, le=100)
     city: Optional[str]= None
     country : Optional[str] = None
+    district_key: Optional[str] = None
     team_number: Optional[int] = Field(None,gt=0)
     next_team_number: Optional[int] = Field(None, gt=0)
 

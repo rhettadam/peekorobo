@@ -6,6 +6,7 @@ class EventQuery(BaseModel):
     city : Optional[str] = None
     state_prov : Optional[str] = None
     country : Optional[str] = None
+    district_key : Optional[str] = None
     limit : Optional[int] = None
 
 class EventMetaInfo(BaseModel):

@@ -1,10 +1,22 @@
 import datetime
 from typing import Optional
 from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy import Text, INT, select, func
+from sqlalchemy import Text, INT, select, func, or_
 from sqlalchemy.orm import Mapped, mapped_column, Session, QueryEvents
 from data.db import Base
 from query.events import EventQuery, EventResponse, LocationInfo, EventMetaInfo, EventData
+
+def _district_match(column, district_key: str):
+    """Match district_key (handles 2024fim or FIM format)."""
+    dk = (district_key or "").strip()
+    if not dk:
+        return None
+    if len(dk) > 4 and dk[:4].isdigit():
+        return column.ilike(dk)
+    return or_(
+        column.ilike(dk),
+        (func.length(column) > 4) & (func.substring(column, 5).ilike(dk)),
+    )
 
 class Events(Base):
     __tablename__="events"
@@ -56,12 +68,16 @@ def get_events(db: Session, event_year : int, event_query : EventQuery) -> Event
         next=None
     )
 
-def get_event_keys(db: Session, year: int):
-    """Return event keys for a given year, sorted by start_date."""
+def get_event_keys(db: Session, year: int, district_key: Optional[str] = None):
+    """Return event keys for a given year, sorted by start_date. Optionally filter by district."""
     stmt = (
         select(Events.event_key)
         .where(func.extract('year', Events.start_date) == year)
-        .order_by(Events.start_date)
     )
+    if district_key:
+        cond = _district_match(Events.district_key, district_key)
+        if cond is not None:
+            stmt = stmt.where(cond)
+    stmt = stmt.order_by(Events.start_date)
     result = db.scalars(stmt)
     return list(result.scalars().all())

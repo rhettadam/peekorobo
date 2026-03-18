@@ -11,8 +11,8 @@ from query.event_keys import EventKeysResponse
 from query.team_epas import TeamPerfRequest, TeamPerfResponse, TeamPerfListRequest, TeamPerfListResponse
 from query.event_teams import EventTeamsQuery, EventTeamsResponse
 from query.event_matches import EventMatchesRequest, EventMatchResponse
-from query.event_awards import EventAwardsResponse
-from query.event_rankings import EventRankingsResponse
+from query.event_awards import EventAwardsResponse, EventAwardsQuery
+from query.event_rankings import EventRankingsResponse, EventRankingsQuery
 from query.event_perfs import EventPerfsResponse, EventPerfInfo
 from query.team_awards import TeamAwardsResponse, TeamAwardsQuery
 from query.team_events import TeamEventsResponse, TeamEventsQuery
@@ -198,8 +198,8 @@ async def get_teams(filter_query: Annotated[TeamQuery, Query()], db : Session = 
     return teams.get_teams(db = db, query = filter_query)
 
 @app.get("/events/{year}/keys", dependencies=[Depends(verify_api_key)], tags=["Events"])
-async def get_event_keys(year: Annotated[int, Path(title="Year")], db: Session = Depends(get_db)) -> EventKeysResponse:
-    keys = events.get_event_keys(db, year)
+async def get_event_keys(year: Annotated[int, Path(title="Year")], district_key: Optional[str] = Query(None, description="Filter by district (e.g. fim or 2024fim)"), db: Session = Depends(get_db)) -> EventKeysResponse:
+    keys = events.get_event_keys(db, year, district_key)
     return EventKeysResponse(year=year, keys=keys)
 
 @app.get("/events/{year}", response_model=EventResponse, dependencies=[Depends(verify_api_key)], tags=["Events"])
@@ -239,13 +239,21 @@ async def get_event_teams_nested(event_key: Annotated[str, Path(title="Event key
 async def get_event_matches_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: Annotated[EventMatchesRequest, Query()], db: Session = Depends(get_db)) -> EventMatchResponse:
     return event_matches.get_event_matches(db, event_key, query)
 
+@app.get("/event/{event_key}/awards/{team_number}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
+async def get_event_awards_by_team(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], team_number: Annotated[int, Path(title="Team number")], db: Session = Depends(get_db)) -> EventAwardsResponse:
+    return event_awards.get_event_awards(db, event_key, EventAwardsQuery(team_number=team_number))
+
 @app.get("/event/{event_key}/awards", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
-async def get_event_awards_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventAwardsResponse:
-    return event_awards.get_event_awards(db, event_key)
+async def get_event_awards(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: EventAwardsQuery = Depends(), db: Session = Depends(get_db)) -> EventAwardsResponse:
+    return event_awards.get_event_awards(db, event_key, query)
+
+@app.get("/event/{event_key}/rankings/{team_number}", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
+async def get_event_rankings_by_team(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], team_number: Annotated[int, Path(title="Team number")], db: Session = Depends(get_db)) -> EventRankingsResponse:
+    return event_rankings.get_event_rankings(db, event_key, EventRankingsQuery(team_number=team_number))
 
 @app.get("/event/{event_key}/rankings", dependencies=[Depends(verify_api_key)], tags=["Event Data"])
-async def get_event_rankings_nested(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], db: Session = Depends(get_db)) -> EventRankingsResponse:
-    return event_rankings.get_event_rankings(db, event_key)
+async def get_event_rankings(event_key: Annotated[str, Path(title="Event key (e.g. 2024cmp)")], query: EventRankingsQuery = Depends(), db: Session = Depends(get_db)) -> EventRankingsResponse:
+    return event_rankings.get_event_rankings(db, event_key, query)
 
 def _parse_team_key(team_key: str) -> int:
     """Parse team_key (e.g. '254' or 'frc254') to team number."""

@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import INT, REAL, select
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from data.db import Base
+from data.models.teams import Teams, _district_match
 from query.team_epas import TeamPerfRequest, TeamPerfResponse, TeamPerfInfo, TeamPerfListRequest, TeamPerfListResponse
 
 class TeamEpa(Base):
@@ -59,6 +60,10 @@ def get_team_epa(db : Session, team_number : int, query: TeamPerfRequest) -> Tea
 
 def get_team_perfs_list(db: Session, query: TeamPerfListRequest) -> TeamPerfListResponse:
     stmt = select(TeamEpa).where(TeamEpa.year == query.year)
+    if query.district_key:
+        cond = _district_match(Teams.district_key, query.district_key)
+        if cond is not None:
+            stmt = stmt.join(Teams, TeamEpa.team_number == Teams.team_number).where(cond)
     if query.next_team_number is not None:
         stmt = stmt.where(TeamEpa.team_number > query.next_team_number)
     stmt = stmt.order_by(TeamEpa.team_number).limit(query.limit + 1)
