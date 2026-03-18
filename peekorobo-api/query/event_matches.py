@@ -5,10 +5,6 @@ class EventMatchesRequest(BaseModel):
     match_key : Optional[str] = None
     team_number : Optional[str] = None
 
-class EventMatchResponse(BaseModel):
-    event_key : str
-    matches : List[MatchResponse]
-
 class MatchResponse(BaseModel):
     match_key : str
     comp_level : str
@@ -23,3 +19,7 @@ class MatchResponse(BaseModel):
     predicted_time : Optional[int] = None
     red_win_prob : Optional[float] = None
     blue_win_prob : Optional[float] = None
+
+class EventMatchResponse(BaseModel):
+    event_key : str
+    matches : List[MatchResponse]
