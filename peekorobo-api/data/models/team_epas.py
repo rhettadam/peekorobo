@@ -60,10 +60,17 @@ def get_team_epa(db : Session, team_number : int, query: TeamPerfRequest) -> Tea
 
 def get_team_perfs_list(db: Session, query: TeamPerfListRequest) -> TeamPerfListResponse:
     stmt = select(TeamEpa).where(TeamEpa.year == query.year)
-    if query.district_key:
-        cond = _district_match(Teams.district_key, query.district_key)
-        if cond is not None:
-            stmt = stmt.join(Teams, TeamEpa.team_number == Teams.team_number).where(cond)
+    needs_teams_join = query.city or query.country or query.district_key
+    if needs_teams_join:
+        stmt = stmt.join(Teams, TeamEpa.team_number == Teams.team_number)
+        if query.city:
+            stmt = stmt.where(Teams.city == query.city)
+        if query.country:
+            stmt = stmt.where(Teams.country == query.country)
+        if query.district_key:
+            cond = _district_match(Teams.district_key, query.district_key)
+            if cond is not None:
+                stmt = stmt.where(cond)
     if query.next_team_number is not None:
         stmt = stmt.where(TeamEpa.team_number > query.next_team_number)
     stmt = stmt.order_by(TeamEpa.team_number).limit(query.limit + 1)

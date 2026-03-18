@@ -55,29 +55,43 @@ def get_events(db: Session, event_year : int, event_query : EventQuery) -> Event
         where_clause.append(Events.state_prov == event_query.state_prov)
     if event_query.country is not None:
         where_clause.append(Events.country == event_query.country)
+    if event_query.district_key:
+        cond = _district_match(Events.district_key, event_query.district_key)
+        if cond is not None:
+            where_clause.append(cond)
     where_clause.append(func.extract('year',Events.start_date) == event_year)
-     
+
     stmt = select(Events).where(*where_clause).order_by(Events.start_date)
+    if event_query.limit is not None:
+        stmt = stmt.limit(event_query.limit)
 
     result = db.scalars(stmt)
+    event_list = list(map(build_events_response, result.all()))
 
-    events = list(map(build_events_response, result.all()))
-    
     return EventResponse(
-        events=events,
+        events=event_list,
         next=None
     )
 
-def get_event_keys(db: Session, year: int, district_key: Optional[str] = None):
-    """Return event keys for a given year, sorted by start_date. Optionally filter by district."""
+def get_event_keys(db: Session, year: int, event_query: EventQuery):
+    """Return event keys for a given year, sorted by start_date. Uses same filters as get_events."""
+    where_clause = [func.extract('year', Events.start_date) == year]
+    if event_query.city is not None:
+        where_clause.append(Events.city == event_query.city)
+    if event_query.state_prov is not None:
+        where_clause.append(Events.state_prov == event_query.state_prov)
+    if event_query.country is not None:
+        where_clause.append(Events.country == event_query.country)
+    if event_query.district_key:
+        cond = _district_match(Events.district_key, event_query.district_key)
+        if cond is not None:
+            where_clause.append(cond)
     stmt = (
         select(Events.event_key)
-        .where(func.extract('year', Events.start_date) == year)
+        .where(*where_clause)
+        .order_by(Events.start_date)
     )
-    if district_key:
-        cond = _district_match(Events.district_key, district_key)
-        if cond is not None:
-            stmt = stmt.where(cond)
-    stmt = stmt.order_by(Events.start_date)
+    if event_query.limit is not None:
+        stmt = stmt.limit(event_query.limit)
     result = db.scalars(stmt)
     return list(result.scalars().all())

@@ -198,13 +198,13 @@ async def get_teams(filter_query: Annotated[TeamQuery, Query()], db : Session = 
     return teams.get_teams(db = db, query = filter_query)
 
 @app.get("/events/{year}/keys", dependencies=[Depends(verify_api_key)], tags=["Events"])
-async def get_event_keys(year: Annotated[int, Path(title="Year")], district_key: Optional[str] = Query(None, description="Filter by district (e.g. fim or 2024fim)"), db: Session = Depends(get_db)) -> EventKeysResponse:
-    keys = events.get_event_keys(db, year, district_key)
+async def get_event_keys(year: Annotated[int, Path(title="Year")], query: Annotated[EventQuery, Query()], db: Session = Depends(get_db)) -> EventKeysResponse:
+    keys = events.get_event_keys(db, year, query)
     return EventKeysResponse(year=year, keys=keys)
 
 @app.get("/events/{year}", response_model=EventResponse, dependencies=[Depends(verify_api_key)], tags=["Events"])
-async def get_events(year : Annotated[int , Path(title="Events from this year")], query : Annotated[EventQuery, Query()]) -> EventResponse:
-    return EventResponse(events=[], next=None)
+async def get_events(year : Annotated[int , Path(title="Events from this year")], query : Annotated[EventQuery, Query()], db: Session = Depends(get_db)) -> EventResponse:
+    return events.get_events(db, year, query)
 
 @app.get("/team_perfs", dependencies=[Depends(verify_api_key)], tags=["Teams"])
 async def get_team_perfs_list(query: TeamPerfListRequest = Depends(), db: Session = Depends(get_db)) -> TeamPerfListResponse:
