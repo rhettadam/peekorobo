@@ -29,7 +29,7 @@ import time
 
 from datagather import load_data_current_year,load_search_data,load_year_data,get_team_avatar,DatabaseConnection,get_team_years_participated
 
-from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,duel_layout,build_recent_events_section,get_team_district_options,api_docs_layout
+from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,duel_layout,build_recent_events_section,get_team_district_options
 
 from utils import format_human_date,calculate_all_ranks,calculate_single_rank,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_event_week_label_from_number,event_card,truncate_name,get_team_data_with_fallback,normalize_district_key
 
@@ -386,9 +386,6 @@ def display_page(pathname):
 
     if pathname == "/duel":
         return duel_layout()
-
-    if pathname == "/api-docs":
-        return api_docs_layout()
 
     return home_layout
 
