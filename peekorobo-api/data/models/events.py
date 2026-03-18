@@ -55,3 +55,13 @@ def get_events(db: Session, event_year : int, event_query : EventQuery) -> Event
         events=events,
         next=None
     )
+
+def get_event_keys(db: Session, year: int):
+    """Return event keys for a given year, sorted by start_date."""
+    stmt = (
+        select(Events.event_key)
+        .where(func.extract('year', Events.start_date) == year)
+        .order_by(Events.start_date)
+    )
+    result = db.scalars(stmt)
+    return list(result.scalars().all())

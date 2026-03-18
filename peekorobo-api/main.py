@@ -7,6 +7,7 @@ from fastapi.security import APIKeyHeader
 from fastapi.openapi.docs import get_swagger_ui_html
 from query.teams import TeamQuery, TeamResponse
 from query.events import EventQuery, EventResponse
+from query.event_keys import EventKeysResponse
 from query.team_epas import TeamPerfRequest, TeamPerfResponse, TeamPerfListRequest, TeamPerfListResponse
 from query.event_teams import EventTeamsQuery, EventTeamsResponse
 from query.event_matches import EventMatchesRequest, EventMatchResponse
@@ -28,6 +29,7 @@ import data.models.event_rankings as event_rankings
 import data.models.event_perfs as event_perfs
 import data.models.team_awards as team_awards
 import data.models.team_events as team_events
+import data.models.events as events
 
 load_dotenv()
 
@@ -194,6 +196,11 @@ async def hello():
 @app.get("/teams", dependencies=[Depends(verify_api_key)], tags=["Teams"])
 async def get_teams(filter_query: Annotated[TeamQuery, Query()], db : Session = Depends(get_db)) -> TeamResponse:
     return teams.get_teams(db = db, query = filter_query)
+
+@app.get("/events/{year}/keys", dependencies=[Depends(verify_api_key)], tags=["Events"])
+async def get_event_keys(year: Annotated[int, Path(title="Year")], db: Session = Depends(get_db)) -> EventKeysResponse:
+    keys = events.get_event_keys(db, year)
+    return EventKeysResponse(year=year, keys=keys)
 
 @app.get("/events/{year}", response_model=EventResponse, dependencies=[Depends(verify_api_key)], tags=["Events"])
 async def get_events(year : Annotated[int , Path(title="Events from this year")], query : Annotated[EventQuery, Query()]) -> EventResponse:
