@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy import Text, INT, select, func
 from sqlalchemy.orm import Mapped, mapped_column, Session, QueryEvents
-from db import Base
+from data.db import Base
 from query.events import EventQuery, EventResponse, LocationInfo, EventMetaInfo, EventData
 
 class Events(Base):

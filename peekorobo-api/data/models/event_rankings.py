@@ -15,7 +15,11 @@ class EventRankings(Base):
     dq : Mapped[int] = mapped_column(INT)
 
 def get_event_rankings(db: Session, event_key: str) -> EventRankingsResponse:
-    stmt = select(EventRankings).where(EventRankings.event_key == event_key).order_by(EventRankings.rank)
+    stmt = (
+        select(EventRankings)
+        .where(EventRankings.event_key == event_key)
+        .order_by(EventRankings.rank, EventRankings.team_number)
+    )
     result = db.scalars(stmt)
     rows = result.all()
     event_rankings = [

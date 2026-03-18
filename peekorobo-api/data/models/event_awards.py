@@ -11,7 +11,11 @@ class EventAwards(Base):
     award_name : Mapped[str] = mapped_column(Text)
 
 def get_event_awards(db: Session, event_key: str) -> EventAwardsResponse:
-    stmt = select(EventAwards).where(EventAwards.event_key == event_key).order_by(EventAwards.team_number, EventAwards.award_name)
+    stmt = (
+        select(EventAwards)
+        .where(EventAwards.event_key == event_key)
+        .order_by(EventAwards.award_name, EventAwards.team_number)
+    )
     result = db.scalars(stmt)
     rows = result.all()
     teams_and_awards = [AwardData(team_number=r.team_number, award_name=r.award_name or "") for r in rows]
