@@ -63,18 +63,10 @@ def _reload_current_year_cache():
     except Exception as e:
         print(f"[peekorobo] Cache reload failed: {e}", flush=True)
 
-# Initial load
+# Initial load only.
+# The app is expected to be restarted after scheduler completion
+# instead of periodically reloading cache in-process.
 _reload_current_year_cache()
-
-def _cache_reload_loop():
-    """Background loop: reload current-year cache every 10 minutes."""
-    while True:
-        time.sleep(600)  # 10 minutes
-        _reload_current_year_cache()
-        print("[peekorobo] Current-year cache reloaded", flush=True)
-
-_cache_thread = threading.Thread(target=_cache_reload_loop, daemon=True)
-_cache_thread.start()
 
 # Load optimized data: search data with all events (static, loaded once)
 SEARCH_TEAM_DATA, SEARCH_EVENT_DATA = load_search_data()

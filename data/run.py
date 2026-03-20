@@ -224,6 +224,32 @@ def cleanup_connection(conn):
         except Exception as e:
             print(f"Warning: Error closing connection: {e}")
 
+def restart_heroku_app():
+    # Restart the Heroku app to reload updated data.
+    app_name = os.environ.get("HEROKU_APP_NAME")
+    api_key = os.environ.get("HEROKU_API_KEY")
+
+    if not app_name or not api_key:
+        print("HEROKU_APP_NAME or HEROKU_API_KEY not set, skipping app restart")
+        return
+
+    try:
+        url = f"https://api.heroku.com/apps/{app_name}/dynos"
+        headers = {
+            "Accept": "application/vnd.heroku+json; version=3",
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        # Restart all dynos.
+        response = requests.delete(url, headers=headers)
+        if response.status_code == 202:
+            print(f"Successfully restarted Heroku app: {app_name}")
+        else:
+            print(f"Failed to restart app: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"Error restarting app: {e}")
+
 # Robust retry for DB connection
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
 def get_pg_connection():
@@ -1345,6 +1371,8 @@ def fetch_and_store_team_data(year):
             calculate_and_store_match_predictions(year)
         except Exception as e:
             print(f"Failed to calculate match predictions for {year}: {e}")
+        finally:
+            restart_heroku_app()
 
 def get_team_experience(team_number: int, up_to_year: int) -> int:
     # Determine how many years a team has competed up to and including up_to_year.
@@ -1550,32 +1578,19 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
                 continue
 
+            red_score = match["alliances"]["red"]["score"]
+            blue_score = match["alliances"]["blue"]["score"]
+            winning_alliance = match.get("winning_alliance")
+
+            # Unplayed matches are typically 0-0 with no winning alliance.
+            # Skip them entirely so they do not inflate match_count or tie count.
+            if red_score == 0 and blue_score == 0 and winning_alliance not in ("red", "blue"):
+                continue
+
             match_count += 1
             early_weight = min(1.0, match_count / early_match_target) if match_count > 0 else 0.0
             alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
             opponent_alliance = "blue" if alliance == "red" else "red"
-
-            red_score = match["alliances"]["red"]["score"]
-            blue_score = match["alliances"]["blue"]["score"]
-            predicted_time = match.get("predicted_time")
-            if red_score == 0 and blue_score == 0 and predicted_time:
-                predicted_ts = None
-                if isinstance(predicted_time, int):
-                    predicted_ts = predicted_time
-                elif isinstance(predicted_time, str):
-                    try:
-                        if predicted_time.isdigit():
-                            predicted_ts = int(predicted_time)
-                        else:
-                            predicted_ts = datetime.fromisoformat(predicted_time.replace("Z", "+00:00")).timestamp()
-                    except Exception:
-                        predicted_ts = None
-                elif isinstance(predicted_time, datetime):
-                    predicted_ts = predicted_time.timestamp()
-
-                if predicted_ts and predicted_ts > time.time():
-                    # Skip unplayed matches (0-0) so they don't count as ties
-                    continue
 
             # Track wins/losses/ties (existing logic) ...
             if year == "2015":
