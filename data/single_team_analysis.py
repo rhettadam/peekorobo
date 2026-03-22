@@ -807,9 +807,9 @@ def analyze_single_team(team_key: str, year: int):
     print(f"\n{'='*50}")
     print(f"EPA Analysis for Team {team_key} ({year})")
     print(f"{'='*50}")
-    print(f"\nOverall EPA: {overall_epa_data['overall']}")
+    print(f"\nRAW: {overall_epa_data['raw']}")
     print(f"Overall Confidence: {overall_epa_data['confidence']}")
-    print(f"Actual Overall EPA: {overall_epa_data['actual_epa']}")
+    print(f"ACE: {overall_epa_data['ace']}")
     print(f"Overall Record: {overall_epa_data['wins']}-{overall_epa_data['losses']}-{overall_epa_data['ties']}")
     
     # Add note for demo teams
@@ -822,12 +822,12 @@ def analyze_single_team(team_key: str, year: int):
         print(f"{'='*50}")
         for event_epa in event_epa_results:
             print(f"\nEvent: {event_epa['event_key']}")
-            print(f"  Overall: {event_epa['raw']}")
+            print(f"  RAW: {event_epa['raw']}")
             print(f"  Auto: {event_epa['auto_raw']}")
             print(f"  Teleop: {event_epa['teleop_raw']}")
             print(f"  Endgame: {event_epa['endgame_raw']}")
             print(f"  Confidence: {event_epa['confidence']}")
-            print(f"  Actual EPA: {event_epa['ace']}")
+            print(f"  ACE: {event_epa['ace']}")
             print(f"  Record: {event_epa['wins']}-{event_epa['losses']}-{event_epa['ties']}")
             print("  Confidence Breakdown:")
             weights = event_epa["weights"]

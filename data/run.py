@@ -302,7 +302,7 @@ def upsert_district(cur, district_key, district_abbrev, district_name):
         pass  # districts table may not exist yet
 
 def insert_event_data(all_data, year):
-    # Insert event, teams, rankings, matches, and awards into PostgreSQL
+    # Insert event, teams, rankings, and matches into PostgreSQL (awards handled by run_awards.py)
     conn = get_pg_connection()
     cur = conn.cursor()
     for i, data in enumerate(tqdm(all_data, desc=f'Inserting {year} events')):
@@ -375,13 +375,6 @@ def insert_event_data(all_data, year):
                     youtube_key = EXCLUDED.youtube_key,
                     predicted_time = EXCLUDED.predicted_time
             """, data["matches"])
-        # Insert awards
-        if data["awards"]:
-            cur.executemany("""
-                INSERT INTO event_awards (event_key, team_number, award_name)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (event_key, team_number, award_name) DO NOTHING
-            """, data["awards"])
     conn.commit()
     cur.close()
     conn.close()
@@ -598,12 +591,6 @@ def get_existing_event_data(event_key):
     if not matches:
         matches = {}
     
-    # Get awards
-    cur.execute("SELECT team_number, award_name FROM event_awards WHERE event_key = %s", (event_key,))
-    awards = set((row[0], row[1]) for row in cur.fetchall())
-    if not awards:
-        awards = set()
-    
     cur.close()
     conn.close()
     
@@ -612,7 +599,6 @@ def get_existing_event_data(event_key):
         "teams": teams,
         "rankings": rankings,
         "matches": matches,
-        "awards": awards
     }
 
 def event_has_started(event_key, start_date):
@@ -830,12 +816,6 @@ def data_has_changed(existing, new_data, data_type):
         
         return False
     
-    elif data_type == "awards":
-        existing_awards = existing["awards"]
-        new_awards = set((award[1], award[2]) for award in new_data["awards"])
-        
-        return existing_awards != new_awards
-    
     elif data_type == "team_epa":
         # For team EPA, we'll do a more detailed comparison
         if not existing:
@@ -972,7 +952,7 @@ def create_event_db(year):
                 (event.get("webcasts", [{}]) or [{}])[0].get("channel"),
                 event_week
             ),
-            "teams": [], "rankings": [], "matches": [], "awards": []
+            "teams": [], "rankings": [], "matches": []
         }
         
         # Fetch teams once
@@ -1070,33 +1050,12 @@ def create_event_db(year):
         except:
             pass
         
-        # Fetch awards
-        try:
-            awards = tba_get(f"event/{key}/awards")
-            if awards:
-                for aw in awards:
-                    for r in aw.get("recipient_list", []):
-                        if r.get("team_key"):
-                            team_key = r["team_key"]
-                            
-                            # Skip B teams
-                            if team_key.endswith("B"):
-                                continue
-                            
-                            # Normal team number extraction
-                            t_num = int(team_key[3:])
-                            
-                            new_data["awards"].append((key, t_num, aw.get("name")))
-        except:
-            pass
-        
         # Determine what needs updating
         updates_needed = {
             "event": data_has_changed(existing_data, new_data, "event"),
             "teams": data_has_changed(existing_data, new_data, "teams"),
             "rankings": data_has_changed(existing_data, new_data, "rankings"),
             "matches": data_has_changed(existing_data, new_data, "matches"),
-            "awards": data_has_changed(existing_data, new_data, "awards")
         }
         
         return {
@@ -1144,7 +1103,6 @@ def create_event_db(year):
     team_updates = sum(1 for r in all_results if r["updates_needed"]["teams"])
     ranking_updates = sum(1 for r in all_results if r["updates_needed"]["rankings"])
     match_updates = sum(1 for r in all_results if r["updates_needed"]["matches"])
-    award_updates = sum(1 for r in all_results if r["updates_needed"]["awards"])
     
     print(f"\n Update Summary for {year}:")
     print(f"  Total events processed: {total_events}")
@@ -1153,7 +1111,6 @@ def create_event_db(year):
     print(f"  Team data updates: {team_updates}")
     print(f"  Ranking updates: {ranking_updates}")
     print(f"  Match updates: {match_updates}")
-    print(f"  Award updates: {award_updates}")
 
     # Only update what's changed
     if events_with_changes > 0:
@@ -1233,24 +1190,6 @@ def insert_event_data(results, year):
                 INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, data["matches"])
-        
-        # Update awards if needed
-        if updates["awards"] and data["awards"]:
-            # Delete existing awards for this event and reinsert
-            cur.execute("DELETE FROM event_awards WHERE event_key = %s", (data["event"][0],))
-            # Deduplicate awards
-            seen = set()
-            deduped_awards = []
-            for award in data["awards"]:
-                key = (award[0], award[1], award[2])
-                if key not in seen:
-                    seen.add(key)
-                    deduped_awards.append(award)
-            cur.executemany("""
-                INSERT INTO event_awards (event_key, team_number, award_name)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (event_key, team_number, award_name) DO NOTHING
-            """, deduped_awards)
     
     conn.commit()
     cur.close()
