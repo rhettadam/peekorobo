@@ -301,72 +301,6 @@ def upsert_district(cur, district_key, district_abbrev, district_name):
     except Exception:
         pass  # districts table may not exist yet
 
-def insert_event_data(all_data, year):
-    # Insert event, teams, and matches into PostgreSQL (awards/rankings handled by run_awards.py, run_rankings.py)
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    for i, data in enumerate(tqdm(all_data, desc=f'Inserting {year} events')):
-        ev = data["event"]
-        upsert_district(cur, ev[4], ev[5], ev[6])  # district_key, district_abbrev, district_name
-        # Insert event
-        cur.execute("""
-            INSERT INTO events (
-                event_key, name, start_date, end_date, event_type,
-                district_key, district_abbrev, district_name,
-                city, state_prov, country, website, webcast_type, webcast_channel, week
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (event_key) DO UPDATE SET
-                name = EXCLUDED.name,
-                start_date = EXCLUDED.start_date,
-                end_date = EXCLUDED.end_date,
-                event_type = EXCLUDED.event_type,
-                district_key = EXCLUDED.district_key,
-                district_abbrev = EXCLUDED.district_abbrev,
-                district_name = EXCLUDED.district_name,
-                city = EXCLUDED.city,
-                state_prov = EXCLUDED.state_prov,
-                country = EXCLUDED.country,
-                website = EXCLUDED.website,
-                webcast_type = EXCLUDED.webcast_type,
-                webcast_channel = EXCLUDED.webcast_channel,
-                week = EXCLUDED.week
-        """, data["event"])
-        # Insert teams (filter out teams with null team_number)
-        if data["teams"]:
-            valid_teams = [team for team in data["teams"] if team[1] is not None]
-            if valid_teams:
-                cur.executemany("""
-                    INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (event_key, team_number) DO UPDATE SET
-                        nickname = EXCLUDED.nickname,
-                        city = EXCLUDED.city,
-                        state_prov = EXCLUDED.state_prov,
-                        country = EXCLUDED.country
-                """, valid_teams)
-        # Insert matches
-        if data["matches"]:
-            cur.executemany("""
-                INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (match_key) DO UPDATE SET
-                    event_key = EXCLUDED.event_key,
-                    comp_level = EXCLUDED.comp_level,
-                    match_number = EXCLUDED.match_number,
-                    set_number = EXCLUDED.set_number,
-                    red_teams = EXCLUDED.red_teams,
-                    blue_teams = EXCLUDED.blue_teams,
-                    red_score = EXCLUDED.red_score,
-                    blue_score = EXCLUDED.blue_score,
-                    winning_alliance = EXCLUDED.winning_alliance,
-                    youtube_key = EXCLUDED.youtube_key,
-                    predicted_time = EXCLUDED.predicted_time
-            """, data["matches"])
-    conn.commit()
-    cur.close()
-    conn.close()
-
 def upsert_team_profile(result):
     # Insert or update a team's general profile data
     conn = get_pg_connection()
@@ -914,11 +848,7 @@ def create_event_db(year):
                 print(f"DEBUG: No teams found for event {key} - continuing with event data only")
                 # Don't return None - continue processing the event even without teams
             else:
-                # Filter out B teams (use team_key - the canonical TBA identifier) but don't skip the event
                 for t in teams:
-                    team_key_str = t.get("team_key", f"frc{t.get('team_number')}")
-                    if team_key_str.endswith("B"):
-                        continue  # Skip B team, don't add to event_teams
                     team_number = t.get("team_number")
                     if team_number is None:
                         print(f"DEBUG: Skipping team with null team_number in event {key}: {t.get('nickname', 'Unknown')}")
@@ -943,20 +873,13 @@ def create_event_db(year):
                 # Store raw matches in cache for team processing
                 match_cache[key] = matches
                 for m in matches:
-                    # Skip matches with B teams
                     red_teams = []
                     blue_teams = []
-                    
-                    # Check if any B teams in this match
-                    has_b_teams = any(team_key.endswith("B") for team_key in m["alliances"]["red"]["team_keys"] + m["alliances"]["blue"]["team_keys"])
-                    if has_b_teams:
-                        continue  # Skip this match
-                    
+
                     for team_key in m["alliances"]["red"]["team_keys"]:
-                        red_teams.append(str(int(team_key[3:])))
-                    
+                        red_teams.append(str(int(team_key[3:].rstrip("B"))))
                     for team_key in m["alliances"]["blue"]["team_keys"]:
-                        blue_teams.append(str(int(team_key[3:])))
+                        blue_teams.append(str(int(team_key[3:].rstrip("B"))))
                     
                     # Get first YouTube video if available
                     videos = m.get("videos", [])
@@ -973,8 +896,8 @@ def create_event_db(year):
                         best_video,
                         m.get("predicted_time")
                     ))
-        except:
-            pass
+        except Exception as e:
+            print(f"Error fetching matches for event {key}: {e}")
         
         # Determine what needs updating
         updates_needed = {
@@ -1190,8 +1113,8 @@ def fetch_and_store_team_data(year):
                 try:
                     if hasattr(future, '_args') and future._args:
                         team_info = f"Team {future._args[0].get('team_number', 'Unknown')}"
-                except:
-                    pass
+                except Exception:
+                    pass  # Keep team_info as "Unknown team"
                 failed_teams.append(f"{team_info}: {str(e)}")
                 print(f"Failed to process {team_info}: {e}")
                 continue
@@ -2081,42 +2004,33 @@ def fetch_team_components(team, year):
 # Import the function from the new file
 
 
+def finalize():
+    """Clean up executors/connections and print runtime. Call from main entry point."""
+    print("\nPerforming final cleanup...")
+    for executor in active_executors:
+        cleanup_executor(executor)
+    for conn in active_connections:
+        cleanup_connection(conn)
+    print("Cleanup complete.")
+    elapsed = time.time() - start_time
+    print(f"\nScript runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
+
+
 def main():
     print("\nEPA Calculator")
     print("="*20)
-    
+    year = input("Enter year (e.g., 2025): ").strip()
     try:
-        year = input("Enter year (e.g., 2025): ").strip()
-        try:
-            year = int(year)
-        except ValueError:
-            print("Invalid year. Please enter a valid year.")
-            return
-            
-        fetch_and_store_team_data(year)
+        year = int(year)
+    except ValueError:
+        print("Invalid year. Please enter a valid year.")
+        return
+    fetch_and_store_team_data(year)
 
-    except KeyboardInterrupt:
-        print("\nInterrupted by user (Ctrl+C)")
-    except Exception as e:
-        print(f"\nUnexpected error: {e}")
-    finally:
-        # Final cleanup
-        print("\nPerforming final cleanup...")
-        for executor in active_executors:
-            cleanup_executor(executor)
-        for conn in active_connections:
-            cleanup_connection(conn)
-        print("Cleanup complete.")
-        elapsed = time.time() - start_time
-        print(f"\nScript runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
 
 if __name__ == "__main__":
     try:
         if len(sys.argv) > 1:
-            # Command-line mode: python run.py 2025
-            if len(sys.argv) < 2:
-                print("Usage: python run.py <year>")
-                sys.exit(1)
             try:
                 year = int(sys.argv[1])
             except ValueError:
@@ -2130,12 +2044,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nUnexpected error: {e}")
     finally:
-        # Final cleanup
-        print("\nPerforming final cleanup...")
-        for executor in active_executors:
-            cleanup_executor(executor)
-        for conn in active_connections:
-            cleanup_connection(conn)
-        print("Cleanup complete.")
-        elapsed = time.time() - start_time
-        print(f"\nScript runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
+        finalize()
