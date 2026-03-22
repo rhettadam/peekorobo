@@ -302,7 +302,7 @@ def upsert_district(cur, district_key, district_abbrev, district_name):
         pass  # districts table may not exist yet
 
 def insert_event_data(all_data, year):
-    # Insert event, teams, rankings, and matches into PostgreSQL (awards handled by run_awards.py)
+    # Insert event, teams, and matches into PostgreSQL (awards/rankings handled by run_awards.py, run_rankings.py)
     conn = get_pg_connection()
     cur = conn.cursor()
     for i, data in enumerate(tqdm(all_data, desc=f'Inserting {year} events')):
@@ -345,18 +345,6 @@ def insert_event_data(all_data, year):
                         state_prov = EXCLUDED.state_prov,
                         country = EXCLUDED.country
                 """, valid_teams)
-        # Insert rankings
-        if data["rankings"]:
-            cur.executemany("""
-                INSERT INTO event_rankings (event_key, team_number, rank, wins, losses, ties, dq)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (event_key, team_number) DO UPDATE SET
-                    rank = EXCLUDED.rank,
-                    wins = EXCLUDED.wins,
-                    losses = EXCLUDED.losses,
-                    ties = EXCLUDED.ties,
-                    dq = EXCLUDED.dq
-            """, data["rankings"])
         # Insert matches
         if data["matches"]:
             cur.executemany("""
@@ -579,12 +567,6 @@ def get_existing_event_data(event_key):
     if not teams:
         teams = {}  # Ensure it's always a dict, not None
     
-    # Get rankings
-    cur.execute("SELECT team_number, rank, wins, losses, ties, dq FROM event_rankings WHERE event_key = %s", (event_key,))
-    rankings = {row[0]: {"rank": row[1], "wins": row[2], "losses": row[3], "ties": row[4], "dq": row[5]} for row in cur.fetchall()}
-    if not rankings:
-        rankings = {}
-    
     # Get matches
     cur.execute("SELECT match_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time FROM event_matches WHERE event_key = %s", (event_key,))
     matches = {row[0]: {"comp_level": row[1], "match_number": row[2], "set_number": row[3], "red_teams": row[4], "blue_teams": row[5], "red_score": row[6], "blue_score": row[7], "winning_alliance": row[8], "youtube_key": row[9], "predicted_time": row[10]} for row in cur.fetchall()}
@@ -597,7 +579,6 @@ def get_existing_event_data(event_key):
     return {
         "event": event_row,
         "teams": teams,
-        "rankings": rankings,
         "matches": matches,
     }
 
@@ -748,35 +729,6 @@ def data_has_changed(existing, new_data, data_type):
                 existing_team.get("city") != team_data[3] or
                 existing_team.get("state_prov") != team_data[4] or
                 existing_team.get("country") != team_data[5]
-            ):
-                return True
-        
-        return False
-    
-    elif data_type == "rankings":
-        existing_rankings = existing["rankings"]
-        new_rankings = new_data["rankings"]
-        
-        # Check if ranking lists are different
-        existing_team_nums = set(existing_rankings.keys())
-        new_team_nums = set(ranking[1] for ranking in new_rankings)
-        
-        if existing_team_nums != new_team_nums:
-            return True
-        
-        # Check if any ranking data has changed
-        for ranking_data in new_rankings:
-            team_num = ranking_data[1]
-            if team_num not in existing_rankings:
-                return True
-            
-            existing_ranking = existing_rankings[team_num]
-            if (
-                existing_ranking["rank"] != ranking_data[2] or
-                existing_ranking["wins"] != ranking_data[3] or
-                existing_ranking["losses"] != ranking_data[4] or
-                existing_ranking["ties"] != ranking_data[5] or
-                existing_ranking["dq"] != ranking_data[6]
             ):
                 return True
         
@@ -952,7 +904,7 @@ def create_event_db(year):
                 (event.get("webcasts", [{}]) or [{}])[0].get("channel"),
                 event_week
             ),
-            "teams": [], "rankings": [], "matches": []
+            "teams": [], "matches": []
         }
         
         # Fetch teams once
@@ -983,32 +935,6 @@ def create_event_db(year):
             print(f"DEBUG: Error processing teams for event {key}: {e}")
             # Don't return None on team fetch error - continue with event data
 
-        
-        # Fetch rankings
-        try:
-            ranks = tba_get(f"event/{key}/rankings")
-            if ranks and ranks.get("rankings"):
-                for r in ranks.get("rankings", []):
-                    team_key = r.get("team_key", "frc0")
-                    
-                    # Skip B teams
-                    if team_key.endswith("B"):
-                        continue
-                    
-                    # Normal team number extraction
-                    t_num = int(team_key[3:])
-                    
-                    if str(year) == "2015":
-                        qual_avg = r.get("qual_average")
-                        new_data["rankings"].append((key, t_num, r.get("rank"),
-                                                     qual_avg, None, None, r.get("dq")))
-                    else:
-                        record = r.get("record", {})
-                        new_data["rankings"].append((key, t_num, r.get("rank"),
-                                                     record.get("wins"), record.get("losses"),
-                                                     record.get("ties"), r.get("dq")))
-        except:
-            pass
         
         # Fetch matches
         try:
@@ -1054,7 +980,6 @@ def create_event_db(year):
         updates_needed = {
             "event": data_has_changed(existing_data, new_data, "event"),
             "teams": data_has_changed(existing_data, new_data, "teams"),
-            "rankings": data_has_changed(existing_data, new_data, "rankings"),
             "matches": data_has_changed(existing_data, new_data, "matches"),
         }
         
@@ -1101,7 +1026,6 @@ def create_event_db(year):
     events_with_changes = sum(1 for r in all_results if r["has_changes"])
     event_updates = sum(1 for r in all_results if r["updates_needed"]["event"])
     team_updates = sum(1 for r in all_results if r["updates_needed"]["teams"])
-    ranking_updates = sum(1 for r in all_results if r["updates_needed"]["rankings"])
     match_updates = sum(1 for r in all_results if r["updates_needed"]["matches"])
     
     print(f"\n Update Summary for {year}:")
@@ -1109,7 +1033,6 @@ def create_event_db(year):
     print(f"  Events with changes: {events_with_changes}")
     print(f"  Event data updates: {event_updates}")
     print(f"  Team data updates: {team_updates}")
-    print(f"  Ranking updates: {ranking_updates}")
     print(f"  Match updates: {match_updates}")
 
     # Only update what's changed
@@ -1172,15 +1095,6 @@ def insert_event_data(results, year):
                     INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """, valid_teams)
-        
-        # Update rankings if needed
-        if updates["rankings"] and data["rankings"]:
-            # Delete existing rankings for this event and reinsert
-            cur.execute("DELETE FROM event_rankings WHERE event_key = %s", (data["event"][0],))
-            cur.executemany("""
-                INSERT INTO event_rankings (event_key, team_number, rank, wins, losses, ties, dq)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, data["rankings"])
         
         # Update matches if needed
         if updates["matches"] and data["matches"]:
