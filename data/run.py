@@ -52,18 +52,18 @@ CONFIDENCE_WEIGHTS = {
 }
 
 CONFIDENCE_THRESHOLDS = {
-    "high": 0.85,  # Lower threshold for high confidence boost
-    "low": 0.65,   # Higher threshold for low confidence reduction
+    "high": 0.9,  # Lower threshold for high confidence boost
+    "low": 0.7,   # Higher threshold for low confidence reduction
 }
 
 CONFIDENCE_MULTIPLIERS = {
-    "high_boost": 1.1,  # Reduced multiplier for high confidence
-    "low_reduction": 0.9  # Increased multiplier for low confidence
+    "high_boost": 1.05,  # Reduced multiplier for high confidence
+    "low_reduction": 0.85  # Increased multiplier for low confidence
 }
 
 EVENT_BOOSTS = {
     1: 0.5,   # Single event
-    2: 0.9,  # Two events
+    2: 0.8,  # Two events
     3: 1.0    # Three or more events
 }
 
@@ -1166,6 +1166,8 @@ def get_veteran_boost(years: int) -> float:
         return 0.4
     elif years == 3:
         return 0.6
+    elif years == 5:
+        return 0.8
     else:
         return 1.0
 
