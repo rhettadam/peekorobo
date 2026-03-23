@@ -1351,6 +1351,7 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             endgame_func = endgame_2025
 
         early_match_target = 5
+        early_weight_floor = 0.75  # Don't over-decay early matches; they may show true performance
 
         for match in matches:
             if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
@@ -1366,7 +1367,7 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                 continue
 
             match_count += 1
-            early_weight = min(1.0, match_count / early_match_target) if match_count > 0 else 0.0
+            early_weight = max(early_weight_floor, min(1.0, match_count / early_match_target)) if match_count > 0 else early_weight_floor
             alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
             opponent_alliance = "blue" if alliance == "red" else "red"
 
@@ -1441,6 +1442,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                     teleop_epa = teleop * early_weight
                     continue
                 K = 0.4 * early_weight
+                if teleop_epa > 10 and teleop > teleop_epa * 1.4:
+                    K *= 0.5
                 # Fallback: always ensure teleop_epa is a float
                 try:
                     delta_teleop = K * (teleop - teleop_epa)
@@ -1489,6 +1492,12 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                 margin = actual_overall - opponent_score
                 scaled_margin = margin / (opponent_score + 1e-6)
                 norm_margin = (scaled_margin + 1) / 1.3
+                # Scale down dominance if team was carried (contributed less than alliance average)
+                alliance_total = match["alliances"][alliance]["score"] or 1
+                alliance_avg = alliance_total / team_count
+                contribution_share = actual_overall / (alliance_avg + 1e-6)
+                adjustment = min(1.0, contribution_share)
+                norm_margin = norm_margin * adjustment
                 dominance_scores.append(min(1.0, max(0.0, norm_margin)))
                 match_importance = importance.get(match.get("comp_level", "qm"), 1.0)
                 decay = early_weight
@@ -1500,6 +1509,9 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                     continue
                 K = 0.4
                 K *= match_importance * decay
+                # Dampen large positive surprises (possible carried matches) - don't let a few spikes overestimate
+                if overall_epa > 10 and actual_overall > overall_epa * 1.4:
+                    K *= 0.5
                 delta_auto = K * (actual_auto - auto_epa)
                 delta_teleop = K * (actual_teleop - teleop_epa)
                 delta_endgame = K * (actual_endgame - endgame_epa)
