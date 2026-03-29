@@ -35,15 +35,38 @@ current_year = 2026
 DEFAULT_TIMEZONE = 'America/Chicago'  # Central Time
 
 def get_team_district_options():
-    """District options for dropdown. Uses districts table from database."""
+    """District options for dropdown. Only districts that have at least one team or event in the DB."""
     try:
         with DatabaseConnection() as conn:
             cur = conn.cursor()
+            # Normalize TBA keys (e.g. 2024fim) to base code like the rest of the app; match districts.district_key.
             cur.execute("""
-                SELECT district_key, COALESCE(display_name, name) AS label
-                FROM districts
-                WHERE district_key !~ '^[0-9]{4}'
-                ORDER BY COALESCE(display_name, name)
+                SELECT d.district_key, COALESCE(d.display_name, d.name) AS label
+                FROM districts d
+                WHERE d.district_key !~ '^[0-9]{4}'
+                  AND (
+                    EXISTS (
+                        SELECT 1 FROM teams t
+                        WHERE t.district_key IS NOT NULL AND TRIM(t.district_key) <> ''
+                          AND (
+                            CASE WHEN t.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
+                                 THEN UPPER(SUBSTRING(t.district_key FROM 5))
+                                 ELSE UPPER(TRIM(t.district_key))
+                            END
+                          ) = d.district_key
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM events e
+                        WHERE e.district_key IS NOT NULL AND TRIM(e.district_key) <> ''
+                          AND (
+                            CASE WHEN e.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
+                                 THEN UPPER(SUBSTRING(e.district_key FROM 5))
+                                 ELSE UPPER(TRIM(e.district_key))
+                            END
+                          ) = d.district_key
+                    )
+                  )
+                ORDER BY COALESCE(d.display_name, d.name)
             """)
             rows = cur.fetchall()
             cur.close()
