@@ -1542,7 +1542,7 @@ def update_events_tab_content(
                 team_number = t["tk"]
                 team_data, actual_year = get_team_data_with_fallback(team_number, selected_year, team_database)
                 if team_data and team_data.get("ace") is not None:
-                    epa_values.append(team_data["epa"])
+                    epa_values.append(team_data["ace"])
     
             if not epa_values:
                 continue
