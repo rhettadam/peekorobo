@@ -1,8 +1,7 @@
-import datetime
 from typing import Optional
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy import Text, INT, select, func, or_
-from sqlalchemy.orm import Mapped, mapped_column, Session, QueryEvents
+from sqlalchemy.orm import Mapped, mapped_column, Session
 from data.db import Base
 from query.events import EventQuery, EventResponse, LocationInfo, EventMetaInfo, EventData
 
@@ -37,15 +36,29 @@ class Events(Base):
     district_name : Mapped[str] = mapped_column(Text)
     week : Mapped[Optional[int]] = mapped_column(INT)
 
-def build_events_response(event : Events) -> EventData:
-    meta_data = EventMetaInfo(name = "", start_date=datetime.datetime.now(), end_date=datetime.datetime.now(), event_type="")
-    location_info = LocationInfo(city = "", state_prov = "", country = "")
-    return EventData( event_key="",
-                          event_data = meta_data,
-                          location_info = location_info,
-                          website = None,
-                          webcast_type = None,
-                          webcast_channel = None)
+def build_events_response(event: Events) -> EventData:
+    meta_data = EventMetaInfo(
+        name=str(event.name),
+        start_date=event.start_date,
+        end_date=event.end_date,
+        event_type=str(event.event_type),
+    )
+    location_info = LocationInfo(
+        city=str(event.city),
+        state_prov=str(event.state_prov),
+        country=str(event.country),
+    )
+    ws = (event.website or "").strip()
+    wt = (event.webcast_type or "").strip()
+    wch = (event.webcast_channel or "").strip()
+    return EventData(
+        event_key=str(event.event_key),
+        event_data=meta_data,
+        location_info=location_info,
+        website=ws or None,
+        webcast_type=wt or None,
+        webcast_channel=wch or None,
+    )
 
 def get_events(db: Session, event_year : int, event_query : EventQuery) -> EventResponse:
     where_clause = []
@@ -93,5 +106,4 @@ def get_event_keys(db: Session, year: int, event_query: EventQuery):
     )
     if event_query.limit is not None:
         stmt = stmt.limit(event_query.limit)
-    result = db.scalars(stmt)
-    return list(result.scalars().all())
+    return list(db.scalars(stmt).all())
