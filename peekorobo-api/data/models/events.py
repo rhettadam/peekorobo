@@ -1,6 +1,6 @@
 from typing import Optional
 from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy import Text, INT, select, func, or_
+from sqlalchemy import Text, INT, cast, DateTime, select, func, or_
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from data.db import Base
 from query.events import EventQuery, EventResponse, LocationInfo, EventMetaInfo, EventData
@@ -16,6 +16,12 @@ def _district_match(column, district_key: str):
         column.ilike(dk),
         (func.length(column) > 4) & (func.substring(column, 5).ilike(dk)),
     )
+
+
+def _start_date_as_datetime():
+    """Cast for DBs where `events.start_date` is stored as text (EXTRACT needs a temporal type)."""
+    return cast(Events.start_date, DateTime())
+
 
 class Events(Base):
     __tablename__="events"
@@ -72,9 +78,9 @@ def get_events(db: Session, event_year : int, event_query : EventQuery) -> Event
         cond = _district_match(Events.district_key, event_query.district_key)
         if cond is not None:
             where_clause.append(cond)
-    where_clause.append(func.extract('year',Events.start_date) == event_year)
+    where_clause.append(func.extract("year", _start_date_as_datetime()) == event_year)
 
-    stmt = select(Events).where(*where_clause).order_by(Events.start_date)
+    stmt = select(Events).where(*where_clause).order_by(_start_date_as_datetime())
     if event_query.limit is not None:
         stmt = stmt.limit(event_query.limit)
 
@@ -88,7 +94,7 @@ def get_events(db: Session, event_year : int, event_query : EventQuery) -> Event
 
 def get_event_keys(db: Session, year: int, event_query: EventQuery):
     """Return event keys for a given year, sorted by start_date. Uses same filters as get_events."""
-    where_clause = [func.extract('year', Events.start_date) == year]
+    where_clause = [func.extract("year", _start_date_as_datetime()) == year]
     if event_query.city is not None:
         where_clause.append(func.lower(Events.city) == func.lower(event_query.city))
     if event_query.state_prov is not None:
@@ -102,7 +108,7 @@ def get_event_keys(db: Session, year: int, event_query: EventQuery):
     stmt = (
         select(Events.event_key)
         .where(*where_clause)
-        .order_by(Events.start_date)
+        .order_by(_start_date_as_datetime())
     )
     if event_query.limit is not None:
         stmt = stmt.limit(event_query.limit)

@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from data.models.event_teams import EventTeams
-from data.models.events import Events, _district_match
+from data.models.events import Events, _district_match, _start_date_as_datetime
 from query.team_events import TeamEventsResponse, TeamEventsQuery
 
 def get_team_events(db: Session, team_number: int, query: TeamEventsQuery) -> TeamEventsResponse:
@@ -16,7 +16,7 @@ def get_team_events(db: Session, team_number: int, query: TeamEventsQuery) -> Te
         cond = _district_match(Events.district_key, query.district_key)
         if cond is not None:
             stmt = stmt.where(cond)
-    stmt = stmt.order_by(Events.start_date, EventTeams.event_key)
+    stmt = stmt.order_by(_start_date_as_datetime(), EventTeams.event_key)
     result = db.scalars(stmt)
     event_keys = result.all()
     return TeamEventsResponse(team_number=team_number, events=event_keys)
