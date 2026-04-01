@@ -27,6 +27,9 @@ class EventData(BaseModel):
     website : Optional[str]
     webcast_type : Optional[str]
     webcast_channel : Optional[str]
+    week : Optional[int] = None
+    district_key : Optional[str] = None
+    district_name : Optional[str] = None
 
 class EventResponse(BaseModel):
     events : List[EventData]

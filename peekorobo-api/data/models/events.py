@@ -42,6 +42,11 @@ class Events(Base):
     district_name : Mapped[str] = mapped_column(Text)
     week : Mapped[Optional[int]] = mapped_column(INT)
 
+def _opt_str(s: str | None) -> str | None:
+    t = (s or "").strip()
+    return t or None
+
+
 def build_events_response(event: Events) -> EventData:
     meta_data = EventMetaInfo(
         name=str(event.name),
@@ -64,6 +69,9 @@ def build_events_response(event: Events) -> EventData:
         website=ws or None,
         webcast_type=wt or None,
         webcast_channel=wch or None,
+        week=event.week,
+        district_key=_opt_str(event.district_key),
+        district_name=_opt_str(event.district_name),
     )
 
 def get_events(db: Session, event_year : int, event_query : EventQuery) -> EventResponse:
