@@ -1,7 +1,7 @@
 from sqlalchemy import Text, INT, select
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from data.db import Base
-from query.event_teams import EventTeamsQuery, EventTeamsResponse
+from query.event_teams import EventTeamsQuery, EventTeamsResponse, EventTeamEntry
 
 class EventTeams(Base):
     __tablename__ = "event_teams"
@@ -20,5 +20,14 @@ def get_event_teams(db: Session, event_key: str, query: EventTeamsQuery) -> Even
     stmt = stmt.order_by(EventTeams.team_number)
     result = db.scalars(stmt)
     rows = result.all()
-    teams = [r.team_number for r in rows]
+    teams = [
+        EventTeamEntry(
+            team_number=int(r.team_number),
+            nickname=(r.nickname or "").strip(),
+            city=(r.city or "").strip(),
+            state_prov=(r.state_prov or "").strip(),
+            country=(r.country or "").strip(),
+        )
+        for r in rows
+    ]
     return EventTeamsResponse(event_key=event_key, teams=teams)
