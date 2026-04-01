@@ -18,5 +18,15 @@ def get_team_awards(db: Session, team_number: int, query: TeamAwardsQuery) -> Te
     stmt = stmt.order_by(EventAwards.event_key, EventAwards.award_name)
     result = db.scalars(stmt)
     rows = result.all()
-    awards = [TeamAwardData(event_key=r.event_key, award_name=r.award_name or "") for r in rows]
+    # De-dupe (event_key, award_name): duplicate rows can appear from bad imports or ORM/DB quirks.
+    seen: set[tuple[str, str]] = set()
+    awards: list[TeamAwardData] = []
+    for r in rows:
+        ek = (r.event_key or "").strip()
+        an = (r.award_name or "").strip()
+        key = (ek, an)
+        if key in seen:
+            continue
+        seen.add(key)
+        awards.append(TeamAwardData(event_key=ek, award_name=an))
     return TeamAwardsResponse(team_number=team_number, awards=awards)
