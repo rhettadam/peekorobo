@@ -6,7 +6,6 @@ from datetime import datetime, date, timedelta, timezone
 from utils import (
     get_team_data_with_fallback,
     format_human_date,
-    calculate_single_rank,
     is_demo_team,
     normalize_district_key,
     sort_key,
@@ -207,9 +206,6 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
 
     # DEBUG: Print selected_team data
     #print(f"DEBUG (team_layout): selected_team for {team_number}: {selected_team}")
-
-    # Calculate Rankings
-    global_rank, country_rank, state_rank = calculate_single_rank(list(year_data.values()), selected_team)
 
     epa_data = {
         str(team_num): {
@@ -469,43 +465,29 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
             "color": text_color
         },
     )
-    def build_rank_cards(performance_year, global_rank, country_rank, state_rank, country, state, year_data, selected_team):
-        # Exclude demo teams (9970-9999) from totals
-        real_teams = [t for t in year_data.values() if not is_demo_team(t.get("team_number"))]
-        # Calculate total counts for each category (excluding demo teams)
-        total_teams = len(real_teams)
-        country_teams = len([team for team in real_teams if team.get("country", "").lower() == country.lower()])
-        state_teams = len([team for team in real_teams if team.get("state_prov", "").lower() == state.lower()])
+    def build_rank_cards(performance_year, country, state, selected_team):
+        district_name = selected_team.get("district")
+        district_key = normalize_district_key(selected_team.get("district_key")) or selected_team.get("district_key")
 
-        # Use stored district data for district ranking
-        district_rank = None
-        district_name = None
-        district_teams = 0
-
-        try:
-            district_name = selected_team.get("district")
-            district_key = normalize_district_key(selected_team.get("district_key")) or selected_team.get("district_key")
-            if district_name or district_key:
-                def same_district(t):
-                    t_norm = normalize_district_key(t.get("district_key")) or (t.get("district") or "").strip().upper()
-                    if district_key and t_norm:
-                        return t_norm == district_key
-                    return district_name and (t.get("district") == district_name)
-                district_team_list = [team for team in real_teams if same_district(team)]
-                district_name = district_name or (district_key or "")
-                district_teams = len(district_team_list)
-                if district_teams > 0:
-                    valid_epas = [team.get("ace") for team in district_team_list if team.get("ace") not in (None, 0)]
-                    if not valid_epas:
-                        district_rank = "N/A"
-                    else:
-                        district_team_list.sort(key=lambda x: x.get("ace", 0), reverse=True)
-                        for i, team in enumerate(district_team_list):
-                            if team.get("team_number") == selected_team.get("team_number"):
-                                district_rank = i + 1
-                                break
-        except Exception as e:
-            print(f"Error loading district data: {e}")
+        if selected_team.get("rank_global") is not None:
+            global_rank = selected_team["rank_global"]
+            country_rank = selected_team["rank_country"]
+            state_rank = selected_team["rank_state"]
+            total_teams = selected_team["count_global"]
+            country_teams = selected_team["count_country"]
+            state_teams = selected_team["count_state"]
+            dr = selected_team.get("rank_district")
+            dct = selected_team.get("count_district")
+            if district_key and dct:
+                district_rank_val = dr if dr is not None else "N/A"
+                district_total_val = dct
+            else:
+                district_rank_val = "N/A"
+                district_total_val = "N/A"
+        else:
+            global_rank = country_rank = state_rank = "N/A"
+            total_teams = country_teams = state_teams = "N/A"
+            district_rank_val = district_total_val = "N/A"
         
         def rank_tile(label, rank, total, href):
             return html.A(
@@ -520,8 +502,6 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
 
         # District: use name when team has district, else "District" label with N/A rank (e.g. regional teams)
         district_label = district_name if district_name else "District"
-        district_rank_val = district_rank if (district_key and district_teams > 0) else "N/A"
-        district_total_val = district_teams if (district_key and district_teams > 0) else "N/A"
         district_href = f"/teams?year={performance_year}&district={district_key}&sort_by=ace" if district_key else f"/teams?year={performance_year}&sort_by=ace"
 
         return html.Div([
@@ -592,12 +572,8 @@ def team_layout(team_number, year, team_database, event_database, event_matches,
 
     rank_card = build_rank_cards(
         performance_year,
-        global_rank,
-        country_rank,
-        state_rank,
         country,
         state,
-        year_data,
         selected_team
     )
 
@@ -2366,9 +2342,7 @@ def create_team_card(team, year, avatar_url, epa_ranks, muted=False):
 def create_team_card_spotlight(team, year_team_database, event_year):
         t_num = team.get("tk")  # from compressed team list
         
-        # Use the passed year_team_database
         team_data = year_team_database.get(event_year, {}).get(t_num, {})
-        all_teams = year_team_database.get(event_year, {})
 
         nickname = team_data.get("nickname", "Unknown")
         city = team_data.get("city", "")
@@ -2376,19 +2350,9 @@ def create_team_card_spotlight(team, year_team_database, event_year):
         country = team_data.get("country", "")
         location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
 
-        # === Rank Calculation (use global ranking) ===
-        # Get global rank from the team data if available, otherwise calculate it
-        epa_rank = team_data.get("global_rank", "N/A")
-        if epa_rank == "N/A":
-            # Fallback: calculate rank from current year data
-            team_epas = [
-                (tnum, data.get("ace", 0))
-                for tnum, data in all_teams.items()
-                if isinstance(data, dict)
-            ]
-            team_epas.sort(key=lambda x: x[1], reverse=True)
-            rank_map = {tnum: i + 1 for i, (tnum, _) in enumerate(team_epas)}
-            epa_rank = rank_map.get(t_num, "N/A")
+        epa_rank = team_data.get("rank_global", "N/A")
+        if epa_rank is None:
+            epa_rank = "N/A"
 
         team_epa = team_data.get("ace", 0)
         epa_display = f"{team_epa:.1f}"

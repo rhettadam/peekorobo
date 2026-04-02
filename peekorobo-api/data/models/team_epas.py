@@ -1,4 +1,6 @@
 import json
+from typing import Optional
+
 from sqlalchemy.util import NoneType
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import INT, REAL, select, func
@@ -22,6 +24,14 @@ class TeamEpa(Base):
     losses : Mapped[int] = mapped_column(INT)
     event_perf : Mapped[JSONB] = mapped_column(JSONB)
     ties : Mapped[int] = mapped_column(INT)
+    rank_global : Mapped[Optional[int]] = mapped_column(INT, nullable=True)
+    rank_country : Mapped[Optional[int]] = mapped_column(INT, nullable=True)
+    rank_state : Mapped[Optional[int]] = mapped_column(INT, nullable=True)
+    rank_district : Mapped[Optional[int]] = mapped_column(INT, nullable=True)
+    count_global : Mapped[Optional[int]] = mapped_column(INT, nullable=True)
+    count_country : Mapped[Optional[int]] = mapped_column(INT, nullable=True)
+    count_state : Mapped[Optional[int]] = mapped_column(INT, nullable=True)
+    count_district : Mapped[Optional[int]] = mapped_column(INT, nullable=True)
 
 def from_db_row(team_epa : TeamEpa) -> TeamPerfInfo:
     event_perf_raw = team_epa.event_perf
@@ -46,6 +56,14 @@ def from_db_row(team_epa : TeamEpa) -> TeamPerfInfo:
         losses=int(team_epa.losses) if not isinstance(team_epa.losses, NoneType) else None,
         ties=int(team_epa.ties) if not isinstance(team_epa.ties, NoneType) else None,
         event_perf=event_perf_raw,
+        rank_global=int(team_epa.rank_global) if not isinstance(team_epa.rank_global, NoneType) else None,
+        rank_country=int(team_epa.rank_country) if not isinstance(team_epa.rank_country, NoneType) else None,
+        rank_state=int(team_epa.rank_state) if not isinstance(team_epa.rank_state, NoneType) else None,
+        rank_district=int(team_epa.rank_district) if not isinstance(team_epa.rank_district, NoneType) else None,
+        count_global=int(team_epa.count_global) if not isinstance(team_epa.count_global, NoneType) else None,
+        count_country=int(team_epa.count_country) if not isinstance(team_epa.count_country, NoneType) else None,
+        count_state=int(team_epa.count_state) if not isinstance(team_epa.count_state, NoneType) else None,
+        count_district=int(team_epa.count_district) if not isinstance(team_epa.count_district, NoneType) else None,
     )
 
 def get_team_epa(db : Session, team_number : int, query: TeamPerfRequest) -> TeamPerfResponse:

@@ -13,6 +13,14 @@ class TeamPerfInfo(BaseModel):
     losses : Optional[int]
     ties : Optional[int]
     event_perf : Optional[List[Dict[str, Any]]] = None
+    rank_global : Optional[int] = None
+    rank_country : Optional[int] = None
+    rank_state : Optional[int] = None
+    rank_district : Optional[int] = None
+    count_global : Optional[int] = None
+    count_country : Optional[int] = None
+    count_state : Optional[int] = None
+    count_district : Optional[int] = None
 
 class TeamPerfRequest(BaseModel):
     year : Optional[int] = None

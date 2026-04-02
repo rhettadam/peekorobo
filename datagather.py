@@ -56,17 +56,17 @@ def create_connection_pool():
         'host': result.hostname,
         'port': result.port,
         'minconn': 1,      # Minimum connections
-        'maxconn': 1000,      # Maximum connections (conservative for 512MB)
+        'maxconn': 10,      # Maximum connections (conservative for 512MB)
         'connect_timeout': 10,
         'options': '-c statement_timeout=300000'  # 5 minute timeout
     }
     
     try:
         pool_obj = pool.ThreadedConnectionPool(**pool_config)
-        print(f"✅ Database connection pool created: {pool_config['minconn']}-{pool_config['maxconn']} connections")
+        print(f"Database connection pool created: {pool_config['minconn']}-{pool_config['maxconn']} connections")
         return pool_obj
     except Exception as e:
-        print(f"❌ Failed to create connection pool: {e}")
+        print(f"Failed to create connection pool: {e}")
         raise
 
 def get_pg_connection():
@@ -79,7 +79,7 @@ def get_pg_connection():
             raise Exception("Failed to get connection from pool")
         return conn
     except Exception as e:
-        print(f"❌ Error getting connection from pool: {e}")
+        print(f"Error getting connection from pool: {e}")
         raise
 
 def return_pg_connection(conn):
@@ -91,7 +91,7 @@ def return_pg_connection(conn):
     try:
         pool_obj.putconn(conn)
     except Exception as e:
-        print(f"❌ Error returning connection to pool: {e}")
+        print(f"Error returning connection to pool: {e}")
         # If we can't return to pool, close it
         try:
             conn.close()
@@ -107,9 +107,9 @@ def close_connection_pool():
             if _connection_pool is not None:
                 try:
                     _connection_pool.closeall()
-                    print("✅ Database connection pool closed")
+                    print("Database connection pool closed")
                 except Exception as e:
-                    print(f"❌ Error closing connection pool: {e}")
+                    print(f"Error closing connection pool: {e}")
                 finally:
                     _connection_pool = None
 
@@ -149,43 +149,33 @@ def load_data():
     with DatabaseConnection() as conn:
         team_cursor = conn.cursor()
         
-        # Get all team EPA data (district display from districts table via district_key)
-        try:
-            team_cursor.execute("""
-                SELECT te.team_number, te.year,
-                       t.nickname, t.city, t.state_prov, t.country, t.website,
-                       COALESCE(d.display_name, d.name) AS district,
-                       t.district_key,
-                       te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
-                       te.wins, te.losses, te.ties, te.event_perf
-                FROM team_epas te
-                LEFT JOIN teams t ON te.team_number = t.team_number
-                LEFT JOIN districts d ON (
-                    CASE WHEN t.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
-                         THEN UPPER(SUBSTRING(t.district_key FROM 5))
-                         ELSE UPPER(TRIM(t.district_key))
-                    END
-                ) = d.district_key
-                ORDER BY te.year, te.team_number
-            """)
-        except Exception:
-            team_cursor.execute("""
-                SELECT te.team_number, te.year,
-                       t.nickname, t.city, t.state_prov, t.country, t.website,
-                       NULL::text AS district,
-                       NULL::text AS district_key,
-                       te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
-                       te.wins, te.losses, te.ties, te.event_perf
-                FROM team_epas te
-                LEFT JOIN teams t ON te.team_number = t.team_number
-                ORDER BY te.year, te.team_number
-            """)
+        team_cursor.execute("""
+            SELECT te.team_number, te.year,
+                   t.nickname, t.city, t.state_prov, t.country, t.website,
+                   COALESCE(d.display_name, d.name) AS district,
+                   t.district_key,
+                   te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
+                   te.wins, te.losses, te.ties, te.event_perf,
+                   te.rank_global, te.rank_country, te.rank_state, te.rank_district,
+                   te.count_global, te.count_country, te.count_state, te.count_district
+            FROM team_epas te
+            LEFT JOIN teams t ON te.team_number = t.team_number
+            LEFT JOIN districts d ON (
+                CASE WHEN t.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
+                     THEN UPPER(SUBSTRING(t.district_key FROM 5))
+                     ELSE UPPER(TRIM(t.district_key))
+                END
+            ) = d.district_key
+            ORDER BY te.year, te.team_number
+        """)
         
         team_data = {}
         for row in team_cursor.fetchall():
             team_number, year, nickname, city, state_prov, country, website, district, district_key, \
             raw, ace, confidence, auto_raw, teleop_raw, endgame_raw, \
-            wins, losses, ties, event_perf = row
+            wins, losses, ties, event_perf, \
+            rank_global, rank_country, rank_state, rank_district, \
+            count_global, count_country, count_state, count_district = row
             
             raw_team_data = {
                 "team_number": team_number,
@@ -206,7 +196,15 @@ def load_data():
                 "wins": wins,
                 "losses": losses,
                 "ties": ties,
-                "event_perf": event_perf
+                "event_perf": event_perf,
+                "rank_global": rank_global,
+                "rank_country": rank_country,
+                "rank_state": rank_state,
+                "rank_district": rank_district,
+                "count_global": count_global,
+                "count_country": count_country,
+                "count_state": count_state,
+                "count_district": count_district,
             }
             
             if raw_team_data["event_perf"] is None:
@@ -391,7 +389,7 @@ def _load_avatar_cache():
                         _available_avatars = set()
                 else:
                     _available_avatars = set()
-                print(f"✅ Loaded {len(_available_avatars)} team avatars into cache")
+                print(f"Loaded {len(_available_avatars)} team avatars into cache")
     
     return _available_avatars
 
@@ -423,45 +421,34 @@ def load_data_current_year():
     with DatabaseConnection() as conn:
         team_cursor = conn.cursor()
         
-        # Get only current year team EPA data
-        try:
-            team_cursor.execute("""
-                SELECT te.team_number, te.year,
-                       t.nickname, t.city, t.state_prov, t.country, t.website,
-                       COALESCE(d.display_name, d.name) AS district,
-                       t.district_key,
-                       te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
-                       te.wins, te.losses, te.event_perf
-                FROM team_epas te
-                LEFT JOIN teams t ON te.team_number = t.team_number
-                LEFT JOIN districts d ON (
-                    CASE WHEN t.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
-                         THEN UPPER(SUBSTRING(t.district_key FROM 5))
-                         ELSE UPPER(TRIM(t.district_key))
-                    END
-                ) = d.district_key
-                WHERE te.year = %s
-                ORDER BY te.team_number
-            """, (current_year,))
-        except Exception:
-            team_cursor.execute("""
-                SELECT te.team_number, te.year,
-                       t.nickname, t.city, t.state_prov, t.country, t.website,
-                       NULL::text AS district,
-                       NULL::text AS district_key,
-                       te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
-                       te.wins, te.losses, te.event_perf
-                FROM team_epas te
-                LEFT JOIN teams t ON te.team_number = t.team_number
-                WHERE te.year = %s
-                ORDER BY te.team_number
-            """, (current_year,))
+        team_cursor.execute("""
+            SELECT te.team_number, te.year,
+                   t.nickname, t.city, t.state_prov, t.country, t.website,
+                   COALESCE(d.display_name, d.name) AS district,
+                   t.district_key,
+                   te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
+                   te.wins, te.losses, te.event_perf,
+                   te.rank_global, te.rank_country, te.rank_state, te.rank_district,
+                   te.count_global, te.count_country, te.count_state, te.count_district
+            FROM team_epas te
+            LEFT JOIN teams t ON te.team_number = t.team_number
+            LEFT JOIN districts d ON (
+                CASE WHEN t.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
+                     THEN UPPER(SUBSTRING(t.district_key FROM 5))
+                     ELSE UPPER(TRIM(t.district_key))
+                END
+            ) = d.district_key
+            WHERE te.year = %s
+            ORDER BY te.team_number
+        """, (current_year,))
         
         team_data = {current_year: {}}
         for row in team_cursor.fetchall():
             team_number, year, nickname, city, state_prov, country, website, district, district_key, \
             raw, ace, confidence, auto_raw, teleop_raw, endgame_raw, \
-            wins, losses, event_perf = row
+            wins, losses, event_perf, \
+            rank_global, rank_country, rank_state, rank_district, \
+            count_global, count_country, count_state, count_district = row
             
             raw_team_data = {
                 "team_number": team_number,
@@ -481,7 +468,15 @@ def load_data_current_year():
                 "endgame_raw": endgame_raw,
                 "wins": wins,
                 "losses": losses,
-                "event_perf": event_perf
+                "event_perf": event_perf,
+                "rank_global": rank_global,
+                "rank_country": rank_country,
+                "rank_state": rank_state,
+                "rank_district": rank_district,
+                "count_global": count_global,
+                "count_country": count_country,
+                "count_state": count_state,
+                "count_district": count_district,
             }
             
             if raw_team_data["event_perf"] is None:
@@ -689,43 +684,33 @@ def load_year_data(year):
         # === Load team EPA data for specific year ===
         team_data = {}
         with conn.cursor() as cursor:
-            try:
-                cursor.execute("""
-                    SELECT te.team_number, te.year,
-                           t.nickname, t.city, t.state_prov, t.country, t.website,
-                           COALESCE(d.display_name, d.name) AS district,
-                           t.district_key,
-                           te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
-                           te.wins, te.losses, te.ties, te.event_perf
-                    FROM team_epas te
-                    LEFT JOIN teams t ON te.team_number = t.team_number
-                    LEFT JOIN districts d ON (
-                        CASE WHEN t.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
-                             THEN UPPER(SUBSTRING(t.district_key FROM 5))
-                             ELSE UPPER(TRIM(t.district_key))
-                        END
-                    ) = d.district_key
-                    WHERE te.year = %s
-                    ORDER BY te.team_number
-                """, (year,))
-            except Exception:
-                cursor.execute("""
-                    SELECT te.team_number, te.year,
-                           t.nickname, t.city, t.state_prov, t.country, t.website,
-                           NULL::text AS district,
-                           NULL::text AS district_key,
-                           te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
-                           te.wins, te.losses, te.ties, te.event_perf
-                    FROM team_epas te
-                    LEFT JOIN teams t ON te.team_number = t.team_number
-                    WHERE te.year = %s
-                    ORDER BY te.team_number
-                """, (year,))
+            cursor.execute("""
+                SELECT te.team_number, te.year,
+                       t.nickname, t.city, t.state_prov, t.country, t.website,
+                       COALESCE(d.display_name, d.name) AS district,
+                       t.district_key,
+                       te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
+                       te.wins, te.losses, te.ties, te.event_perf,
+                       te.rank_global, te.rank_country, te.rank_state, te.rank_district,
+                       te.count_global, te.count_country, te.count_state, te.count_district
+                FROM team_epas te
+                LEFT JOIN teams t ON te.team_number = t.team_number
+                LEFT JOIN districts d ON (
+                    CASE WHEN t.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
+                         THEN UPPER(SUBSTRING(t.district_key FROM 5))
+                         ELSE UPPER(TRIM(t.district_key))
+                    END
+                ) = d.district_key
+                WHERE te.year = %s
+                ORDER BY te.team_number
+            """, (year,))
             for row in cursor.fetchall():
                 (
                     team_number, year, nickname, city, state_prov, country, website, district, district_key,
                     raw, ace, confidence, auto_raw, teleop_raw, endgame_raw,
-                    wins, losses, ties, event_perf
+                    wins, losses, ties, event_perf,
+                    rank_global, rank_country, rank_state, rank_district,
+                    count_global, count_country, count_state, count_district
                 ) = row
 
                 raw_team_data = {
@@ -747,7 +732,15 @@ def load_year_data(year):
                     "wins": wins,
                     "losses": losses,
                     "ties": ties,
-                    "event_perf": safe_json_load(event_perf)
+                    "event_perf": safe_json_load(event_perf),
+                    "rank_global": rank_global,
+                    "rank_country": rank_country,
+                    "rank_state": rank_state,
+                    "rank_district": rank_district,
+                    "count_global": count_global,
+                    "count_country": count_country,
+                    "count_state": count_state,
+                    "count_district": count_district,
                 }
 
                 team_data[team_number] = compress_dict(raw_team_data)

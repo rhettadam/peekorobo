@@ -1,5 +1,6 @@
 import statistics
 import json
+from collections import defaultdict
 from tqdm import tqdm
 from tenacity import retry, stop_never, wait_exponential, retry_if_exception_type, stop_after_attempt
 import requests
@@ -29,6 +30,7 @@ TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
 API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 
 import psycopg2
+from psycopg2.extras import execute_values
 from urllib.parse import urlparse
 
 # Global variables for cleanup
@@ -372,6 +374,283 @@ def insert_team_epa(result, year):
     conn.commit()
     cur.close()
     conn.close()
+
+
+def _is_demo_team_rank(team_number):
+    try:
+        n = int(team_number)
+        return 9970 <= n <= 9999
+    except (TypeError, ValueError):
+        return False
+
+
+def _district_key_normalized_rank(key):
+    """Align with utils.normalize_district_key for grouping."""
+    if not key or not isinstance(key, str):
+        return None
+    s = key.strip()
+    if len(s) > 4 and s[:4].isdigit():
+        return s[4:].upper()
+    return s.upper() if s else None
+
+
+def _district_bucket_rank(team):
+    """Stable district bucket for same-district comparisons (key preferred, else display name)."""
+    dk = team.get("district_key")
+    nk = _district_key_normalized_rank(dk)
+    if nk:
+        return nk
+    if dk and str(dk).strip():
+        return str(dk).strip().upper()
+    dn = (team.get("district") or "").strip()
+    return dn.upper() if dn else None
+
+
+def _team_has_district_key_for_ui(team):
+    """Match layouts: rank shown only when TBA district_key is present."""
+    return bool(_district_key_normalized_rank(team.get("district_key")) or (team.get("district_key") or "").strip())
+
+
+def _same_district_rank(sel, t):
+    """Match teams in the same district bucket (aligned with team insights filtering)."""
+    a = _district_bucket_rank(sel)
+    b = _district_bucket_rank(t)
+    if not a or not b:
+        return False
+    return a == b
+
+
+def _block_competition_ranks(members):
+    """
+    members: iterable of (team_number, ace) with ace not None.
+    Competition rank = 1 + count of others with strictly higher ACE (ties share rank).
+    Returns dict team_number -> int rank.
+    """
+    lst = sorted(members, key=lambda x: (-(x[1] if x[1] is not None else 0.0), x[0]))
+    ranks = {}
+    n = len(lst)
+    i = 0
+    while i < n:
+        ace_i = lst[i][1]
+        ai = ace_i if ace_i is not None else 0.0
+        j = i + 1
+        while j < n:
+            aj = lst[j][1]
+            aj = aj if aj is not None else 0.0
+            if aj != ai:
+                break
+            j += 1
+        block_rank = i + 1
+        for k in range(i, j):
+            ranks[lst[k][0]] = block_rank
+        i = j
+    return ranks
+
+
+def _demo_rank_versus_nondemo(teams, sel, pred=None):
+    """Rank = 1 + nondemo competitors with ace not None, strictly higher ACE, optional pred(t)."""
+    tn = sel["team_number"]
+    sel_ace = sel.get("ace")
+    if sel_ace is None:
+        return None
+    sel_cmp = sel_ace or 0.0
+    r = 1
+    for t in teams:
+        if t["team_number"] == tn or _is_demo_team_rank(t["team_number"]):
+            continue
+        te = t.get("ace")
+        if te is None:
+            continue
+        te = te or 0.0
+        if pred is not None and not pred(t):
+            continue
+        if te > sel_cmp:
+            r += 1
+    return r
+
+
+def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
+    """
+    Compute global / country / state / district ACE ranks for one season and UPDATE team_epas.
+
+    Competition-style ranks: rank = 1 + count of
+    non-demo peers in scope with strictly higher ACE (ties share the same rank). District scope
+    uses teams.district_key + districts display join the same way as datagather.
+
+    District ranks are only stored when the team has a district_key (regional teams: NULL).
+
+    Pass ``conn`` to reuse a single connection (e.g. backfill); otherwise a new connection is opened.
+    """
+    own_conn = conn is None
+    if own_conn:
+        conn = get_pg_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT te.team_number, te.ace,
+                   t.country, t.state_prov, t.district_key,
+                   COALESCE(d.display_name, d.name) AS district
+            FROM team_epas te
+            LEFT JOIN teams t ON te.team_number = t.team_number
+            LEFT JOIN districts d ON (
+                CASE WHEN t.district_key ~ '^[0-9]{4}[a-zA-Z]+$'
+                     THEN UPPER(SUBSTRING(t.district_key FROM 5))
+                     ELSE UPPER(TRIM(t.district_key))
+                END
+            ) = d.district_key
+            WHERE te.year = %s
+            """,
+            (year,),
+        )
+        rows = cur.fetchall()
+    except Exception as e:
+        cur.close()
+        if own_conn:
+            conn.close()
+        print(f"compute_and_store_team_epa_ranks: query failed (missing columns or join?): {e}")
+        raise
+
+    teams = []
+    for team_number, ace, country, state_prov, district_key, district in rows:
+        teams.append(
+            {
+                "team_number": team_number,
+                "ace": ace,
+                "country": (country or "").lower(),
+                "state_prov": (state_prov or "").lower(),
+                "district_key": district_key,
+                "district": district,
+            }
+        )
+
+    real = [t for t in teams if not _is_demo_team_rank(t["team_number"])]
+    valid_epas_year = [
+        t.get("ace") for t in real if t.get("ace") not in (None, 0)
+    ]
+
+    count_country_tot = defaultdict(int)
+    count_state_tot = defaultdict(int)
+    for t in real:
+        count_country_tot[t["country"]] += 1
+        count_state_tot[t["state_prov"]] += 1
+
+    global_members = []
+    country_groups = defaultdict(list)
+    state_groups = defaultdict(list)
+    district_groups = defaultdict(list)
+
+    for t in teams:
+        if _is_demo_team_rank(t["team_number"]):
+            continue
+        te = t.get("ace")
+        if te is None:
+            continue
+        tn = t["team_number"]
+        global_members.append((tn, te))
+        country_groups[t["country"]].append((tn, te))
+        state_groups[t["state_prov"]].append((tn, te))
+        bk = _district_bucket_rank(t)
+        if bk:
+            district_groups[bk].append((tn, te))
+
+    global_ranks = _block_competition_ranks(global_members)
+    country_ranks = {}
+    for _c, members in country_groups.items():
+        country_ranks.update(_block_competition_ranks(members))
+    state_ranks = {}
+    for _s, members in state_groups.items():
+        state_ranks.update(_block_competition_ranks(members))
+    district_ranks = {}
+    for _b, members in district_groups.items():
+        district_ranks.update(_block_competition_ranks(members))
+
+    updates = []
+    for sel in teams:
+        tn = sel["team_number"]
+        sel_ace = sel.get("ace")
+
+        null_row = (None,) * 8
+        if sel_ace is None or not valid_epas_year:
+            updates.append(null_row + (tn, year))
+            continue
+
+        sel_country = sel["country"]
+        sel_state = sel["state_prov"]
+
+        count_global = len(real)
+        count_c = count_country_tot[sel_country]
+        count_s = count_state_tot[sel_state]
+
+        is_demo = _is_demo_team_rank(tn)
+
+        if is_demo:
+            gr = _demo_rank_versus_nondemo(teams, sel)
+            cr = _demo_rank_versus_nondemo(teams, sel, lambda t: t["country"] == sel_country)
+            sr = _demo_rank_versus_nondemo(teams, sel, lambda t: t["state_prov"] == sel_state)
+        else:
+            gr = global_ranks.get(tn)
+            cr = country_ranks.get(tn)
+            sr = state_ranks.get(tn)
+
+        dr = cd = None
+        if _team_has_district_key_for_ui(sel):
+            district_peers = [x for x in real if _same_district_rank(sel, x)]
+            cd = len(district_peers)
+            valid_in_district = [x.get("ace") for x in district_peers if x.get("ace") not in (None, 0)]
+            if cd > 0 and valid_in_district:
+                if is_demo:
+                    dr = _demo_rank_versus_nondemo(teams, sel, lambda t: _same_district_rank(sel, t))
+                else:
+                    dr = district_ranks.get(tn)
+            else:
+                dr = None
+                cd = cd if cd else None
+
+        updates.append((gr, cr, sr, dr, count_global, count_c, count_s, cd, tn, year))
+
+    if updates:
+        batch_rows = [
+            (tn, y, gr, cr, sr, dr, cg, cc, cs, cd)
+            for (gr, cr, sr, dr, cg, cc, cs, cd, tn, y) in updates
+        ]
+        execute_values(
+            cur,
+            """
+            UPDATE team_epas AS te SET
+                rank_global = v.rank_global::integer,
+                rank_country = v.rank_country::integer,
+                rank_state = v.rank_state::integer,
+                rank_district = v.rank_district::integer,
+                count_global = v.count_global::integer,
+                count_country = v.count_country::integer,
+                count_state = v.count_state::integer,
+                count_district = v.count_district::integer
+            FROM (VALUES %s) AS v(
+                team_number,
+                year,
+                rank_global,
+                rank_country,
+                rank_state,
+                rank_district,
+                count_global,
+                count_country,
+                count_state,
+                count_district
+            )
+            WHERE te.team_number = v.team_number::integer AND te.year = v.year::integer
+            """,
+            batch_rows,
+            template="(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            page_size=len(batch_rows),
+        )
+    conn.commit()
+    cur.close()
+    if own_conn:
+        conn.close()
+    if not quiet:
+        print(f"Stored ACE ranks for year {year} ({len(updates)} teams).")
+
 
 # Robust retry for team experience
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
@@ -1127,6 +1406,13 @@ def fetch_and_store_team_data(year):
     if shutdown_event.is_set():
         print("Shutdown requested, stopping team data update...")
         return
+
+    if not shutdown_event.is_set():
+        try:
+            compute_and_store_team_epa_ranks(year)
+        except Exception as e:
+            print(f"Failed to compute/store team ACE ranks for {year}: {e}")
+            traceback.print_exc()
     
     print(f"\nTeam Update Summary for {year}:")
     print(f"  Total teams processed: {len(all_teams)}")
@@ -2050,7 +2336,10 @@ if __name__ == "__main__":
             except ValueError:
                 print("Year must be an integer.")
                 sys.exit(1)
-            fetch_and_store_team_data(year)
+            if len(sys.argv) > 2 and sys.argv[2] == "--ranks-only":
+                compute_and_store_team_epa_ranks(year)
+            else:
+                fetch_and_store_team_data(year)
         else:
             main()
     except KeyboardInterrupt:

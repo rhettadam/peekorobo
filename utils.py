@@ -70,60 +70,6 @@ def apply_simple_filter(df, filter_query):
             # Add more ops as needed
     return df
 
-def calculate_single_rank(team_data, selected_team):
-    # Extract selected team's information
-    selected_epa = selected_team.get("ace")
-    valid_epas = [
-        team.get("ace") for team in team_data
-        if team.get("ace") not in (None, 0) and not is_demo_team(team.get("team_number"))
-    ]
-
-    # If selected team has no EPA data, return N/A for all ranks
-    if selected_epa is None:
-        return "N/A", "N/A", "N/A"
-
-    # If there is no meaningful EPA data for the year, return N/A for all ranks
-    if not valid_epas:
-        return "N/A", "N/A", "N/A"
-
-    selected_epa = selected_epa or 0  # Convert None/False to 0, but we already checked for None above
-    selected_country = (selected_team.get("country") or "").lower()
-    selected_state = (selected_team.get("state_prov") or "").lower()
-
-    global_rank = 1
-    country_rank = 1
-    state_rank = 1
-
-    for team in team_data:
-        if team.get("team_number") == selected_team.get("team_number"):
-            continue
-        # Exclude demo teams (9970-9999) from rank comparison
-        if is_demo_team(team.get("team_number")):
-            continue
-
-        team_epa = team.get("ace")
-        # Skip teams with no EPA data for comparison
-        if team_epa is None:
-            continue
-
-        team_epa = team_epa or 0
-        team_country = (team.get("country") or "").lower()
-        team_state = (team.get("state_prov") or "").lower()
-
-        # Global Rank
-        if team_epa > selected_epa:
-            global_rank += 1
-
-        # Country Rank
-        if team_country == selected_country and team_epa > selected_epa:
-            country_rank += 1
-
-        # State Rank
-        if team_state == selected_state and team_epa > selected_epa:
-            state_rank += 1
-
-    return global_rank, country_rank, state_rank
-
 ### RANKINGS
 
 def calculate_all_ranks(year, data):
