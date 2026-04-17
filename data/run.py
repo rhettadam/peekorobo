@@ -232,7 +232,9 @@ def signal_handler(signum, frame):
             print(f"Warning: Error closing connection: {e}")
     
     print("Cleanup complete. Exiting.")
-    sys.exit(0)
+    # sys.exit(0) waits for non-daemon ThreadPoolExecutor workers; Heroku then hits
+    # R12 (SIGKILL after 30s). os._exit terminates immediately after the cleanup above.
+    os._exit(0)
 
 # Register signal handlers
 signal.signal(signal.SIGINT, signal_handler)
@@ -1328,12 +1330,34 @@ def insert_event_data(results, year):
         
         # Update matches if needed
         if updates["matches"] and data["matches"]:
-            # Delete existing matches for this event and reinsert
-            cur.execute("DELETE FROM event_matches WHERE event_key = %s", (data["event"][0],))
-            cur.executemany("""
-                INSERT INTO event_matches (match_key, event_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, data["matches"])
+            # DELETE + INSERT would drop red_win_prob / blue_win_prob (defaults NULL). Preserve
+            # per match_key so scores/TBA refreshes do not wipe predictions until
+            # calculate_and_store_match_predictions runs (or if a run times out early).
+            event_key = data["event"][0]
+            cur.execute(
+                """
+                SELECT match_key, red_win_prob, blue_win_prob
+                FROM event_matches
+                WHERE event_key = %s
+                """,
+                (event_key,),
+            )
+            preserved_probs = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+            cur.execute("DELETE FROM event_matches WHERE event_key = %s", (event_key,))
+            rows_with_probs = [
+                row + preserved_probs.get(row[0], (None, None)) for row in data["matches"]
+            ]
+            cur.executemany(
+                """
+                INSERT INTO event_matches (
+                    match_key, event_key, comp_level, match_number, set_number,
+                    red_teams, blue_teams, red_score, blue_score, winning_alliance,
+                    youtube_key, predicted_time, red_win_prob, blue_win_prob
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                rows_with_probs,
+            )
     
     conn.commit()
     cur.close()
