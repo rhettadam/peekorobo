@@ -1541,6 +1541,32 @@ def _team_prediction_info(team_number: int, current_year_lookup: Dict[int, Dict[
         return data
     return {"ace": 0.0, "confidence": 0.7}
 
+
+def _parse_match_alliance_teams(team_csv) -> List[int]:
+    """
+    Parse red_teams / blue_teams from event_matches (comma-separated).
+    Matches TBA ingest: numeric strings; tolerate leading 'frc' and trailing 'B' surrogate markers.
+    """
+    if team_csv is None:
+        return []
+    out: List[int] = []
+    for raw in str(team_csv).split(","):
+        tok = raw.strip()
+        if not tok:
+            continue
+        low = tok.lower()
+        if low.startswith("frc"):
+            tok = tok[3:]
+        tok = tok.rstrip("Bb")
+        if not tok.isdigit():
+            continue
+        try:
+            out.append(int(tok))
+        except ValueError:
+            continue
+    return out
+
+
 def calculate_and_store_match_predictions(year: int):
     if shutdown_event.is_set():
         return
@@ -1562,11 +1588,14 @@ def calculate_and_store_match_predictions(year: int):
         match_rows = cur.fetchall()
 
         updates = []
+        skipped_no_teams = 0
+        skipped_bad_prob = 0
         for match_key, red_teams, blue_teams in match_rows:
-            red_list = [int(t) for t in (red_teams or "").split(",") if t.strip().isdigit()]
-            blue_list = [int(t) for t in (blue_teams or "").split(",") if t.strip().isdigit()]
+            red_list = _parse_match_alliance_teams(red_teams)
+            blue_list = _parse_match_alliance_teams(blue_teams)
             if not red_list or not blue_list:
-                updates.append((None, None, match_key))
+                # Do not UPDATE with NULL — preserves existing probs if alliances were briefly empty/malformed.
+                skipped_no_teams += 1
                 continue
 
             red_info = [
@@ -1577,20 +1606,28 @@ def calculate_and_store_match_predictions(year: int):
             ]
 
             p_red, p_blue = predict_win_probability(red_info, blue_info)
+            if not math.isfinite(p_red) or not math.isfinite(p_blue):
+                skipped_bad_prob += 1
+                continue
             updates.append((p_red, p_blue, match_key))
 
         if updates:
+            # COALESCE: never overwrite existing non-NULL probs with NULL (defense in depth).
+            # Rows we skip above are not in `updates`, so good predictions stay untouched.
             cur.executemany(
                 """
                 UPDATE event_matches
-                SET red_win_prob = %s,
-                    blue_win_prob = %s
+                SET red_win_prob = COALESCE(%s::double precision, red_win_prob),
+                    blue_win_prob = COALESCE(%s::double precision, blue_win_prob)
                 WHERE match_key = %s
                 """,
                 updates,
             )
         conn.commit()
-        print(f"Stored match predictions for {len(updates)} matches in {year}.")
+        msg = f"Stored match predictions for {len(updates)} matches in {year}."
+        if skipped_no_teams or skipped_bad_prob:
+            msg += f" (skipped: {skipped_no_teams} missing alliances, {skipped_bad_prob} non-finite probs)"
+        print(msg)
     finally:
         cur.close()
         conn.close()
