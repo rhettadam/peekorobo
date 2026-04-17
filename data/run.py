@@ -38,6 +38,34 @@ active_executors = []
 active_connections = []
 shutdown_event = threading.Event()
 
+# Serialize EPA ingest across processes (e.g. Heroku Scheduler: a new one-off dyno every N
+# minutes does not wait for the previous run; long runs overlap and can corrupt work).
+_PIPELINE_ADV_LOCK_KEY1 = 893741
+_PIPELINE_ADV_LOCK_KEY2 = 20260401
+
+
+def _release_pipeline_lock(conn) -> None:
+    if conn is None or conn.closed:
+        return
+    try:
+        c = conn.cursor()
+        c.execute(
+            "SELECT pg_advisory_unlock(%s, %s)",
+            (_PIPELINE_ADV_LOCK_KEY1, _PIPELINE_ADV_LOCK_KEY2),
+        )
+        c.close()
+    except Exception as e:
+        print(f"[pipeline] pg_advisory_unlock failed: {e}", flush=True)
+    try:
+        if conn in active_connections:
+            active_connections.remove(conn)
+    except ValueError:
+        pass
+    try:
+        conn.close()
+    except Exception:
+        pass
+
 # Global match cache to avoid redundant API calls
 match_cache = {}
 
@@ -1311,7 +1339,38 @@ def insert_event_data(results, year):
     cur.close()
     conn.close()
 
+
 def fetch_and_store_team_data(year):
+    """
+    Fetch and store team EPA data. Uses a Postgres advisory lock so only one pipeline
+    runs at a time across scheduler one-off dynos; if another run holds the lock, exit.
+    """
+    lock_conn = get_pg_connection()
+    cur = lock_conn.cursor()
+    cur.execute(
+        "SELECT pg_try_advisory_lock(%s, %s)",
+        (_PIPELINE_ADV_LOCK_KEY1, _PIPELINE_ADV_LOCK_KEY2),
+    )
+    locked = bool(cur.fetchone()[0])
+    cur.close()
+    if not locked:
+        if lock_conn in active_connections:
+            active_connections.remove(lock_conn)
+        lock_conn.close()
+        print(
+            "[pipeline] Another EPA pipeline run is in progress; exiting so schedulers "
+            "do not overlap (increase interval or shorten the job if this happens often).",
+            flush=True,
+        )
+        return
+
+    try:
+        _fetch_and_store_team_data_impl(year)
+    finally:
+        _release_pipeline_lock(lock_conn)
+
+
+def _fetch_and_store_team_data_impl(year):
     # Fetch and store team data, only updating what's changed
     global match_cache
     match_cache.clear()  # Clear cache for new year
