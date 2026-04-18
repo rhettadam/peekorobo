@@ -414,6 +414,35 @@ def _is_demo_team_rank(team_number):
         return False
 
 
+def _team_has_season_competition(team):
+    """True if the team has at least one qual/playoff result row for the season (not just registration)."""
+    w = team.get("wins") or 0
+    l = team.get("losses") or 0
+    t = team.get("ties") or 0
+    try:
+        return int(w) + int(l) + int(t) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_eligible_for_ace_rank(team):
+    """
+    Teams included in ACE rank pools: real team numbers, ACE != 0, and competed this season.
+    Excludes demo teams (9970–9999), ACE 0 / NULL, and teams with no counted matches.
+    """
+    if _is_demo_team_rank(team.get("team_number")):
+        return False
+    ace = team.get("ace")
+    if ace is None:
+        return False
+    try:
+        if float(ace) == 0.0:
+            return False
+    except (TypeError, ValueError):
+        return False
+    return _team_has_season_competition(team)
+
+
 def _district_key_normalized_rank(key):
     """Align with utils.normalize_district_key for grouping."""
     if not key or not isinstance(key, str):
@@ -477,35 +506,14 @@ def _block_competition_ranks(members):
     return ranks
 
 
-def _demo_rank_versus_nondemo(teams, sel, pred=None):
-    """Rank = 1 + nondemo competitors with ace not None, strictly higher ACE, optional pred(t)."""
-    tn = sel["team_number"]
-    sel_ace = sel.get("ace")
-    if sel_ace is None:
-        return None
-    sel_cmp = sel_ace or 0.0
-    r = 1
-    for t in teams:
-        if t["team_number"] == tn or _is_demo_team_rank(t["team_number"]):
-            continue
-        te = t.get("ace")
-        if te is None:
-            continue
-        te = te or 0.0
-        if pred is not None and not pred(t):
-            continue
-        if te > sel_cmp:
-            r += 1
-    return r
-
-
 def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
     """
     Compute global / country / state / district ACE ranks for one season and UPDATE team_epas.
 
-    Competition-style ranks: rank = 1 + count of
-    non-demo peers in scope with strictly higher ACE (ties share the same rank). District scope
-    uses teams.district_key + districts display join the same way as datagather.
+    Competition-style ranks: rank = 1 + count of eligible peers in scope with strictly higher ACE
+    (ties share the same rank). Eligible peers exclude demo teams (9970–9999), ACE 0, and teams
+    with no season W/L/T. District scope uses teams.district_key + districts display join the
+    same way as datagather.
 
     District ranks are only stored when the team has a district_key (regional teams: NULL).
 
@@ -519,6 +527,7 @@ def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
         cur.execute(
             """
             SELECT te.team_number, te.ace,
+                   te.wins, te.losses, te.ties,
                    t.country, t.state_prov, t.district_key,
                    COALESCE(d.display_name, d.name) AS district
             FROM team_epas te
@@ -542,11 +551,14 @@ def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
         raise
 
     teams = []
-    for team_number, ace, country, state_prov, district_key, district in rows:
+    for team_number, ace, wins, losses, ties, country, state_prov, district_key, district in rows:
         teams.append(
             {
                 "team_number": team_number,
                 "ace": ace,
+                "wins": wins,
+                "losses": losses,
+                "ties": ties,
                 "country": (country or "").lower(),
                 "state_prov": (state_prov or "").lower(),
                 "district_key": district_key,
@@ -554,14 +566,12 @@ def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
             }
         )
 
-    real = [t for t in teams if not _is_demo_team_rank(t["team_number"])]
-    valid_epas_year = [
-        t.get("ace") for t in real if t.get("ace") not in (None, 0)
-    ]
+    rankable = [t for t in teams if _is_eligible_for_ace_rank(t)]
+    has_rankable_pool = len(rankable) > 0
 
     count_country_tot = defaultdict(int)
     count_state_tot = defaultdict(int)
-    for t in real:
+    for t in rankable:
         count_country_tot[t["country"]] += 1
         count_state_tot[t["state_prov"]] += 1
 
@@ -570,9 +580,7 @@ def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
     state_groups = defaultdict(list)
     district_groups = defaultdict(list)
 
-    for t in teams:
-        if _is_demo_team_rank(t["team_number"]):
-            continue
+    for t in rankable:
         te = t.get("ace")
         if te is None:
             continue
@@ -598,44 +606,31 @@ def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
     updates = []
     for sel in teams:
         tn = sel["team_number"]
-        sel_ace = sel.get("ace")
-
         null_row = (None,) * 8
-        if sel_ace is None or not valid_epas_year:
+        if not has_rankable_pool or not _is_eligible_for_ace_rank(sel):
             updates.append(null_row + (tn, year))
             continue
 
         sel_country = sel["country"]
         sel_state = sel["state_prov"]
 
-        count_global = len(real)
+        count_global = len(rankable)
         count_c = count_country_tot[sel_country]
         count_s = count_state_tot[sel_state]
 
-        is_demo = _is_demo_team_rank(tn)
-
-        if is_demo:
-            gr = _demo_rank_versus_nondemo(teams, sel)
-            cr = _demo_rank_versus_nondemo(teams, sel, lambda t: t["country"] == sel_country)
-            sr = _demo_rank_versus_nondemo(teams, sel, lambda t: t["state_prov"] == sel_state)
-        else:
-            gr = global_ranks.get(tn)
-            cr = country_ranks.get(tn)
-            sr = state_ranks.get(tn)
+        gr = global_ranks.get(tn)
+        cr = country_ranks.get(tn)
+        sr = state_ranks.get(tn)
 
         dr = cd = None
         if _team_has_district_key_for_ui(sel):
-            district_peers = [x for x in real if _same_district_rank(sel, x)]
+            district_peers = [x for x in rankable if _same_district_rank(sel, x)]
             cd = len(district_peers)
-            valid_in_district = [x.get("ace") for x in district_peers if x.get("ace") not in (None, 0)]
-            if cd > 0 and valid_in_district:
-                if is_demo:
-                    dr = _demo_rank_versus_nondemo(teams, sel, lambda t: _same_district_rank(sel, t))
-                else:
-                    dr = district_ranks.get(tn)
+            if cd > 0:
+                dr = district_ranks.get(tn)
             else:
                 dr = None
-                cd = cd if cd else None
+                cd = None
 
         updates.append((gr, cr, sr, dr, count_global, count_c, count_s, cd, tn, year))
 
