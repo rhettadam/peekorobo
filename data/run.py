@@ -91,6 +91,7 @@ CONFIDENCE_MULTIPLIERS = {
     "low_reduction": 0.85  # Increased multiplier for low confidence
 }
 
+# Confidence "event_boost" from number of distinct played events in the season (not chronological).
 EVENT_BOOSTS = {
     1: 0.5,   # Single event
     2: 0.8,  # Two events
@@ -1752,7 +1753,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
             endgame_func = endgame_2025
 
         early_match_target = 5
-        early_weight_floor = 0.75  # Don't over-decay early matches; they may show true performance
+        # Within a single event: first matches use weight in [0.75, 1.0], ramping by match_count/5.
+        early_weight_floor = 0.75
 
         for match in matches:
             if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
@@ -1994,7 +1996,21 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         }
 
 def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, str]:
-    # Calculate chronological weight for an event based on its timing in the season
+    """
+    Weight for how much an event counts when blending multi-event season ACE (aggregate_overall_epa).
+    Effective per-event weight = chronological_weight * match_count.
+
+    Fixed weights:
+      - Preseason (before first regular week): 0.05
+      - Offseason (after last regular week): 0.10
+      - Unknown / no week_ranges / no start_date: 1.0
+
+    Regular season: piecewise linear in season_progress (0 = season start, 1 = season end).
+    Steeper than before so late weeks are weighted much more than early weeks:
+      - First 20% of season: 0.12 -> 0.32
+      - 20% - 80%: 0.32 -> 0.84
+      - Last 20%: 0.84 -> 1.00
+    """
     try:
         # Load week ranges for the year
         week_ranges = load_week_ranges()
@@ -2040,19 +2056,13 @@ def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, st
         days_into_season = (event_start - season_start).days
         season_progress = max(0.0, min(1.0, days_into_season / season_duration))
         
-        # Apply enhanced chronological weighting curve
-        # Early events (first 20% of season): 0.2-0.4 weight (more aggressive penalty)
-        # Mid events (20-80% of season): 0.4-0.8 weight (gradual improvement)
-        # Late events (last 20% of season): 0.8-1.0 weight (full recognition)
+        # Piecewise linear: discount early season, emphasize late season (same structure as before).
         if season_progress <= 0.2:
-            # Early season: linear from 0.2 to 0.4 (more aggressive penalty)
-            weight = 0.2 + (season_progress / 0.2) * 0.2
+            weight = 0.12 + (season_progress / 0.2) * 0.2
         elif season_progress <= 0.8:
-            # Mid season: linear from 0.4 to 0.8 (gradual improvement)
-            weight = 0.4 + ((season_progress - 0.2) / 0.6) * 0.4
+            weight = 0.32 + ((season_progress - 0.2) / 0.6) * 0.52
         else:
-            # Late season: linear from 0.8 to 1.0 (full recognition)
-            weight = 0.8 + ((season_progress - 0.8) / 0.2) * 0.2
+            weight = 0.84 + ((season_progress - 0.8) / 0.2) * 0.16
         
         return round(weight, 3), 'regular'
         
