@@ -874,6 +874,136 @@ def load_year_data(year):
     return team_data, event_data, dict(EVENT_TEAMS), dict(EVENT_RANKINGS), EVENTS_AWARDS, EVENT_MATCHES
 
 
+def load_compare_year_from_db(year, team_numbers):
+    """
+    Minimal load for /compare: EPA rows for the given teams plus event metadata only.
+    Skips matches, rankings, event_teams, and awards (large tables).
+    """
+    team_numbers = sorted({int(t) for t in team_numbers})
+
+    def compress_dict(d):
+        return {k: v for k, v in d.items() if v not in (None, "") or k == "wa"}
+
+    def safe_json_load(value):
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return []
+        return value or []
+
+    if not team_numbers:
+        return {}, {}
+
+    with DatabaseConnection() as conn:
+        team_data = {}
+        with conn.cursor() as cursor:
+            placeholders = ",".join(["%s"] * len(team_numbers))
+            cursor.execute(
+                f"""
+                SELECT te.team_number, te.year,
+                       t.nickname, t.city, t.state_prov, t.country, t.website,
+                       COALESCE(d.display_name, d.name) AS district,
+                       t.district_key,
+                       te.raw, te.ace, te.confidence, te.auto_raw, te.teleop_raw, te.endgame_raw,
+                       te.wins, te.losses, te.ties, te.event_perf,
+                       te.rank_global, te.rank_country, te.rank_state, te.rank_district,
+                       te.count_global, te.count_country, te.count_state, te.count_district
+                FROM team_epas te
+                LEFT JOIN teams t ON te.team_number = t.team_number
+                LEFT JOIN districts d ON (
+                    CASE WHEN t.district_key ~ '^[0-9]{{4}}[a-zA-Z]+$'
+                         THEN UPPER(SUBSTRING(t.district_key FROM 5))
+                         ELSE UPPER(TRIM(t.district_key))
+                    END
+                ) = d.district_key
+                WHERE te.year = %s AND te.team_number IN ({placeholders})
+                ORDER BY te.team_number
+                """,
+                (year, *team_numbers),
+            )
+            for row in cursor.fetchall():
+                (
+                    team_number, yrow, nickname, city, state_prov, country, website, district, district_key,
+                    raw, ace, confidence, auto_raw, teleop_raw, endgame_raw,
+                    wins, losses, ties, event_perf,
+                    rank_global, rank_country, rank_state, rank_district,
+                    count_global, count_country, count_state, count_district
+                ) = row
+
+                raw_team_data = {
+                    "team_number": team_number,
+                    "year": yrow,
+                    "nickname": nickname,
+                    "city": city,
+                    "state_prov": state_prov,
+                    "country": country,
+                    "website": website,
+                    "district": district,
+                    "district_key": district_key,
+                    "raw": raw,
+                    "ace": ace,
+                    "confidence": confidence,
+                    "auto_raw": auto_raw,
+                    "teleop_raw": teleop_raw,
+                    "endgame_raw": endgame_raw,
+                    "wins": wins,
+                    "losses": losses,
+                    "ties": ties,
+                    "event_perf": safe_json_load(event_perf),
+                    "rank_global": rank_global,
+                    "rank_country": rank_country,
+                    "rank_state": rank_state,
+                    "rank_district": rank_district,
+                    "count_global": count_global,
+                    "count_country": count_country,
+                    "count_state": count_state,
+                    "count_district": count_district,
+                }
+
+                team_data[team_number] = compress_dict(raw_team_data)
+
+        event_data = {}
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT event_key, name, start_date, end_date, event_type,
+                       district_key, district_abbrev, district_name,
+                       city, state_prov, country, website, webcast_type, webcast_channel, week
+                FROM events
+                WHERE event_key LIKE %s
+                ORDER BY event_key
+                """,
+                (f"{year}%",),
+            )
+            for row in cursor.fetchall():
+                (
+                    event_key, name, start_date, end_date, event_type,
+                    district_key, district_abbrev, district_name,
+                    city, state_prov, country, website, webcast_type, webcast_channel, week
+                ) = row
+                event_data[event_key] = compress_dict({
+                    "k": event_key,
+                    "n": name,
+                    "y": year,
+                    "sd": start_date,
+                    "ed": end_date,
+                    "et": event_type,
+                    "dk": district_key,
+                    "da": district_abbrev,
+                    "dn": district_name,
+                    "c": city,
+                    "s": state_prov,
+                    "co": country,
+                    "w": website,
+                    "wt": webcast_type,
+                    "wc": webcast_channel,
+                    "wk": week,
+                })
+
+    return team_data, event_data
+
+
 def get_team_years_participated(team_number):
     """Return a sorted list of years this team has participated in."""
     with DatabaseConnection() as conn:

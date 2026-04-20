@@ -1332,6 +1332,7 @@ def topbar():
                                         in_navbar=True,
                                         className="custom-navlink",
                                         children=[
+                                            dbc.DropdownMenuItem("Compare", href="/compare", id="nav-compare", className="custom-navlink"),
                                             dbc.DropdownMenuItem("Blog", href="/blog"),
                                             dbc.DropdownMenuItem("API Docs", href="https://www.peekorobo.com/api/docs#/", target="_blank"),
                                             dbc.DropdownMenuItem("Higher or Lower", href="/higher-lower"),
@@ -7700,3 +7701,103 @@ def duel_layout():
         ),
         footer
     ], style={"minHeight": "100vh", "display": "flex", "flexDirection": "column"})
+
+
+def compare_teams_layout():
+    """Multi-team event performance comparison (Peekorobo metrics)."""
+    year_opts = [{"label": str(y), "value": y} for y in range(current_year, 1991, -1)]
+    return html.Div(
+        [
+            topbar(),
+            dbc.Container(
+                [
+                    html.H2("Compare", className="mb-2", style={"color": "var(--text-primary)", "fontWeight": "bold"}),
+                    html.P(
+                        "Metrics by event — one season or all seasons. Events ordered by start date when known.",
+                        className="mb-4",
+                        style={"color": "var(--text-secondary)", "maxWidth": "820px"},
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                [
+                                    html.Label("Teams (2–8)", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
+                                    dcc.Dropdown(
+                                        id="compare-teams-select",
+                                        options=[],
+                                        multi=True,
+                                        placeholder="Search and select teams…",
+                                        className="custom-input-box",
+                                    ),
+                                ],
+                                md=12,
+                                className="mb-3",
+                            ),
+                            dbc.Col(
+                                [
+                                    html.Label("Time range", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
+                                    dcc.RadioItems(
+                                        id="compare-range-mode",
+                                        options=[
+                                            {"label": " One season", "value": "single_year"},
+                                            {"label": " All seasons", "value": "all_years"},
+                                        ],
+                                        value="single_year",
+                                        inline=True,
+                                        labelStyle={"marginRight": "18px", "color": "var(--text-primary)"},
+                                        inputStyle={"marginRight": "6px"},
+                                    ),
+                                ],
+                                md=6,
+                                className="mb-3",
+                            ),
+                            dbc.Col(
+                                [
+                                    html.Label("Season", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
+                                    dcc.Dropdown(
+                                        id="compare-year-dropdown",
+                                        options=year_opts,
+                                        value=current_year,
+                                        clearable=False,
+                                        className="custom-input-box",
+                                    ),
+                                ],
+                                md=4,
+                                className="mb-3",
+                            ),
+                            dbc.Col(
+                                [
+                                    html.Label("Metric", style={"fontWeight": "bold", "color": "var(--text-primary)"}),
+                                    dcc.Dropdown(
+                                        id="compare-metric-dropdown",
+                                        options=[
+                                            {"label": "ACE", "value": "ace"},
+                                            {"label": "RAW", "value": "raw"},
+                                            {"label": "Auto", "value": "auto"},
+                                            {"label": "Teleop", "value": "teleop"},
+                                            {"label": "Endgame", "value": "endgame"},
+                                            {"label": "Confidence", "value": "confidence"},
+                                        ],
+                                        value="ace",
+                                        clearable=False,
+                                        className="custom-input-box",
+                                    ),
+                                ],
+                                md=4,
+                                className="mb-3",
+                            ),
+                        ]
+                    ),
+                    dcc.Graph(
+                        id="compare-teams-chart",
+                        config={"displayModeBar": True},
+                        clear_on_unhover=True,
+                        style={"minHeight": "480px"},
+                    ),
+                ],
+                style={"padding": "20px", "maxWidth": "1200px", "margin": "0 auto"},
+            ),
+            footer,
+        ],
+        style={"minHeight": "100vh", "display": "flex", "flexDirection": "column"},
+    )
