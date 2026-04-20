@@ -1806,10 +1806,15 @@ def update_events_tab_content(
     Input("url", "search"),
 )
 def set_event_tab_from_url(search):
+    valid = ["teams", "matches", "sos", "alliances", "metrics"]
     if search and search.startswith("?"):
         params = parse_qs(search[1:])
         tab = params.get("tab", [None])[0]
-        if tab in ["teams", "rankings", "matches", "sos", "compare", "alliances", "metrics"]:
+        if tab == "compare":
+            return "teams"
+        if tab == "rankings":
+            return "teams"
+        if tab in valid:
             return tab
     return "teams"
 
@@ -1821,11 +1826,28 @@ def set_event_tab_from_url(search):
 def set_event_tabs_active_tab(tab):
     return tab
 
+
+def _default_event_teams_stats_type(event_matches, event_record):
+    """Default to Event Stats after the event end date or once any match has recorded scores."""
+    today = date.today()
+    end_str = (event_record or {}).get("ed")
+    if end_str:
+        try:
+            if today > datetime.strptime(end_str, "%Y-%m-%d").date():
+                return "event"
+        except ValueError:
+            pass
+    for m in event_matches or []:
+        rs, bs = m.get("rs"), m.get("bs")
+        if rs is not None and bs is not None:
+            return "event"
+    return "overall"
+
+
 @app.callback(
     Output("data-display-container", "children"),
     Output("event-url", "search"),  # NEW: update the event tab URL
     Input("event-data-tabs", "active_tab"),
-    State("store-rankings", "data"),
     State("store-event-epa", "data"),
     State("store-event-teams", "data"),
     State("store-event-matches", "data"),
@@ -1833,7 +1855,7 @@ def set_event_tabs_active_tab(tab):
     State("url", "pathname"),  # get the event_key from the URL
     suppress_callback_exceptions=True,
 )
-def update_event_display(active_tab, rankings, epa_data, event_teams, event_matches, event_year, pathname):
+def update_event_display(active_tab, epa_data, event_teams, event_matches, event_year, pathname):
 
     # --- URL update logic ---
     # Extract event_key from pathname
@@ -1864,31 +1886,16 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         "fontSize": "14px",
     }
 
-    def safe_int(val):
-        try: return int(val)
-        except: return 999999
-
     # Load team data for the specific year
+    year_event_data = None
     if event_year == current_year:
         year_team_data = TEAM_DATABASE # Use global data for current year
-        team_epas = []
-        for tnum, team_data in TEAM_DATABASE.get(event_year, {}).items():
-            if team_data:
-                team_epas.append((tnum, team_data.get("ace", 0)))
     else:
         # Load data for other years on-demand
         try:
-            year_team_data, _, _, _, _, _ = load_year_data(event_year)
-            team_epas = []
-            for tnum, team_data in year_team_data.items():
-                if team_data:
-                    team_epas.append((tnum, team_data.get("ace", 0)))
+            year_team_data, year_event_data, _, _, _, _ = load_year_data(event_year)
         except Exception as e:
             return dbc.Alert(f"Error loading team data for year {event_year}: {str(e)}", color="danger"), query_string
-        
-    # Sort by ACE to calculate ranks
-    team_epas.sort(key=lambda x: x[1], reverse=True)
-    rank_map = {tnum: i+1 for i, (tnum, _) in enumerate(team_epas)}
 
     # Get all performance values for percentile calculations
     ace_values = [data.get("ace", 0) for data in epa_data.values()]
@@ -1907,127 +1914,18 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         
     style_data_conditional = get_epa_styling(percentiles_dict)
 
-    # === Rankings Tab ===
-    if active_tab == "rankings":
-        data_rows = []
-        for team_num, rank_info in (rankings or {}).items():
-            tstr = str(team_num)
-            if event_year == current_year:
-                team_data = year_team_data.get(current_year, {}).get(int(team_num), {})
-            else:
-                team_data = year_team_data.get(int(team_num), {})
-            nickname = team_data.get("nickname", "Unknown")
-
-            nickname_safe = nickname.replace('"', "'")
-            truncated = truncate_name(nickname)
-            nickname_link = f'[{truncated}](/team/{tstr}/{event_year} "{nickname_safe}")'
-            data_rows.append({
-                "Rank": rank_info.get("rk", None),
-                "Team #": int(team_num) if team_num else 0,
-                "Nickname": nickname_link,
-                "Wins": rank_info.get("w", None),
-                "Losses": rank_info.get("l", None),
-                "Ties": rank_info.get("t", None),
-                "DQ": rank_info.get("dq", None),
-                "ACE Rank": rank_map.get(int(tstr), None),
-                "ACE": epa_data.get(tstr, {}).get("ace", None),
-            })
-
-        data_rows.sort(key=lambda r: safe_int(r["Rank"]))
-
-        columns = [
-            {"name": "Rank", "id": "Rank", "type": "numeric"},
-            {"name": "Team #", "id": "Team #", "type": "numeric"},
-            {"name": "Nickname", "id": "Nickname", "presentation": "markdown"},
-            {"name": "Wins", "id": "Wins", "type": "numeric"},
-            {"name": "Losses", "id": "Losses", "type": "numeric"},
-            {"name": "Ties", "id": "Ties", "type": "numeric"},
-            {"name": "DQ", "id": "DQ", "type": "numeric"},
-            {"name": "ACE Rank", "id": "ACE Rank", "type": "numeric"},
-            {"name": "ACE", "id": "ACE", "type": "numeric"},
-        ]
-
-        # Export dropdown for rankings
-        rankings_export_dropdown = dbc.DropdownMenu(
-            label="Export",
-            color="primary",
-            className="me-2",
-            children=[
-                dbc.DropdownMenuItem("Export as CSV", id="event-rankings-export-csv-dropdown"),
-                dbc.DropdownMenuItem("Export as TSV", id="event-rankings-export-tsv-dropdown"),
-                dbc.DropdownMenuItem("Export as Excel", id="event-rankings-export-excel-dropdown"),
-                dbc.DropdownMenuItem("Export as JSON", id="event-rankings-export-json-dropdown"),
-                dbc.DropdownMenuItem("Export as HTML", id="event-rankings-export-html-dropdown"),
-                dbc.DropdownMenuItem("Export as LaTeX", id="event-rankings-export-latex-dropdown"),
-            ],
-            toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
-            style={"display": "inline-block"}
-        )
-
-        # Export container (at top)
-        rankings_export_container = html.Div([
-            rankings_export_dropdown,
-            dcc.Download(id="download-event-rankings-csv"),
-            dcc.Download(id="download-event-rankings-excel"),
-            dcc.Download(id="download-event-rankings-tsv"),
-            dcc.Download(id="download-event-rankings-json"),
-            dcc.Download(id="download-event-rankings-html"),
-            dcc.Download(id="download-event-rankings-latex"),
-        ], style={"textAlign": "right", "marginBottom": "10px"})
-        
-        # Rows per page container (at bottom)
-        rankings_rows_per_page_container = html.Div([
-            html.Label("Rows/page: ", style={"marginRight": "6px", "color": "var(--text-primary)", "fontSize": "0.85rem", "verticalAlign": "middle"}),
-            dcc.Dropdown(
-                id="event-rankings-page-size",
-                options=[
-                    {"label": "10", "value": 10},
-                    {"label": "25", "value": 25},
-                    {"label": "50", "value": 50},
-                    {"label": "100", "value": 100},
-                ],
-                value=10,
-                clearable=False,
-                style={"width": "65px", "display": "inline-block", "fontSize": "0.85rem"},
-                className="custom-input-box"
-            ),
-        ], style={"display": "inline-flex", "alignItems": "center", "justifyContent": "flex-end", "width": "100%", "marginTop": "10px"})
-
-        # Store rankings data for export
-        rankings_data_store = dcc.Store(id="event-rankings-data-store", data=data_rows)
-
-        return html.Div([
-            rankings_data_store,
-            ace_legend_layout(),
-            rankings_export_container,
-            dash_table.DataTable(
-                id="event-rankings-table",
-                columns=columns,
-                sort_action="native",
-                sort_mode="multi",
-                filter_action="native",
-                filter_options={"case": "insensitive"},
-                data=data_rows,
-                page_size=10,
-                page_current=0,
-                style_table=common_style_table,
-                style_header=common_style_header,
-                style_cell=common_style_cell,
-                style_data_conditional=style_data_conditional,
-                style_filter={
-                    "backgroundColor": "var(--input-bg)",
-                    "color": "var(--text-primary)",
-                    "borderColor": "var(--input-border)",
-                }
-            ),
-            rankings_rows_per_page_container
-        ]), query_string
-
     # === Teams Tab ===
-    elif active_tab == "teams":
+    if active_tab == "teams":
 
         if event_year != current_year:
             year_team_data = {event_year: year_team_data}
+        
+        event_record = (
+            EVENT_DATABASE.get(event_year, {}).get(event_key)
+            if event_year == current_year
+            else (year_event_data or {}).get(event_key)
+        )
+        default_stats_type = _default_event_teams_stats_type(event_matches, event_record)
         
         # Add stats selector
         stats_selector = dbc.Row([
@@ -2039,7 +1937,7 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
                         {"label": "Overall Stats", "value": "overall"},
                         {"label": "Event Stats", "value": "event"}
                     ],
-                    value="overall",
+                    value=default_stats_type,
                     clearable=False,
                     style={"width": "200px"},
                     className="custom-input-box"
@@ -2301,43 +2199,6 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
             sos_rows_per_page_container
         ]), query_string
 
-    # === Compare Teams Tab ===
-    elif active_tab == "compare":
-        # Multi-select dropdown for teams
-        team_options = [
-            {"label": f"{t['tk']} - {t.get('nn', '')}", "value": str(t["tk"])}
-            for t in event_teams
-        ]
-        # Default: top 2 teams by ACE
-        sorted_teams = sorted(event_teams, key=lambda t: epa_data.get(str(t["tk"]), {}).get("ace", 0), reverse=True)
-        default_team_values = [str(t["tk"]) for t in sorted_teams[:2]]
-        # Use a Store to keep selection in sync
-        compare_layout = html.Div([
-            html.Label("Select Teams to Compare:", style={"fontWeight": "bold", "color": "var(--text-primary)", "marginBottom": "8px"}),
-            dcc.Dropdown(
-                id="compare-teams-dropdown",
-                options=team_options,
-                value=default_team_values,
-                multi=True,
-                placeholder="Select teams...",
-                style={"marginBottom": "10px"},
-                className="custom-input-box"
-            ),
-            dbc.ButtonGroup(
-                [
-                    dbc.Button("Compare Teams", id="event-compare-mode-teams", n_clicks=0, active=True, outline=True, color="warning", size="sm"),
-                    dbc.Button("Compare Alliances", id="event-compare-mode-alliances", n_clicks=0, active=False, outline=True, color="warning", size="sm"),
-                ],
-                id="event-compare-mode-toggle",
-                className="mb-3"
-            ),
-            html.Div(id="event-compare-mode-hint", style={"marginBottom": "10px", "fontSize": "0.85rem", "color": "var(--text-secondary)"}),
-            html.Div(id="compare-teams-table-container"),
-            dcc.Store(id="event-compare-mode-store", data="teams"),
-            dcc.Store(id="event-radar-toggles-store", data={"show_alliances": True, "show_teams": True})
-        ])
-        return compare_layout, query_string
-
     if active_tab == "alliances":
         query_string = f"?tab=alliances"
         return "", query_string
@@ -2357,11 +2218,12 @@ def update_event_display(active_tab, rankings, epa_data, event_teams, event_matc
         State("store-event-teams", "data"),
         State("store-event-matches", "data"),
         State("store-event-year", "data"),
+        State("store-rankings", "data"),
         State("url", "pathname"),
     ],
     suppress_callback_exceptions=True,
 )
-def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_matches, event_year, pathname):
+def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_matches, event_year, rankings, pathname):
     """Update the teams table and spotlight cards based on selected stats type (overall vs event-specific)"""
     
     if not stats_type or not event_teams:
@@ -2374,6 +2236,30 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
     
     if not event_key:
         return "", ""
+
+    def tba_rank_row(team_num):
+        if not rankings:
+            return {}
+        r = rankings.get(str(team_num))
+        if r is None:
+            r = rankings.get(int(team_num))
+        return r or {}
+
+    def format_tba_record(o):
+        if not o:
+            return None
+        w, l, t, dq = o.get("w"), o.get("l"), o.get("t"), o.get("dq")
+        if w is None and l is None and t is None:
+            return None
+
+        def _n(v):
+            return 0 if v is None else int(v)
+
+        rec = f"{_n(w)}-{_n(l)}-{_n(t)}"
+        dq_n = 0 if dq is None else int(dq)
+        if dq_n:
+            rec = f"{rec} ({dq_n} DQ{'s' if dq_n != 1 else ''})"
+        return rec
     
     # Load team data for the specific year
     if event_year == current_year:
@@ -2420,17 +2306,19 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             nickname_safe = nickname.replace('"', "'")
             truncated = truncate_name(nickname)
             nickname_link = f'[{truncated}](/team/{tstr}/{event_year} "{nickname_safe}")'
+            o = tba_rank_row(tnum)
             rows.append({
                 "ACE Rank": rank_map.get(int(tnum), None),
+                "Official Rank": o.get("rk"),
                 "Team #": int(tnum) if tnum else 0,
                 "Nickname": nickname_link,
+                "Record": format_tba_record(o),
                 "RAW": team_data.get('raw', 0),
                 "Confidence": team_data.get('confidence', 0),
                 "ACE": team_data.get('ace', 0),
                 "Auto": team_data.get('auto_raw', 0),
                 "Teleop": team_data.get('teleop_raw', 0),
                 "Endgame": team_data.get('endgame_raw', 0),
-                "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
         
         # Sort by overall ACE value
@@ -2464,10 +2352,7 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                         global_endgame_values.append(fallback_team_data.get("endgame_raw", 0))
         
     else:  # stats_type == "event"
-        # Use event-specific data for ranking within the event
         event_epa_values = [data.get("ace", 0) for data in epa_data.values()]
-        event_epa_values.sort(reverse=True)
-        event_rank_map = {epa_val: i+1 for i, epa_val in enumerate(event_epa_values)}
         
         # Calculate overall ACE ranks using the full dataset
         overall_team_epas = []
@@ -2531,10 +2416,6 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             tstr = str(tnum)
             event_team_data = epa_data.get(tstr, {})
             
-            # Find rank for this team's event ACE 
-            team_event_epa = event_team_data.get("ace", 0)
-            event_rank = event_rank_map.get(team_event_epa, None)
-            
             # Get overall ACE rank
             overall_ace_rank = overall_rank_map.get(int(tnum), None)
             
@@ -2551,11 +2432,13 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             nickname_safe = nickname.replace('"', "'")
             truncated = truncate_name(nickname)
             nickname_link = f'[{truncated}](/team/{tstr}/{event_year} "{nickname_safe}")'
+            o = tba_rank_row(tnum)
             rows.append({
-                "Event Rank": event_rank,
                 "ACE Rank": overall_ace_rank,
+                "Official Rank": o.get("rk"),
                 "Team #": int(tnum) if tnum else 0,
                 "Nickname": nickname_link,
+                "Record": format_tba_record(o),
                 "RAW": event_team_data.get('raw', 0),
                 "Confidence": event_team_data.get('confidence', 0),
                 "ACE": event_team_data.get('ace', 0),
@@ -2564,7 +2447,6 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
                 "Endgame": event_team_data.get('endgame_raw', 0),
                 "SoS": round(sos_value, 2),
                 "ACE Δ": round(ace_improvement, 2),
-                "Location": ", ".join(filter(None, [t.get("c", ""), t.get("s", ""), t.get("co", "")])) or "Unknown",
             })
         
         # Sort by event ACE value
@@ -2638,22 +2520,24 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
     if stats_type == "overall":
         columns = [
             {"name": "ACE Rank", "id": "ACE Rank", "type": "numeric"},
+            {"name": "Official Rank", "id": "Official Rank", "type": "numeric"},
             {"name": "Team #", "id": "Team #", "type": "numeric"},
             {"name": "Nickname", "id": "Nickname", "presentation": "markdown"},
+            {"name": "Record", "id": "Record"},
             {"name": "RAW", "id": "RAW", "type": "numeric"},
             {"name": "Confidence", "id": "Confidence", "type": "numeric"},
             {"name": "ACE", "id": "ACE", "type": "numeric"},
             {"name": "Auto", "id": "Auto", "type": "numeric"},
             {"name": "Teleop", "id": "Teleop", "type": "numeric"},
             {"name": "Endgame", "id": "Endgame", "type": "numeric"},
-            {"name": "Location", "id": "Location"},
         ]
     else:  # event stats
         columns = [
-            {"name": "Event Rank", "id": "Event Rank", "type": "numeric"},
             {"name": "ACE Rank", "id": "ACE Rank", "type": "numeric"},
+            {"name": "Official Rank", "id": "Official Rank", "type": "numeric"},
             {"name": "Team #", "id": "Team #", "type": "numeric"},
             {"name": "Nickname", "id": "Nickname", "presentation": "markdown"},
+            {"name": "Record", "id": "Record"},
             {"name": "RAW", "id": "RAW", "type": "numeric"},
             {"name": "Confidence", "id": "Confidence", "type": "numeric"},
             {"name": "ACE", "id": "ACE", "type": "numeric"},
@@ -2662,7 +2546,6 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             {"name": "Endgame", "id": "Endgame", "type": "numeric"},
             {"name": "SoS", "id": "SoS", "type": "numeric"},
             {"name": "ACE Δ", "id": "ACE Δ", "type": "numeric"},
-            {"name": "Location", "id": "Location"},
         ]
     
     # Create spotlight cards based on selected stats type
@@ -2689,7 +2572,9 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
             
             spotlight_cards.append(
                 dbc.Col(
-                    create_team_card_spotlight_event(t, event_team_data, event_year, event_rank_map),
+                    create_team_card_spotlight_event(
+                        t, event_team_data, event_year, tba_rank_row(tnum).get("rk")
+                    ),
                     width="auto"
                 )
             )
@@ -3499,436 +3384,6 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
     content.append(matches_rows_per_page_container)
     
     return html.Div(content)
-
-# Add callback for radar chart toggles
-@app.callback(
-    Output("event-radar-toggles-store", "data"),
-    Input("event-radar-toggles-checklist", "value"),
-    prevent_initial_call=True
-)
-def update_event_radar_toggles(selected_values):
-    if not selected_values:
-        return {"show_alliances": False, "show_teams": False}
-    return {
-        "show_alliances": "show_alliances" in selected_values,
-        "show_teams": "show_teams" in selected_values
-    }
-
-# Add callback for event compare mode toggle
-@app.callback(
-    [
-        Output("event-compare-mode-store", "data"),
-        Output("event-compare-mode-teams", "active"),
-        Output("event-compare-mode-alliances", "active"),
-        Output("event-compare-mode-hint", "children"),
-    ],
-    [
-        Input("event-compare-mode-teams", "n_clicks"),
-        Input("event-compare-mode-alliances", "n_clicks"),
-    ],
-    State("compare-teams-dropdown", "value"),
-)
-def update_event_compare_mode(teams_clicks, alliances_clicks, selected_teams):
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        return "teams", True, False, "Select 2+ teams to compare"
-    
-    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    
-    if button_id == "event-compare-mode-alliances":
-        if selected_teams and len(selected_teams) >= 3 and len(selected_teams) % 3 == 0:
-            num_alliances = len(selected_teams) // 3
-            return "alliances", False, True, f"Comparing {num_alliances} alliance{'s' if num_alliances > 1 else ''} ({len(selected_teams)} teams)"
-        elif selected_teams and len(selected_teams) > 0:
-            return "alliances", False, True, f"Select a multiple of 3 teams (currently {len(selected_teams)} teams)"
-        else:
-            return "alliances", False, True, "Select 3, 6, 9, or more teams (multiple of 3) to compare as alliances"
-    else:
-        if selected_teams and len(selected_teams) >= 2:
-            return "teams", True, False, f"Comparing {len(selected_teams)} teams"
-        else:
-            return "teams", True, False, "Select 2+ teams to compare"
-
-# Add a callback for the compare teams table
-@app.callback(
-    Output("compare-teams-table-container", "children"),
-    Input("compare-teams-dropdown", "value"),
-    Input("event-compare-mode-store", "data"),
-    Input("event-radar-toggles-store", "data"),
-    State("store-event-epa", "data"),
-    State("store-event-teams", "data"),
-    State("store-rankings", "data"),
-    State("store-event-year", "data"),
-    State("store-event-matches", "data"),
-)
-def update_compare_teams_table(selected_teams, mode, radar_toggles, epa_data, event_teams, rankings, event_year, event_matches):
-    mode = mode or "teams"
-    radar_toggles = radar_toggles or {"show_alliances": True, "show_teams": True}
-    show_alliances = radar_toggles.get("show_alliances", True)
-    show_teams = radar_toggles.get("show_teams", True)
-    
-    if not selected_teams:
-        return dbc.Alert("Select teams to compare.", color="info")
-    
-    if mode == "alliances":
-        if len(selected_teams) < 3 or len(selected_teams) % 3 != 0:
-            return dbc.Alert(f"Select a multiple of 3 teams to compare as alliances (currently {len(selected_teams)} teams). Select 3, 6, 9, 12, etc.", color="warning")
-    else:
-        if len(selected_teams) < 2:
-            return dbc.Alert("Select two or more teams to compare.", color="info")
-    # Build lookup for event_teams
-    team_lookup = {str(t["tk"]): t for t in event_teams}
-
-    # Compute avg score and SoS for each team
-    avg_score_map = {}
-    sos_map = {}
-    matches = event_matches or []
-    for tnum in selected_teams:
-        tnum_str = str(tnum)
-        team_matches = [m for m in matches if tnum_str in m.get("rt", "").split(",") or tnum_str in m.get("bt", "").split(",")]
-        scores = []
-        win_probs = []
-        for m in team_matches:
-            # Determine alliance
-            if tnum_str in m.get("rt", "").split(","):
-                alliance = "red"
-                score = m.get("rs", 0)
-                opp_teams = [int(t) for t in m.get("bt", "").split(",") if t.strip().isdigit()]
-            else:
-                alliance = "blue"
-                score = m.get("bs", 0)
-                opp_teams = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
-            scores.append(score)
-            p_red = m.get("rp")
-            p_blue = m.get("bp")
-            if p_red is None or p_blue is None:
-                continue
-            win_prob = p_red if alliance == "red" else p_blue
-            win_probs.append(win_prob)
-        avg_score_map[tnum_str] = sum(scores) / len(scores) if scores else 0
-        sos_map[tnum_str] = sum(win_probs) / len(win_probs) if win_probs else None
-
-    # Handle alliance mode - calculate combined stats for multiple alliances
-    alliance_rows = []
-    if mode == "alliances" and len(selected_teams) >= 3 and len(selected_teams) % 3 == 0:
-        # Group teams into alliances (3 teams per alliance)
-        num_alliances = len(selected_teams) // 3
-        for alliance_idx in range(num_alliances):
-            alliance_teams = selected_teams[alliance_idx * 3:(alliance_idx + 1) * 3]
-            
-            # Calculate combined alliance stats
-            combined_auto = sum(float(epa_data.get(str(tnum), {}).get('auto_raw', 0)) for tnum in alliance_teams)
-            combined_teleop = sum(float(epa_data.get(str(tnum), {}).get('teleop_raw', 0)) for tnum in alliance_teams)
-            combined_endgame = sum(float(epa_data.get(str(tnum), {}).get('endgame_raw', 0)) for tnum in alliance_teams)
-            combined_ace = sum(float(epa_data.get(str(tnum), {}).get('epa', 0)) for tnum in alliance_teams)
-            combined_raw = sum(float(epa_data.get(str(tnum), {}).get('normal_epa', 0)) for tnum in alliance_teams)
-            combined_confidence = sum(float(epa_data.get(str(tnum), {}).get('confidence', 0)) for tnum in alliance_teams) / 3.0
-            combined_wins = sum((rankings or {}).get(str(tnum), {}).get('w', 0) for tnum in alliance_teams)
-            combined_losses = sum((rankings or {}).get(str(tnum), {}).get('l', 0) for tnum in alliance_teams)
-            combined_ties = sum((rankings or {}).get(str(tnum), {}).get('t', 0) for tnum in alliance_teams)
-            combined_sos = sum(sos_map.get(str(tnum), 0) for tnum in alliance_teams) / 3.0
-            
-            team_numbers = [int(tnum) for tnum in alliance_teams]
-            alliance_label = " | ".join([f"#{num}" for num in team_numbers])
-            alliance_name = f"Alliance {alliance_idx + 1}" if num_alliances > 1 else "Alliance"
-            
-            alliance_rows.append({
-                "Team #": alliance_label,
-                "Nickname": alliance_name,
-                "Rank": "N/A",
-                "W-L-T": f"{combined_wins}-{combined_losses}-{combined_ties}",
-                "SoS": round(combined_sos, 2),
-                "RAW": round(combined_raw, 2),
-                "Auto": round(combined_auto, 2),
-                "Teleop": round(combined_teleop, 2),
-                "Endgame": round(combined_endgame, 2),
-                "Confidence": round(combined_confidence, 2),
-                "ACE": round(combined_ace, 2),
-                "_alliance_teams": alliance_teams,  # Store for radar chart
-            })
-    
-    # Build rows for each team
-    rows = []
-    for tnum in selected_teams:
-        t = team_lookup.get(str(tnum), {})
-        epa = epa_data.get(str(tnum), {})
-        rank_info = (rankings or {}).get(str(tnum), {})
-        nickname = t.get('nn', 'Unknown')
-        nickname_safe = nickname.replace('"', "'")
-        truncated = truncate_name(nickname)
-        nickname_link = f'[{truncated}](/team/{tnum}/{event_year} "{nickname_safe}")'
-        rows.append({
-            "Team #": int(tnum) if tnum else 0,
-            "Nickname": nickname_link,
-            "Rank": rank_info.get("rk", "N/A"),
-            "W-L-T": f"{rank_info.get('w', 'N/A')}-{rank_info.get('l', 'N/A')}-{rank_info.get('t', 'N/A')}",
-            "SoS": sos_map.get(str(tnum)),
-            "RAW": float(epa.get('normal_epa', 0)),
-            "Auto": float(epa.get('auto_raw', 0)),
-            "Teleop": float(epa.get('teleop_raw', 0)),
-            "Endgame": float(epa.get('endgame_raw', 0)),
-            "Confidence": float(epa.get('confidence', 0)),
-            "ACE": float(epa.get('epa', 0)),
-        })
-    
-    # Add alliance rows at the beginning if in alliance mode
-    if alliance_rows:
-        rows = alliance_rows + rows
-    # Compute global percentiles for coloring
-    if event_year == current_year:
-        global_teams = TEAM_DATABASE.get(event_year, {}).values()
-    else:
-        year_team_data, _, _, _, _, _ = load_year_data(event_year)
-        global_teams = year_team_data.values()
-    global_ace_values = [t.get("ace", 0) for t in global_teams]
-    global_auto_values = [t.get("auto_raw", 0) for t in global_teams]
-    global_teleop_values = [t.get("teleop_raw", 0) for t in global_teams]
-    global_endgame_values = [t.get("endgame_raw", 0) for t in global_teams]
-    global_confidence_values = [t.get("confidence", 0) for t in global_teams]
-    percentiles_dict = {
-        "Auto": compute_percentiles(global_auto_values),
-        "Teleop": compute_percentiles(global_teleop_values),
-        "Endgame": compute_percentiles(global_endgame_values),
-        "Confidence": compute_percentiles(global_confidence_values),
-        "ACE": compute_percentiles(global_ace_values),
-    }
-    style_data_conditional = get_epa_styling(percentiles_dict)
-    columns = [
-        {"name": "Team #", "id": "Team #", "type": "numeric"},
-        {"name": "Nickname", "id": "Nickname", "presentation": "markdown"},
-        {"name": "Rank", "id": "Rank"},
-        {"name": "W-L-T", "id": "W-L-T"},
-        {"name": "SoS", "id": "SoS"},
-        {"name": "RAW", "id": "RAW"},
-        {"name": "Auto", "id": "Auto"},
-        {"name": "Teleop", "id": "Teleop"},
-        {"name": "Endgame", "id": "Endgame"},
-        {"name": "Confidence", "id": "Confidence"},
-        {"name": "ACE", "id": "ACE"},
-    ]
-    # Radar chart for visual comparison
-    
-    radar_stats = ["Auto", "Teleop", "Endgame", "Confidence", "RAW", "ACE", "Avg Score", "SoS"]
-    # Gather all event teams' stats for normalization
-    all_team_stats = {stat: [] for stat in radar_stats}
-    for t in event_teams:
-        tnum = str(t["tk"])
-        epa = epa_data.get(tnum, {})
-        all_team_stats["Auto"].append(float(epa.get("auto_raw", 0)))
-        all_team_stats["Teleop"].append(float(epa.get("teleop_raw", 0)))
-        all_team_stats["Endgame"].append(float(epa.get("endgame_raw", 0)))
-        all_team_stats["Confidence"].append(float(epa.get("confidence", 0)))
-        all_team_stats["RAW"].append(float(epa.get("raw", 0)))
-        all_team_stats["ACE"].append(float(epa.get("ace", 0)))
-        all_team_stats["Avg Score"].append(avg_score_map.get(tnum, 0))
-        all_team_stats["SoS"].append(sos_map.get(tnum, 0))
-    # Compute min/max for each stat
-    stat_minmax = {}
-    for stat in radar_stats:
-        vals = all_team_stats[stat]
-        if vals:
-            stat_min = min(vals)
-            stat_max = max(vals)
-            stat_minmax[stat] = (stat_min, stat_max)
-        else:
-            stat_minmax[stat] = (0, 1)
-    # Radar chart with normalized values
-    fig = go.Figure()
-    
-    # Define colors for multiple alliances
-    alliance_colors = [
-        'rgba(244, 67, 54, 0.4)',    # Red
-        'rgba(33, 150, 243, 0.4)',   # Blue
-        'rgba(76, 175, 80, 0.4)',    # Green
-        'rgba(255, 193, 7, 0.4)',    # Yellow
-        'rgba(255, 87, 34, 0.4)',    # Orange
-    ]
-
-    alliance_line_colors = [
-        'rgba(244, 67, 54, 1.0)',    
-        'rgba(33, 150, 243, 1.0)',   
-        'rgba(76, 175, 80, 1.0)',    
-        'rgba(255, 193, 7, 1.0)',    
-        'rgba(255, 87, 34, 1.0)',    
-    ]
-    # Process alliance rows first if they exist and toggle is on
-    if mode == "alliances" and alliance_rows and show_alliances:
-        # Remove "Avg Score" from radar stats for alliances since it's not meaningful
-        alliance_radar_stats = [s for s in radar_stats if s != "Avg Score"]
-        for idx, alliance_row in enumerate(alliance_rows):
-            # For alliance, use combined values but scale normalization
-            values = [
-                alliance_row["Auto"],
-                alliance_row["Teleop"],
-                alliance_row["Endgame"],
-                alliance_row["Confidence"],
-                alliance_row["RAW"],
-                alliance_row["ACE"],
-                alliance_row["SoS"],
-            ]
-            # Scale mins/maxs by 3 for alliance comparison (except averaged stats)
-            alliance_stat_minmax = {}
-            for stat in alliance_radar_stats:
-                if stat in ["Confidence", "SoS"]:
-                    # Confidence and SoS are averaged, so keep original range
-                    alliance_stat_minmax[stat] = (stat_minmax[stat][0], stat_minmax[stat][1])
-                else:
-                    # Other stats (Auto, Teleop, Endgame, RAW, ACE) are summed, so scale by 3
-                    alliance_stat_minmax[stat] = (stat_minmax[stat][0] * 3, stat_minmax[stat][1] * 3)
-            norm_values = []
-            for v, stat in zip(values, alliance_radar_stats):
-                stat_min, stat_max = alliance_stat_minmax[stat]
-                if stat_max > stat_min:
-                    norm = (v - stat_min) / (stat_max - stat_min)
-                else:
-                    norm = 0.5
-                norm_values.append(norm)
-            color_idx = idx % len(alliance_colors)
-            fig.add_trace(go.Scatterpolar(
-                r=norm_values,
-                theta=alliance_radar_stats,
-                fill='toself',
-                fillcolor=alliance_colors[color_idx],
-                line=dict(color=alliance_line_colors[color_idx], width=3),
-                name=alliance_row["Nickname"],
-            ))
-    
-    # Process team rows (skip alliance rows if they exist) - only if toggle is on
-    if show_teams:
-        # Use alliance_radar_stats if in alliance mode (to exclude Avg Score), otherwise use full radar_stats
-        team_radar_stats = alliance_radar_stats if (mode == "alliances" and alliance_rows) else radar_stats
-        for row in rows:
-            # Skip alliance rows - we already processed them
-            if row.get("Nickname") and ("Alliance" in row.get("Nickname", "")):
-                continue
-            
-            tnum = str(row["Team #"])
-            tnum_key = tnum
-            
-            if mode == "alliances" and alliance_rows:
-                # In alliance mode, exclude Avg Score for consistency
-                values = [
-                    row["Auto"],
-                    row["Teleop"],
-                    row["Endgame"],
-                    row["Confidence"],
-                    row["RAW"],
-                    row["ACE"],
-                    row["SoS"],
-                ]
-            else:
-                # In team mode, include all stats
-                values = [
-                    row["Auto"],
-                    row["Teleop"],
-                    row["Endgame"],
-                    row["Confidence"],
-                    row["RAW"],
-                    row["ACE"],
-                    avg_score_map.get(tnum_key, 0),
-                    sos_map.get(tnum_key, 0),
-                ]
-            norm_values = []
-            for v, stat in zip(values, team_radar_stats):
-                stat_min, stat_max = stat_minmax[stat]
-                if stat_max > stat_min:
-                    norm = (v - stat_min) / (stat_max - stat_min)
-                else:
-                    norm = 0.5
-                norm_values.append(norm)
-            fig.add_trace(go.Scatterpolar(
-                r=norm_values,
-                theta=team_radar_stats,
-                fill='toself',
-                name=tnum,
-            ))
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=True, showticklabels=True, ticks=''),
-            bgcolor='rgba(0,0,0,0)'
-        ),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        showlegend=True,
-        margin=dict(l=30, r=30, t=30, b=30),
-        height=400,
-        template="plotly_dark"
-    )
-    # Export dropdown for compare
-    compare_export_dropdown = dbc.DropdownMenu(
-        label="Export",
-        color="primary",
-        className="me-2",
-        children=[
-            dbc.DropdownMenuItem("Export as CSV", id="event-compare-export-csv-dropdown"),
-            dbc.DropdownMenuItem("Export as TSV", id="event-compare-export-tsv-dropdown"),
-            dbc.DropdownMenuItem("Export as Excel", id="event-compare-export-excel-dropdown"),
-            dbc.DropdownMenuItem("Export as JSON", id="event-compare-export-json-dropdown"),
-            dbc.DropdownMenuItem("Export as HTML", id="event-compare-export-html-dropdown"),
-            dbc.DropdownMenuItem("Export as LaTeX", id="event-compare-export-latex-dropdown"),
-        ],
-        toggle_style={"backgroundColor": "transparent", "color": "var(--text-primary)", "fontWeight": "bold", "borderColor": "transparent"},
-        style={"display": "inline-block"}
-    )
-
-    compare_export_container = html.Div([
-        compare_export_dropdown,
-        dcc.Download(id="download-event-compare-csv"),
-        dcc.Download(id="download-event-compare-excel"),
-        dcc.Download(id="download-event-compare-tsv"),
-        dcc.Download(id="download-event-compare-json"),
-        dcc.Download(id="download-event-compare-html"),
-        dcc.Download(id="download-event-compare-latex"),
-    ], style={"textAlign": "right", "marginBottom": "10px"})
-
-    # Store compare data for export
-    compare_data_store = dcc.Store(id="event-compare-data-store", data=rows)
-    
-    return html.Div([
-        compare_data_store,
-        compare_export_container,
-        dash_table.DataTable(
-            columns=columns,
-            sort_action="native",
-            sort_mode="multi",
-            data=[{k: (f"{v:.2f}" if isinstance(v, float) else v) for k, v in row.items()} for row in rows],
-            style_table={"overflowX": "auto", "borderRadius": "10px", "border": "none", "backgroundColor": "var(--card-bg)"},
-            style_header={
-                "backgroundColor": "var(--card-bg)",
-                "fontWeight": "bold",
-                "textAlign": "center",
-                "borderBottom": "1px solid #ccc",
-                "padding": "6px",
-                "fontSize": "13px",
-            },
-            style_cell={
-                "backgroundColor": "var(--card-bg)",
-                "textAlign": "center",
-                "padding": "10px",
-                "border": "none",
-                "fontSize": "14px",
-            },
-            style_data_conditional=style_data_conditional,
-            style_as_list_view=True,
-        ),
-        html.Div([
-            html.Hr(),
-            html.H5("Radar Chart Comparison", style={"marginTop": "20px", "marginBottom": "10px"}),
-            html.Div([
-                dbc.Checklist(
-                    id="event-radar-toggles-checklist",
-                    options=[opt for opt in [
-                        {"label": " Show Alliances", "value": "show_alliances"} if mode == "alliances" else None,
-                        {"label": " Show Teams", "value": "show_teams"},
-                    ] if opt is not None],
-                    value=["show_alliances", "show_teams"] if (mode == "alliances" and show_alliances and show_teams) else (["show_alliances"] if (mode == "alliances" and show_alliances) else ["show_teams"]),
-                    inline=True,
-                    style={"marginBottom": "10px", "color": "var(--text-primary)"}
-                )
-            ]) if mode == "alliances" else html.Div(),
-            dcc.Graph(figure=fig, id="event-compare-radar-chart")
-        ])
-    ])
 
 # client-side callback to handle opening the playlist in a new tab
 app.clientside_callback(
@@ -4917,53 +4372,6 @@ def export_event_cards_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, h
     return outputs
 
 
-# Export callbacks for event rankings table
-@app.callback(
-    [Output("download-event-rankings-csv", "data"),
-     Output("download-event-rankings-excel", "data"),
-     Output("download-event-rankings-tsv", "data"),
-     Output("download-event-rankings-json", "data"),
-     Output("download-event-rankings-html", "data"),
-     Output("download-event-rankings-latex", "data")],
-    [Input("event-rankings-export-csv-dropdown", "n_clicks"),
-     Input("event-rankings-export-tsv-dropdown", "n_clicks"),
-     Input("event-rankings-export-excel-dropdown", "n_clicks"),
-     Input("event-rankings-export-json-dropdown", "n_clicks"),
-     Input("event-rankings-export-html-dropdown", "n_clicks"),
-     Input("event-rankings-export-latex-dropdown", "n_clicks")],
-    [State("event-rankings-data-store", "data"),
-     State("store-event-key", "data")],
-    prevent_initial_call=True
-)
-def export_event_rankings_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data, event_key):
-    ctx = callback_context
-    if not ctx.triggered:
-        return [None] * 6
-    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    if not data:
-        return [None] * 6
-    df = pd.DataFrame(data)
-    df_export = df.copy()
-    if 'Team' in df_export.columns:
-        df_export['Team'] = df_export['Team'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    event_code = event_key or "unknown_event"
-    filename_prefix = f"{event_code}_rankings"
-    outputs = [None] * 6
-    if triggered_id == "event-rankings-export-csv-dropdown":
-        outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
-    if triggered_id == "event-rankings-export-excel-dropdown":
-        outputs[1] = dcc.send_data_frame(df_export.to_excel, f"{filename_prefix}_{timestamp}.xlsx", index=False)
-    if triggered_id == "event-rankings-export-tsv-dropdown":
-        outputs[2] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.tsv", sep='\t', index=False)
-    if triggered_id == "event-rankings-export-json-dropdown":
-        outputs[3] = dict(content=df_export.to_json(orient='records', indent=2), filename=f"{filename_prefix}_{timestamp}.json")
-    if triggered_id == "event-rankings-export-html-dropdown":
-        outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
-    if triggered_id == "event-rankings-export-latex-dropdown":
-        outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
-    return outputs
-
 # Export callbacks for event teams table
 @app.callback(
     [Output("download-event-teams-csv", "data"),
@@ -5110,53 +4518,6 @@ def export_event_matches_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks,
     if triggered_id == "event-matches-export-html-dropdown":
         outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
     if triggered_id == "event-matches-export-latex-dropdown":
-        outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
-    return outputs
-
-# Export callbacks for event compare table
-@app.callback(
-    [Output("download-event-compare-csv", "data"),
-     Output("download-event-compare-excel", "data"),
-     Output("download-event-compare-tsv", "data"),
-     Output("download-event-compare-json", "data"),
-     Output("download-event-compare-html", "data"),
-     Output("download-event-compare-latex", "data")],
-    [Input("event-compare-export-csv-dropdown", "n_clicks"),
-     Input("event-compare-export-tsv-dropdown", "n_clicks"),
-     Input("event-compare-export-excel-dropdown", "n_clicks"),
-     Input("event-compare-export-json-dropdown", "n_clicks"),
-     Input("event-compare-export-html-dropdown", "n_clicks"),
-     Input("event-compare-export-latex-dropdown", "n_clicks")],
-    [State("event-compare-data-store", "data"),
-     State("store-event-key", "data")],
-    prevent_initial_call=True
-)
-def export_event_compare_data(csv_clicks, tsv_clicks, excel_clicks, json_clicks, html_clicks, latex_clicks, data, event_key):
-    ctx = callback_context
-    if not ctx.triggered:
-        return [None] * 6
-    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    if not data:
-        return [None] * 6
-    df = pd.DataFrame(data)
-    df_export = df.copy()
-    if 'Team' in df_export.columns:
-        df_export['Team'] = df_export['Team'].str.replace(r'\[([^\]]+)\]\([^)]+\)', r'\1', regex=True)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    event_code = event_key or "unknown_event"
-    filename_prefix = f"{event_code}_compare"
-    outputs = [None] * 6
-    if triggered_id == "event-compare-export-csv-dropdown":
-        outputs[0] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.csv", index=False)
-    if triggered_id == "event-compare-export-excel-dropdown":
-        outputs[1] = dcc.send_data_frame(df_export.to_excel, f"{filename_prefix}_{timestamp}.xlsx", index=False)
-    if triggered_id == "event-compare-export-tsv-dropdown":
-        outputs[2] = dcc.send_data_frame(df_export.to_csv, f"{filename_prefix}_{timestamp}.tsv", sep='\t', index=False)
-    if triggered_id == "event-compare-export-json-dropdown":
-        outputs[3] = dict(content=df_export.to_json(orient='records', indent=2), filename=f"{filename_prefix}_{timestamp}.json")
-    if triggered_id == "event-compare-export-html-dropdown":
-        outputs[4] = dict(content=df_export.to_html(index=False), filename=f"{filename_prefix}_{timestamp}.html")
-    if triggered_id == "event-compare-export-latex-dropdown":
         outputs[5] = dict(content=df_export.to_latex(index=False), filename=f"{filename_prefix}_{timestamp}.tex")
     return outputs
 
@@ -5925,11 +5286,13 @@ def update_team_awards(active_tab, store_data):
     Input("event-data-tabs", "active_tab"),
     State("store-event-year", "data"),
     State("url", "pathname"),
+    State("store-event-epa", "data"),
     prevent_initial_call=True,
 )
-def load_event_alliances(active_tab, event_year, pathname):
+def load_event_alliances(active_tab, event_year, pathname, epa_data):
     if active_tab != "alliances":
         return ""
+    epa_data = epa_data or {}
     # Extract event key from URL
     if not pathname or "/event/" not in pathname:
         return "No event selected."
@@ -5986,6 +5349,92 @@ def load_event_alliances(active_tab, event_year, pathname):
         if "Finals" in playoff_str:
             return "Finals"
         return "Eliminated"
+
+    def alliance_performance_footer(member_team_keys):
+        """Combined event EPA as thin pills (same basis as Teams tab)."""
+        if not member_team_keys:
+            return None
+
+        def thin_stat_pill(label, value_str):
+            return html.Span(
+                [
+                    html.Span(label, style={
+                        "opacity": 0.72,
+                        "fontWeight": 500,
+                        "marginRight": "4px",
+                    }),
+                    html.Span(value_str, style={"fontWeight": 600}),
+                ],
+                style={
+                    "display": "inline-flex",
+                    "alignItems": "center",
+                    "padding": "1px 9px",
+                    "fontSize": "0.7rem",
+                    "lineHeight": 1.35,
+                    "borderRadius": "999px",
+                    "border": "1px solid var(--border-color)",
+                    "backgroundColor": "rgba(128, 128, 128, 0.08)",
+                    "color": "var(--text-primary)",
+                },
+            )
+
+        team_nums = [str(tk).replace("frc", "") for tk in member_team_keys]
+        ace_t = raw_t = auto_t = tele_t = end_t = 0.0
+        conf_vals = []
+        any_epa = False
+        for num in team_nums:
+            e = epa_data.get(num) or {}
+            if e:
+                any_epa = True
+            ace_t += float(e.get("ace") or 0)
+            raw_t += float(e.get("raw") or 0)
+            auto_t += float(e.get("auto_raw") or 0)
+            tele_t += float(e.get("teleop_raw") or 0)
+            end_t += float(e.get("endgame_raw") or 0)
+            conf = e.get("confidence")
+            if conf is not None:
+                try:
+                    conf_vals.append(float(conf))
+                except (TypeError, ValueError):
+                    pass
+        avg_conf = sum(conf_vals) / len(conf_vals) if conf_vals else None
+
+        if not any_epa:
+            return html.Div(
+                "No event stats yet",
+                style={
+                    "marginTop": "10px",
+                    "paddingTop": "8px",
+                    "borderTop": "1px solid var(--border-color)",
+                    "fontSize": "0.72rem",
+                    "color": "var(--text-secondary)",
+                    "fontStyle": "italic",
+                },
+            )
+
+        pills = [thin_stat_pill("ACE", f"{ace_t:.1f}")]
+        if avg_conf is not None:
+            pills.append(thin_stat_pill("Confidence", f"{avg_conf:.2f}"))
+        pills.extend([
+            thin_stat_pill("RAW", f"{raw_t:.1f}"),
+            thin_stat_pill("Auto", f"{auto_t:.1f}"),
+            thin_stat_pill("Teleop", f"{tele_t:.1f}"),
+            thin_stat_pill("Endgame", f"{end_t:.1f}"),
+        ])
+
+        return html.Div(
+            pills,
+            style={
+                "display": "flex",
+                "flexWrap": "wrap",
+                "alignItems": "center",
+                "gap": "6px",
+                "marginTop": "10px",
+                "paddingTop": "8px",
+                "borderTop": "1px solid var(--border-color)",
+            },
+        )
+
     def alliance_box(alliance_num, members):
         members_sorted = sorted(members, key=lambda x: x["pick"] if x["pick"] is not None else 99)
         captain = next((m for m in members_sorted if m["pick"] == 0), None)
@@ -6046,10 +5495,12 @@ def load_event_alliances(active_tab, event_year, pathname):
         progress = html.Div([
             dcc.Markdown(playoff_str, dangerously_allow_html=True, style={"color": "var(--text-primary)"}, className="markdown-text")
         ], style={"marginLeft": "2px", "color": "var(--text-secondary)", "fontSize": "0.95em"})
+        perf_footer = alliance_performance_footer([m["team"] for m in members_sorted])
         return html.Div([
             html.Div(f"Alliance {alliance_num}", style={"fontWeight": "bold", "fontSize": "1.2em", "marginBottom": "4px", "color": "var(--text-primary)"}),
             row,
-            progress
+            progress,
+            perf_footer,
         ], style={
             "background": "var(--card-bg)",
             "border": f"3px solid {border_color}",
@@ -6751,13 +6202,6 @@ def update_match_notifications(selected_team):
     Input("event-insights-page-size", "value")
 )
 def update_event_insights_page_size(page_size):
-    return page_size
-
-@app.callback(
-    Output("event-rankings-table", "page_size"),
-    Input("event-rankings-page-size", "value")
-)
-def update_event_rankings_page_size(page_size):
     return page_size
 
 @app.callback(

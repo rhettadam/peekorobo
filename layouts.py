@@ -1103,21 +1103,17 @@ def features_blog_layout():
                     html.Li([html.Strong("Header: "), "Event name, year, location, dates, type, website link, and a favorite button. Includes a thumbnail link to the event's YouTube match video if available."]),
                     html.Li([html.Strong("Data Tabs: "), "Switch between different views of event data:"]),
                     html.Ul([
-                        html.Li([html.Strong("Teams: "), "Lists all teams participating in the event, sorted by ACE Rank, with ACE and component breakdowns. Includes a spotlight of the top teams at the event. A Stats Type selector lets you switch between Overall season metrics and Event-specific metrics; event stats include SoS and ACE Δ versus season baselines."]),
-                        html.Li([html.Strong("Rankings: "), "Displays the official event rankings (Rank, Wins, Losses, Ties, DQ) alongside ACE Rank and ACE for comparison."]),
+                        html.Li([html.Strong("Teams: "), "Lists all teams participating in the event with official qualification rank and a combined qualification record (W-L-T, plus DQ count when non-zero) alongside ACE Rank, ACE, and component breakdowns. Includes a spotlight of the top teams at the event. A Stats Type selector switches between Overall season metrics and Event-specific metrics; event stats include SoS and ACE Δ versus season baselines."]),
                         html.Li([html.Strong("Matches: "), "Lists all matches played at the event, including Red/Blue alliances, scores, winner, and win predictions based on ACE and confidence. Toggle between Both Alliances and Team Focus views, filter by team, and create a YouTube playlist of selected matches with one click. Inline accuracy badges summarize prediction performance, and an Event Insights card surfaces high/low scores, win margins, and handy match links."]),
                         html.Li([html.Strong("SoS: "), "Strength of Schedule table per team using average opponent ACE and per-match win probabilities."]),
-                        html.Li([html.Strong("Compare: "), "Select multiple teams and compare event stats side-by-side, plus a radar chart normalized to the event field."]),
                         html.Li([html.Strong("Metrics: "), "Explore TBA metrics via a dropdown (OPRs, DPRs, CCWMs, COPRs variants). Results are sortable and link back to team pages."]),
                         html.Li([html.Strong("Alliances: "), "Visual bracket-style cards that show alliance captains/picks and playoff progression/status pulled from TBA."])
                     ], style={"marginLeft": "20px", "marginTop": "10px", "marginBottom": "10px"})
                 ], style={"color": "var(--text-primary)", "marginBottom": "20px"}),
                 
                 html.Img(src="/assets/readme/event_teams.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
-                html.Img(src="/assets/readme/event_ranks.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
                 html.Img(src="/assets/readme/event_matches.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
                 html.Img(src="/assets/readme/event_sos.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
-                html.Img(src="/assets/readme/event_compare.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
                 html.Img(src="/assets/readme/event_metrics.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "20px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
                 html.Img(src="/assets/readme/event_alliances.png", style={"width": "100%", "maxWidth": "1200px", "marginBottom": "30px", "borderRadius": "8px", "border": "1px solid var(--border-color)"}),
                 
@@ -2458,7 +2454,7 @@ def create_team_card_spotlight(team, year_team_database, event_year):
             },
         )
 
-def create_team_card_spotlight_event(team, event_team_data, event_year, event_rank_map):
+def create_team_card_spotlight_event(team, event_team_data, event_year, official_rank=None):
     """Create a spotlight card for event-specific stats with team gradients."""
     t_num = team.get("tk")  # from compressed team list
     
@@ -2469,9 +2465,8 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
     country = team.get("co", "")
     location_str = ", ".join(filter(None, [city, state, country])) or "Unknown"
     
-    # Calculate event-specific rank
     team_event_epa = event_team_data.get("ace", 0)
-    event_rank = event_rank_map.get(team_event_epa, "N/A")
+    rank_suffix = f" · Official rank: {official_rank}" if official_rank is not None else ""
     
     # === Avatar and link ===
     avatar_url = get_team_avatar(t_num, event_year)
@@ -2499,7 +2494,7 @@ def create_team_card_spotlight_event(team, event_team_data, event_year, event_ra
                 "opacity": "0.9",
                 "fontWeight": "400"
             }),
-            html.P(f"Event ACE: {team_event_epa:.1f} (Event Rank: {event_rank})", className="card-text", style={
+            html.P(f"Event ACE: {team_event_epa:.1f}{rank_suffix}", className="card-text", style={
                 "fontSize": "0.9rem",
                 "textAlign": "center",
                 "marginBottom": "1rem",
@@ -6054,12 +6049,10 @@ def event_layout(event_key):
     data_tabs = dbc.Tabs(
         [
             dbc.Tab(label=f"Teams ({team_count})", tab_id="teams", label_style=tab_style, active_label_style=tab_style),
-            dbc.Tab(label="Rankings", tab_id="rankings", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Metrics", tab_id="metrics", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Matches", tab_id="matches", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="Alliances", tab_id="alliances", label_style=tab_style, active_label_style=tab_style),
             dbc.Tab(label="SoS", tab_id="sos", label_style=tab_style, active_label_style=tab_style),
-            dbc.Tab(label="Compare", tab_id="compare", label_style=tab_style, active_label_style=tab_style),
         ],
         id="event-data-tabs",
         active_tab=None,  # Will be set by callback
