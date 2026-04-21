@@ -42,7 +42,7 @@ from datagather import (
 
 from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,duel_layout,compare_teams_layout,build_recent_events_section,get_team_district_options
 
-from utils import format_human_date,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_event_week_label_from_number,event_card,truncate_name,get_team_data_with_fallback,normalize_district_key
+from utils import format_human_date,calculate_all_ranks,get_user_avatar,get_epa_styling,compute_percentiles,get_contrast_text_color,universal_profile_icon_or_toast,get_event_week_label_from_number,event_card,truncate_name,get_team_data_with_fallback,normalize_district_key,pill
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -433,6 +433,8 @@ app.clientside_callback(
 )
 
 COMPARE_TRACE_PALETTE = ["#FFDD00", "#29B6F6", "#EC407A", "#66BB6A", "#AB47BC", "#FF7043", "#5C6BC0", "#8D6E63"]
+COMPARE_METRIC_LINE_DASH = ["solid", "dash", "dot", "dashdot", "longdashdot"]
+_COMPARE_METRIC_IDS = frozenset({"ace", "raw", "auto", "teleop", "endgame", "confidence"})
 COMPARE_CHART_LINE_WIDTH = 3.1
 COMPARE_CHART_MARKER_SIZE = 8
 COMPARE_CHART_SMOOTH_SAMPLES_PER_SPAN = 22
@@ -442,6 +444,15 @@ COMPARE_CHART_HOVER_MARKER = 9.5
 COMPARE_CHART_DIM_MARKER = 7
 COMPARE_CHART_HOVER_OPACITY = 1.0
 COMPARE_CHART_DIM_OPACITY = 0.48
+
+# EPA pill colors — same as team overview `build_performance_metrics_card` (layouts.py)
+_COMPARE_PILL_AUTO = "#1976d2"
+_COMPARE_PILL_TELEOP = "#fb8c00"
+_COMPARE_PILL_ENDGAME = "#388e3c"
+_COMPARE_PILL_RAW = "#d32f2f"
+_COMPARE_PILL_CONF = "#555"
+_COMPARE_PILL_ACE = "#673ab7"
+_COMPARE_PILL_RANK = "#455a64"
 
 
 @lru_cache(maxsize=1)
@@ -521,11 +532,59 @@ def _compare_metric_label(metric):
     }.get((metric or "ace").lower(), "ACE")
 
 
-def _compare_collect_points(tnum, cache, range_mode, y_sel, metric_key):
+def _compare_normalize_metrics(metric_val):
+    if not metric_val:
+        return ["ace"]
+    if isinstance(metric_val, str):
+        m = (metric_val or "ace").lower().strip()
+        return [m] if m in _COMPARE_METRIC_IDS else ["ace"]
+    seen = set()
+    out = []
+    for raw in metric_val:
+        m = str(raw or "").lower().strip()
+        if m in _COMPARE_METRIC_IDS and m not in seen:
+            seen.add(m)
+            out.append(m)
+    return out if out else ["ace"]
+
+
+def _compare_normalize_year_list(year_val):
+    if year_val is None:
+        return [current_year]
+    if isinstance(year_val, (list, tuple)):
+        ys = []
+        for y in year_val:
+            try:
+                ys.append(int(y))
+            except (TypeError, ValueError):
+                continue
+        return sorted(set(ys)) if ys else [current_year]
+    try:
+        return [int(year_val)]
+    except (TypeError, ValueError):
+        return [current_year]
+
+
+def _compare_chart_year_subtitle(years_sorted):
+    if len(years_sorted) == 1:
+        return str(years_sorted[0])
+    if years_sorted == list(range(years_sorted[0], years_sorted[-1] + 1)):
+        return f"{years_sorted[0]}–{years_sorted[-1]}"
+    return ", ".join(str(y) for y in years_sorted)
+
+
+def _compare_yaxis_title(metrics):
+    if len(metrics) == 1:
+        return _compare_metric_label(metrics[0])
+    return "Value"
+
+
+def _compare_collect_points(tnum, cache, range_mode, years_filter, metric_key):
     points = []
     for y in sorted(cache.keys()):
-        if range_mode == "single_year" and y != y_sel:
-            continue
+        if range_mode == "single_year":
+            if years_filter is not None and y not in years_filter:
+                continue
         td, ed = cache[y]
         team_row = td.get(tnum, {})
         for ev in _compare_parse_event_perf(team_row):
@@ -689,11 +748,9 @@ def build_compare_teams_figure(team_ids, range_mode, year_val, metric_key):
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=56, r=24, t=72, b=56),
         hovermode="closest",
         hoverdistance=9,
         uirevision="compare-teams",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=12)),
     )
     if not team_ids or len(team_ids) < 2:
         fig.add_annotation(
@@ -713,16 +770,16 @@ def build_compare_teams_figure(team_ids, range_mode, year_val, metric_key):
         )
         return fig
 
-    metric_key = metric_key or "ace"
-    y_title = _compare_metric_label(metric_key)
+    metrics = _compare_normalize_metrics(metric_key)
+    y_title = _compare_yaxis_title(metrics)
+    metrics_title_str = ", ".join(_compare_metric_label(m) for m in metrics)
 
-    y_sel = current_year
+    years_list = None
+    years_filter = None
     if range_mode == "single_year":
-        try:
-            y_sel = int(year_val)
-        except (TypeError, ValueError):
-            y_sel = current_year
-        years_needed = {y_sel}
+        years_list = _compare_normalize_year_list(year_val)
+        years_filter = frozenset(years_list)
+        years_needed = set(years_filter)
     else:
         years_needed = set()
         for t in team_nums:
@@ -779,9 +836,9 @@ def build_compare_teams_figure(team_ids, range_mode, year_val, metric_key):
             return fig
 
     if range_mode == "single_year":
-        title_text = f"Compare · {y_title} · {y_sel}"
+        title_text = f"Compare · {metrics_title_str} · {_compare_chart_year_subtitle(sorted(years_list))}"
     else:
-        title_text = f"Compare · {y_title} · all seasons"
+        title_text = f"Compare · {metrics_title_str} · all seasons"
     x_title = "Year (5-yr ticks)" if range_mode == "all_years" else "Date"
     xaxis_kw = dict(
         title=x_title,
@@ -798,10 +855,34 @@ def build_compare_teams_figure(team_ids, range_mode, year_val, metric_key):
         xaxis_kw["tickmode"] = "array"
         xaxis_kw["tickvals"] = tickvals
         xaxis_kw["ticktext"] = [f"{v}–{v + 4}" for v in tickvals]
+
+    n_metrics = len(metrics)
+    if n_metrics > 1:
+        margin = dict(l=56, r=24, t=64, b=min(200, 96 + 18 * max(1, (len(team_nums) * n_metrics + 2) // 3)))
+        legend = dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.22,
+            x=0.5,
+            xanchor="center",
+            font=dict(size=11),
+        )
+    else:
+        margin = dict(l=56, r=24, t=72, b=56)
+        legend = dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            x=0,
+            font=dict(size=12),
+        )
+
     fig.update_layout(
         title=dict(
             text=title_text,
             font=dict(size=17, color="#FFDD00"),
+            y=0.96,
+            yanchor="top",
         ),
         xaxis=xaxis_kw,
         yaxis=dict(
@@ -811,121 +892,139 @@ def build_compare_teams_figure(team_ids, range_mode, year_val, metric_key):
             zeroline=False,
             rangemode="normal",
         ),
+        margin=margin,
+        legend=legend,
     )
 
     team_points_map = {}
     for tnum in team_nums:
-        pts = _compare_collect_points(tnum, cache, range_mode, y_sel, metric_key)
-        if pts:
-            team_points_map[tnum] = pts
+        for mk in metrics:
+            pts = _compare_collect_points(tnum, cache, range_mode, years_filter, mk)
+            if pts:
+                team_points_map[(tnum, mk)] = pts
 
     has_trace = bool(team_points_map)
     all_ace_y_vals = []
+    multi_m = len(metrics) > 1
     for idx, tnum in enumerate(team_nums):
-        points = team_points_map.get(tnum)
-        if not points:
-            continue
-
-        trace_name = _compare_team_display_name(tnum, cache)
-        ys = [p["val"] for p in points]
-        if (metric_key or "").lower() == "ace":
-            all_ace_y_vals.extend(ys)
-        custom = [
-            (p["ek"], str(p.get("sd") or ""), p.get("ename") or "", p["y"])
-            for p in points
-        ]
         color = COMPARE_TRACE_PALETTE[idx % len(COMPARE_TRACE_PALETTE)]
-        trace_hoverlabel = dict(
-            bgcolor=color,
-            bordercolor=color,
-            font=dict(color=get_contrast_text_color(color), size=13),
-        )
-        hovertemplate = (
-            "<b>%{fullData.name}</b><br>"
-            "Event %{customdata[0]} (%{customdata[3]})<br>"
-            "%{customdata[2]}<br>"
-            "Start: %{customdata[1]}<br>"
-            f"{y_title}: %{{y:.2f}}<extra></extra>"
-        )
-        if range_mode == "all_years":
-            xs = _compare_xs_season_year_band(points)
-            line_hovertemplate = (
-                f"<b>{trace_name}</b><br>"
-                "Season %{customdata[3]}<br>"
-                "Start: %{customdata[1]}<br>"
-                f"{y_title}: %{{y:.2f}}<extra></extra>"
-            )
-        else:
-            xs = []
-            for j, p in enumerate(points):
-                sdd = p.get("sd")
-                yi = int(p["y"])
-                if sdd:
-                    if isinstance(sdd, datetime):
-                        xs.append(sdd)
-                    elif isinstance(sdd, date):
-                        xs.append(datetime.combine(sdd, datetime.min.time()))
-                    else:
-                        try:
-                            xs.append(datetime.strptime(str(sdd)[:10], "%Y-%m-%d"))
-                        except ValueError:
-                            xs.append(datetime(yi, 6, 1) + timedelta(days=j + 1))
-                else:
-                    xs.append(datetime(yi, 6, 1) + timedelta(days=j + 1))
-            line_hovertemplate = (
-                f"<b>{trace_name}</b><br>"
-                "%{x|%b %d, %Y}<br>"
-                f"{y_title}: %{{y:.2f}}<extra></extra>"
-            )
+        base_name = _compare_team_display_name(tnum, cache)
         lg = f"cmp-{tnum}"
-        mk_style = dict(
-            size=COMPARE_CHART_MARKER_SIZE,
-            color=color,
-            line=dict(width=1.5, color="rgba(0,0,0,0.42)"),
-        )
-        if len(xs) < 2:
-            fig.add_trace(
-                go.Scatter(
-                    x=xs,
-                    y=ys,
-                    mode="lines+markers",
-                    name=trace_name,
-                    legendgroup=lg,
-                    line=dict(width=COMPARE_CHART_LINE_WIDTH, color=color, shape="linear"),
-                    marker=mk_style,
-                    customdata=custom,
-                    hovertemplate=hovertemplate,
-                    hoverlabel=trace_hoverlabel,
-                )
+        for mi, mk in enumerate(metrics):
+            points = team_points_map.get((tnum, mk))
+            if not points:
+                continue
+
+            mlabel = _compare_metric_label(mk)
+            trace_name = f"{base_name} · {mlabel}" if multi_m else base_name
+            dash_style = (
+                "solid"
+                if not multi_m
+                else COMPARE_METRIC_LINE_DASH[mi % len(COMPARE_METRIC_LINE_DASH)]
             )
-        else:
-            xs_s, ys_s = _compare_smooth_series(xs, ys)
-            fig.add_trace(
-                go.Scatter(
-                    x=xs_s,
-                    y=ys_s,
-                    mode="lines",
-                    name=trace_name,
-                    legendgroup=lg,
-                    line=dict(width=COMPARE_CHART_LINE_WIDTH, color=color, shape="linear"),
-                    hovertemplate=line_hovertemplate,
-                    hoverlabel=trace_hoverlabel,
-                )
+            ys = [p["val"] for p in points]
+            if mk == "ace":
+                all_ace_y_vals.extend(ys)
+            custom = [
+                (p["ek"], str(p.get("sd") or ""), p.get("ename") or "", p["y"])
+                for p in points
+            ]
+            trace_hoverlabel = dict(
+                bgcolor=color,
+                bordercolor=color,
+                font=dict(color=get_contrast_text_color(color), size=13),
             )
-            fig.add_trace(
-                go.Scatter(
-                    x=xs,
-                    y=ys,
-                    mode="markers",
-                    name=trace_name,
-                    legendgroup=lg,
-                    showlegend=False,
-                    marker=mk_style,
-                    customdata=custom,
-                    hovertemplate=hovertemplate,
-                    hoverlabel=trace_hoverlabel,
-                )
+            hovertemplate = (
+                "<b>%{fullData.name}</b><br>"
+                "Event %{customdata[0]} (%{customdata[3]})<br>"
+                "%{customdata[2]}<br>"
+                "Start: %{customdata[1]}<br>"
+                f"{mlabel}: %{{y:.2f}}<extra></extra>"
             )
+            if range_mode == "all_years":
+                xs = _compare_xs_season_year_band(points)
+                line_hovertemplate = (
+                    f"<b>{trace_name}</b><br>"
+                    "Season %{customdata[3]}<br>"
+                    "Start: %{customdata[1]}<br>"
+                    f"{mlabel}: %{{y:.2f}}<extra></extra>"
+                )
+            else:
+                xs = []
+                for j, p in enumerate(points):
+                    sdd = p.get("sd")
+                    yi = int(p["y"])
+                    if sdd:
+                        if isinstance(sdd, datetime):
+                            xs.append(sdd)
+                        elif isinstance(sdd, date):
+                            xs.append(datetime.combine(sdd, datetime.min.time()))
+                        else:
+                            try:
+                                xs.append(datetime.strptime(str(sdd)[:10], "%Y-%m-%d"))
+                            except ValueError:
+                                xs.append(datetime(yi, 6, 1) + timedelta(days=j + 1))
+                    else:
+                        xs.append(datetime(yi, 6, 1) + timedelta(days=j + 1))
+                line_hovertemplate = (
+                    f"<b>{trace_name}</b><br>"
+                    "%{x|%b %d, %Y}<br>"
+                    f"{mlabel}: %{{y:.2f}}<extra></extra>"
+                )
+            mk_style = dict(
+                size=COMPARE_CHART_MARKER_SIZE,
+                color=color,
+                line=dict(width=1.5, color="rgba(0,0,0,0.42)"),
+            )
+            line_common = dict(
+                width=COMPARE_CHART_LINE_WIDTH,
+                color=color,
+                shape="linear",
+                dash=dash_style,
+            )
+            if len(xs) < 2:
+                fig.add_trace(
+                    go.Scatter(
+                        x=xs,
+                        y=ys,
+                        mode="lines+markers",
+                        name=trace_name,
+                        legendgroup=lg,
+                        line=line_common,
+                        marker=mk_style,
+                        customdata=custom,
+                        hovertemplate=hovertemplate,
+                        hoverlabel=trace_hoverlabel,
+                    )
+                )
+            else:
+                xs_s, ys_s = _compare_smooth_series(xs, ys)
+                fig.add_trace(
+                    go.Scatter(
+                        x=xs_s,
+                        y=ys_s,
+                        mode="lines",
+                        name=trace_name,
+                        legendgroup=lg,
+                        line=line_common,
+                        hovertemplate=line_hovertemplate,
+                        hoverlabel=trace_hoverlabel,
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=xs,
+                        y=ys,
+                        mode="markers",
+                        name=trace_name,
+                        legendgroup=lg,
+                        showlegend=False,
+                        marker=mk_style,
+                        customdata=custom,
+                        hovertemplate=hovertemplate,
+                        hoverlabel=trace_hoverlabel,
+                    )
+                )
 
     if not has_trace:
         fig.add_annotation(
@@ -933,7 +1032,7 @@ def build_compare_teams_figure(team_ids, range_mode, year_val, metric_key):
             xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
             font=dict(color="#aaa", size=14),
         )
-    elif (metric_key or "").lower() == "ace" and all_ace_y_vals:
+    elif metrics == ["ace"] and all_ace_y_vals:
         arr = np.asarray(all_ace_y_vals, dtype=float)
         y_lo, y_hi = float(np.min(arr)), float(np.max(arr))
         span = y_hi - y_lo
@@ -948,6 +1047,191 @@ def build_compare_teams_figure(team_ids, range_mode, year_val, metric_key):
         fig.update_yaxes(range=[y_lo, y_hi], autorange=False, rangemode="normal")
 
     return fig
+
+
+def _compare_fmt_rank_cell(rank, count):
+    if rank is None:
+        return "—"
+    try:
+        r = int(rank)
+        if count is not None:
+            try:
+                return f"{r} / {int(count)}"
+            except (TypeError, ValueError):
+                return str(r)
+        return str(r)
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _compare_district_pill_label(row):
+    dk = row.get("district_key")
+    code = normalize_district_key(dk) if dk else None
+    if not code and dk:
+        s = str(dk).strip()
+        code = s if s else None
+    return f"District ({code})" if code else "District"
+
+
+def _compare_pill_metric_value(v, decimals=1):
+    if v is None:
+        return "—"
+    try:
+        return f"{float(v):.{decimals}f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _compare_season_panel_for_year(team_nums, y_sel):
+    if y_sel == current_year:
+        full_td = TEAM_DATABASE.get(current_year, {})
+        td = {t: full_td[t] for t in team_nums if t in full_td}
+    else:
+        try:
+            td, _ = load_compare_year_from_db(y_sel, team_nums)
+        except Exception:
+            td = {}
+
+    team_blocks = []
+    for idx, tnum in enumerate(team_nums):
+        accent = COMPARE_TRACE_PALETTE[idx % len(COMPARE_TRACE_PALETTE)]
+        row = td.get(tnum)
+        nick = (row.get("nickname") or "").strip() if row else ""
+        label = f"{tnum} — {nick}" if nick else str(tnum)
+
+        if row:
+            w, l, ties = row.get("wins"), row.get("losses"), row.get("ties")
+            try:
+                rec = f"{int(w or 0)}-{int(l or 0)}-{int(ties or 0)} record"
+            except (TypeError, ValueError):
+                rec = ""
+            meta_bits = [rec] if rec else []
+            dist = (row.get("district") or "").strip()
+            dcode = normalize_district_key(row.get("district_key")) if row.get("district_key") else None
+            if dist and dcode:
+                meta_bits.append(f"{dist} ({dcode})")
+            elif dist:
+                meta_bits.append(dist)
+            elif dcode:
+                meta_bits.append(f"District {dcode}")
+            meta_line = " · ".join(meta_bits) if meta_bits else ""
+            pills = [
+                pill("ACE", _compare_pill_metric_value(row.get("ace"), 1), _COMPARE_PILL_ACE),
+                pill("RAW", _compare_pill_metric_value(row.get("raw"), 1), _COMPARE_PILL_RAW),
+                pill("Auto", _compare_pill_metric_value(row.get("auto_raw"), 1), _COMPARE_PILL_AUTO),
+                pill("Teleop", _compare_pill_metric_value(row.get("teleop_raw"), 1), _COMPARE_PILL_TELEOP),
+                pill("Endgame", _compare_pill_metric_value(row.get("endgame_raw"), 1), _COMPARE_PILL_ENDGAME),
+                pill("Confidence", _compare_pill_metric_value(row.get("confidence"), 2), _COMPARE_PILL_CONF),
+                pill(
+                    "World",
+                    _compare_fmt_rank_cell(row.get("rank_global"), row.get("count_global")),
+                    _COMPARE_PILL_RANK,
+                ),
+                pill(
+                    "Country",
+                    _compare_fmt_rank_cell(row.get("rank_country"), row.get("count_country")),
+                    _COMPARE_PILL_RANK,
+                ),
+                pill(
+                    _compare_district_pill_label(row),
+                    _compare_fmt_rank_cell(row.get("rank_district"), row.get("count_district")),
+                    _COMPARE_PILL_RANK,
+                ),
+                pill(
+                    "State",
+                    _compare_fmt_rank_cell(row.get("rank_state"), row.get("count_state")),
+                    _COMPARE_PILL_RANK,
+                ),
+            ]
+        else:
+            meta_line = "No season row for this year"
+            pills = [
+                html.Span(
+                    "No EPA data",
+                    className="compare-season-pill compare-season-pill-muted",
+                )
+            ]
+
+        team_blocks.append(
+            html.Div(
+                className="compare-season-team",
+                style={"--compare-accent": accent},
+                children=[
+                    html.Div(
+                        className="compare-season-identity",
+                        children=[
+                            html.A(
+                                html.Img(
+                                    src=get_team_avatar(tnum, y_sel),
+                                    className="compare-season-avatar",
+                                    alt=f"Team {tnum}",
+                                ),
+                                href=f"/team/{tnum}/{y_sel}",
+                                className="compare-season-avatar-link",
+                            ),
+                            html.Div(
+                                [
+                                    html.A(
+                                        label,
+                                        href=f"/team/{tnum}/{y_sel}",
+                                        className="compare-season-name",
+                                    ),
+                                    html.Div(meta_line, className="compare-season-meta"),
+                                ],
+                                className="compare-season-titles",
+                            ),
+                        ],
+                    ),
+                    html.Div(pills, className="compare-season-pills"),
+                ],
+            )
+        )
+
+    return html.Div(
+        className="compare-season-panel",
+        children=[
+            html.Div(
+                html.Span(f"Season {y_sel}", className="compare-season-panel-year"),
+                className="compare-season-panel-head",
+            ),
+            html.Div(team_blocks, className="compare-season-teams"),
+        ],
+    )
+
+
+def build_compare_season_summary(teams, year_val):
+    """Season snapshot cards for single-year compare (avatar, EPA, ranks)."""
+    if not teams:
+        return html.Div()
+    try:
+        team_nums = [int(str(t)) for t in teams[:8]]
+    except (ValueError, TypeError):
+        return html.Div()
+    if not team_nums:
+        return html.Div()
+
+    years = sorted(_compare_normalize_year_list(year_val), reverse=True)
+    panels = [_compare_season_panel_for_year(team_nums, y) for y in years]
+    if len(panels) == 1:
+        return panels[0]
+    return html.Div(className="compare-season-panels", children=panels)
+
+
+@app.callback(
+    Output("compare-season-summary", "children"),
+    [
+        Input("url", "pathname"),
+        Input("compare-teams-select", "value"),
+        Input("compare-range-mode", "value"),
+        Input("compare-year-dropdown", "value"),
+    ],
+)
+def update_compare_season_summary(pathname, teams, range_mode, year_val):
+    if pathname != "/compare":
+        return no_update
+    if range_mode != "single_year":
+        return html.Div()
+    return build_compare_season_summary(teams, year_val)
 
 
 @app.callback(

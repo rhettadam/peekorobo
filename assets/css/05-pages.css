@@ -814,3 +814,131 @@
 #all-matches::-webkit-scrollbar-thumb:hover {
     background: var(--text-secondary);
 }
+
+/* Compare page — season summary (single-year, below chart) */
+.compare-season-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.compare-season-panel {
+    margin-top: 1.75rem;
+    border-radius: 18px;
+    overflow: hidden;
+    background: var(--card-bg);
+    border: 1px solid color-mix(in srgb, var(--text-primary) 12%, transparent);
+    box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.28);
+    color: var(--text-primary);
+}
+
+.compare-season-panel-head {
+    padding: 14px 20px;
+    border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
+    background: var(--card-bg);
+}
+
+.compare-season-panel-year {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.compare-season-teams {
+    display: flex;
+    flex-direction: column;
+}
+
+.compare-season-team {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    border-left: 4px solid var(--compare-accent, var(--navbar-hover));
+    transition: background 0.2s ease;
+}
+
+.compare-season-team:last-child {
+    border-bottom: none;
+}
+
+.compare-season-team:hover {
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+}
+
+.compare-season-identity {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    flex: 1 1 200px;
+}
+
+.compare-season-avatar-link {
+    flex-shrink: 0;
+    line-height: 0;
+    border-radius: 14px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.compare-season-avatar-link:hover {
+    transform: scale(1.03);
+}
+
+.compare-season-avatar-link:active {
+    transform: scale(0.98);
+}
+
+.compare-season-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    object-fit: cover;
+    display: block;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+    border: 2px solid color-mix(in srgb, var(--compare-accent, var(--navbar-hover)) 50%, transparent);
+}
+
+.compare-season-titles {
+    min-width: 0;
+}
+
+.compare-season-name {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--navbar-hover);
+    text-decoration: none;
+    display: inline-block;
+}
+
+.compare-season-name:hover {
+    text-decoration: underline;
+    color: var(--navbar-hover);
+}
+
+.compare-season-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    line-height: 1.35;
+}
+
+.compare-season-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    justify-content: flex-end;
+    align-items: center;
+    align-content: center;
+    flex: 2 1 280px;
+}
+
+.compare-season-pill-muted {
+    opacity: 0.75;
+    font-style: italic;
+    font-weight: 500;
+}
