@@ -507,6 +507,45 @@ def _block_competition_ranks(members):
     return ranks
 
 
+def _db_int_or_none(x):
+    if x is None:
+        return None
+    return int(x)
+
+
+def _rank_and_count_row_unchanged(
+    new8: tuple, old8: tuple
+) -> bool:
+    """True if computed rank/count columns match what is already stored (skip noisy UPDATEs)."""
+    for a, b in zip(new8, old8):
+        na, nb = _db_int_or_none(a), _db_int_or_none(b)
+        if na != nb:
+            return False
+    return True
+
+
+def _match_unplayed_for_prediction(red_score, blue_score, winning_alliance) -> bool:
+    """Unplayed: no real scores and no winning alliance (matches logic used elsewhere in this file)."""
+    rs = red_score
+    bs = blue_score
+    if (rs and float(rs) > 0) or (bs and float(bs) > 0) or winning_alliance in ("red", "blue"):
+        return False
+    return True
+
+
+def _probs_unchanged(
+    p_red: float, p_blue: float, ex_red, ex_blue, eps: float = 1e-9
+) -> bool:
+    if ex_red is None and ex_blue is None:
+        return False
+    if ex_red is None or ex_blue is None:
+        return False
+    try:
+        return abs(float(p_red) - float(ex_red)) < eps and abs(float(p_blue) - float(ex_blue)) < eps
+    except (TypeError, ValueError):
+        return False
+
+
 def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
     """
     Compute global / country / state / district ACE ranks for one season and UPDATE team_epas.
@@ -517,6 +556,9 @@ def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
     same way as datagather.
 
     District ranks are only stored when the team has a district_key (regional teams: NULL).
+
+    Ranks and pool sizes are recomputed every run, but a row is written only when at least one
+    rank or count value differs from what is already in ``team_epas`` (avoids no-op updates).
 
     Pass ``conn`` to reuse a single connection (e.g. backfill); otherwise a new connection is opened.
     """
@@ -544,6 +586,16 @@ def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
             (year,),
         )
         rows = cur.fetchall()
+        cur.execute(
+            """
+            SELECT team_number, rank_global, rank_country, rank_state, rank_district,
+                   count_global, count_country, count_state, count_district
+            FROM team_epas
+            WHERE year = %s
+            """,
+            (year,),
+        )
+        existing_ranks = {r[0]: r[1:9] for r in cur.fetchall()}
     except Exception as e:
         cur.close()
         if own_conn:
@@ -635,47 +687,62 @@ def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
 
         updates.append((gr, cr, sr, dr, count_global, count_c, count_s, cd, tn, year))
 
+    batch_rows = []
     if updates:
-        batch_rows = [
-            (tn, y, gr, cr, sr, dr, cg, cc, cs, cd)
-            for (gr, cr, sr, dr, cg, cc, cs, cd, tn, y) in updates
-        ]
-        execute_values(
-            cur,
-            """
-            UPDATE team_epas AS te SET
-                rank_global = v.rank_global::integer,
-                rank_country = v.rank_country::integer,
-                rank_state = v.rank_state::integer,
-                rank_district = v.rank_district::integer,
-                count_global = v.count_global::integer,
-                count_country = v.count_country::integer,
-                count_state = v.count_state::integer,
-                count_district = v.count_district::integer
-            FROM (VALUES %s) AS v(
-                team_number,
-                year,
-                rank_global,
-                rank_country,
-                rank_state,
-                rank_district,
-                count_global,
-                count_country,
-                count_state,
-                count_district
+        for (gr, cr, sr, dr, cg, cc, cs, cd, tn, y) in updates:
+            new8 = (gr, cr, sr, dr, cg, cc, cs, cd)
+            old8 = existing_ranks.get(tn)
+            if old8 is not None and _rank_and_count_row_unchanged(new8, old8):
+                continue
+            batch_rows.append((tn, y, gr, cr, sr, dr, cg, cc, cs, cd))
+        if batch_rows:
+            execute_values(
+                cur,
+                """
+                UPDATE team_epas AS te SET
+                    rank_global = v.rank_global::integer,
+                    rank_country = v.rank_country::integer,
+                    rank_state = v.rank_state::integer,
+                    rank_district = v.rank_district::integer,
+                    count_global = v.count_global::integer,
+                    count_country = v.count_country::integer,
+                    count_state = v.count_state::integer,
+                    count_district = v.count_district::integer
+                FROM (VALUES %s) AS v(
+                    team_number,
+                    year,
+                    rank_global,
+                    rank_country,
+                    rank_state,
+                    rank_district,
+                    count_global,
+                    count_country,
+                    count_state,
+                    count_district
+                )
+                WHERE te.team_number = v.team_number::integer AND te.year = v.year::integer
+                """,
+                batch_rows,
+                template="(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                page_size=len(batch_rows),
             )
-            WHERE te.team_number = v.team_number::integer AND te.year = v.year::integer
-            """,
-            batch_rows,
-            template="(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            page_size=len(batch_rows),
-        )
     conn.commit()
     cur.close()
     if own_conn:
         conn.close()
     if not quiet:
-        print(f"Stored ACE ranks for year {year} ({len(updates)} teams).")
+        n_tot = len(updates)
+        n_wrote = len(batch_rows) if updates else 0
+        n_skip = n_tot - n_wrote
+        if n_wrote:
+            print(
+                f"Stored ACE ranks for year {year} ({n_wrote} row(s) updated"
+                f"{f', {n_skip} unchanged skipped' if n_skip else ''})."
+            )
+        elif n_tot:
+            print(f"ACE ranks for year {year}: all {n_tot} team row(s) already up to date, no DB writes.")
+        else:
+            print(f"compute_and_store_team_epa_ranks: no team_epas rows for year {year}.")
 
 
 # Robust retry for team experience
@@ -1647,6 +1714,11 @@ def _parse_match_alliance_teams(team_csv) -> List[int]:
 
 
 def calculate_and_store_match_predictions(year: int):
+    """
+    Fill ``red_win_prob`` / ``blue_win_prob`` for not-yet-played matches from current ACE/confidence.
+    Skips matches that already have a result; skips DB updates when stored probs match the
+    newly computed values (within a small epsilon).
+    """
     if shutdown_event.is_set():
         return
 
@@ -1658,7 +1730,8 @@ def calculate_and_store_match_predictions(year: int):
     try:
         cur.execute(
             """
-            SELECT match_key, red_teams, blue_teams
+            SELECT match_key, red_teams, blue_teams,
+                   red_score, blue_score, winning_alliance, red_win_prob, blue_win_prob
             FROM event_matches
             WHERE LEFT(event_key, 4) = %s
             """,
@@ -1669,7 +1742,21 @@ def calculate_and_store_match_predictions(year: int):
         updates = []
         skipped_no_teams = 0
         skipped_bad_prob = 0
-        for match_key, red_teams, blue_teams in match_rows:
+        skipped_played = 0
+        skipped_unchanged = 0
+        for (
+            match_key,
+            red_teams,
+            blue_teams,
+            red_score,
+            blue_score,
+            winning_alliance,
+            ex_pr,
+            ex_pb,
+        ) in match_rows:
+            if not _match_unplayed_for_prediction(red_score, blue_score, winning_alliance):
+                skipped_played += 1
+                continue
             red_list = _parse_match_alliance_teams(red_teams)
             blue_list = _parse_match_alliance_teams(blue_teams)
             if not red_list or not blue_list:
@@ -1688,6 +1775,9 @@ def calculate_and_store_match_predictions(year: int):
             if not math.isfinite(p_red) or not math.isfinite(p_blue):
                 skipped_bad_prob += 1
                 continue
+            if _probs_unchanged(p_red, p_blue, ex_pr, ex_pb):
+                skipped_unchanged += 1
+                continue
             updates.append((p_red, p_blue, match_key))
 
         if updates:
@@ -1703,10 +1793,13 @@ def calculate_and_store_match_predictions(year: int):
                 updates,
             )
         conn.commit()
-        msg = f"Stored match predictions for {len(updates)} matches in {year}."
-        if skipped_no_teams or skipped_bad_prob:
-            msg += f" (skipped: {skipped_no_teams} missing alliances, {skipped_bad_prob} non-finite probs)"
-        print(msg)
+        n_rows = len(match_rows)
+        print(
+            f"Match predictions {year}: wrote {len(updates)} of {n_rows} row(s) — "
+            f"skipped: {skipped_played} already played, {skipped_unchanged} prob unchanged, "
+            f"{skipped_no_teams} missing alliances, {skipped_bad_prob} non-finite prob",
+            flush=True,
+        )
     finally:
         cur.close()
         conn.close()
