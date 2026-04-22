@@ -4324,7 +4324,10 @@ def match_layout(event_key, match_key):
         try:
             team_db, event_db, _, _, _, event_matches = load_year_data(year)
         except Exception:
-            team_db = {}
+            return dbc.Alert(
+                "Event data is temporarily unavailable. Please refresh in a moment.",
+                color="warning",
+            )
 
     if isinstance(event_matches, dict):
         matches = [m for m in event_matches.get(year, []) if m.get("ek") == event_key]

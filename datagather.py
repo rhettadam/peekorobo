@@ -876,7 +876,8 @@ def load_year_data(year):
 
 def load_compare_year_from_db(year, team_numbers):
     """
-    Minimal load for /compare: EPA rows for the given teams plus event metadata only.
+    Minimal load for /compare: EPA rows for the given teams plus event metadata
+    for events those teams have in event_perf only (not the full season schedule).
     Skips matches, rankings, event_teams, and awards (large tables).
     """
     team_numbers = sorted({int(t) for t in team_numbers})
@@ -891,6 +892,26 @@ def load_compare_year_from_db(year, team_numbers):
             except json.JSONDecodeError:
                 return []
         return value or []
+
+    def event_keys_for_compare(yr, team_dict):
+        """Event keys from teams' event_perf for this season (same scope as the compare chart)."""
+        yp = str(int(yr))
+        keys = set()
+        for row in (team_dict or {}).values():
+            ep = row.get("event_perf")
+            if ep is None:
+                continue
+            if isinstance(ep, str):
+                ep = safe_json_load(ep)
+            if not isinstance(ep, list):
+                continue
+            for ev in ep:
+                if not isinstance(ev, dict):
+                    continue
+                ek = (ev.get("event_key") or "").strip()
+                if ek and ek.startswith(yp):
+                    keys.add(ek)
+        return sorted(keys)
 
     if not team_numbers:
         return {}, {}
@@ -963,43 +984,47 @@ def load_compare_year_from_db(year, team_numbers):
 
                 team_data[team_number] = compress_dict(raw_team_data)
 
+        event_keys = event_keys_for_compare(year, team_data)
         event_data = {}
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT event_key, name, start_date, end_date, event_type,
-                       district_key, district_abbrev, district_name,
-                       city, state_prov, country, website, webcast_type, webcast_channel, week
-                FROM events
-                WHERE event_key LIKE %s
-                ORDER BY event_key
-                """,
-                (f"{year}%",),
-            )
-            for row in cursor.fetchall():
-                (
-                    event_key, name, start_date, end_date, event_type,
-                    district_key, district_abbrev, district_name,
-                    city, state_prov, country, website, webcast_type, webcast_channel, week
-                ) = row
-                event_data[event_key] = compress_dict({
-                    "k": event_key,
-                    "n": name,
-                    "y": year,
-                    "sd": start_date,
-                    "ed": end_date,
-                    "et": event_type,
-                    "dk": district_key,
-                    "da": district_abbrev,
-                    "dn": district_name,
-                    "c": city,
-                    "s": state_prov,
-                    "co": country,
-                    "w": website,
-                    "wt": webcast_type,
-                    "wc": webcast_channel,
-                    "wk": week,
-                })
+        if event_keys:
+            n = len(event_keys)
+            in_ph = ",".join(["%s"] * n)
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT event_key, name, start_date, end_date, event_type,
+                           district_key, district_abbrev, district_name,
+                           city, state_prov, country, website, webcast_type, webcast_channel, week
+                    FROM events
+                    WHERE event_key IN ({in_ph})
+                    ORDER BY event_key
+                    """,
+                    event_keys,
+                )
+                for row in cursor.fetchall():
+                    (
+                        event_key, name, start_date, end_date, event_type,
+                        district_key, district_abbrev, district_name,
+                        city, state_prov, country, website, webcast_type, webcast_channel, week
+                    ) = row
+                    event_data[event_key] = compress_dict({
+                        "k": event_key,
+                        "n": name,
+                        "y": year,
+                        "sd": start_date,
+                        "ed": end_date,
+                        "et": event_type,
+                        "dk": district_key,
+                        "da": district_abbrev,
+                        "dn": district_name,
+                        "c": city,
+                        "s": state_prov,
+                        "co": country,
+                        "w": website,
+                        "wt": webcast_type,
+                        "wc": webcast_channel,
+                        "wk": week,
+                    })
 
     return team_data, event_data
 
