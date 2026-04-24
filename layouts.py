@@ -1250,8 +1250,6 @@ def topbar():
             [
                 dcc.Store(id="login-state-ready", data=False),
                 dcc.Store(id="theme-store", data="dark"),  # Store for theme preference
-                html.Div(id="last-updated-text", style={"display": "none"}),
-                html.Div(id="last-updated-text-mobile", style={"display": "none"}),
 
                 dbc.Row(
                     [
@@ -1764,21 +1762,22 @@ def insights_details_layout(year):
     event_db = None
     try:
         if year == current_year:
-            from peekorobo import EVENT_DATABASE, EVENT_TEAMS
-            year_events = EVENT_DATABASE.get(year, {})
+            from peekorobo import _peek_year
+            _cy = _peek_year()
+            year_events = _cy[1].get(year, {})
             year_event_keys = list(year_events.keys())
             num_events = len(year_event_keys)
             team_set = set()
             for ek in year_event_keys:
-                teams = EVENT_TEAMS.get(year, {}).get(ek, [])
+                teams = _cy[2].get(year, {}).get(ek, [])
                 for t in teams:
                     if isinstance(t, dict) and 'tk' in t:
                         team_set.add(t['tk'])
             num_teams = len(team_set)
             num_matches = count_season_matches(year)
             # Only store event_teams (event_key: list of team dicts)
-            event_teams = EVENT_TEAMS.get(year, {})
-            event_db = {k: v.get("n", "") for k, v in EVENT_DATABASE.get(year, {}).items()}
+            event_teams = _cy[2].get(year, {})
+            event_db = {k: v.get("n", "") for k, v in _cy[1].get(year, {}).items()}
         else:
             _, ly_event_db, ly_event_teams, _, _, ly_event_matches = load_year_data(year)
             num_events = len(ly_event_db)
@@ -3059,8 +3058,8 @@ def events_layout(year=current_year, active_tab="cards-tab"):
     )
     # Dynamically generate week options based on stored weeks for the year
     try:
-        from peekorobo import EVENT_DATABASE
-        year_events = EVENT_DATABASE.get(year, {})
+        from peekorobo import _peek_year
+        year_events = _peek_year()[1].get(year, {})
         weeks = sorted({ev.get("wk") for ev in year_events.values() if ev.get("wk") is not None})
     except Exception:
         weeks = []
@@ -3198,7 +3197,7 @@ def events_layout(year=current_year, active_tab="cards-tab"):
         ]
     )
 
-def build_recent_events_section(team_key, team_number, team_epa_data, performance_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, table_style="team", include_header=True):
+def build_recent_events_section(team_key, team_number, team_epa_data, performance_year, event_db, teams_index, matches_index, awards_list, rankings_index, table_style="team", include_header=True):
     epa_data = team_epa_data or {}
 
     recent_rows = []
@@ -3212,24 +3211,24 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
     # Get all events the team attended with start dates
     event_dates = []
     
-    year_events = EVENT_DATABASE.get(performance_year, {}) if isinstance(EVENT_DATABASE, dict) else EVENT_DATABASE
+    year_events = event_db.get(performance_year, {}) if isinstance(event_db, dict) else event_db
 
-    has_year_keys = isinstance(EVENT_TEAMS, dict) and performance_year in EVENT_TEAMS
+    has_year_keys = isinstance(teams_index, dict) and performance_year in teams_index
     # Empty in-memory year slice => load matches, rankings, awards per event from DB (cached)
     use_lazy_event_tables = (
         has_year_keys
-        and isinstance(EVENT_MATCHES, dict)
-        and not EVENT_MATCHES.get(performance_year)
+        and isinstance(matches_index, dict)
+        and not matches_index.get(performance_year)
     )
 
     for ek, ev in year_events.items():
         # Handle both data structures
         if has_year_keys:
-            # current yearstructure: EVENT_TEAMS[year][event_key]
-            event_teams = EVENT_TEAMS.get(performance_year, {}).get(ek, [])
+            # current yearstructure: teams_index[year][event_key]
+            event_teams = teams_index.get(performance_year, {}).get(ek, [])
         else:
-            # before current year structure: EVENT_TEAMS[event_key]
-            event_teams = EVENT_TEAMS.get(ek, []) if isinstance(EVENT_TEAMS, dict) else EVENT_TEAMS
+            # before current year structure: teams_index[event_key]
+            event_teams = teams_index.get(ek, []) if isinstance(teams_index, dict) else teams_index
         
         if not any(int(t.get("tk", -1)) == team_number for t in event_teams):
             continue
@@ -3253,11 +3252,11 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
 
         # Handle both data structures
         if has_year_keys:
-            # current year structure: EVENT_TEAMS[year][event_key]
-            event_teams = EVENT_TEAMS.get(year, {}).get(event_key, [])
+            # current year structure: teams_index[year][event_key]
+            event_teams = teams_index.get(year, {}).get(event_key, [])
         else:
-            # before current year structure: EVENT_TEAMS[event_key]
-            event_teams = EVENT_TEAMS.get(event_key, []) if isinstance(EVENT_TEAMS, dict) else EVENT_TEAMS
+            # before current year structure: teams_index[event_key]
+            event_teams = teams_index.get(event_key, []) if isinstance(teams_index, dict) else teams_index
     
         # Skip if team wasn't on the team list
         if not any(int(t["tk"]) == team_number for t in event_teams if "tk" in t):
@@ -3268,9 +3267,9 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             if use_lazy_event_tables:
                 ein_src = get_event_matches_for_key(event_key)
             elif has_year_keys:
-                ein_src = EVENT_MATCHES.get(year, [])
+                ein_src = matches_index.get(year, [])
             else:
-                ein_src = EVENT_MATCHES
+                ein_src = matches_index
             einstein_matches = [
                 m for m in ein_src
                 if m.get("ek") == event_key
@@ -3282,7 +3281,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             if use_lazy_event_tables:
                 ein_aw_src = get_event_awards_for_key(event_key)
             else:
-                ein_aw_src = EVENT_AWARDS
+                ein_aw_src = awards_list
             einstein_awards = [
                 a
                 for a in ein_aw_src
@@ -3301,11 +3300,11 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         if use_lazy_event_tables:
             ranking = get_event_rankings_for_key(event_key).get(team_number, {})
         elif has_year_keys:
-            ranking = EVENT_RANKINGS.get(year, {}).get(event_key, {}).get(team_number, {})
+            ranking = rankings_index.get(year, {}).get(event_key, {}).get(team_number, {})
         else:
             ranking = (
-                EVENT_RANKINGS.get(event_key, {}).get(team_number, {})
-                if isinstance(EVENT_RANKINGS, dict)
+                rankings_index.get(event_key, {}).get(team_number, {})
+                if isinstance(rankings_index, dict)
                 else {}
             )
         rank_val = ranking.get("rk", "N/A")
@@ -3314,7 +3313,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         if use_lazy_event_tables:
             _aw_src = get_event_awards_for_key(event_key)
         else:
-            _aw_src = EVENT_AWARDS
+            _aw_src = awards_list
         award_names = [
             a["an"]
             for a in _aw_src
@@ -3389,10 +3388,10 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         if use_lazy_event_tables:
             all_event_matches = get_event_matches_for_key(event_key)
         elif has_year_keys:
-            year_matches = EVENT_MATCHES.get(year, [])
+            year_matches = matches_index.get(year, [])
             all_event_matches = [m for m in year_matches if m.get("ek") == event_key]
         else:
-            year_matches = EVENT_MATCHES
+            year_matches = matches_index
             all_event_matches = [m for m in year_matches if m.get("ek") == event_key]
         
         # Calculate record from match data instead of rankings
@@ -3470,8 +3469,8 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
             # If still no data, try to get from team database for the year
             try:
                 if year == current_year:
-                    from peekorobo import TEAM_DATABASE
-                    team_data = TEAM_DATABASE.get(year, {}).get(int(t_key.strip()), {})
+                    from peekorobo import _peek_year
+                    team_data = _peek_year()[0].get(year, {}).get(int(t_key.strip()), {})
                 else:
                     from datagather import load_year_data
                     year_team_data, _, _, _, _, _ = load_year_data(year)
@@ -4251,7 +4250,8 @@ def build_peekolive_grid(team_value=None, prefiltered_events=None):
         else:
             # Team filtering logic for categorized events
             try:
-                from peekorobo import EVENT_TEAMS
+                from peekorobo import _peek_year
+                event_teams_by_year = _peek_year()[2]
                 t_str = str(team_value)
                 filtered_events = []
                 
@@ -4261,7 +4261,7 @@ def build_peekolive_grid(team_value=None, prefiltered_events=None):
                         evk = ev.get("event_key")
                         found = False
                         # Search across all years for the event key
-                        for y, year_map in (EVENT_TEAMS or {}).items():
+                        for y, year_map in (event_teams_by_year or {}).items():
                             teams = (year_map or {}).get(evk, [])
                             if any(str(t.get("tk")) == t_str for t in teams):
                                 found = True
@@ -5004,8 +5004,6 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
         _user_id: If provided, shows profile for this user ID (current user view)
         deleted_items: Items to exclude from display (for current user view)
     """
-    from peekorobo import EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, TEAM_DATABASE, EVENT_RANKINGS
-
     session_user_id = session.get("user_id")
     if not session_user_id:
         return html.Div([
@@ -5351,6 +5349,10 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
             ]
         )
 
+    from peekorobo import _peek_year
+
+    _cy = _peek_year()
+
     # Build team cards
     epa_data = {
         str(team_num): {
@@ -5362,7 +5364,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
             "confidence": data.get("confidence", 0),
             "event_perf": data.get("event_perf", []),
         }
-        for team_num, data in TEAM_DATABASE.get(current_year, {}).items()
+        for team_num, data in _cy[0].get(current_year, {}).items()
     }
     
     team_cards = []
@@ -5372,7 +5374,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
         except:
             continue
 
-        team_data = TEAM_DATABASE.get(current_year, {}).get(team_number)
+        team_data = _cy[0].get(current_year, {}).get(team_number)
         if not team_data:
             continue
 
@@ -5445,7 +5447,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                 metrics,
                 html.Br(),
                 html.Hr(),
-                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, current_year, EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS)
+                build_recent_events_section(f"frc{team_key}", int(team_key), epa_data, current_year, _cy[1], _cy[2], _cy[5], _cy[4], _cy[3])
             ],
             delete_button=delete_team_btn,
             team_number=team_number
@@ -5791,7 +5793,7 @@ def user_profile_layout(username=None, _user_id=None, deleted_items=None):
                 
                 # Generate team recommendations
                 html.Div([
-                    *generate_team_recommendations(TEAM_DATABASE, team_keys, team_affil, text_color)
+                    *generate_team_recommendations(_cy[0], team_keys, team_affil, text_color)
                 ], className="team-recommendations-grid", style={
                     "display": "grid",
                     "gridTemplateColumns": "repeat(auto-fill, minmax(280px, 1fr))",
@@ -5826,14 +5828,15 @@ def event_layout(event_key):
     
     # Load data for the specific year
     if parsed_year == current_year:
-        from peekorobo import EVENT_DATABASE, EVENT_TEAMS, TEAM_DATABASE, EVENT_MATCHES
-        # Use global data for current year
-        event = EVENT_DATABASE.get(parsed_year, {}).get(event_key)
-        event_teams = EVENT_TEAMS.get(parsed_year, {}).get(event_key, [])
+        from peekorobo import _peek_year
+        _cy = _peek_year()
+        # Current-year bundle (lazy-loaded once per process)
+        event = _cy[1].get(parsed_year, {}).get(event_key)
+        event_teams = _cy[2].get(parsed_year, {}).get(event_key, [])
         event_epa_data = {}
         for team in event_teams:
             team_num = team.get("tk")
-            team_data = TEAM_DATABASE.get(parsed_year, {}).get(team_num, {})
+            team_data = _cy[0].get(parsed_year, {}).get(team_num, {})
             if team_data:
                 # Handle event_perf whether it's a string or list
                 event_perf = team_data.get("event_perf", [])
@@ -5858,8 +5861,8 @@ def event_layout(event_key):
                         "confidence": event_specific_epa.get("confidence", 0.7),  # Use 0.7 as fallback instead of 0
                     }
                 else:
-                    # Use overall data from TEAM_DATABASE with fallback
-                    fallback_team_data, actual_year = get_team_data_with_fallback(team_num, parsed_year, TEAM_DATABASE)
+                    # Use overall data from current-year team bundle with fallback
+                    fallback_team_data, actual_year = get_team_data_with_fallback(team_num, parsed_year, _cy[0])
                     if fallback_team_data:
                         event_epa_data[str(team_num)] = {
                             "ace": fallback_team_data.get("ace", 0),

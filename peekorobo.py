@@ -51,37 +51,18 @@ load_dotenv()
 
 current_year = 2026
 
-# Mutable containers for current-year data (updated in place so all importers see fresh data)
-TEAM_DATABASE = {}
-EVENT_DATABASE = {}
-EVENT_TEAMS = {}
-EVENT_RANKINGS = {}
-EVENT_AWARDS = []
-EVENT_MATCHES = {}
+@lru_cache(maxsize=1)
+def _cached_load_data_current_year(yr: int):
+    """
+    One in-process bundle for the active season (no module-level database dicts).
+    Cleared on process restart, or call _cached_load_data_current_year.cache_clear().
+    """
+    return load_data_current_year(yr)
 
-def _reload_current_year_cache():
-    """Reload current year data from DB into the global caches (updates in place)."""
-    try:
-        td, ed, et, er, ea, em = load_data_current_year(current_year)
-        TEAM_DATABASE.clear()
-        TEAM_DATABASE.update(td)
-        EVENT_DATABASE.clear()
-        EVENT_DATABASE.update(ed)
-        EVENT_TEAMS.clear()
-        EVENT_TEAMS.update(et)
-        EVENT_RANKINGS.clear()
-        EVENT_RANKINGS.update(er)
-        EVENT_AWARDS.clear()
-        EVENT_AWARDS.extend(ea)
-        EVENT_MATCHES.clear()
-        EVENT_MATCHES.update(em)
-    except Exception as e:
-        print(f"[peekorobo] Cache reload failed: {e}", flush=True)
 
-# Initial load only.
-# The app is expected to be restarted after scheduler completion
-# instead of periodically reloading cache in-process.
-_reload_current_year_cache()
+def _peek_year():
+    """(team_by_year, event_by_year, event_teams, rankings, awards, matches) from DB, lazy."""
+    return _cached_load_data_current_year(current_year)
 
 # Load optimized data: search data with all events (static, loaded once)
 SEARCH_TEAM_DATA, SEARCH_EVENT_DATA, SEARCH_EVENTS_LIST = load_search_data()
@@ -265,14 +246,6 @@ def toggle_register_popup(pathname, n_dismiss):
     return True
 
 @app.callback(
-    [Output("last-updated-text", "children"), Output("last-updated-text-mobile", "children")],
-    Input("url", "pathname"),
-)
-def _last_updated_noop(pathname):
-    """No-op for removed Last Updated UI; prevents 500s from cached clients."""
-    return "", ""
-
-@app.callback(
     Output("page-content", "children"),
     Input("url", "pathname")
 )
@@ -283,8 +256,8 @@ def display_page(pathname):
         team_number = path_parts[1]
         # If the third part is 'history', show history (year=None)
         if len(path_parts) > 2 and path_parts[2].lower() == "history":
-            # Use global data for history
-            return team_layout(team_number, None, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS)
+            b = _peek_year()
+            return team_layout(team_number, None, b[0], b[1], b[5], b[4], b[3], b[2])
         # If a year is specified and it's not current_year, load that year's data
         year = path_parts[2] if len(path_parts) > 2 else str(current_year)
         if year and year != str(current_year):
@@ -306,7 +279,8 @@ def display_page(pathname):
                 # If year parsing fails, fall back to current year
                 pass
         # Default: show current year
-        return team_layout(team_number, current_year, TEAM_DATABASE, EVENT_DATABASE, EVENT_MATCHES, EVENT_AWARDS, EVENT_RANKINGS, EVENT_TEAMS)
+        b = _peek_year()
+        return team_layout(team_number, current_year, b[0], b[1], b[5], b[4], b[3], b[2])
     
     if pathname.startswith("/event/"):
         event_key = pathname.split("/")[-1]
@@ -804,9 +778,10 @@ def build_compare_teams_figure(team_ids, range_mode, year_val, metric_key):
                 except Exception:
                     continue
     if current_year in years_needed:
-        full_td = TEAM_DATABASE.get(current_year, {})
+        b = _peek_year()
+        full_td = b[0].get(current_year, {})
         td_cur = {t: full_td[t] for t in team_nums if t in full_td}
-        cache[current_year] = (td_cur, EVENT_DATABASE.get(current_year, {}))
+        cache[current_year] = (td_cur, b[1].get(current_year, {}))
 
     if not cache:
         fig.add_annotation(
@@ -1085,7 +1060,7 @@ def _compare_pill_metric_value(v, decimals=1):
 
 def _compare_season_panel_for_year(team_nums, y_sel):
     if y_sel == current_year:
-        full_td = TEAM_DATABASE.get(current_year, {})
+        full_td = _peek_year()[0].get(current_year, {})
         td = {t: full_td[t] for t in team_nums if t in full_td}
     else:
         try:
@@ -2300,7 +2275,7 @@ def update_events_tab_content(
                         evk = ev.get("event_key")
                         found = False
                         # Search across all years for the event key
-                        for _, year_map in (EVENT_TEAMS or {}).items():
+                        for _, year_map in (_peek_year()[2] or {}).items():
                             teams = (year_map or {}).get(evk, [])
                             if any(str(t.get("tk")) == t_str for t in teams):
                                 found = True
@@ -2326,10 +2301,10 @@ def update_events_tab_content(
     
     # Load data for the selected year
     if selected_year == current_year:
-        # Use global data for the current year
-        events_data = list(EVENT_DATABASE.get(selected_year, {}).values())
-        year_event_teams = EVENT_TEAMS.get(selected_year, {})
-        year_team_database = TEAM_DATABASE
+        b = _peek_year()
+        events_data = list(b[1].get(selected_year, {}).values())
+        year_event_teams = b[2].get(selected_year, {})
+        year_team_database = b[0]
     else:
         # Load data for other years on-demand
         try:
@@ -2753,8 +2728,10 @@ def update_event_display(active_tab, epa_data, event_teams, event_matches, event
     # Load team data for the specific year
     year_event_data = None
     if event_year == current_year:
-        year_team_data = TEAM_DATABASE # Use global data for current year
+        cy = _peek_year()
+        year_team_data = cy[0]
     else:
+        cy = None
         # Load data for other years on-demand
         try:
             year_team_data, year_event_data, _, _, _, _ = load_year_data(event_year)
@@ -2785,8 +2762,8 @@ def update_event_display(active_tab, epa_data, event_teams, event_matches, event
             year_team_data = {event_year: year_team_data}
         
         event_record = (
-            EVENT_DATABASE.get(event_year, {}).get(event_key)
-            if event_year == current_year
+            cy[1].get(event_year, {}).get(event_key)
+            if cy
             else (year_event_data or {}).get(event_key)
         )
         default_stats_type = _default_event_teams_stats_type(event_matches, event_record)
@@ -2812,10 +2789,9 @@ def update_event_display(active_tab, epa_data, event_teams, event_matches, event
             ], md=9)
         ], className="mb-4 align-items-center", align="center")
 
-        # Calculate global rankings for teams in the event
+        # Season-wide ACE ordering for in-event rank context
         if event_year == current_year:
-            # Use global database for current year
-            global_teams_data = list(TEAM_DATABASE.get(event_year, {}).values())
+            global_teams_data = list(cy[0].get(event_year, {}).values())
         else:
             # For other years, use the year_team_data
             global_teams_data = list(year_team_data.get(event_year, {}).values())
@@ -3127,8 +3103,10 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
     
     # Load team data for the specific year
     if event_year == current_year:
-        year_team_data = TEAM_DATABASE
+        cy = _peek_year()
+        year_team_data = cy[0]
     else:
+        cy = None
         try:
             year_team_data, _, _, _, _, _ = load_year_data(event_year)
         except Exception as e:
@@ -3188,9 +3166,9 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         # Sort by overall ACE value
         rows.sort(key=lambda r: r["ACE"] if r["ACE"] is not None else 0, reverse=True)
         
-        # Use global percentiles for coloring (with fallback data)
+        # Use season-wide percentiles for coloring (with fallback data)
         if event_year == current_year:
-            global_teams = TEAM_DATABASE.get(event_year, {}).values()
+            global_teams = cy[0].get(event_year, {}).values()
             global_epa_values = [t.get("ace", 0) for t in global_teams]
             global_confidence_values = [t.get("confidence", 0) for t in global_teams]
             global_auto_values = [t.get("auto_raw", 0) for t in global_teams]
@@ -3574,7 +3552,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
         if not info or info.get("ace", 0) == 0:
             # Fallback to team database for the specific year
             if event_year == current_year:
-                team_data = TEAM_DATABASE.get(event_year, {}).get(int(t_key), {})
+                team_data = _peek_year()[0].get(event_year, {}).get(int(t_key), {})
             else:
                 try:
                     year_team_data, _, _, _, _, _ = load_year_data(event_year)
@@ -4458,8 +4436,8 @@ def load_teams(
         url_update = no_update
 
     # Load and filter teams
-    # Check if data for the selected year is available
-    if not TEAM_DATABASE.get(selected_year):
+    team_by_year = _peek_year()[0]
+    if not team_by_year.get(selected_year):
         # Load data for the specific year if it's not current year
         if selected_year != current_year:
             try:
@@ -4471,7 +4449,7 @@ def load_teams(
         else:
             return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, url_update, []
     else:
-        teams_data, epa_ranks = calculate_all_ranks(selected_year, TEAM_DATABASE)
+        teams_data, epa_ranks = calculate_all_ranks(selected_year, team_by_year)
 
     empty_style = []
     if not teams_data:
@@ -4557,7 +4535,7 @@ def load_teams(
     teams_data.sort(key=lambda t: t.get("weighted_ace") or 0, reverse=True)
     
     # Always compute global percentiles
-    if not TEAM_DATABASE.get(selected_year):
+    if not team_by_year.get(selected_year):
         if selected_year != current_year:
             try:
                 year_team_data, _, _, _, _, _ = load_year_data(selected_year)
@@ -4568,7 +4546,7 @@ def load_teams(
         else:
             global_data = teams_data
     else:
-        global_data, _ = calculate_all_ranks(selected_year, TEAM_DATABASE)
+        global_data, _ = calculate_all_ranks(selected_year, team_by_year)
     
     extract_global = lambda key: [t[key] for t in global_data if t.get(key) is not None]
     
@@ -5618,8 +5596,9 @@ def update_team_insights(active_tab, store_data):
     
     # Load year-specific data if needed
     if performance_year == current_year:
-        team_data = TEAM_DATABASE.get(performance_year, {}).get(team_number, {})
-        event_database = EVENT_DATABASE
+        b = _peek_year()
+        team_data = b[0].get(performance_year, {}).get(team_number, {})
+        event_database = b[1]
     else:
         try:
             year_team_data, year_event_data, _, _, _, _ = load_year_data(performance_year)
@@ -5717,11 +5696,11 @@ def update_team_insights(active_tab, store_data):
         
         # Get team's historical data across all years they participated in
         years_data = []
+        cy = _peek_year()
         for year_key in sorted(years_participated):
             
             if year_key == current_year:
-                # Use global database for current year
-                year_team_data = TEAM_DATABASE[year_key]
+                year_team_data = cy[0][year_key]
             else:
                 # Load data for other years
                 try:
@@ -5834,9 +5813,10 @@ def update_team_events(active_tab, store_data):
         year = int(year)
         try:
             if year == current_year:
-                event_iter = EVENT_DATABASE[year].items()
+                b = _peek_year()
+                event_iter = b[1][year].items()
                 for event_key, event in event_iter:
-                    team_list = EVENT_TEAMS[year].get(event_key, [])
+                    team_list = b[2][year].get(event_key, [])
                     if any(t["tk"] == team_number for t in team_list):
                         events.append({
                             "name": event.get("n", ""),
@@ -6913,14 +6893,12 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
     if selected_year:
         events = [ev for ev in events if ev.get("year") == selected_year]
 
-    # Event type filter uses EVENT_DATABASE to lookup type by key
     if selected_event_types:
         if not isinstance(selected_event_types, list):
             selected_event_types = [selected_event_types]
         try:
-            # EVENT_DATABASE is keyed by year; when year filter missing, assume current
             lookup_year = selected_year or current_year
-            ev_by_key = {e.get("k"): e for e in EVENT_DATABASE.get(lookup_year, {}).values()}
+            ev_by_key = {e.get("k"): e for e in _peek_year()[1].get(lookup_year, {}).values()}
             def ev_type_ok(ev):
                 ek = ev.get("event_key")
                 meta = ev_by_key.get(ek, {})
@@ -6978,7 +6956,7 @@ def update_peekolive_grid(_, selected_year, selected_event_types, selected_week,
             for ev in events:
                 evk = ev.get("event_key")
                 found = False
-                for _, year_map in (EVENT_TEAMS or {}).items():
+                for _, year_map in (_peek_year()[2] or {}).items():
                     teams = (year_map or {}).get(evk, [])
                     if any(str(t.get("tk")) == t_str for t in teams):
                         found = True
@@ -7261,8 +7239,7 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
             available_avatars = _load_avatar_cache()  # This is cached globally, fast after first call
             
             if year == current_year:
-                # Use global TEAM_DATABASE for current year
-                year_data = TEAM_DATABASE.get(current_year, {})
+                year_data = _peek_year()[0].get(current_year, {})
             else:
                 # Load data for other years using load_year_data
                 year_team_data, _, _, _, _, _ = load_year_data(year)
