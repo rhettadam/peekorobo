@@ -1,6 +1,16 @@
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
-from datagather import load_year_data,get_team_avatar,get_team_years_participated,TEAM_COLORS
+from datagather import (
+    load_match_page_data,
+    load_year_data,
+    get_team_avatar,
+    get_team_years_participated,
+    TEAM_COLORS,
+    get_event_matches_for_key,
+    get_event_rankings_for_key,
+    get_event_awards_for_key,
+    count_season_matches,
+)
 from flask import session
 from datetime import datetime, date, timedelta, timezone
 from utils import (
@@ -1754,7 +1764,7 @@ def insights_details_layout(year):
     event_db = None
     try:
         if year == current_year:
-            from peekorobo import EVENT_DATABASE, EVENT_TEAMS, EVENT_MATCHES
+            from peekorobo import EVENT_DATABASE, EVENT_TEAMS
             year_events = EVENT_DATABASE.get(year, {})
             year_event_keys = list(year_events.keys())
             num_events = len(year_event_keys)
@@ -1765,8 +1775,7 @@ def insights_details_layout(year):
                     if isinstance(t, dict) and 'tk' in t:
                         team_set.add(t['tk'])
             num_teams = len(team_set)
-            year_matches = EVENT_MATCHES.get(year, [])
-            num_matches = len(year_matches)
+            num_matches = count_season_matches(year)
             # Only store event_teams (event_key: list of team dicts)
             event_teams = EVENT_TEAMS.get(year, {})
             event_db = {k: v.get("n", "") for k, v in EVENT_DATABASE.get(year, {}).items()}
@@ -3206,7 +3215,13 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
     year_events = EVENT_DATABASE.get(performance_year, {}) if isinstance(EVENT_DATABASE, dict) else EVENT_DATABASE
 
     has_year_keys = isinstance(EVENT_TEAMS, dict) and performance_year in EVENT_TEAMS
-    
+    # Empty in-memory year slice => load matches, rankings, awards per event from DB (cached)
+    use_lazy_event_tables = (
+        has_year_keys
+        and isinstance(EVENT_MATCHES, dict)
+        and not EVENT_MATCHES.get(performance_year)
+    )
+
     for ek, ev in year_events.items():
         # Handle both data structures
         if has_year_keys:
@@ -3248,32 +3263,33 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         if not any(int(t["tk"]) == team_number for t in event_teams if "tk" in t):
             continue
     
-        # === Special check for Einstein (2025cmptx) ===
-        if event_key == "2025cmptx":
-            # Handle both data structures for matches
-            if has_year_keys:
-                # current year structure: EVENT_MATCHES[year]
-                year_matches = EVENT_MATCHES.get(year, [])
+        # === Special check for Einstein (championship) ===
+        if event_key == f"{year}cmptx" or event_key == "2025cmptx":
+            if use_lazy_event_tables:
+                ein_src = get_event_matches_for_key(event_key)
+            elif has_year_keys:
+                ein_src = EVENT_MATCHES.get(year, [])
             else:
-                # before current year structure: EVENT_MATCHES is a list
-                year_matches = EVENT_MATCHES
+                ein_src = EVENT_MATCHES
             einstein_matches = [
-                m for m in year_matches
-                if m.get("ek") == "2025cmptx" and (
-                    str(team_number) in m.get("rt", "").split(",") or
-                    str(team_number) in m.get("bt", "").split(",")
+                m for m in ein_src
+                if m.get("ek") == event_key
+                and (
+                    str(team_number) in m.get("rt", "").split(",")
+                    or str(team_number) in m.get("bt", "").split(",")
                 )
             ]
-
-            # EVENT_AWARDS is always a list
+            if use_lazy_event_tables:
+                ein_aw_src = get_event_awards_for_key(event_key)
+            else:
+                ein_aw_src = EVENT_AWARDS
             einstein_awards = [
-                a for a in EVENT_AWARDS
+                a
+                for a in ein_aw_src
                 if a["tk"] == team_number
-                and a["ek"] == "2025cmptx"
+                and a["ek"] == event_key
                 and parse_event_year(a.get("ek")) == year
             ]
-    
-            # If neither, skip
             if not einstein_matches and not einstein_awards:
                 continue
 
@@ -3282,19 +3298,26 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         start_date = event.get("sd", "")
         event_url = f"/event/{event_key}"
 
-        # Handle both data structures for rankings
-        if has_year_keys:
-            # current year structure: EVENT_RANKINGS[year][event_key]
+        if use_lazy_event_tables:
+            ranking = get_event_rankings_for_key(event_key).get(team_number, {})
+        elif has_year_keys:
             ranking = EVENT_RANKINGS.get(year, {}).get(event_key, {}).get(team_number, {})
         else:
-            # before current year structure: EVENT_RANKINGS[event_key]
-            ranking = EVENT_RANKINGS.get(event_key, {}).get(team_number, {}) if isinstance(EVENT_RANKINGS, dict) else {}
+            ranking = (
+                EVENT_RANKINGS.get(event_key, {}).get(team_number, {})
+                if isinstance(EVENT_RANKINGS, dict)
+                else {}
+            )
         rank_val = ranking.get("rk", "N/A")
         total_teams = len(event_teams)
 
-        # EVENT_AWARDS is always a list
+        if use_lazy_event_tables:
+            _aw_src = get_event_awards_for_key(event_key)
+        else:
+            _aw_src = EVENT_AWARDS
         award_names = [
-            a["an"] for a in EVENT_AWARDS
+            a["an"]
+            for a in _aw_src
             if a["tk"] == team_number
             and a["ek"] == event_key
             and parse_event_year(a.get("ek")) == year
@@ -3363,16 +3386,14 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
         # Get week label for the event (stored week is 0-based)
         week_label = get_event_week_label_from_number(event.get("wk"))
 
-        # Handle both data structures for matches
-        if has_year_keys:
-            # 2025 structure: EVENT_MATCHES[year]
+        if use_lazy_event_tables:
+            all_event_matches = get_event_matches_for_key(event_key)
+        elif has_year_keys:
             year_matches = EVENT_MATCHES.get(year, [])
+            all_event_matches = [m for m in year_matches if m.get("ek") == event_key]
         else:
-            # 2024 structure: EVENT_MATCHES is a list
             year_matches = EVENT_MATCHES
-        
-        # Get ALL matches for this event
-        all_event_matches = [m for m in year_matches if m.get("ek") == event_key]
+            all_event_matches = [m for m in year_matches if m.get("ek") == event_key]
         
         # Calculate record from match data instead of rankings
         wins = 0
@@ -4314,25 +4335,16 @@ def match_layout(event_key, match_key):
     except Exception:
         return dbc.Alert("Invalid event key.", color="danger")
     
-     # Get data for teams (prefer event-specific)
-    if year == current_year:
-        from peekorobo import TEAM_DATABASE, EVENT_MATCHES, EVENT_DATABASE
-        team_db = TEAM_DATABASE.get(year, {})
-        event_matches = EVENT_MATCHES
-        event_db = EVENT_DATABASE
-    else:
-        try:
-            team_db, event_db, _, _, _, event_matches = load_year_data(year)
-        except Exception:
-            return dbc.Alert(
-                "Event data is temporarily unavailable. Please refresh in a moment.",
-                color="warning",
-            )
-
-    if isinstance(event_matches, dict):
-        matches = [m for m in event_matches.get(year, []) if m.get("ek") == event_key]
-    else:
-        matches = [m for m in event_matches if m.get("ek") == event_key]
+    try:
+        mdata = load_match_page_data(event_key, year, match_key)
+        if not mdata:
+            return dbc.Alert("Match not found.", color="danger")
+        team_db, event_db, matches, season_stat_lists = mdata
+    except Exception:
+        return dbc.Alert(
+            "Event data is temporarily unavailable. Please refresh in a moment.",
+            color="warning",
+        )
 
     # Use the same normalization as build_match_rows in layouts.py
     def normalized_label(match):
@@ -4412,9 +4424,18 @@ def match_layout(event_key, match_key):
     pred_red_score = sum(t["ace"] for t in red_epas)
     pred_blue_score = sum(t["ace"] for t in blue_epas)
 
-    # Percentile coloring for ACE using app-wide logic
-    all_epas = [t.get("ace", 0) for t in team_db.values() if t.get("ace") is not None or t.get("raw") is not None]
-    percentiles_dict = {"ace": compute_percentiles(all_epas)}
+    # Percentile coloring: season stats (minimal load) or from full in-memory `team_db` (current year)
+    if season_stat_lists is not None:
+        percentiles_dict = {
+            k: compute_percentiles([float(x) for x in (season_stat_lists.get(k) or [])])
+            for k in ["auto_raw", "teleop_raw", "endgame_raw", "confidence", "ace", "raw"]
+        }
+    else:
+        all_stats = {
+            k: [t.get(k, 0) for t in team_db.values() if t.get(k) is not None]
+            for k in ["auto_raw", "teleop_raw", "endgame_raw", "confidence", "ace", "raw"]
+        }
+        percentiles_dict = {k: compute_percentiles(v) for k, v in all_stats.items()}
 
     # Build breakdown data for DataTable
     phases = [
@@ -4480,13 +4501,6 @@ def match_layout(event_key, match_key):
     blue_total_row["Blue Predicted"] = round(pred_blue_score, 2)
     blue_total_row["Blue Actual"] = blue_score
     blue_data.append(blue_total_row)
-
-    # Percentile coloring for all stats
-    all_stats = {
-        k: [t.get(k, 0) for t in team_db.values() if t.get(k) is not None]
-        for k in ["auto_raw", "teleop_raw", "endgame_raw", "confidence", "ace", "raw"]
-    }
-    percentiles_dict = {k: compute_percentiles(v) for k, v in all_stats.items()}
 
     # Build style_data_conditional for red table
     red_style_data_conditional = []
@@ -5812,7 +5826,7 @@ def event_layout(event_key):
     
     # Load data for the specific year
     if parsed_year == current_year:
-        from peekorobo import EVENT_DATABASE, EVENT_TEAMS, TEAM_DATABASE, EVENT_RANKINGS, EVENT_MATCHES
+        from peekorobo import EVENT_DATABASE, EVENT_TEAMS, TEAM_DATABASE, EVENT_MATCHES
         # Use global data for current year
         event = EVENT_DATABASE.get(parsed_year, {}).get(event_key)
         event_teams = EVENT_TEAMS.get(parsed_year, {}).get(event_key, [])
@@ -5866,12 +5880,10 @@ def event_layout(event_key):
                             "confidence": team_data.get("confidence", 0.7),
                         }
         
-        # Calculate rankings based on event-specific data
-        rankings = EVENT_RANKINGS.get(parsed_year, {}).get(event_key, {})
-        
-        # Get event matches
-        event_matches = [m for m in EVENT_MATCHES.get(parsed_year, []) if m.get("ek") == event_key]
-        
+        rankings = get_event_rankings_for_key(event_key)
+
+        event_matches = get_event_matches_for_key(event_key)
+
     else:
         # Load data for other years on-demand
         try:

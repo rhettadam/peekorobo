@@ -34,7 +34,9 @@ from datagather import (
     load_data_current_year,
     load_search_data,
     load_year_data,
+    load_season_matches_cached,
     load_compare_year_from_db,
+    get_season_awards_for_team,
     get_team_avatar,
     DatabaseConnection,
     get_team_years_participated,
@@ -47,6 +49,8 @@ from utils import format_human_date,calculate_all_ranks,get_user_avatar,get_epa_
 from dotenv import load_dotenv
 load_dotenv()
 
+current_year = 2026
+
 # Mutable containers for current-year data (updated in place so all importers see fresh data)
 TEAM_DATABASE = {}
 EVENT_DATABASE = {}
@@ -58,7 +62,7 @@ EVENT_MATCHES = {}
 def _reload_current_year_cache():
     """Reload current year data from DB into the global caches (updates in place)."""
     try:
-        td, ed, et, er, ea, em = load_data_current_year()
+        td, ed, et, er, ea, em = load_data_current_year(current_year)
         TEAM_DATABASE.clear()
         TEAM_DATABASE.update(td)
         EVENT_DATABASE.clear()
@@ -80,9 +84,7 @@ def _reload_current_year_cache():
 _reload_current_year_cache()
 
 # Load optimized data: search data with all events (static, loaded once)
-SEARCH_TEAM_DATA, SEARCH_EVENT_DATA = load_search_data()
-
-current_year = 2026
+SEARCH_TEAM_DATA, SEARCH_EVENT_DATA, SEARCH_EVENTS_LIST = load_search_data()
 
 app = dash.Dash(
     __name__,
@@ -616,12 +618,11 @@ def _compare_team_display_name(tnum, cache):
             nick = (row.get("nickname") or "").strip()
             if nick:
                 return f"{tnum} — {nick}"
-    for y in sorted(SEARCH_TEAM_DATA.keys(), reverse=True):
-        row = SEARCH_TEAM_DATA.get(y, {}).get(tnum)
-        if row:
-            nick = (row.get("nickname") or "").strip()
-            if nick:
-                return f"{tnum} — {nick}"
+    row = SEARCH_TEAM_DATA.get(tnum)
+    if row:
+        nick = (row.get("nickname") or "").strip()
+        if nick:
+            return f"{tnum} — {nick}"
     return f"Team {tnum}"
 
 
@@ -1297,9 +1298,9 @@ def update_search_preview(desktop_value, mobile_value, current_theme):
     desktop_value = (desktop_value or "").strip().lower()
     mobile_value = (mobile_value or "").strip().lower()
 
-    # Use search-specific data: current year teams and all events
-    teams_data = list(SEARCH_TEAM_DATA[current_year].values())
-    events_data = [ev for year_dict in SEARCH_EVENT_DATA.values() for ev in year_dict.values()]
+    # Search lists are precomputed at import; do not rebuild all-events on every keystroke.
+    teams_data = list(SEARCH_TEAM_DATA.values())
+    events_data = SEARCH_EVENTS_LIST
 
     def get_children_and_style(val):
         if not val:
@@ -6124,9 +6125,7 @@ def update_team_awards(active_tab, store_data):
                     "name": aw["an"],
                     "year": int(str(aw["ek"])[:4]) if str(aw.get("ek", ""))[:4].isdigit() else None,
                 }
-                for aw in EVENT_AWARDS
-                if aw.get("tk") == int(team)
-                and (int(str(aw.get("ek", ""))[:4]) if str(aw.get("ek", ""))[:4].isdigit() else None) == current_year
+                for aw in get_season_awards_for_team(current_year, int(team))
             ]
         else:
             _, _, _, _, aya, _ = load_year_data(int(year))
@@ -7856,12 +7855,9 @@ def _parse_duel_years(value):
     filtered_years = [y for y in years if 1992 <= y <= current_year]
     return sorted(filtered_years) if filtered_years else list(range(1992, current_year + 1))
 
-@lru_cache(maxsize=64)
-def _load_duel_year_data(year):
-    if year == current_year:
-        return EVENT_DATABASE.get(year, {}), EVENT_MATCHES.get(year, [])
-    _, event_data, _, _, _, matches = load_year_data(year)
-    return event_data, matches
+def _duel_matches_for_year(year: int) -> list:
+    """Full season match rows; loaded on first duel use per year (not at web import)."""
+    return list(load_season_matches_cached(int(year)))
 
 def _format_duel_match_label(match):
     comp_level = match.get("cl", "")
@@ -7883,7 +7879,7 @@ def _format_duel_match_code(event_key, match):
         match_part = f"{comp_level}{match_number}"
     return f"{event_key}_{match_part}"
 
-@lru_cache(maxsize=512)
+@lru_cache(maxsize=128)
 def _get_team_years_cached(team_number):
     try:
         return tuple(get_team_years_participated(team_number))
@@ -7914,7 +7910,7 @@ def _build_duel_team_info(team_number):
         return html.Div("Enter a team number", className="duel-team-info-placeholder")
 
     nickname = None
-    team_data = SEARCH_TEAM_DATA.get(current_year, {}).get(team_number)
+    team_data = SEARCH_TEAM_DATA.get(team_number)
     if team_data:
         nickname = team_data.get("nickname")
     label = f"Team {team_number}"
@@ -8018,7 +8014,7 @@ def update_duel_results(n_clicks, swap_clicks, filter_options, team1_input, team
 
     for year in years:
         try:
-            event_data, matches = _load_duel_year_data(year)
+            matches = _duel_matches_for_year(year)
         except Exception:
             continue
 
