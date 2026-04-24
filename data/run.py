@@ -25,6 +25,9 @@ start_time = time.time()
 
 load_dotenv()
 
+# Verbose per-team EPA trace logs; off in production to reduce log I/O and noise.
+_EPA_DEBUG = os.environ.get("EPA_DEBUG", "").lower() in ("1", "true", "yes")
+
 TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
 
 API_KEYS = os.getenv("TBA_API_KEYS").split(',')
@@ -258,12 +261,34 @@ def cleanup_connection(conn):
             print(f"Warning: Error closing connection: {e}")
 
 def restart_heroku_app():
-    # Restart the Heroku app to reload updated data.
-    app_name = os.environ.get("HEROKU_APP_NAME")
-    api_key = os.environ.get("HEROKU_API_KEY")
+    """
+    Best-effort restart of all web/worker dynos so the app reloads (clears in-memory caches).
 
-    if not app_name or not api_key:
-        print("HEROKU_APP_NAME or HEROKU_API_KEY not set, skipping app restart")
+    Not automatic: set a Platform API token on the app (or Scheduler job):
+      heroku config:set HEROKU_API_KEY="$(heroku auth:token)" -a <your-app>
+
+    HEROKU_APP_NAME is set automatically for apps running on Heroku. For local/CI runs, set it
+    explicitly. Disable with RESTART_HEROKU=0.
+    """
+    if os.environ.get("RESTART_HEROKU", "1").strip().lower() in ("0", "false", "no", "off"):
+        print("[heroku] RESTART_HEROKU=0, skipping app restart", flush=True)
+        return
+
+    app_name = (os.environ.get("HEROKU_APP_NAME") or os.environ.get("HEROKU_APP") or "").strip()
+    api_key = (os.environ.get("HEROKU_API_KEY") or "").strip()
+
+    if not api_key:
+        print(
+            "[heroku] HEROKU_API_KEY is not set — skipping dyno restart. "
+            "Set it to a valid Heroku authorizations token so the web app reloads after this job.",
+            flush=True,
+        )
+        return
+    if not app_name:
+        print(
+            "[heroku] HEROKU_APP_NAME (or HEROKU_APP) is not set — skipping dyno restart.",
+            flush=True,
+        )
         return
 
     try:
@@ -271,17 +296,20 @@ def restart_heroku_app():
         headers = {
             "Accept": "application/vnd.heroku+json; version=3",
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
-        # Restart all dynos.
-        response = requests.delete(url, headers=headers)
+        response = requests.delete(url, headers=headers, timeout=60)
         if response.status_code == 202:
-            print(f"Successfully restarted Heroku app: {app_name}")
+            print(f"[heroku] Restart requested for app {app_name} (all dynos).", flush=True)
         else:
-            print(f"Failed to restart app: {response.status_code} - {response.text}")
+            print(
+                f"[heroku] Dyno restart failed: HTTP {response.status_code} — {response.text!r}. "
+                "If 401/403, ensure the token is valid and the account can manage this app.",
+                flush=True,
+            )
     except Exception as e:
-        print(f"Error restarting app: {e}")
+        print(f"[heroku] Error requesting dyno restart: {e}", flush=True)
 
 # Robust retry for DB connection
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
@@ -1449,6 +1477,10 @@ def fetch_and_store_team_data(year):
             "do not overlap (increase interval or shorten the job if this happens often).",
             flush=True,
         )
+        print(
+            "[heroku] App restart is skipped (this process did not run the pipeline).",
+            flush=True,
+        )
         return
 
     try:
@@ -1573,13 +1605,15 @@ def _fetch_and_store_team_data_impl(year):
         if len(failed_teams) > 10:
             print(f"  ... and {len(failed_teams) - 10} more")
 
-    # Calculate and store match predictions after team EPAs are up to date
+    # Match predictions + Heroku restart (in-memory app cache; see restart_heroku_app).
     if not shutdown_event.is_set():
         try:
             calculate_and_store_match_predictions(year)
         except Exception as e:
             print(f"Failed to calculate match predictions for {year}: {e}")
         finally:
+            # Runs after predictions success or exception; not reached if we returned early above
+            # (e.g. shutdown) or if this process never got the pipeline lock in fetch_and_store_team_data.
             restart_heroku_app()
 
 def get_team_experience(team_number: int, up_to_year: int) -> int:
@@ -1810,11 +1844,11 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
         matches = sorted(matches, key=lambda m: m.get("time") or 0)
 
-        # DEBUG: Print team and year
-        if matches:
-            print(f"EPA DEBUG: Processing team {team_key} for year {matches[0]['event_key'][:4]}")
-        else:
-            print(f"EPA DEBUG: Processing team {team_key} (no matches)")
+        if _EPA_DEBUG:
+            if matches:
+                print(f"EPA DEBUG: Processing team {team_key} for year {matches[0]['event_key'][:4]}")
+            else:
+                print(f"EPA DEBUG: Processing team {team_key} (no matches)")
 
         match_count = 0
         overall_epa = 0.0
@@ -1923,7 +1957,7 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                 norm_margin = (scaled_margin + 1) / 1.3
                 dominance_scores.append(min(1.0, max(0.0, norm_margin)))
                 # Robust fallback: set to 0.0 if any are None
-                if auto_epa is None or teleop_epa is None or endgame_epa is None:
+                if (auto_epa is None or teleop_epa is None or endgame_epa is None) and _EPA_DEBUG:
                     print(f"EPA DEBUG: NoneType EPA before math in match {match.get('key', 'unknown')}: auto_epa={auto_epa}, teleop_epa={teleop_epa}, endgame_epa={endgame_epa}, teleop={teleop}")
                 if auto_epa is None:
                     auto_epa = 0.0
@@ -1944,7 +1978,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                 try:
                     delta_teleop = K * (teleop - teleop_epa)
                 except Exception as e:
-                    print(f"EPA DEBUG ERROR: teleop={teleop}, teleop_epa={teleop_epa}, match={match.get('key', 'unknown')}, error={e}")
+                    if _EPA_DEBUG:
+                        print(f"EPA DEBUG ERROR: teleop={teleop}, teleop_epa={teleop_epa}, match={match.get('key', 'unknown')}, error={e}")
                     teleop_epa = 0.0
                     delta_teleop = K * (teleop - teleop_epa)
                 teleop_epa += delta_teleop
@@ -2017,7 +2052,8 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                 overall_epa = auto_epa + teleop_epa + endgame_epa
                 contributions.append(actual_overall)
             except Exception as e:
-                print(f"EPA DEBUG ERROR: Modern block, match={match.get('key', 'unknown')}, error={e}")
+                if _EPA_DEBUG:
+                    print(f"EPA DEBUG ERROR: Modern block, match={match.get('key', 'unknown')}, error={e}")
 
         if not match_count:
             return {
@@ -2556,6 +2592,7 @@ if __name__ == "__main__":
                 sys.exit(1)
             if len(sys.argv) > 2 and sys.argv[2] == "--ranks-only":
                 compute_and_store_team_epa_ranks(year)
+                restart_heroku_app()
             else:
                 fetch_and_store_team_data(year)
         else:
