@@ -2893,8 +2893,8 @@ def update_event_display(active_tab, epa_data, event_teams, event_matches, event
 
     # === Strength of Schedule (SoS) Tab ===
     elif active_tab == "sos":
-        # SoS = schedule ease within the event: min–max of mean QM opponent ACE (weaker = easier) and
-        # mean partner ACE (stronger partners = easier), combined 50/50, scaled to [0,1] (1 = easiest).
+        # SoS = ease of winning QMs: mean model win probability (rp/bp) for your alliance. Higher = more
+        # often predicted to win (top teams with favorable draws rank at the top). Opponent/partner ACE are context only.
         team_sos_rows = []
         team_numbers = [t["tk"] for t in event_teams]
         matches = [m for m in (event_matches or []) if m.get("cl") == "qm"]  # Only consider qualification matches
@@ -2944,6 +2944,7 @@ def update_event_display(active_tab, epa_data, event_teams, event_matches, event
             avg_opp_ace = sum(opp_aces) / len(opp_aces) if opp_aces else 0
             avg_partner_ace = sum(partner_aces) / len(partner_aces) if partner_aces else 0
             avg_win_prob = sum(win_probs) / len(win_probs) if win_probs else None
+            sos_val = round(avg_win_prob, 2) if avg_win_prob is not None else None
             # Build row
             team_data = team_lookup.get(team_num_int, {})
             nickname = team_data.get("nn", "Unknown")
@@ -2957,34 +2958,23 @@ def update_event_display(active_tab, epa_data, event_teams, event_matches, event
             team_sos_rows.append({
                 "Team #": int(team_num_int) if team_num_int else 0,
                 "Nickname": nickname_link,
+                "SoS": sos_val,
                 "Avg Opponent ACE": round(avg_opp_ace, 2),
                 "Avg Partner ACE": round(avg_partner_ace, 2),
-                "Avg Win Prob": round(avg_win_prob, 2) if avg_win_prob is not None else None,
                 "Hardest Match": match_label(hardest),
                 "Hardest Win Prob": round(hardest_prob, 2) if hardest_prob is not None else None,
                 "Easiest Match": match_label(easiest),
                 "Easiest Win Prob": round(easiest_prob, 2) if easiest_prob is not None else None,
                 "# Matches": len(team_matches),
             })
-        if team_sos_rows:
-            _o = [r["Avg Opponent ACE"] for r in team_sos_rows]
-            _p = [r["Avg Partner ACE"] for r in team_sos_rows]
-            o_mn, o_mx = min(_o), max(_o)
-            p_mn, p_mx = min(_p), max(_p)
-            o_sp, p_sp = o_mx - o_mn, p_mx - p_mn
-            for r in team_sos_rows:
-                o_e = 1.0 - (r["Avg Opponent ACE"] - o_mn) / o_sp if o_sp else 1.0
-                p_e = (r["Avg Partner ACE"] - p_mn) / p_sp if p_sp else 1.0
-                r["SoS"] = round(0.5 * o_e + 0.5 * p_e, 2)
-        # Easiest schedules (SoS → 1) first
-        team_sos_rows.sort(key=lambda r: r.get("SoS", -1), reverse=True)
+        # Highest predicted win rate (easiest path) first
+        team_sos_rows.sort(key=lambda r: r.get("SoS") if r.get("SoS") is not None else -1, reverse=True)
         sos_columns = [
             {"name": "Team #", "id": "Team #", "type": "numeric"},
             {"name": "Nickname", "id": "Nickname", "presentation": "markdown"},
             {"name": "SoS", "id": "SoS", "type": "numeric"},
             {"name": "Avg Opponent ACE", "id": "Avg Opponent ACE", "type": "numeric"},
             {"name": "Avg Partner ACE", "id": "Avg Partner ACE", "type": "numeric"},
-            {"name": "Avg Win Prob", "id": "Avg Win Prob", "type": "numeric"},
             {"name": "Hardest Match", "id": "Hardest Match", "presentation": "markdown"},
             {"name": "Hardest Win Prob", "id": "Hardest Win Prob", "type": "numeric"},
             {"name": "Easiest Match", "id": "Easiest Match", "presentation": "markdown"},
@@ -3044,7 +3034,7 @@ def update_event_display(active_tab, epa_data, event_teams, event_matches, event
 
         return html.Div([
             sos_data_store,
-            html.H4("Strength of Schedule (SoS)", className="mb-3 mt-3"),
+            html.H4("Strength of Schedule (SoS) — mean predicted QM win probability", className="mb-3 mt-3"),
             sos_export_container,
             dash_table.DataTable(
                 id="event-sos-table",
@@ -3240,46 +3230,25 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
         overall_team_epas.sort(key=lambda x: x[1], reverse=True)
         overall_rank_map = {tnum: i+1 for i, (tnum, _) in enumerate(overall_team_epas)}
         
-        # SoS: same as SoS tab (opponent + partner ACE, 50/50, event-normalized to [0,1])
+        # SoS: mean predicted QM win prob (same as SoS tab)
         team_numbers = [t["tk"] for t in event_teams]
         team_sos = {}
-        raw_mean_opp = {}
-        raw_mean_par = {}
         if event_matches:
             qm_matches = [m for m in event_matches if m.get("cl") == "qm"]
             for team_num in team_numbers:
                 team_num_str = str(team_num)
-                tn_int = int(team_num)
-                team_matches = [m for m in qm_matches if team_num_str in m.get("rt", "").split(",") or team_num_str in m.get("bt", "").split(",")]
-                if not team_matches:
-                    raw_mean_opp[team_num] = None
-                    continue
-                opp_aces, par_aces = [], []
-                for m in team_matches:
-                    if team_num_str in m.get("rt", "").split(","):
-                        allies = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
-                        opps = [int(t) for t in m.get("bt", "").split(",") if t.strip().isdigit()]
-                    else:
-                        allies = [int(t) for t in m.get("bt", "").split(",") if t.strip().isdigit()]
-                        opps = [int(t) for t in m.get("rt", "").split(",") if t.strip().isdigit()]
-                    partners = [t for t in allies if t != tn_int]
-                    opp_aces.append(sum(epa_data.get(str(o), {}).get("ace", 0) for o in opps) / len(opps) if opps else 0)
-                    par_aces.append(sum(epa_data.get(str(p), {}).get("ace", 0) for p in partners) / len(partners) if partners else 0)
-                raw_mean_opp[team_num] = sum(opp_aces) / len(opp_aces)
-                raw_mean_par[team_num] = sum(par_aces) / len(par_aces)
-            _vo = [raw_mean_opp[k] for k in team_numbers if raw_mean_opp.get(k) is not None]
-            _vp = [raw_mean_par[k] for k in team_numbers if raw_mean_par.get(k) is not None]
-            o_mn, o_mx = (min(_vo), max(_vo)) if _vo else (0.0, 0.0)
-            p_mn, p_mx = (min(_vp), max(_vp)) if _vp else (0.0, 0.0)
-            o_sp, p_sp = o_mx - o_mn, p_mx - p_mn
-            for team_num in team_numbers:
-                vo, vp = raw_mean_opp.get(team_num), raw_mean_par.get(team_num)
-                if vo is None:
+                t_matches = [m for m in qm_matches if team_num_str in m.get("rt", "").split(",") or team_num_str in m.get("bt", "").split(",")]
+                if not t_matches:
                     team_sos[team_num] = None
-                else:
-                    o_e = 1.0 - (vo - o_mn) / o_sp if o_sp else 1.0
-                    p_e = (vp - p_mn) / p_sp if p_sp and vp is not None else 1.0
-                    team_sos[team_num] = round(0.5 * o_e + 0.5 * p_e, 2)
+                    continue
+                wps = []
+                for m in t_matches:
+                    red = team_num_str in m.get("rt", "").split(",")
+                    pr, pb = m.get("rp"), m.get("bp")
+                    if pr is None or pb is None:
+                        continue
+                    wps.append(pr if red else pb)
+                team_sos[team_num] = round(sum(wps) / len(wps), 2) if wps else None
         else:
             for team_num in team_numbers:
                 team_sos[team_num] = None
