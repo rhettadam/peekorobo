@@ -3,6 +3,9 @@ from dash import html, dcc, dash_table
 from datagather import (
     load_match_page_data,
     load_year_data,
+    load_event_layout_data,
+    load_season_ace_values,
+    load_single_team_epa_year,
     get_team_avatar,
     get_team_years_participated,
     TEAM_COLORS,
@@ -1779,7 +1782,13 @@ def insights_details_layout(year):
             event_teams = _cy[2].get(year, {})
             event_db = {k: v.get("n", "") for k, v in _cy[1].get(year, {}).items()}
         else:
-            _, ly_event_db, ly_event_teams, _, _, ly_event_matches = load_year_data(year)
+            _, ly_event_db, ly_event_teams, _, _, _ = load_year_data(
+                year,
+                include_team_epas=False,
+                include_matches=False,
+                include_rankings=False,
+                include_awards=False,
+            )
             num_events = len(ly_event_db)
             team_set = set()
             for ek, teams in ly_event_teams.items():
@@ -1787,7 +1796,7 @@ def insights_details_layout(year):
                     if isinstance(t, dict) and 'tk' in t:
                         team_set.add(t['tk'])
             num_teams = len(team_set)
-            num_matches = len(ly_event_matches)
+            num_matches = count_season_matches(year)
             # Only store event_teams (event_key: list of team dicts)
             event_teams = ly_event_teams
             event_db = {k: v.get("n", "") for k, v in ly_event_db.items()}
@@ -3472,9 +3481,7 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                     from peekorobo import _peek_year
                     team_data = _peek_year()[0].get(year, {}).get(int(t_key.strip()), {})
                 else:
-                    from datagather import load_year_data
-                    year_team_data, _, _, _, _, _ = load_year_data(year)
-                    team_data = year_team_data.get(int(t_key.strip()), {})
+                    team_data = load_single_team_epa_year(int(year), int(t_key.strip()))
                 
                 return {
                     "team_number": int(t_key.strip()),
@@ -5888,29 +5895,23 @@ def event_layout(event_key):
         event_matches = get_event_matches_for_key(event_key)
 
     else:
-        # Load data for other years on-demand
         try:
-            year_team_data, year_event_data, year_event_teams, year_event_rankings, _, year_event_matches = load_year_data(parsed_year)
-            event = year_event_data.get(event_key)
-            event_teams = year_event_teams.get(event_key, [])
+            event, event_teams, year_team_data = load_event_layout_data(event_key, parsed_year)
             event_epa_data = {}
             for team in event_teams:
                 team_num = team.get("tk")
                 team_data = year_team_data.get(team_num, {})
                 if team_data:
-                    # Handle event_perf whether it's a string or list
                     event_perf = team_data.get("event_perf", [])
                     if isinstance(event_perf, str):
                         try:
                             event_perf = json.loads(event_perf)
                         except json.JSONDecodeError:
                             event_perf = []
-                    # Find event-specific data for this team at this event
                     event_specific_epa = next(
                         (e for e in event_perf if e.get("event_key") == event_key),
                         None
                     )
-                    # Fallback to overall data if event-specific is missing
                     if event_specific_epa and event_specific_epa.get("ace", 0) != 0:
                         event_epa_data[str(team_num)] = {
                             "raw": event_specific_epa.get("raw", 0),
@@ -5921,22 +5922,18 @@ def event_layout(event_key):
                             "confidence": event_specific_epa.get("confidence", 0.7),
                         }
                     else:
-                        # Use overall performance metrics from year_team_data
                         event_epa_data[str(team_num)] = {
                             "ace": team_data.get("ace", 0),
                             "raw": team_data.get("raw"),
-"auto_raw": team_data.get("auto_raw", 0),
-                "teleop_raw": team_data.get("teleop_raw", 0),
+                            "auto_raw": team_data.get("auto_raw", 0),
+                            "teleop_raw": team_data.get("teleop_raw", 0),
                             "endgame_raw": team_data.get("endgame_raw", 0),
                             "confidence": team_data.get("confidence", 0.7),
                         }
-            
-            # Calculate rankings based on event-specific ACE
-            rankings = year_event_rankings.get(event_key, {})
-            
-            # Get event matches
-            event_matches = [m for m in year_event_matches if m.get("ek") == event_key]
-            
+
+            rankings = get_event_rankings_for_key(event_key)
+            event_matches = get_event_matches_for_key(event_key)
+
         except Exception as e:
             return dbc.Alert(f"Error loading data for year {parsed_year}: {str(e)}", color="danger")
     
@@ -6436,9 +6433,8 @@ def build_trends_chart(team_number, year, performance_year, team_database, event
                 ace_values = [max(0.0, data.get("ace", 0)) for data in team_database.get(year_key, {}).values()]
             else:
                 try:
-                    year_team_data, *_ = load_year_data(year_key)
-                    team_year_data = year_team_data.get(team_number, {})
-                    ace_values = [max(0.0, data.get("ace", 0)) for data in year_team_data.values()]
+                    team_year_data = load_single_team_epa_year(year_key, team_number)
+                    ace_values = load_season_ace_values(year_key)
                 except Exception:
                     team_year_data = {}
                     ace_values = []

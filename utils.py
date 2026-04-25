@@ -586,7 +586,14 @@ def get_team_data_with_fallback(team_number, target_year, team_database):
         try:
             # Load previous year data if not already loaded
             if previous_year not in team_database:
-                prev_team_data, _, _, _, _, _ = load_year_data(previous_year)
+                prev_team_data, _, _, _, _, _ = load_year_data(
+                    previous_year,
+                    include_matches=False,
+                    include_rankings=False,
+                    include_awards=False,
+                    include_events=False,
+                    include_event_teams=False,
+                )
                 team_database[previous_year] = prev_team_data
             
             prev_team_data = team_database.get(previous_year, {}).get(team_number)

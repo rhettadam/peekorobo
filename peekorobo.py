@@ -40,6 +40,7 @@ from datagather import (
     get_team_avatar,
     DatabaseConnection,
     get_team_years_participated,
+    load_single_team_epa_year,
 )
 
 from layouts import create_team_card_spotlight,create_team_card_spotlight_event,insights_layout,insights_details_layout,team_layout,match_layout,user_profile_layout,home_layout,map_layout,login_layout,register_layout,create_team_card,teams_layout,event_layout,ace_legend_layout,events_layout,peekolive_layout,build_peekolive_grid,build_peekolive_layout_with_events,raw_vs_ace_blog_layout,blog_index_layout,features_blog_layout,predictions_blog_layout,higher_lower_layout,duel_layout,compare_teams_layout,build_recent_events_section,get_team_district_options
@@ -264,16 +265,23 @@ def display_page(pathname):
             try:
                 year = int(year)
                 if year != current_year:
-                    # Load data for the specific year
-                    year_team_data, year_event_data, year_event_teams, year_event_rankings, year_event_awards, year_event_matches = load_year_data(year)
-                    # Create year-specific databases
+                    year_team_data, year_event_data, year_event_teams, _, _, _ = load_year_data(
+                        year,
+                        include_matches=False,
+                        include_rankings=False,
+                        include_awards=False,
+                    )
                     year_team_database = {year: year_team_data}
                     year_event_database = {year: year_event_data}
                     return team_layout(
-                        team_number, year, 
-                        year_team_database, year_event_database, 
-                        year_event_matches, year_event_awards, 
-                        year_event_rankings, year_event_teams
+                        team_number,
+                        year,
+                        year_team_database,
+                        year_event_database,
+                        {year: []},
+                        [],
+                        {year: {}},
+                        {year: year_event_teams},
                     )
             except (ValueError, TypeError):
                 # If year parsing fails, fall back to current year
@@ -2308,7 +2316,12 @@ def update_events_tab_content(
     else:
         # Load data for other years on-demand
         try:
-            year_team_data, year_event_data, year_event_teams, _, _, _ = load_year_data(selected_year)
+            year_team_data, year_event_data, year_event_teams, _, _, _ = load_year_data(
+                selected_year,
+                include_matches=False,
+                include_rankings=False,
+                include_awards=False,
+            )
             events_data = list(year_event_data.values())
             year_team_database = {selected_year: year_team_data}
         except Exception as e:
@@ -2734,7 +2747,13 @@ def update_event_display(active_tab, epa_data, event_teams, event_matches, event
         cy = None
         # Load data for other years on-demand
         try:
-            year_team_data, year_event_data, _, _, _, _ = load_year_data(event_year)
+            year_team_data, year_event_data, _, _, _, _ = load_year_data(
+                event_year,
+                include_matches=False,
+                include_rankings=False,
+                include_awards=False,
+                include_event_teams=False,
+            )
         except Exception as e:
             return dbc.Alert(f"Error loading team data for year {event_year}: {str(e)}", color="danger"), query_string
 
@@ -3108,7 +3127,14 @@ def update_event_teams_stats_display(stats_type, epa_data, event_teams, event_ma
     else:
         cy = None
         try:
-            year_team_data, _, _, _, _, _ = load_year_data(event_year)
+            year_team_data, _, _, _, _, _ = load_year_data(
+                event_year,
+                include_matches=False,
+                include_rankings=False,
+                include_awards=False,
+                include_events=False,
+                include_event_teams=False,
+            )
         except Exception as e:
             error_alert = dbc.Alert(f"Error loading team data for year {event_year}: {str(e)}", color="danger")
             return error_alert, ""
@@ -3555,8 +3581,7 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
                 team_data = _peek_year()[0].get(event_year, {}).get(int(t_key), {})
             else:
                 try:
-                    year_team_data, _, _, _, _, _ = load_year_data(event_year)
-                    team_data = year_team_data.get(int(t_key), {})
+                    team_data = load_single_team_epa_year(int(event_year), int(t_key.strip()))
                 except Exception:
                     team_data = {}
             return {
@@ -4441,7 +4466,14 @@ def load_teams(
         # Load data for the specific year if it's not current year
         if selected_year != current_year:
             try:
-                year_team_data, _, _, _, _, _ = load_year_data(selected_year)
+                year_team_data, _, _, _, _, _ = load_year_data(
+                    selected_year,
+                    include_matches=False,
+                    include_rankings=False,
+                    include_awards=False,
+                    include_events=False,
+                    include_event_teams=False,
+                )
                 year_team_database = {selected_year: year_team_data}
                 teams_data, epa_ranks = calculate_all_ranks(selected_year, year_team_database)
             except Exception as e:
@@ -4538,7 +4570,14 @@ def load_teams(
     if not team_by_year.get(selected_year):
         if selected_year != current_year:
             try:
-                year_team_data, _, _, _, _, _ = load_year_data(selected_year)
+                year_team_data, _, _, _, _, _ = load_year_data(
+                    selected_year,
+                    include_matches=False,
+                    include_rankings=False,
+                    include_awards=False,
+                    include_events=False,
+                    include_event_teams=False,
+                )
                 year_team_database = {selected_year: year_team_data}
                 global_data, _ = calculate_all_ranks(selected_year, year_team_database)
             except Exception as e:
@@ -5601,7 +5640,13 @@ def update_team_insights(active_tab, store_data):
         event_database = b[1]
     else:
         try:
-            year_team_data, year_event_data, _, _, _, _ = load_year_data(performance_year)
+            year_team_data, year_event_data, _, _, _, _ = load_year_data(
+                performance_year,
+                include_matches=False,
+                include_rankings=False,
+                include_awards=False,
+                include_event_teams=False,
+            )
             team_data = year_team_data.get(team_number, {})
             event_database = {performance_year: year_event_data}
         except Exception:
@@ -5702,9 +5747,9 @@ def update_team_insights(active_tab, store_data):
             if year_key == current_year:
                 year_team_data = cy[0][year_key]
             else:
-                # Load data for other years
                 try:
-                    year_team_data, _, _, _, _, _ = load_year_data(year_key)
+                    team_row = load_single_team_epa_year(year_key, team_number)
+                    year_team_data = {team_number: team_row} if team_row else {}
                 except Exception as e:
                     print(f"Failed to load data for {year_key}: {e}")
                     continue
@@ -5828,7 +5873,13 @@ def update_team_events(active_tab, store_data):
                             "year": year,
                         })
             else:
-                _, year_event_data, year_event_teams, year_event_rankings, _, _ = load_year_data(year)
+                _, year_event_data, year_event_teams, _, _, _ = load_year_data(
+                    year,
+                    include_team_epas=False,
+                    include_matches=False,
+                    include_rankings=False,
+                    include_awards=False,
+                )
                 for event_key, event in year_event_data.items():
                     team_list = year_event_teams.get(event_key, [])
                     if any(t["tk"] == team_number for t in team_list):
@@ -6108,15 +6159,13 @@ def update_team_awards(active_tab, store_data):
                 for aw in get_season_awards_for_team(current_year, int(team))
             ]
         else:
-            _, _, _, _, aya, _ = load_year_data(int(year))
-            source = aya.values() if isinstance(aya, dict) else aya
             awards = [
                 {
                     "event_key": aw["ek"],
                     "name": aw["an"],
                     "year": int(str(aw["ek"])[:4]) if str(aw.get("ek", ""))[:4].isdigit() else None,
                 }
-                for aw in source if aw.get("tk") == int(team)
+                for aw in get_season_awards_for_team(int(year), int(team))
             ]
     except Exception:
         return "Error processing awards locally."
@@ -7242,7 +7291,14 @@ def initialize_higher_lower_game(start_clicks, pathname, selected_year, selected
                 year_data = _peek_year()[0].get(current_year, {})
             else:
                 # Load data for other years using load_year_data
-                year_team_data, _, _, _, _, _ = load_year_data(year)
+                year_team_data, _, _, _, _, _ = load_year_data(
+                    year,
+                    include_matches=False,
+                    include_rankings=False,
+                    include_awards=False,
+                    include_events=False,
+                    include_event_teams=False,
+                )
                 year_data = year_team_data
             
             # Extract teams with valid ACE values and pre-compute avatar URLs
