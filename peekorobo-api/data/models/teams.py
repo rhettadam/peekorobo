@@ -1,6 +1,8 @@
+import json
 from sqlalchemy import Text, select, ScalarResult, or_, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, Session
-from typing import List, Optional
+from typing import List, Optional, Any
 from data.db import Base
 from query.teams import TeamQuery, TeamResponse, TeamData
 
@@ -26,15 +28,25 @@ class Teams(Base):
     country : Mapped[str] = mapped_column(Text)
     website : Mapped[str] = mapped_column(Text)
     district_key : Mapped[Optional[str]] = mapped_column(Text)
+    team_colors: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
 
 def to_team_response(input : Teams) -> TeamData:
+    tc = input.team_colors
+    if isinstance(tc, str):
+        try:
+            tc = json.loads(tc)
+        except (json.JSONDecodeError, TypeError):
+            tc = None
+    if tc is not None and not isinstance(tc, dict):
+        tc = None
     return TeamData(team_number=input.team_number.numerator,
                     nickname=str(input.nickname),
                     state_prov=str(input.state_prov),
                     city=str(input.city),
                     country=str(input.country),
                     website=str(input.website),
-                    district_key=input.district_key)
+                    district_key=input.district_key,
+                    team_colors=tc)
     
 def get_teams(db : Session, query : TeamQuery) -> TeamResponse:
     whereargs = []

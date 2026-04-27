@@ -14,9 +14,9 @@ import sys
 from datetime import datetime
 import gzip
 import pickle
-from functools import lru_cache
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from datagather import get_team_colors_for_teams_batch
 
 # Define database paths relative to the data directory
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -89,24 +89,8 @@ def load_cached_data(cache_file, load_func, *args, **kwargs):
     
     return data
 
-@lru_cache(maxsize=128)
-def get_team_colors(team_number):
-    """Get team colors from the JSON file, with fallback to default colors"""
-    try:
-        with open('../data/team_colors.json', 'r') as f:
-            team_colors_data = json.load(f)
-        
-        team_str = str(team_number)
-        if team_str in team_colors_data:
-            return team_colors_data[team_str]
-    except (FileNotFoundError, json.JSONDecodeError, KeyError):
-        pass
-    
-    # Default colors if team not found or file doesn't exist
-    return {
-        "primary": "#1566ac",
-        "secondary": "#c0b8bb"
-    }
+_MAP_DEFAULT_TEAM_COLORS = {"primary": "#1566ac", "secondary": "#c0b8bb"}
+
 
 def load_team_data_optimized(locations_file="2026_geo_teams.json"):
     """Optimized team data loading with caching"""
@@ -423,6 +407,7 @@ def generate_team_event_map(output_file="teams_map.html"):
 
     # Track coordinates to prevent exact overlap
     used_coordinates = {}
+    color_by_num = get_team_colors_for_teams_batch([t["team_number"] for t in map_teams])
     
     for team in map_teams:
         lat, lng = team["lat"], team["lng"]
@@ -450,8 +435,11 @@ def generate_team_event_map(output_file="teams_map.html"):
             icon_size=(40, 40),  # Adjust size as needed
             icon_anchor=(20, 20)
         )
-        # Get team colors
-        team_colors = get_team_colors(team['team_number'])
+        try:
+            tcn = int(team["team_number"])
+        except (TypeError, ValueError):
+            tcn = 0
+        team_colors = color_by_num.get(tcn, _MAP_DEFAULT_TEAM_COLORS)
         
         popup_html = f"""
 <div style="background: linear-gradient(135deg, {team_colors['primary']}, {team_colors['secondary']}); padding: 15px; border-radius: 8px; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.7);">

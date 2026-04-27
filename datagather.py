@@ -1138,10 +1138,86 @@ def get_all_team_favorites_counts():
     
     return favorites_counts
 
-# Load team colors globally for efficient access
-try:
-    with open('data/team_colors.json', 'r', encoding='utf-8') as f:
-        TEAM_COLORS = json.load(f)
-except Exception as e:
-    print(f"Warning: Could not load team colors: {e}")
-    TEAM_COLORS = {} 
+def _default_team_colors() -> dict:
+    """When teams.team_colors is NULL or invalid (same defaults as old card fallbacks)."""
+    return {"primary": "#3b82f6", "secondary": "#1e40af"}
+
+
+def _parse_team_colors_value(raw, default: dict) -> dict:
+    if raw is None:
+        return default
+    tc = raw
+    if isinstance(tc, str):
+        try:
+            tc = json.loads(tc)
+        except (json.JSONDecodeError, TypeError):
+            return default
+    if not isinstance(tc, dict):
+        return default
+    p, s = tc.get("primary"), tc.get("secondary")
+    if isinstance(p, str) and isinstance(s, str) and p and s:
+        return {"primary": p, "secondary": s}
+    return default
+
+
+def team_colors_from_db(raw, fallback=None) -> dict:
+    """Parse ``teams.team_colors`` jsonb (or pass-through dict); use *fallback* when NULL/invalid."""
+    base = fallback if fallback is not None else _default_team_colors()
+    return _parse_team_colors_value(raw, base)
+
+
+@functools.lru_cache(maxsize=8192)
+def _get_team_colors_cached(tn: int) -> dict:
+    """DB lookup for one team; cache key is int ``tn``."""
+    default = _default_team_colors()
+    try:
+        with DatabaseConnection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT team_colors FROM teams WHERE team_number = %s", (tn,))
+                row = cur.fetchone()
+        if not row:
+            return default
+        return _parse_team_colors_value(row[0], default)
+    except Exception as e:
+        print(f"get_team_colors_for_team({tn}): {e}")
+        return default
+
+
+def get_team_colors_for_team(team_number) -> dict:
+    """Primary/secondary hex colors from ``teams.team_colors`` (jsonb), with LRU cache."""
+    try:
+        return _get_team_colors_cached(int(team_number))
+    except (TypeError, ValueError):
+        return _default_team_colors()
+
+
+def get_team_colors_for_teams_batch(team_numbers) -> dict:
+    """
+    For many team numbers, one query. Returns dict[int, dict] (defaults for missing rows).
+    """
+    default = _default_team_colors()
+    if not team_numbers:
+        return {}
+    nums = []
+    for x in team_numbers:
+        try:
+            nums.append(int(x))
+        except (TypeError, ValueError):
+            continue
+    if not nums:
+        return {}
+    unique = list(dict.fromkeys(nums))
+    out = {n: default for n in unique}
+    try:
+        ph = ",".join(["%s"] * len(unique))
+        with DatabaseConnection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT team_number, team_colors FROM teams WHERE team_number IN ({ph})",
+                    unique,
+                )
+                for tnum, tc in cur.fetchall():
+                    out[int(tnum)] = _parse_team_colors_value(tc, default)
+    except Exception as e:
+        print(f"get_team_colors_for_teams_batch: {e}")
+    return out

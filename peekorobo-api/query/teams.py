@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 # Query model for the team request
 class TeamQuery(BaseModel):
@@ -21,6 +21,7 @@ class TeamData(BaseModel):
     country : str
     website : Optional[str]
     district_key : Optional[str] = None
+    team_colors: Optional[Dict[str, Any]] = None
 
 #The response object from the query
 class TeamResponse(BaseModel):

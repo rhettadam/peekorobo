@@ -7,10 +7,9 @@ import pandas as pd
 import dash_bootstrap_components as dbc
 from dash import html
 from flask import session, request
-from datagather import DatabaseConnection, get_team_avatar
+from datagather import DatabaseConnection, get_team_avatar, get_team_colors_for_team
 from datetime import datetime, date
 import json
-from datagather import TEAM_COLORS
 
 current_year = 2025
 
@@ -287,9 +286,9 @@ def user_team_card(title, body_elements, delete_button=None, team_number=None):
         gradient_style = {}
         if team_number:
             try:
-                team_colors_data = TEAM_COLORS.get(str(team_number), {})
-                primary_color = team_colors_data.get('primary', '#1566ac')
-                secondary_color = team_colors_data.get('secondary', '#c0b8bb')
+                team_colors_data = get_team_colors_for_team(team_number)
+                primary_color = team_colors_data.get("primary", "#1566ac")
+                secondary_color = team_colors_data.get("secondary", "#c0b8bb")
                 
                 gradient_style = {
                     "background": f"linear-gradient(135deg, {primary_color} 0%, {secondary_color} 100%)",

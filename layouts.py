@@ -8,7 +8,8 @@ from datagather import (
     load_single_team_epa_year,
     get_team_avatar,
     get_team_years_participated,
-    TEAM_COLORS,
+    get_team_colors_for_team,
+    team_colors_from_db,
     get_event_matches_for_key,
     get_event_rankings_for_key,
     get_event_awards_for_key,
@@ -89,9 +90,9 @@ def get_team_district_options():
 def get_team_card_colors_with_text(team_number, muted=False):
     """Get team colors and appropriate text color for card with cleaner, more subtle styling."""
     try:
-        colors = TEAM_COLORS.get(str(team_number), {})
-        primary = colors.get("primary", "#3b82f6")  # Default to a medium blue
-        secondary = colors.get("secondary", "#1e40af")  # Default to a darker blue
+        colors = get_team_colors_for_team(team_number)
+        primary = colors.get("primary", "#3b82f6")
+        secondary = colors.get("secondary", "#1e40af")
         
         # Create a more subtle gradient with softer colors
         # Use the primary color as base but make it lighter and more muted
@@ -6742,26 +6743,25 @@ def build_team_list(event_key):
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT DISTINCT team_number, nickname, city, state_prov, country
-                FROM event_teams
-                WHERE event_key = %s
-                ORDER BY team_number
+                SELECT DISTINCT et.team_number, et.nickname, et.city, et.state_prov, et.country, t.team_colors
+                FROM event_teams et
+                LEFT JOIN teams t ON t.team_number = et.team_number
+                WHERE et.event_key = %s
+                ORDER BY et.team_number
                 """,
                 (event_key,)
             )
             rows = cur.fetchall()
-            
+            peeko_fallback = {"primary": "#6c757d", "secondary": "#ffffff"}
             for row in rows:
-                team_number, nickname, city, state, country = row
+                team_number, nickname, city, state, country, tc_row = row
+                tc = team_colors_from_db(tc_row, peeko_fallback)
+                primary_color = tc.get("primary", "#6c757d")
+                secondary_color = tc.get("secondary", "#ffffff")
                 
                 # Build location string
                 location_parts = [part for part in [city, state, country] if part]
                 location = ", ".join(location_parts) if location_parts else "Unknown"
-                
-                # Get team colors if available
-                team_colors = get_team_colors(team_number)
-                primary_color = team_colors.get("primary", "#6c757d")
-                secondary_color = team_colors.get("secondary", "#ffffff")
                 
                 # Create team card
                 team_card = dbc.Card([
@@ -6828,19 +6828,6 @@ def build_team_list(event_key):
         ], style={"textAlign": "center", "padding": "2rem"})
     
     return html.Div(teams)
-
-def get_team_colors(team_number):
-    """Get team colors from the team_colors.json file"""
-    try:
-        colors_file = os.path.join(os.path.dirname(__file__), "data", "team_colors.json")
-        if os.path.exists(colors_file):
-            with open(colors_file, 'r') as f:
-                team_colors = json.load(f)
-                return team_colors.get(str(team_number), {"primary": "#6c757d", "secondary": "#ffffff"})
-    except Exception as e:
-        print(f"Error loading team colors: {e}")
-    
-    return {"primary": "#6c757d", "secondary": "#ffffff"}
 
 def get_sf_bracket_position(match_key, predicted_time, all_sf_matches):
     """Determine the actual bracket position for semifinal matches based on predicted time"""
