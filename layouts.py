@@ -2886,11 +2886,6 @@ def teams_layout(default_year=current_year):
         },
     )
 
-    avatar_gallery = html.Div(
-        id="avatar-gallery",
-        className="d-flex flex-wrap justify-content-center",
-        style={"gap": "5px", "padding": "1rem"}
-    )
     tab_style = {"color": "var(--text-primary)", "backgroundColor": "transparent"}
     tabs = dbc.Tabs([
         dbc.Tab(label="Insights", tab_id="table-tab", active_label_style=tab_style),
@@ -2986,7 +2981,39 @@ def teams_layout(default_year=current_year):
             search_export_container,
             teams_table
         ]),
-        html.Div(id="avatar-gallery", className="d-flex flex-wrap justify-content-center", style={"gap": "5px", "padding": "1rem", "display": "none"}),
+        html.Div(
+            className="w-100",
+            children=[
+                html.Div(
+                    id="avatar-size-row",
+                    className="teams-avatar-size-row",
+                    style={"display": "none"},
+                    children=[
+                        dbc.Label(
+                            "Avatar size",
+                            html_for="avatar-size-slider",
+                            className="teams-avatar-size-label mb-1 d-block small",
+                        ),
+                        dcc.Slider(
+                            id="avatar-size-slider",
+                            min=32,
+                            max=80,
+                            step=2,
+                            value=48,
+                            marks={32: "32", 48: "48", 64: "64", 80: "80"},
+                            className="teams-avatar-size-slider mb-0",
+                            persistence=True,
+                            persistence_type="local",
+                        ),
+                    ],
+                ),
+                html.Div(
+                    id="avatar-gallery",
+                    className="w-100",
+                    style={"display": "none", "padding": "0", "margin": "0"},
+                ),
+            ],
+        ),
         dcc.Graph(
             id="bubble-chart", 
             style={
@@ -3015,6 +3042,7 @@ def teams_layout(default_year=current_year):
         [
             dcc.Location(id="teams-url", refresh=False),
             dcc.Store(id="user-session"),
+            dcc.Store(id="avatar-tile-bg-mode", data="blue"),
             topbar(),
             dbc.Container([
                 dbc.Row(id="top-teams-container", className="gx-4 gy-4 justify-content-center mb-5 d-none d-md-flex", justify="center"),
@@ -3022,6 +3050,11 @@ def teams_layout(default_year=current_year):
                 axis_dropdowns,
                 ace_legend_layout(),
                 tabs,
+                html.Div(
+                    id="teams-page-count",
+                    className="teams-page-count-wrap",
+                    children=[html.Span("\u00a0", id="teams-page-count-placeholder")],
+                ),
                 content,
             ], style={
                 "padding": "10px",

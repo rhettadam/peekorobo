@@ -4358,6 +4358,21 @@ app.clientside_callback(
     prevent_initial_call=True
 )
 
+
+def _teams_page_count_content(n_shown, year):
+    """Teams page: 'Showing n teams for {year}'."""
+    try:
+        y = int(year) if year is not None else current_year
+    except (TypeError, ValueError):
+        y = current_year
+    n = int(n_shown) if n_shown is not None else 0
+    word = "team" if n == 1 else "teams"
+    return html.Div(
+        className="teams-page-count",
+        children=html.Span(f"Showing {n} {word} for {y}"),
+    )
+
+
 @app.callback(
     [
         Output("teams-table", "data"),
@@ -4366,10 +4381,12 @@ app.clientside_callback(
         Output("teams-table-container", "style"),
         Output("avatar-gallery", "children"),
         Output("avatar-gallery", "style"),
+        Output("avatar-size-row", "style"),
         Output("bubble-chart", "figure"),
         Output("bubble-chart", "style"),
         Output("teams-url", "search"),
-        Output("teams-table", "style_data_conditional"), 
+        Output("teams-table", "style_data_conditional"),
+        Output("teams-page-count", "children"),
     ],
     [
         Input("district-dropdown", "value"),
@@ -4382,6 +4399,8 @@ app.clientside_callback(
         Input("y-axis-dropdown", "value"),
         Input("z-axis-dropdown", "value"),
         Input("percentile-toggle", "value"),
+        Input("avatar-tile-bg-mode", "data"),
+        Input("avatar-size-slider", "value"),
     ],
     [State("teams-url", "href")],
 )
@@ -4395,9 +4414,10 @@ def load_teams(
     x_axis,
     y_axis,
     z_axis,
-    
     percentile_mode,
-    href
+    avatar_tile_mode,
+    avatar_size_px,
+    href,
 ):
     ctx = callback_context
     
@@ -4453,15 +4473,15 @@ def load_teams(
                 year_team_database = {selected_year: year_team_data}
                 teams_data, epa_ranks = calculate_all_ranks(selected_year, year_team_database)
             except Exception as e:
-                return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, url_update, []
+                return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, {"display": "none"}, go.Figure(), {"display": "none"}, url_update, [], _teams_page_count_content(0, selected_year)
         else:
-            return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, url_update, []
+            return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, {"display": "none"}, go.Figure(), {"display": "none"}, url_update, [], _teams_page_count_content(0, selected_year)
     else:
         teams_data, epa_ranks = calculate_all_ranks(selected_year, team_by_year)
 
     empty_style = []
     if not teams_data:
-        return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, url_update, empty_style
+        return [], [{"label": "All States", "value": "All"}], [], {"display": "block"}, [], {"display": "none"}, {"display": "none"}, go.Figure(), {"display": "none"}, url_update, empty_style, _teams_page_count_content(0, selected_year)
 
     if selected_country and selected_country != "All":
         teams_data = [t for t in teams_data if (t.get("country") or "").lower() == selected_country.lower()]
@@ -4541,6 +4561,139 @@ def load_teams(
                 teams_data = filtered_teams
 
     teams_data.sort(key=lambda t: t.get("weighted_ace") or 0, reverse=True)
+
+    def _state_options_for_teams():
+        with open("data/states.json", "r", encoding="utf-8") as f:
+            st = json.load(f)
+        opts = [{"label": "All States", "value": "All"}]
+        if selected_country and selected_country in st:
+            opts += [
+                {"label": s["label"], "value": s["value"]}
+                for s in st[selected_country]
+                if isinstance(s, dict)
+            ]
+        elif not selected_country or selected_country == "All":
+            opts += [
+                {"label": s["label"], "value": s["value"]}
+                for s in st.get("USA", [])
+                if isinstance(s, dict)
+            ]
+        return opts
+
+    if active_tab == "avatars-tab":
+        try:
+            _px = int(avatar_size_px) if avatar_size_px is not None else 48
+        except (TypeError, ValueError):
+            _px = 48
+        _px = max(32, min(80, _px))
+        _px_s = f"{_px}px"
+        _cell = _px + 4
+        state_options = _state_options_for_teams()
+        avatars = []
+        for t in teams_data:
+            team_number = t.get("team_number")
+            try:
+                tn = int(team_number) if not isinstance(team_number, int) else team_number
+            except (TypeError, ValueError):
+                continue
+            src = get_team_avatar(tn, selected_year)
+            avatars.append(
+                html.A(
+                    html.Img(
+                        src=src,
+                        title=str(tn),
+                        className="teams-avatar-tile-img",
+                        style={
+                            "width": _px_s,
+                            "height": _px_s,
+                            "maxWidth": "100%",
+                            "objectFit": "contain",
+                            "imageRendering": "pixelated",
+                            "display": "block",
+                            "margin": "0 auto",
+                            "boxSizing": "content-box",
+                        },
+                    ),
+                    href=f"/team/{tn}/{selected_year}",
+                    className="teams-avatar-tile",
+                    style={
+                        "display": "block",
+                        "width": "fit-content",
+                        "maxWidth": "100%",
+                        "margin": "0 auto",
+                        "textAlign": "center",
+                        "lineHeight": 0,
+                    },
+                )
+            )
+        _tile_mode = avatar_tile_mode if avatar_tile_mode in ("blue", "red") else "blue"
+        _btn_frc = "#ED1C24" if _tile_mode == "red" else "#0066B3"
+        toggle_button = dbc.Button(
+            "Toggle Background Color",
+            id="avatar-bg-toggle",
+            color="primary",
+            className="w-100 border-0",
+            style={
+                "width": "100%",
+                "boxSizing": "border-box",
+                "backgroundColor": _btn_frc,
+                "color": "#fff",
+            },
+        )
+        avatars_container = html.Div(
+            avatars,
+            id="avatars-container",
+            className=f"teams-avatars-mosaic avatars-tile-bg-{_tile_mode}",
+            style={
+                "display": "grid",
+                "gridTemplateColumns": f"repeat(auto-fill, minmax({_cell}px, 1fr))",
+                "gap": "6px 7px",
+                "justifyItems": "center",
+                "alignContent": "start",
+                "width": "100%",
+                "maxWidth": "100%",
+                "boxSizing": "border-box",
+                "padding": "12px 10px 14px",
+                "margin": "0 auto",
+                "background": "none",
+                "backgroundColor": "transparent",
+                "borderRadius": "8px",
+            },
+        )
+        return (
+            no_update,
+            state_options,
+            no_update,
+            {"display": "none"},
+            [
+                html.Div(
+                    toggle_button,
+                    style={
+                        "width": "100%",
+                        "boxSizing": "border-box",
+                        "padding": "0 10px",
+                        "marginBottom": "12px",
+                    },
+                ),
+                avatars_container,
+            ],
+            {
+                "display": "flex",
+                "flexDirection": "column",
+                "alignItems": "stretch",
+                "width": "100%",
+                "maxWidth": "100%",
+                "boxSizing": "border-box",
+                "padding": "0",
+                "margin": "0 auto",
+            },
+            {"display": "block"},
+            no_update,
+            {"display": "none"},
+            url_update,
+            no_update,
+            _teams_page_count_content(len(teams_data), selected_year),
+        )
     
     # Always compute global percentiles
     if not team_by_year.get(selected_year):
@@ -4620,21 +4773,7 @@ def load_teams(
     
     style_data_conditional.extend(favorites_styling)
 
-    with open('data/states.json', 'r', encoding='utf-8') as f:
-        STATES = json.load(f)
-
-    state_options = [{"label": "All States", "value": "All"}]
-    if selected_country and selected_country in STATES:
-        state_options += [
-            {"label": s["label"], "value": s["value"]}
-            for s in STATES[selected_country] if isinstance(s, dict)
-        ]
-    elif not selected_country or selected_country == "All":
-        # Default to US states if global
-        state_options += [
-            {"label": s["label"], "value": s["value"]}
-            for s in STATES.get("USA", []) if isinstance(s, dict)
-        ]
+    state_options = _state_options_for_teams()
 
     def get_axis_value(team, axis):
         auto = abs(team.get("auto_raw") or 0)
@@ -4722,55 +4861,8 @@ def load_teams(
         }
     )
 
-    # Avatars Tab
-    if active_tab == "avatars-tab":
-        avatars = []
-        for t in teams_data:
-            team_number = t.get("team_number")
-            if isinstance(team_number, int):
-                # Use cached avatar lookup instead of os.path.exists
-                from datagather import _load_avatar_cache
-                available_avatars = _load_avatar_cache()
-                avatar_src = f"/assets/avatars/{team_number}.png?v=1" if team_number in available_avatars else "/assets/avatars/stock.png"
-                avatars.append(html.A(
-                    html.Img(
-                        src=avatar_src,
-                        title=str(team_number),
-                        style={"width": "64px", "height": "64px", "objectFit": "contain", "imageRendering": "pixelated", "border": "1px solid #ccc"},
-                    ),
-                    href=f"/team/{team_number}/{selected_year}",
-                    style={"display": "inline-block"}
-                ))
-        
-        # Add toggle background button
-        toggle_button = dbc.Button(
-            "Toggle Background Color",
-            id="avatar-bg-toggle",
-            color="primary",
-            style={
-                "marginBottom": "20px",
-                "backgroundColor": "#0066B3",
-                "borderColor": "#0066B3"
-            }
-        )
-        
-        avatars_container = html.Div(
-            avatars,
-            id="avatars-container",
-            style={
-                "display": "flex",
-                "flexWrap": "wrap",
-                "gap": "10px",
-                "padding": "20px",
-                "backgroundColor": "#0066B3",
-                "borderRadius": "8px"
-            }
-        )
-        
-        return table_rows, state_options, top_teams_layout, {"display": "none"}, [toggle_button, avatars_container], {"display": "flex", "flexDirection": "column"}, go.Figure(), {"display": "none"}, url_update, style_data_conditional
-
     # Bubble Chart Tab
-    elif active_tab == "bubble-chart-tab":
+    if active_tab == "bubble-chart-tab":
         chart_data = []
         for t in teams_data:
             team_number = t.get("team_number", 0)
@@ -4808,7 +4900,7 @@ def load_teams(
                     "font": {"size": 16, "color": "#777"}
                 }]
             )
-            return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, url_update, style_data_conditional
+            return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, {"display": "none"}, fig, {"display": "block"}, url_update, style_data_conditional, _teams_page_count_content(len(teams_data), selected_year)
 
         df = pd.DataFrame(chart_data)
         q = (search_query or "").lower().strip()
@@ -4957,9 +5049,9 @@ def load_teams(
         )
         
 
-        return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, fig, {"display": "block"}, url_update, style_data_conditional
+        return table_rows, state_options, top_teams_layout, {"display": "none"}, [], {"display": "none"}, {"display": "none"}, fig, {"display": "block"}, url_update, style_data_conditional, _teams_page_count_content(len(teams_data), selected_year)
 
-    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, go.Figure(), {"display": "none"}, url_update, style_data_conditional
+    return table_rows, state_options, top_teams_layout, {"display": "block"}, [], {"display": "none"}, {"display": "none"}, go.Figure(), {"display": "none"}, url_update, style_data_conditional, _teams_page_count_content(len(teams_data), selected_year)
 
 @app.callback(
     [
@@ -4999,38 +5091,18 @@ def toggle_axis_dropdowns(active_tab):
         return {"display": "block", "marginBottom": "15px"}
     return {"display": "none"}
 
-# Avatar background toggle callback
+# Toggle FRC blue/red padding behind each avatar (Store triggers load_teams to refresh tiles + button)
 @app.callback(
-    [Output("avatar-bg-toggle", "style"),
-     Output("avatars-container", "style")],
+    Output("avatar-tile-bg-mode", "data"),
     [Input("avatar-bg-toggle", "n_clicks")],
-    [State("avatar-bg-toggle", "style"),
-     State("avatars-container", "style")],
-    prevent_initial_call=True
+    [State("avatar-tile-bg-mode", "data")],
+    prevent_initial_call=True,
 )
-def toggle_avatar_background(n_clicks, button_style, container_style):
+def toggle_avatar_tile_mode(n_clicks, mode):
     if not n_clicks:
-        return button_style, container_style
-    
-    # Get current background color from button style
-    current_bg = button_style.get("backgroundColor", "#0066B3")
-    
-    # Toggle between blue and red
-    if current_bg == "#0066B3":
-        new_bg = "#ED1C24"
-    else:
-        new_bg = "#0066B3"
-    
-    # Update button style
-    new_button_style = button_style.copy()
-    new_button_style["backgroundColor"] = new_bg
-    new_button_style["borderColor"] = new_bg
-    
-    # Update container style
-    new_container_style = container_style.copy()
-    new_container_style["backgroundColor"] = new_bg
-    
-    return new_button_style, new_container_style
+        return no_update
+    cur = mode if mode in ("blue", "red") else "blue"
+    return "red" if cur == "blue" else "blue"
 
 # Export callbacks for teams table
 @app.callback(

@@ -942,3 +942,112 @@
     font-style: italic;
     font-weight: 500;
 }
+
+/* Teams page — avatars tab: mosaic is transparent; only tile pads use FRC colors */
+#avatars-container.teams-avatars-mosaic {
+    min-width: 0;
+}
+
+#avatars-container.teams-avatars-mosaic .teams-avatar-tile {
+    padding: 3px;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+#avatars-container.avatars-tile-bg-blue .teams-avatar-tile {
+    background-color: #0066b3;
+}
+
+#avatars-container.avatars-tile-bg-red .teams-avatar-tile {
+    background-color: #ed1c24;
+}
+
+.teams-avatar-tile-img {
+    border-radius: 2px;
+    border: none;
+    box-shadow: none;
+    outline: none;
+}
+
+/* Teams → Avatars tab: size row (no card chrome; theme on slider only) */
+#avatar-size-row.teams-avatar-size-row {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0 0 6px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+}
+
+.teams-avatar-size-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+#avatar-size-row .teams-avatar-size-slider,
+#avatar-size-row .teams-avatar-size-slider .rc-slider,
+#avatar-size-row .rc-slider {
+    --teams-slider-rail: var(--border-color);
+    --teams-slider-track: var(--navbar-hover);
+    --teams-slider-handle: var(--card-bg);
+    --teams-slider-handle-border: var(--border-color);
+}
+
+#avatar-size-row .rc-slider-rail {
+    background-color: var(--teams-slider-rail) !important;
+    border-radius: 4px;
+}
+
+#avatar-size-row .rc-slider-track {
+    background-color: var(--teams-slider-track) !important;
+    border-radius: 4px;
+}
+
+#avatar-size-row .rc-slider-handle {
+    background-color: var(--teams-slider-handle) !important;
+    border: 2px solid var(--teams-slider-handle-border) !important;
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--text-primary) 18%, transparent);
+    margin-top: -5px;
+    width: 16px;
+    height: 16px;
+    opacity: 1;
+}
+
+#avatar-size-row .rc-slider-handle:hover,
+#avatar-size-row .rc-slider-handle:active,
+#avatar-size-row .rc-slider-handle-click-focused {
+    border-color: var(--navbar-hover) !important;
+}
+
+#avatar-size-row .rc-slider-mark-text {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+}
+
+#avatar-size-row .rc-slider-dot {
+    border-color: var(--border-color) !important;
+    background-color: var(--card-bg) !important;
+}
+
+#avatar-size-row .rc-slider-dot-active {
+    border-color: var(--navbar-hover) !important;
+}
+
+/* Teams page: result count (directly under tab bar, above table / avatars / chart) */
+.teams-page-count-wrap {
+    width: 100%;
+    margin: 0 0 8px;
+    padding: 2px 2px 0;
+    box-sizing: border-box;
+}
+
+.teams-page-count {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+}
