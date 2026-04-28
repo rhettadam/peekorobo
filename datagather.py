@@ -125,6 +125,37 @@ class DatabaseConnection:
             self.conn = None
 
 
+def load_frc_games():
+    """Load FRC season metadata from the frc_games table.
+
+    Returns a dict keyed by year string, same shape as the old data/frc_games.json:
+    {name, video, logo, manual, summary}. On error or missing table, returns {}.
+    """
+    out = {}
+    try:
+        with DatabaseConnection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT year, name, video, logo, manual, summary
+                FROM frc_games
+                ORDER BY year DESC
+                """
+            )
+            for row in cur.fetchall():
+                year, name, video, logo, manual, summary = row
+                out[str(year)] = {
+                    "name": name,
+                    "video": video or "#",
+                    "logo": logo or "/assets/placeholder.png",
+                    "manual": manual or "#",
+                    "summary": summary or "",
+                }
+    except Exception as e:
+        print(f"load_frc_games: {e}")
+    return out
+
+
 def _compress_dict(d: dict) -> dict:
     """Drop None/empty string; keep empty string for 'wa' (match ties)."""
     return {k: v for k, v in d.items() if v not in (None, "") or k == "wa"}

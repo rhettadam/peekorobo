@@ -14,6 +14,7 @@ from datagather import (
     get_event_rankings_for_key,
     get_event_awards_for_key,
     count_season_matches,
+    load_frc_games,
 )
 from flask import session
 from datetime import datetime, date, timedelta, timezone
@@ -1666,8 +1667,7 @@ home_layout = html.Div([
 
 def insights_layout():
 
-    with open('data/frc_games.json', 'r', encoding='utf-8') as f:
-        frc_games = json.load(f)
+    frc_games = load_frc_games()
 
     challenges = []
     for year, game in sorted(frc_games.items(), reverse=True):
@@ -1737,9 +1737,8 @@ def insights_layout():
 
 def insights_details_layout(year):
 
-    with open('data/frc_games.json', 'r', encoding='utf-8') as f:
-        frc_games = json.load(f)
-        
+    frc_games = load_frc_games()
+
     game = frc_games.get(
         str(year),
         {"name": "Unknown Game", "video": "#", "logo": "/assets/placeholder.png", "manual": "#", "summary": "No summary available."}
