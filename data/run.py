@@ -2479,14 +2479,12 @@ def fetch_team_components(team, year):
             if not matches:
                 continue  # Skip if no matches in cache
 
-            # Skip events that haven't started yet (or have no meaningful scores)
-            # This prevents newly added future events with scheduled matches from affecting EPA
-            event_start_date = get_event_start_date_from_db(event_key)
-            if not event_has_started(event_key, event_start_date):
-                continue  # Exclude from event_epas and total EPA
-
             # Calculate EPA for this event (which includes wins/losses/ties for the event)
+            # and only keep it once this specific team has at least one played match.
+            # This avoids dropping early-event stats due to event-level start detection.
             event_epa = calculate_event_epa(matches, team_key, team_number)
+            if event_epa.get("match_count", 0) <= 0:
+                continue
             event_epa["event_key"] = event_key  # Ensure event_key is included
             # Keep full data for aggregation
             event_epa_full.append(event_epa)
