@@ -3639,11 +3639,14 @@ def update_matches_table(selected_team, table_style, event_matches, epa_data, ev
                 team_prediction_percent = None
                 
                 if selected_team and selected_team != "ALL":
-                    if selected_team in red_str.split(","):
+                    selected_team_norm = str(selected_team).strip()
+                    red_teams = [t.strip() for t in red_str.split(",")]
+                    blue_teams = [t.strip() for t in blue_str.split(",")]
+                    if selected_team_norm in red_teams:
                         team_alliance = "Red"
                         team_prediction = pred_red
                         team_prediction_percent = p_red * 100 if p_red is not None else None
-                    elif selected_team in blue_str.split(","):
+                    elif selected_team_norm in blue_teams:
                         team_alliance = "Blue"
                         team_prediction = pred_blue
                         team_prediction_percent = p_blue * 100 if p_blue is not None else None
