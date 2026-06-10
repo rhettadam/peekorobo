@@ -3688,9 +3688,12 @@ def build_recent_events_section(team_key, team_number, team_epa_data, performanc
                 video_link = f"[▶](https://youtube.com/watch?v={youtube_id})" if youtube_id else "N/A"
                 
                 team_alliance = None
-                if str(team_number) in red_str:
+                team_number_str = str(team_number)
+                red_teams = [t.strip() for t in red_str.split(",")]
+                blue_teams = [t.strip() for t in blue_str.split(",")]
+                if team_number_str in red_teams:
                     team_alliance = "Red"
-                elif str(team_number) in blue_str:
+                elif team_number_str in blue_teams:
                     team_alliance = "Blue"
 
                 if table_style == "both":
