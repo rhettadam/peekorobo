@@ -20,7 +20,8 @@
     *   [Confidence Calculation](#confidence-calculation)
     *   [Season Aggregation & Weighting](#season-aggregation--weighting)
     *   [Key Components](#key-components)
-5.  [License](#license)
+5.  [Acknowledgments](#acknowledgments)
+6.  [License](#license)
 
 ---
 
@@ -274,10 +275,16 @@ https://www.peekorobo.com/
 
 ---
 
+## Acknowledgments
+
+Special thanks to **Patrick A. Phillips** ([@RNGKing](https://github.com/RNGKing)) for helping build the API backend and for his ongoing guidance on the architecture of the site. His contributions have been a huge help in shaping Peekorobo.
+
+---
+
 ## License
 
 Peekorobo is licensed under the **MIT License**. See the LICENSE file for details.
 
-Copyright (c) 2025 Rhett R. Adam
+Copyright (c) 2026 Rhett R. Adam
 
 ---
