@@ -322,22 +322,14 @@ def restart_heroku_app():
 def get_pg_connection():
     if shutdown_event.is_set():
         raise Exception("Shutdown requested")
-        
-    url = os.environ.get("DATABASE_URL")
-    if url is None:
-        raise Exception("DATABASE_URL not set in environment.")
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
-    result = urlparse(url)
-    conn = psycopg2.connect(
-        database=result.path[1:],
-        user=result.username,
-        password=result.password,
-        host=result.hostname,
-        port=result.port,
-        connect_timeout=30,
-        options='-c statement_timeout=300000'
-    )
+    kwargs, host = _connect_kwargs_from_database_url()
+    conn = psycopg2.connect(**kwargs)
+    if "-pooler." in host:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SET statement_timeout TO 300000")
+        except Exception:
+            pass
     active_connections.append(conn)
     return conn
 
@@ -369,29 +361,46 @@ _db_pool = None
 _db_pool_lock = threading.Lock()
 
 
+def _connect_kwargs_from_database_url():
+    """Shared DSN kwargs for get_pg_connection / the ThreadedConnectionPool."""
+    url = os.environ.get("DATABASE_URL")
+    if url is None:
+        raise Exception("DATABASE_URL not set in environment.")
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    result = urlparse(url)
+    dbname = (result.path or "/").lstrip("/")
+    if "?" in dbname:
+        dbname = dbname.split("?", 1)[0]
+    host = result.hostname or ""
+    kwargs = dict(
+        database=dbname,
+        user=result.username,
+        password=result.password,
+        host=host,
+        port=result.port or 5432,
+        connect_timeout=30,
+    )
+    if "neon.tech" in host or "sslmode=require" in url:
+        kwargs["sslmode"] = "require"
+    # Neon pooler rejects startup `options`; set timeout after connect instead.
+    if "-pooler." not in host:
+        kwargs["options"] = "-c statement_timeout=300000"
+    return kwargs, host
+
+
 def _get_db_pool():
     """Lazily build a bounded, thread-safe pool (same DSN/options as get_pg_connection)."""
     global _db_pool
     if _db_pool is None:
         with _db_pool_lock:
             if _db_pool is None:
-                url = os.environ.get("DATABASE_URL")
-                if url is None:
-                    raise Exception("DATABASE_URL not set in environment.")
-                if url.startswith("postgres://"):
-                    url = url.replace("postgres://", "postgresql://", 1)
-                result = urlparse(url)
+                kwargs, _host = _connect_kwargs_from_database_url()
                 maxconn = max(2, _DB_POOL_MAXCONN)
                 _db_pool = psycopg2_pool.ThreadedConnectionPool(
                     minconn=maxconn,
                     maxconn=maxconn,
-                    database=result.path[1:],
-                    user=result.username,
-                    password=result.password,
-                    host=result.hostname,
-                    port=result.port,
-                    connect_timeout=30,
-                    options='-c statement_timeout=300000',
+                    **kwargs,
                 )
     return _db_pool
 

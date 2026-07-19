@@ -41,21 +41,29 @@ def create_connection_pool():
         url = url.replace("postgres://", "postgresql://", 1)
 
     result = urlparse(url)
-    
+    dbname = (result.path or "/").lstrip("/")
+    if "?" in dbname:
+        dbname = dbname.split("?", 1)[0]
+    host = result.hostname or ""
+
     # Pool configuration optimized for Heroku 512MB memory
     # Smaller pool size to conserve memory
     pool_config = {
-        'database': result.path[1:],
+        'database': dbname,
         'user': result.username,
         'password': result.password,
-        'host': result.hostname,
-        'port': result.port,
+        'host': host,
+        'port': result.port or 5432,
         'minconn': 1,      # Minimum connections
-        'maxconn': 10,      # Maximum connections (conservative for 512MB)
+        'maxconn': 10,     # Maximum connections (conservative for 512MB)
         'connect_timeout': 10,
-        'options': '-c statement_timeout=300000'  # 5 minute timeout
     }
-    
+    if "neon.tech" in host or "sslmode=require" in url:
+        pool_config['sslmode'] = 'require'
+    # Neon pooler rejects startup `options` like statement_timeout.
+    if "-pooler." not in host:
+        pool_config['options'] = '-c statement_timeout=300000'
+
     try:
         pool_obj = pool.ThreadedConnectionPool(**pool_config)
         print(f"Database connection pool created: {pool_config['minconn']}-{pool_config['maxconn']} connections")
