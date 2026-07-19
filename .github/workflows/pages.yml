@@ -55,4 +55,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: frontend
-          command: pages deploy dist --project-name=peekorobo --commit-dirty=true
+          command: pages deploy dist --project-name=peekorobo --branch=main --commit-dirty=true
