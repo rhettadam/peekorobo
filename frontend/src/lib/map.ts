@@ -14,7 +14,7 @@ export const BASEMAP_PRIMARY =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 export const BASEMAP_FALLBACK = "https://tiles.openfreemap.org/styles/dark";
 
-// Event marker colors by type, mirroring geo/createmap.py's get_event_marker_color.
+// Event marker colors by type (legacy folium map palette).
 const EVENT_COLORS = {
   regional: "#3b82f6", // blue
   district: "#22c55e", // green
