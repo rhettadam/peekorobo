@@ -1,70 +1,71 @@
-# Production cutover — remaining account steps
+# Production cutover — status
 
-Neon restore is done (row counts match the old DB). Repo config for Render +
-Cloudflare Pages + GitHub Actions is in place. Finish these account steps once,
-then the stack is live.
+## Done
 
-## A. Point local/API env at Neon (pooled)
+- [x] Surrogate team-key fix (`frc498E`, etc.)
+- [x] Neon Postgres restored (row counts match old DB)
+- [x] GitHub Actions secrets: `DATABASE_URL` (Neon pooler), `TBA_API_KEYS`
+- [x] Neon pooler connection fix (`sslmode=require`, no startup `statement_timeout`)
+- [x] Full pipeline green on Neon:  
+  https://github.com/rhettadam/peekorobo/actions/runs/29703848131  
+  (ACE + rankings/awards + `teams.json`/`events.json` artifact)
+- [x] Workflows: `.github/workflows/pipeline.yml`, `pages.yml`
+- [x] React SPA pushed to `main`
+- [x] Render blueprint: `peekorobo-api/render.yaml` (free plan + `JWT_SECRET`)
 
-Your `NEON_URL` may be the direct host. For Render + GitHub Actions prefer pooled:
+## Your turn (account clicks — ~15 min)
 
-```text
-postgresql://neondb_owner:PASSWORD@ep-misty-hill-awge61ox-pooler.c-12.us-east-1.aws.neon.tech/neondb?sslmode=require
+### 1. Render API
+
+Browser is on the Render login screen. Sign in (GitHub is easiest).
+
+Then:
+
+1. **New** → **Web Service**
+2. Connect repo `rhettadam/peekorobo`
+3. Root directory: `peekorobo-api`
+4. Runtime: **Docker**
+5. Instance: **Free**
+6. Env vars:
+   - `DB_URL` = Neon **pooled** URL  
+     `postgresql://neondb_owner:PASSWORD@ep-misty-hill-awge61ox-pooler.c-12.us-east-1.aws.neon.tech/neondb?sslmode=require`
+   - `JWT_SECRET` = generate with  
+     `python -c "import secrets; print(secrets.token_urlsafe(48))"`
+   - `PUBLIC_READ=true`
+   - `CORS_ORIGINS=*`
+7. Deploy. Copy the URL (e.g. `https://peekorobo-api.onrender.com`)
+8. Open `/` and `/docs` to confirm
+
+Then tell me the Render URL (or set it yourself):
+
+```bash
+gh secret set VITE_API_BASE_URL -b "https://YOUR-SERVICE.onrender.com"
 ```
 
-In `peekorobo-api/.env`, set `DB_URL` to that pooled URL when you are ready for the
-new API to use Neon (keep the old `DB_URL` backed up until Heroku is gone).
+### 2. Cloudflare Pages + token
 
-## B. Deploy API on Render (~5 min)
+1. https://dash.cloudflare.com → **Workers & Pages** → Create → Pages → create project named **`peekorobo`** (Direct Upload is fine)
+2. **My Profile** → **API Tokens** → Create Token → use **Edit Cloudflare Workers** template (includes Pages)
+3. Copy **Account ID** from the dashboard sidebar
+4. Set secrets:
 
-1. Open https://dashboard.render.com → New → Blueprint
-2. Connect `rhettadam/peekorobo`, root path `peekorobo-api` (or New Web Service →
-   Docker, Dockerfile in `peekorobo-api/`)
-3. Set env:
-   - `DB_URL` = Neon **pooled** URL above
-   - `JWT_SECRET` = auto or `python -c "import secrets; print(secrets.token_urlsafe(48))"`
-   - leave other values from `peekorobo-api/render.yaml`
-4. Deploy. Copy the service URL, e.g. `https://peekorobo-api.onrender.com`
-5. Check `/` and `/docs`
+```bash
+gh secret set CLOUDFLARE_API_TOKEN
+gh secret set CLOUDFLARE_ACCOUNT_ID
+```
 
-Blueprint file: `peekorobo-api/render.yaml` (free plan).
+5. Re-run: Actions → **Data pipeline** → mode `full`  
+   (or **Deploy Pages**) — this builds the SPA and uploads `/data` + `/assets`
 
-## C. Cloudflare Pages project
+### 3. DNS (after smoke on `*.pages.dev` / `*.onrender.com`)
 
-1. https://dash.cloudflare.com → Workers & Pages → Create → Pages → Direct Upload
-   (or empty project named **`peekorobo`**)
-2. Create an API Token: Templates → **Edit Cloudflare Workers** (includes Pages)
-   with Account + Pages edit permissions
-3. Note Account ID (overview sidebar)
-
-## D. GitHub Actions secrets
-
-Repo → Settings → Secrets and variables → Actions:
-
-| Secret | Value |
-|--------|--------|
-| `DATABASE_URL` | Neon pooled URL (same as Render `DB_URL`) |
-| `TBA_API_KEYS` | same as local |
-| `CLOUDFLARE_API_TOKEN` | from C |
-| `CLOUDFLARE_ACCOUNT_ID` | from C |
-| `VITE_API_BASE_URL` | Render URL from B (no trailing slash) |
-
-Optional: `CLOUDFLARE_PAGES_PROJECT=peekorobo` (workflows default to `peekorobo`).
-
-Push/commit the workflow files, then: Actions → **Data pipeline** → Run workflow →
-mode **full**. That regenerates ACE + deploys SPA with `/data` and `/assets`.
-
-Or run **Deploy Pages** for a frontend-only deploy.
-
-## E. DNS (after smoke test on `*.onrender.com` / `*.pages.dev`)
-
-1. Keep Heroku Dash up
+1. Keep Heroku Dash running
 2. `api.peekorobo.com` → Render custom domain
-3. `peekorobo.com` / `www` → Cloudflare Pages custom domain
+3. `peekorobo.com` / `www` → Cloudflare Pages
 4. Update `VITE_API_BASE_URL` to `https://api.peekorobo.com`, redeploy Pages
 5. Set Render `CORS_ORIGINS=https://peekorobo.com`
-6. Turn off Heroku Scheduler; scale Heroku to 0
+6. Disable Heroku Scheduler; scale Heroku to 0
 
 ## Smoke
 
-Search, teams, team page, events, event tabs, match, compare, insights, map, login.
+Search, teams, team/event/match pages, compare, insights, map, login.
