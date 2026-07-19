@@ -1,0 +1,39 @@
+{
+  "name": "peekorobo-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Peekorobo React SPA - FRC team & event scouting/analysis frontend.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mantine/charts": "^7.15.3",
+    "@mantine/core": "^7.15.3",
+    "@mantine/hooks": "^7.15.3",
+    "@mantine/notifications": "^7.15.3",
+    "@tabler/icons-react": "^3.26.0",
+    "@tanstack/react-query": "^5.62.7",
+    "dayjs": "^1.11.13",
+    "maplibre-gl": "^5.24.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "recharts": "2.13.3"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^20.17.10",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "postcss": "^8.4.49",
+    "postcss-preset-mantine": "^1.17.0",
+    "postcss-simple-vars": "^7.0.1",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
+  }
+}
