@@ -1,8 +1,0 @@
-/* Peekorobo styles - imports organized CSS modules */
-@import url('css/00-variables.css');
-@import url('css/01-base.css');
-@import url('css/02-components.css');
-@import url('css/03-dropdowns.css');
-@import url('css/04-tables.css');
-@import url('css/05-pages.css');
-@import url('css/06-responsive.css');

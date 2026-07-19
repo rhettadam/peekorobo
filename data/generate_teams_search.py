@@ -7,7 +7,7 @@ This creates a mapping of team_number -> {nickname, last_year}, matching the exi
 import json
 import os
 from dotenv import load_dotenv
-from datagather import DatabaseConnection
+from db_connection import DatabaseConnection
 
 load_dotenv()
 

@@ -7,7 +7,7 @@ This creates a mapping of event_key -> event_name, similar to the existing event
 import json
 import os
 from dotenv import load_dotenv
-from datagather import DatabaseConnection
+from db_connection import DatabaseConnection
 
 load_dotenv()
 

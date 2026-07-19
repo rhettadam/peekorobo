@@ -91,6 +91,21 @@ def get_team_perfs_list(db: Session, query: TeamPerfListRequest) -> TeamPerfList
             cond = _district_match(Teams.district_key, query.district_key)
             if cond is not None:
                 stmt = stmt.where(cond)
+    # Fast "top N" path for the leaderboard preview: order by ACE descending
+    # (nulls last) and return the top `limit` with no cursor. We sort by ACE
+    # rather than rank_global because ranks aren't computed for the in-progress
+    # season, whereas ACE is always populated.
+    if query.sort == "rank":
+        stmt = stmt.order_by(
+            TeamEpa.ace.is_(None), TeamEpa.ace.desc(), TeamEpa.team_number
+        ).limit(query.limit)
+        rows = db.scalars(stmt).all()
+        team_perfs_list = [
+            TeamPerfResponse(team_number=r.team_number, team_perfs=[from_db_row(r)])
+            for r in rows
+        ]
+        return TeamPerfListResponse(team_perfs=team_perfs_list, next=None)
+
     if query.next_team_number is not None:
         stmt = stmt.where(TeamEpa.team_number > query.next_team_number)
     stmt = stmt.order_by(TeamEpa.team_number).limit(query.limit + 1)

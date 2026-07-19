@@ -46,5 +46,4 @@ export const BRAND = {
   github: asset("github.png"),
   trophy: asset("trophy.png"),
   pin: asset("pin.png"),
-  peekolive: asset("peekolive.png"),
 } as const;

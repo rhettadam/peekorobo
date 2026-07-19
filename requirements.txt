@@ -1,22 +1,8 @@
-dash==3.4.0
-uvicorn[standard]>=0.30.0
-fastapi>=0.115.0
-sqlalchemy>=2.0.0
-dash-daq>=0.5.0
-dash-mantine-components>=2.1.0
+# Root deps for the GitHub Actions data pipeline (data/run.py and friends).
+# The FastAPI app has its own peekorobo-api/requirements.txt.
 requests>=2.31.0
-gunicorn>=23.0.0
-python-dotenv>=0.21.0
-dash-bootstrap-components>=1.6.0
-numpy>=1.26.4
-openpyxl>=3.1.5
-pandas>=2.2.2
-scipy>=1.12.0
-bcrypt>=3.2.0
-psycopg2>=2.9.10
-psycopg2-binary
-tqdm
-tenacity
-requests
-python-dotenv
-pytz
+python-dotenv>=1.0.0
+psycopg2-binary>=2.9.10
+tqdm>=4.66.0
+tenacity>=8.2.0
+pytz>=2024.1

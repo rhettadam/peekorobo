@@ -1,6 +1,6 @@
 from typing import Optional
 from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy import Text, INT, cast, DateTime, select, func, or_
+from sqlalchemy import Text, INT, Float, cast, DateTime, select, func, or_
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from data.db import Base
 from query.events import EventQuery, EventResponse, LocationInfo, EventMetaInfo, EventData
@@ -41,6 +41,8 @@ class Events(Base):
     district_abbrev : Mapped[str] = mapped_column(Text)
     district_name : Mapped[str] = mapped_column(Text)
     week : Mapped[Optional[int]] = mapped_column(INT)
+    lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    lng: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
 def _opt_str(s: str | None) -> str | None:
     t = (s or "").strip()

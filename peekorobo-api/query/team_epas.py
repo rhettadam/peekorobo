@@ -37,6 +37,9 @@ class TeamPerfListRequest(BaseModel):
     state_prov : Optional[str] = None
     country : Optional[str] = None
     district_key : Optional[str] = None
+    # "rank" returns the top `limit` teams by global ACE rank (fast preview,
+    # no cursor). Any other value uses the default team-number cursor paging.
+    sort : Optional[str] = None
 
 class TeamPerfListResponse(BaseModel):
     team_perfs : List[TeamPerfResponse]

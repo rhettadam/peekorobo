@@ -1,5 +1,5 @@
 import json
-from sqlalchemy import Text, select, ScalarResult, or_, func
+from sqlalchemy import Text, Float, select, ScalarResult, or_, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from typing import List, Optional, Any
@@ -29,6 +29,10 @@ class Teams(Base):
     website : Mapped[str] = mapped_column(Text)
     district_key : Mapped[Optional[str]] = mapped_column(Text)
     team_colors: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
+    lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    lng: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    lng: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
 def to_team_response(input : Teams) -> TeamData:
     tc = input.team_colors
