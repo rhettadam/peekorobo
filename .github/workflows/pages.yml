@@ -1,0 +1,58 @@
+# Deploy SPA to Cloudflare Pages (SPA + /data + /assets)
+
+name: Deploy Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - "frontend/**"
+      - "assets/**"
+      - ".github/workflows/pages.yml"
+
+concurrency:
+  group: peekorobo-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_SEARCH_BASE_URL: /data
+          VITE_ASSETS_BASE_URL: /assets
+          VITE_CURRENT_YEAR: "2026"
+        run: |
+          npm ci
+          npm run build
+          mkdir -p dist/data/leaderboards dist/assets
+          # Prefer freshly generated search indexes from the repo data/ folder when present
+          for f in teams.json events.json countries.json states.json district_definitions.json; do
+            if [ -f "../data/$f" ]; then cp -f "../data/$f" "dist/data/$f"; fi
+            if [ -f "public/data/$f" ]; then cp -f "public/data/$f" "dist/data/$f"; fi
+          done
+          if [ -d ../data/leaderboards ]; then cp -f ../data/leaderboards/*.json dist/data/leaderboards/ 2>/dev/null || true; fi
+          if [ -f public/data/districts.geojson ]; then cp -f public/data/districts.geojson dist/data/districts.geojson; fi
+          if [ -d ../assets ]; then cp -a ../assets/. dist/assets/; fi
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: frontend
+          command: pages deploy dist --project-name=peekorobo --commit-dirty=true

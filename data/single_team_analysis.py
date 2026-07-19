@@ -736,9 +736,12 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
         }
 
 def analyze_single_team(team_key: str, year: int):
-    """Analyze EPA for a single team."""
+    """Analyze ACE for a single team."""
     # Get team events from PostgreSQL
-    team_number = int(team_key[3:])
+    from run import parse_tba_team_number
+    team_number = parse_tba_team_number(team_key)
+    if team_number is None:
+        raise ValueError(f"Invalid TBA team key: {team_key!r}")
     event_keys = get_team_events(team_number, year)
 
     event_epa_results = []

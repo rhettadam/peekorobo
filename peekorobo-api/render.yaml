@@ -1,0 +1,28 @@
+# Render.com blueprint for the standalone Peekorobo API.
+# (Fly.io/Railway can use the Dockerfile directly instead.)
+services:
+  - type: web
+    name: peekorobo-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Free tier sleeps when idle (~cold start). Upgrade to starter (~$7) if needed in-season.
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: DB_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PUBLIC_READ
+        value: "true"
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: CACHE_MAX_AGE
+        value: "300"
+      - key: CACHE_STALE_WHILE_REVALIDATE
+        value: "600"
+      - key: RATE_LIMIT_DEFAULT
+        value: "240/minute"
+      - key: JWT_EXPIRE_DAYS
+        value: "30"

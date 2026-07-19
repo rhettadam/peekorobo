@@ -20,6 +20,7 @@ import math
 import traceback
 
 from yearmodels import *
+from active_events import get_active_event_keys
 
 start_time = time.time()
 
@@ -34,6 +35,8 @@ API_KEYS = os.getenv("TBA_API_KEYS").split(',')
 
 import psycopg2
 from psycopg2.extras import execute_values
+from psycopg2 import pool as psycopg2_pool
+from contextlib import contextmanager
 from urllib.parse import urlparse
 
 # Global variables for cleanup
@@ -234,7 +237,10 @@ def signal_handler(signum, frame):
                 conn.close()
         except Exception as e:
             print(f"Warning: Error closing connection: {e}")
-    
+
+    # Close pooled connections used by the hot per-team/per-event helpers.
+    _close_db_pool()
+
     print("Cleanup complete. Exiting.")
     # sys.exit(0) waits for non-daemon ThreadPoolExecutor workers; Heroku then hits
     # R12 (SIGKILL after 30s). os._exit terminates immediately after the cleanup above.
@@ -335,6 +341,151 @@ def get_pg_connection():
     active_connections.append(conn)
     return conn
 
+# ---------------------------------------------------------------------------
+# Connection pooling for the hot per-team / per-event helpers.
+#
+# The team loop fans out across a 10-worker ThreadPoolExecutor and each hot
+# helper previously opened + committed + closed a brand-new Postgres connection
+# on every call (~5*E + 4 fresh connections per team, across thousands of teams
+# every 6h). That connection churn is the dominant cost and a Heroku
+# connection-limit risk. These helpers now borrow a connection from a bounded,
+# thread-safe pool instead.
+#
+# get_pg_connection() above is deliberately left untouched so it stays backward
+# compatible: external importers (run_rankings / run_awards / active_events /
+# backfill_latlng / add_latlng_columns) and the bounded one-off internal callers
+# keep receiving a fresh, self-owned raw connection that they close themselves.
+# ---------------------------------------------------------------------------
+
+# Bounded to the 10 worker threads + a little headroom (the main thread writes
+# results via insert_team_epa while workers read → ~11 concurrent borrowers max).
+# Kept small to respect Heroku's connection limit. minconn == maxconn on purpose:
+# psycopg2's pool only KEEPS up to minconn idle connections on putconn and closes
+# any beyond it, so a smaller minconn would re-introduce per-call churn under the
+# 10-thread fan-out. Equal min/max means returned connections are always retained
+# and reused, with a hard cap of maxconn total open at once.
+_DB_POOL_MAXCONN = int(os.environ.get("PG_POOL_MAXCONN", "12"))
+_db_pool = None
+_db_pool_lock = threading.Lock()
+
+
+def _get_db_pool():
+    """Lazily build a bounded, thread-safe pool (same DSN/options as get_pg_connection)."""
+    global _db_pool
+    if _db_pool is None:
+        with _db_pool_lock:
+            if _db_pool is None:
+                url = os.environ.get("DATABASE_URL")
+                if url is None:
+                    raise Exception("DATABASE_URL not set in environment.")
+                if url.startswith("postgres://"):
+                    url = url.replace("postgres://", "postgresql://", 1)
+                result = urlparse(url)
+                maxconn = max(2, _DB_POOL_MAXCONN)
+                _db_pool = psycopg2_pool.ThreadedConnectionPool(
+                    minconn=maxconn,
+                    maxconn=maxconn,
+                    database=result.path[1:],
+                    user=result.username,
+                    password=result.password,
+                    host=result.hostname,
+                    port=result.port,
+                    connect_timeout=30,
+                    options='-c statement_timeout=300000',
+                )
+    return _db_pool
+
+
+@contextmanager
+def _pooled_connection():
+    """
+    Borrow a connection from the pool and guarantee it is returned exactly once.
+
+    On success any lingering (read) transaction is rolled back so we never hand
+    an "idle in transaction" connection back to the pool; writers commit
+    explicitly inside the block first (a rollback after commit is a no-op). On
+    error the connection is closed and dropped from the pool (a fresh one is
+    created on demand) so a poisoned/aborted connection is never reused. This is
+    the pooled analogue of the old open-per-call/close-per-call pattern, and it
+    cooperates with the @retry decorators on the read helpers.
+    """
+    pool = _get_db_pool()
+    conn = pool.getconn()
+    broken = False
+    try:
+        yield conn
+    except Exception:
+        broken = True
+        raise
+    finally:
+        if broken:
+            try:
+                pool.putconn(conn, close=True)
+            except Exception:
+                pass
+        else:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            try:
+                pool.putconn(conn)
+            except Exception:
+                pass
+
+
+def _close_db_pool():
+    """Close every pooled connection (called during finalize / shutdown)."""
+    global _db_pool
+    pool = _db_pool
+    _db_pool = None
+    if pool is not None:
+        try:
+            pool.closeall()
+        except Exception:
+            pass
+
+
+# Per-run memoization caches for values that are constant within a single run.
+# All are cleared at the start of _fetch_and_store_team_data_impl (mirrors the
+# existing match_cache.clear()).
+_team_experience_cache = {}
+_team_experience_lock = threading.Lock()
+_team_played_events_cache = {}
+_team_played_events_lock = threading.Lock()
+# Preloaded season event metadata: event_key -> start_date (str or None), built
+# once per run so the per-event chronological weight + start-date reads (which
+# previously read the SAME events row twice per event) become dict lookups.
+_event_start_date_cache = {}
+_event_meta_loaded_years = set()
+_event_meta_lock = threading.Lock()
+
+
+def preload_event_metadata(year):
+    """
+    Load start_date for every event of the season once so per-event chronological
+    weighting / sorting are dict lookups instead of two identical DB reads per
+    event. Falsy start_dates are normalized to None to exactly match the old
+    get_event_start_date_from_db behavior (which returned None for empty values).
+    """
+    try:
+        with _pooled_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT event_key, start_date FROM events WHERE LEFT(event_key, 4) = %s",
+                (str(year),),
+            )
+            rows = cur.fetchall()
+            cur.close()
+    except Exception as e:
+        # Non-fatal: helpers fall back to per-event DB reads if the cache is empty.
+        print(f"preload_event_metadata failed for {year}: {e}", flush=True)
+        return
+    with _event_meta_lock:
+        for event_key, start_date in rows:
+            _event_start_date_cache[event_key] = start_date if start_date else None
+        _event_meta_loaded_years.add(int(year))
+
 def _normalize_district_key(key):
     """TBA uses 2024fim; normalize to FIM."""
     if not key or len(key) <= 4:
@@ -364,75 +515,73 @@ def upsert_district(cur, district_key, district_abbrev, district_name):
 
 def upsert_team_profile(result):
     # Insert or update a team's general profile data
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO teams (team_number, nickname, city, state_prov, country, website)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        ON CONFLICT (team_number) DO UPDATE SET
-            nickname = EXCLUDED.nickname,
-            city = EXCLUDED.city,
-            state_prov = EXCLUDED.state_prov,
-            country = EXCLUDED.country,
-            website = EXCLUDED.website
-        """,
-        (
-            result.get("team_number"),
-            result.get("nickname"),
-            result.get("city"),
-            result.get("state_prov"),
-            result.get("country"),
-            result.get("website"),
-        ),
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    with _pooled_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO teams (team_number, nickname, city, state_prov, country, website)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (team_number) DO UPDATE SET
+                nickname = EXCLUDED.nickname,
+                city = EXCLUDED.city,
+                state_prov = EXCLUDED.state_prov,
+                country = EXCLUDED.country,
+                website = EXCLUDED.website
+            """,
+            (
+                result.get("team_number"),
+                result.get("nickname"),
+                result.get("city"),
+                result.get("state_prov"),
+                result.get("country"),
+                result.get("website"),
+            ),
+        )
+        conn.commit()
+        cur.close()
 
 
 def insert_team_epa(result, year):
     # Insert or update a team's EPA data for a given year
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO team_epas (
-            team_number, year,
-            raw, ace, confidence, auto_raw, teleop_raw, endgame_raw,
-            wins, losses, ties, event_perf
+    with _pooled_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO team_epas (
+                team_number, year,
+                raw, ace, confidence, auto_raw, teleop_raw, endgame_raw,
+                wins, losses, ties, event_perf
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (team_number, year) DO UPDATE SET
+                raw = EXCLUDED.raw,
+                ace = EXCLUDED.ace,
+                confidence = EXCLUDED.confidence,
+                auto_raw = EXCLUDED.auto_raw,
+                teleop_raw = EXCLUDED.teleop_raw,
+                endgame_raw = EXCLUDED.endgame_raw,
+                wins = EXCLUDED.wins,
+                losses = EXCLUDED.losses,
+                ties = EXCLUDED.ties,
+                event_perf = EXCLUDED.event_perf
+            """,
+            (
+                result.get("team_number"),
+                year,
+                result.get("raw"),
+                result.get("ace"),
+                result.get("confidence"),
+                result.get("auto_raw"),
+                result.get("teleop_raw"),
+                result.get("endgame_raw"),
+                result.get("wins"),
+                result.get("losses"),
+                result.get("ties"),
+                json.dumps(result.get("event_perf", [])),
+            ),
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (team_number, year) DO UPDATE SET
-            raw = EXCLUDED.raw,
-            ace = EXCLUDED.ace,
-            confidence = EXCLUDED.confidence,
-            auto_raw = EXCLUDED.auto_raw,
-            teleop_raw = EXCLUDED.teleop_raw,
-            endgame_raw = EXCLUDED.endgame_raw,
-            wins = EXCLUDED.wins,
-            losses = EXCLUDED.losses,
-            ties = EXCLUDED.ties,
-            event_perf = EXCLUDED.event_perf
-        """,
-        (
-            result.get("team_number"),
-            year,
-            result.get("raw"),
-            result.get("ace"),
-            result.get("confidence"),
-            result.get("auto_raw"),
-            result.get("teleop_raw"),
-            result.get("endgame_raw"),
-            result.get("wins"),
-            result.get("losses"),
-            result.get("ties"),
-            json.dumps(result.get("event_perf", [])),
-        ),
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
 
 
 def _is_demo_team_rank(team_number):
@@ -776,29 +925,27 @@ def compute_and_store_team_epa_ranks(year: int, quiet: bool = False, conn=None):
 # Robust retry for team experience
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
 def get_team_experience_pg(team_number, up_to_year):
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT COUNT(DISTINCT year) FROM team_epas
-        WHERE team_number = %s AND year <= %s
-    """, (team_number, up_to_year))
-    years = cur.fetchone()[0]
-    cur.close()
-    conn.close()
+    with _pooled_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT COUNT(DISTINCT year) FROM team_epas
+            WHERE team_number = %s AND year <= %s
+        """, (team_number, up_to_year))
+        years = cur.fetchone()[0]
+        cur.close()
     return years if years else 1
 
 # Robust retry for team events
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
 def get_team_events(team_number, year):
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT event_key FROM event_teams
-        WHERE team_number = %s AND LEFT(event_key, 4) = %s
-    """, (team_number, str(year)))
-    events = [row[0] for row in cur.fetchall()]
-    cur.close()
-    conn.close()
+    with _pooled_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT event_key FROM event_teams
+            WHERE team_number = %s AND LEFT(event_key, 4) = %s
+        """, (team_number, str(year)))
+        events = [row[0] for row in cur.fetchall()]
+        cur.close()
     return events
 
 def _predicted_time_to_datetime(predicted_time):
@@ -818,21 +965,20 @@ def _predicted_time_to_datetime(predicted_time):
     return None
 
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
-def get_team_played_events(team_number, year):
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT event_key, red_score, blue_score, winning_alliance, predicted_time
-        FROM event_matches
-        WHERE LEFT(event_key, 4) = %s
-          AND (%s = ANY(string_to_array(red_teams, ',')) OR %s = ANY(string_to_array(blue_teams, ',')))
-        """,
-        (str(year), str(team_number), str(team_number)),
-    )
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
+def _query_team_played_events(team_number, year):
+    with _pooled_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT event_key, red_score, blue_score, winning_alliance, predicted_time
+            FROM event_matches
+            WHERE LEFT(event_key, 4) = %s
+              AND (%s = ANY(string_to_array(red_teams, ',')) OR %s = ANY(string_to_array(blue_teams, ',')))
+            """,
+            (str(year), str(team_number), str(team_number)),
+        )
+        rows = cur.fetchall()
+        cur.close()
 
     played_events = set()
     now_utc = datetime.now(timezone.utc)
@@ -844,6 +990,20 @@ def get_team_played_events(team_number, year):
         if predicted_dt and predicted_dt <= now_utc:
             played_events.add(event_key)
     return list(played_events)
+
+
+def get_team_played_events(team_number, year):
+    # Depends only on (team_number, year) and event_matches is stable during the
+    # team loop (populated by create_event_db before it, predictions written
+    # after), so memoize once per team+year instead of re-querying per event.
+    key = (team_number, year)
+    with _team_played_events_lock:
+        if key in _team_played_events_cache:
+            return list(_team_played_events_cache[key])
+    result = _query_team_played_events(team_number, year)
+    with _team_played_events_lock:
+        _team_played_events_cache[key] = result
+    return list(result)
 
 def get_teams_for_year(year):
     # Return a list of all teams that played in a given year, using teams table for profile data
@@ -881,35 +1041,101 @@ def get_teams_for_year(year):
     conn.close()
     return teams
 
+
+def get_active_scope(year, buffer_days=2):
+    """
+    Resolve the incremental ("active-only") work set for a season.
+
+    Returns a dict with:
+      - active_events:  event keys whose competition window overlaps "now"
+                        (via active_events.get_active_event_keys).
+      - active_teams:   set of team numbers registered for any active event.
+                        These are the ONLY teams whose team_epas rows are
+                        recomputed in active-only mode.
+      - needed_events:  every event key attended (this season) by any active
+                        team, unioned with active_events. create_event_db must
+                        fetch matches for all of these so each active team's
+                        FULL season is present in match_cache and its overall
+                        EPA recomputes identically to a full run.
+
+    A non-active team plays no active event, so none of its matches change; a
+    full recompute would reproduce its existing row byte-for-byte. Leaving those
+    rows untouched is therefore lossless. Ranks/predictions are recomputed over
+    the full team set afterwards from stored + freshly-updated ACE.
+    """
+    conn = get_pg_connection()
+    try:
+        active_events = get_active_event_keys(conn, year, buffer_days=buffer_days)
+        if not active_events:
+            return {"active_events": [], "active_teams": set(), "needed_events": []}
+
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT DISTINCT team_number FROM event_teams WHERE event_key = ANY(%s)",
+            (list(active_events),),
+        )
+        active_teams = {r[0] for r in cur.fetchall() if r[0] is not None}
+
+        if not active_teams:
+            cur.close()
+            # Active events exist but have no registered teams yet: still refresh
+            # those events so scores/schedules stay current, but there is nothing
+            # to recompute.
+            return {
+                "active_events": list(active_events),
+                "active_teams": set(),
+                "needed_events": list(active_events),
+            }
+
+        cur.execute(
+            """
+            SELECT DISTINCT event_key
+            FROM event_teams
+            WHERE LEFT(event_key, 4) = %s AND team_number = ANY(%s)
+            """,
+            (str(year), list(active_teams)),
+        )
+        needed_events = {r[0] for r in cur.fetchall()}
+        needed_events.update(active_events)
+        cur.close()
+        return {
+            "active_events": list(active_events),
+            "active_teams": active_teams,
+            "needed_events": list(needed_events),
+        }
+    finally:
+        if conn in active_connections:
+            active_connections.remove(conn)
+        conn.close()
+
 def get_existing_event_data(event_key):
     # Get existing event data from database for comparison
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    
-    # Get event (including webcast info)
-    cur.execute("""
-        SELECT name, start_date, end_date, event_type,
-               district_key, district_abbrev, district_name,
-               city, state_prov, country, website, webcast_type, webcast_channel, week
-        FROM events WHERE event_key = %s
-    """, (event_key,))
-    event_row = cur.fetchone()
-    
-    # Get teams - ensure we always return a dict, even if empty
-    cur.execute("SELECT team_number, nickname, city, state_prov, country FROM event_teams WHERE event_key = %s", (event_key,))
-    teams = {row[0]: {"nickname": row[1], "city": row[2], "state_prov": row[3], "country": row[4]} for row in cur.fetchall()}
-    if not teams:
-        teams = {}  # Ensure it's always a dict, not None
-    
-    # Get matches
-    cur.execute("SELECT match_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time FROM event_matches WHERE event_key = %s", (event_key,))
-    matches = {row[0]: {"comp_level": row[1], "match_number": row[2], "set_number": row[3], "red_teams": row[4], "blue_teams": row[5], "red_score": row[6], "blue_score": row[7], "winning_alliance": row[8], "youtube_key": row[9], "predicted_time": row[10]} for row in cur.fetchall()}
-    if not matches:
-        matches = {}
-    
-    cur.close()
-    conn.close()
-    
+    with _pooled_connection() as conn:
+        cur = conn.cursor()
+
+        # Get event (including webcast info)
+        cur.execute("""
+            SELECT name, start_date, end_date, event_type,
+                   district_key, district_abbrev, district_name,
+                   city, state_prov, country, website, webcast_type, webcast_channel, week
+            FROM events WHERE event_key = %s
+        """, (event_key,))
+        event_row = cur.fetchone()
+
+        # Get teams - ensure we always return a dict, even if empty
+        cur.execute("SELECT team_number, nickname, city, state_prov, country FROM event_teams WHERE event_key = %s", (event_key,))
+        teams = {row[0]: {"nickname": row[1], "city": row[2], "state_prov": row[3], "country": row[4]} for row in cur.fetchall()}
+        if not teams:
+            teams = {}  # Ensure it's always a dict, not None
+
+        # Get matches
+        cur.execute("SELECT match_key, comp_level, match_number, set_number, red_teams, blue_teams, red_score, blue_score, winning_alliance, youtube_key, predicted_time FROM event_matches WHERE event_key = %s", (event_key,))
+        matches = {row[0]: {"comp_level": row[1], "match_number": row[2], "set_number": row[3], "red_teams": row[4], "blue_teams": row[5], "red_score": row[6], "blue_score": row[7], "winning_alliance": row[8], "youtube_key": row[9], "predicted_time": row[10]} for row in cur.fetchall()}
+        if not matches:
+            matches = {}
+
+        cur.close()
+
     return {
         "event": event_row,
         "teams": teams,
@@ -958,22 +1184,21 @@ def event_has_started(event_key, start_date):
 
 def get_existing_team_epa(team_number, year):
     # Get existing team EPA data from database for comparison
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    
-    cur.execute(
-        """
-        SELECT raw, ace, confidence,
-               auto_raw, teleop_raw, endgame_raw, wins, losses, ties, event_perf
-        FROM team_epas WHERE team_number = %s AND year = %s
-        """,
-        (team_number, year),
-    )
-    
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-    
+    with _pooled_connection() as conn:
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+            SELECT raw, ace, confidence,
+                   auto_raw, teleop_raw, endgame_raw, wins, losses, ties, event_perf
+            FROM team_epas WHERE team_number = %s AND year = %s
+            """,
+            (team_number, year),
+        )
+
+        row = cur.fetchone()
+        cur.close()
+
     if row:
         event_perf_raw = row[9]
         if event_perf_raw is None:
@@ -1157,10 +1382,20 @@ def data_has_changed(existing, new_data, data_type):
     
     return True  # Default to updating if we don't know
 
-def create_event_db(year):
-    # Create and populate the events database for the specified year, only updating what's changed
+def create_event_db(year, only_event_keys=None):
+    # Create and populate the events database for the specified year, only updating what's changed.
+    #
+    # only_event_keys (active-only mode): restrict fetching/upserts to this set of event keys.
+    # This is the union of every event attended by a team playing at a currently-active event,
+    # so each active team's FULL season is still fetched into match_cache (required to recompute
+    # that team's overall EPA identically to a full run) while events no active team attends are
+    # skipped. When None, every event of the season is processed (full-run behavior, unchanged).
     print(f"\nevents database update for {year}...")
-    
+
+    only_set = set(only_event_keys) if only_event_keys is not None else None
+    if only_set is not None:
+        print(f"  active-only: restricting to {len(only_set)} event(s) attended by active teams")
+
     try:
         events = tba_get(f"events/{year}")
     except Exception as e:
@@ -1183,6 +1418,10 @@ def create_event_db(year):
             return
             
         event_key = event["key"]
+
+        # active-only: skip events not attended by any active team.
+        if only_set is not None and event_key not in only_set:
+            continue
         
         # Track future events for logging, but DO process them so team schedules and
         # event_teams stay up-to-date when teams add new events to their schedule.
@@ -1236,7 +1475,8 @@ def create_event_db(year):
                 # Webcast info (store first webcast if available)
                 (event.get("webcasts", [{}]) or [{}])[0].get("type"),
                 (event.get("webcasts", [{}]) or [{}])[0].get("channel"),
-                event_week
+                event_week,
+                event.get("lat"), event.get("lng")
             ),
             "teams": [], "matches": []
         }
@@ -1277,9 +1517,13 @@ def create_event_db(year):
                     blue_teams = []
 
                     for team_key in m["alliances"]["red"]["team_keys"]:
-                        red_teams.append(str(int(team_key[3:].rstrip("B"))))
+                        t_num = parse_tba_team_number(team_key)
+                        if t_num is not None:
+                            red_teams.append(str(t_num))
                     for team_key in m["alliances"]["blue"]["team_keys"]:
-                        blue_teams.append(str(int(team_key[3:].rstrip("B"))))
+                        t_num = parse_tba_team_number(team_key)
+                        if t_num is not None:
+                            blue_teams.append(str(t_num))
                     
                     # Get first YouTube video if available
                     videos = m.get("videos", [])
@@ -1385,9 +1629,10 @@ def insert_event_data(results, year):
                 INSERT INTO events (
                     event_key, name, start_date, end_date, event_type,
                     district_key, district_abbrev, district_name,
-                    city, state_prov, country, website, webcast_type, webcast_channel, week
+                    city, state_prov, country, website, webcast_type, webcast_channel, week,
+                    lat, lng
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (event_key) DO UPDATE SET
                     name = EXCLUDED.name,
                     start_date = EXCLUDED.start_date,
@@ -1402,7 +1647,9 @@ def insert_event_data(results, year):
                     website = EXCLUDED.website,
                     webcast_type = EXCLUDED.webcast_type,
                     webcast_channel = EXCLUDED.webcast_channel,
-                    week = EXCLUDED.week
+                    week = EXCLUDED.week,
+                    lat = EXCLUDED.lat,
+                    lng = EXCLUDED.lng
             """, data["event"])
         
         # Update teams if needed
@@ -1455,10 +1702,16 @@ def insert_event_data(results, year):
     conn.close()
 
 
-def fetch_and_store_team_data(year):
+def fetch_and_store_team_data(year, active_only=False):
     """
     Fetch and store team EPA data. Uses a Postgres advisory lock so only one pipeline
     runs at a time across scheduler one-off dynos; if another run holds the lock, exit.
+
+    When active_only is True, only teams playing at a currently-active event are
+    recomputed (their full season is refetched and re-aggregated exactly as a full
+    run would); all other teams' rows are left untouched. Ranks and predictions are
+    still recomputed over the full team set. The advisory lock also serializes the
+    active-only path against the full recompute so they never overlap.
     """
     lock_conn = get_pg_connection()
     cur = lock_conn.cursor()
@@ -1484,16 +1737,48 @@ def fetch_and_store_team_data(year):
         return
 
     try:
-        _fetch_and_store_team_data_impl(year)
+        _fetch_and_store_team_data_impl(year, active_only=active_only)
     finally:
         _release_pipeline_lock(lock_conn)
 
 
-def _fetch_and_store_team_data_impl(year):
+def _fetch_and_store_team_data_impl(year, active_only=False):
     # Fetch and store team data, only updating what's changed
     global match_cache
     match_cache.clear()  # Clear cache for new year
-    create_event_db(year)
+    # Clear per-run memoization caches (mirrors match_cache) so a re-run in the
+    # same process never serves stale team/event values.
+    _team_experience_cache.clear()
+    _team_played_events_cache.clear()
+    _event_start_date_cache.clear()
+    _event_meta_loaded_years.clear()
+
+    # Active-only: resolve the set of teams playing at currently-active events and
+    # the full set of events those teams attend (needed so each active team's whole
+    # season is fetched and re-aggregated identically to a full run).
+    active_team_numbers = None
+    only_event_keys = None
+    if active_only:
+        scope = get_active_scope(year)
+        active_events = scope["active_events"]
+        active_team_numbers = scope["active_teams"]
+        only_event_keys = scope["needed_events"]
+        if not active_events:
+            print(f"No active events for {year}; nothing to recompute (active-only).")
+            return
+        print(
+            f"Active-only mode: {len(active_events)} active event(s), "
+            f"{len(active_team_numbers)} active team(s), "
+            f"{len(only_event_keys)} event(s) to fetch."
+        )
+        if not active_team_numbers:
+            # Active events exist but no registered teams yet: refresh those events
+            # (schedules/scores) but there is nothing to recompute.
+            create_event_db(year, only_event_keys=only_event_keys)
+            print("No active teams registered yet; refreshed active events only.")
+            return
+
+    create_event_db(year, only_event_keys=only_event_keys)
     
     if shutdown_event.is_set():
         print("Shutdown requested, stopping team data processing...")
@@ -1501,9 +1786,20 @@ def _fetch_and_store_team_data_impl(year):
         
     print(f"\nProcessing year {year} teams...")
 
+    # Preload this season's event start dates once (after create_event_db has
+    # written the events table) so per-event chronological weighting/sorting are
+    # dict lookups instead of two identical DB reads per event. This reads every
+    # event of the season (cheap single query) so active teams' PAST events still
+    # get correct chronological weights during an active-only run.
+    preload_event_metadata(year)
+
     # Get all teams directly from PostgreSQL
     all_teams = get_teams_for_year(year)
-    print(f"Total unique teams found from events: {len(all_teams)}")
+    if active_only:
+        all_teams = [t for t in all_teams if t["team_number"] in active_team_numbers]
+        print(f"Total active teams to process: {len(all_teams)}")
+    else:
+        print(f"Total unique teams found from events: {len(all_teams)}")
 
     def fetch_and_compare_team(team):
         if shutdown_event.is_set():
@@ -1618,11 +1914,22 @@ def _fetch_and_store_team_data_impl(year):
 
 def get_team_experience(team_number: int, up_to_year: int) -> int:
     # Determine how many years a team has competed up to and including up_to_year.
+    # Constant within a run for a given (team, year); memoized so the two identical
+    # COUNT queries per event (calculate_confidence + calculate_event_epa) collapse
+    # to a single query per team+year. Only successful results are cached so the
+    # exception path keeps retrying exactly like before.
+    key = (team_number, up_to_year)
+    with _team_experience_lock:
+        if key in _team_experience_cache:
+            return _team_experience_cache[key]
     try:
-        return get_team_experience_pg(team_number, up_to_year)
+        val = get_team_experience_pg(team_number, up_to_year)
     except Exception as e:
         print(f"Failed to get team experience: {e}")
         return 1  # Default to first year if we can't determine
+    with _team_experience_lock:
+        _team_experience_cache[key] = val
+    return val
 
 def get_veteran_boost(years: int) -> float:
     # Calculate veteran boost based on years of experience.
@@ -1722,28 +2029,57 @@ def _team_prediction_info(team_number: int, current_year_lookup: Dict[int, Dict[
     return {"ace": 0.0, "confidence": 0.7}
 
 
+def parse_tba_team_number(team_key) -> Optional[int]:
+    """
+    Parse a TBA team key/token into a team number.
+
+    Accepts ``frc254``, ``254``, ``frc254B``, ``frc498E``, etc. Any trailing
+    surrogate letter suffix is ignored; returns None when there are no leading digits.
+    """
+    if team_key is None:
+        return None
+    tok = str(team_key).strip()
+    if not tok:
+        return None
+    if tok.lower().startswith("frc"):
+        tok = tok[3:]
+    i = 0
+    while i < len(tok) and tok[i].isdigit():
+        i += 1
+    if i == 0:
+        return None
+    try:
+        return int(tok[:i])
+    except ValueError:
+        return None
+
+
+def tba_team_key_is_surrogate(team_key) -> bool:
+    """True when the key has a non-digit surrogate suffix (e.g. frc254B, frc498E)."""
+    if team_key is None:
+        return False
+    tok = str(team_key).strip()
+    if tok.lower().startswith("frc"):
+        tok = tok[3:]
+    i = 0
+    while i < len(tok) and tok[i].isdigit():
+        i += 1
+    return i > 0 and i < len(tok)
+
+
 def _parse_match_alliance_teams(team_csv) -> List[int]:
     """
     Parse red_teams / blue_teams from event_matches (comma-separated).
-    Matches TBA ingest: numeric strings; tolerate leading 'frc' and trailing 'B' surrogate markers.
+    Matches TBA ingest: numeric strings; tolerate leading 'frc' and any
+    trailing surrogate letter markers (B, E, ...).
     """
     if team_csv is None:
         return []
     out: List[int] = []
     for raw in str(team_csv).split(","):
-        tok = raw.strip()
-        if not tok:
-            continue
-        low = tok.lower()
-        if low.startswith("frc"):
-            tok = tok[3:]
-        tok = tok.rstrip("Bb")
-        if not tok.isdigit():
-            continue
-        try:
-            out.append(int(tok))
-        except ValueError:
-            continue
+        t_num = parse_tba_team_number(raw)
+        if t_num is not None:
+            out.append(t_num)
     return out
 
 
@@ -2141,74 +2477,74 @@ def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, st
       - Last 20%: 0.84 -> 1.00
     """
     try:
-        # Load week ranges for the year
-        week_ranges = load_week_ranges()
-        if not week_ranges:
-            return 1.0, 'unknown'
-        
-        year_str = str(year)
-        if year_str not in week_ranges:
-            return 1.0, 'unknown'
-        
-        # Get event start date from database instead of API
-        conn = get_pg_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT start_date, event_type FROM events WHERE event_key = %s", (event_key,))
-        event_row = cur.fetchone()
-        cur.close()
-        conn.close()
-        
-        if not event_row or not event_row[0]:  # start_date is None or empty
-            return 1.0, 'unknown'
-        
-        event_start = datetime.strptime(event_row[0], '%Y-%m-%d')
-        
-        # Pre-season events (before first regular week)
-        first_regular_week = datetime.strptime(week_ranges[year_str][0][0], '%Y-%m-%d')
-        if event_start < first_regular_week:
-            return 0.05, 'preseason'  # Minimal weight for pre-season
-        
-        # Off-season events (after last regular week)
-        last_regular_week = datetime.strptime(week_ranges[year_str][-1][1], '%Y-%m-%d')
-        if event_start > last_regular_week:
-            return 0.1, 'offseason'  # Very minimal weight for off-season
-        
-        # Regular season events - calculate position within season
-        season_start = first_regular_week
-        season_end = last_regular_week
-        season_duration = (season_end - season_start).days
-        
-        if season_duration <= 0:
-            return 1.0, 'regular'
-        
-        # Calculate how far into the season this event is (0.0 to 1.0)
-        days_into_season = (event_start - season_start).days
-        season_progress = max(0.0, min(1.0, days_into_season / season_duration))
-        
-        # Piecewise linear: discount early season, emphasize late season (same structure as before).
-        if season_progress <= 0.2:
-            weight = 0.12 + (season_progress / 0.2) * 0.2
-        elif season_progress <= 0.8:
-            weight = 0.32 + ((season_progress - 0.2) / 0.6) * 0.52
-        else:
-            weight = 0.84 + ((season_progress - 0.8) / 0.2) * 0.16
-        
-        return round(weight, 3), 'regular'
-        
+        # start_date comes from the per-run preloaded cache (falling back to a DB
+        # read on a miss); the weight math below is unchanged.
+        start_date = get_event_start_date_from_db(event_key)
+        return _chronological_weight_from_start_date(start_date, year)
     except Exception as e:
         print(f"Error calculating chronological weight for {event_key}: {e}")
         return 1.0, 'unknown'
 
+
+def _chronological_weight_from_start_date(start_date: Optional[str], year: int) -> tuple[float, str]:
+    """Pure computation extracted verbatim from get_event_chronological_weight (no DB access)."""
+    # Load week ranges for the year
+    week_ranges = load_week_ranges()
+    if not week_ranges:
+        return 1.0, 'unknown'
+
+    year_str = str(year)
+    if year_str not in week_ranges:
+        return 1.0, 'unknown'
+
+    if not start_date:  # start_date is None or empty
+        return 1.0, 'unknown'
+
+    event_start = datetime.strptime(start_date, '%Y-%m-%d')
+
+    # Pre-season events (before first regular week)
+    first_regular_week = datetime.strptime(week_ranges[year_str][0][0], '%Y-%m-%d')
+    if event_start < first_regular_week:
+        return 0.05, 'preseason'  # Minimal weight for pre-season
+
+    # Off-season events (after last regular week)
+    last_regular_week = datetime.strptime(week_ranges[year_str][-1][1], '%Y-%m-%d')
+    if event_start > last_regular_week:
+        return 0.1, 'offseason'  # Very minimal weight for off-season
+
+    # Regular season events - calculate position within season
+    season_start = first_regular_week
+    season_end = last_regular_week
+    season_duration = (season_end - season_start).days
+
+    if season_duration <= 0:
+        return 1.0, 'regular'
+
+    # Calculate how far into the season this event is (0.0 to 1.0)
+    days_into_season = (event_start - season_start).days
+    season_progress = max(0.0, min(1.0, days_into_season / season_duration))
+
+    # Piecewise linear: discount early season, emphasize late season (same structure as before).
+    if season_progress <= 0.2:
+        weight = 0.12 + (season_progress / 0.2) * 0.2
+    elif season_progress <= 0.8:
+        weight = 0.32 + ((season_progress - 0.2) / 0.6) * 0.52
+    else:
+        weight = 0.84 + ((season_progress - 0.8) / 0.2) * 0.16
+
+    return round(weight, 3), 'regular'
+
 def get_event_start_date_from_db(event_key: str) -> str:
-    """Get event start date from database instead of making API call."""
+    """Get event start date. Uses the per-run preloaded cache; falls back to a DB read."""
+    if event_key in _event_start_date_cache:
+        return _event_start_date_cache[event_key]
     try:
-        conn = get_pg_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT start_date FROM events WHERE event_key = %s", (event_key,))
-        event_row = cur.fetchone()
-        cur.close()
-        conn.close()
-        
+        with _pooled_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT start_date FROM events WHERE event_key = %s", (event_key,))
+            event_row = cur.fetchone()
+            cur.close()
+
         if event_row and event_row[0]:
             return event_row[0]
         return None
@@ -2563,6 +2899,7 @@ def finalize():
         cleanup_executor(executor)
     for conn in active_connections:
         cleanup_connection(conn)
+    _close_db_pool()
     print("Cleanup complete.")
     elapsed = time.time() - start_time
     print(f"\nScript runtime: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
@@ -2582,17 +2919,21 @@ def main():
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) > 1:
+        positional = [a for a in sys.argv[1:] if not a.startswith("--")]
+        flags = {a for a in sys.argv[1:] if a.startswith("--")}
+        ranks_only = "--ranks-only" in flags
+        active_only = "--active-only" in flags
+        if positional:
             try:
-                year = int(sys.argv[1])
+                year = int(positional[0])
             except ValueError:
                 print("Year must be an integer.")
                 sys.exit(1)
-            if len(sys.argv) > 2 and sys.argv[2] == "--ranks-only":
+            if ranks_only:
                 compute_and_store_team_epa_ranks(year)
                 restart_heroku_app()
             else:
-                fetch_and_store_team_data(year)
+                fetch_and_store_team_data(year, active_only=active_only)
         else:
             main()
     except KeyboardInterrupt:

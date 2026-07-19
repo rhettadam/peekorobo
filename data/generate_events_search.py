@@ -24,10 +24,13 @@ def generate_events_simple():
             
             # Get all events with just key and name
             print("📅 Extracting event keys and names...")
+            # event_key is year-prefixed (e.g. "2025bayou"), so ordering by it is
+            # effectively chronological and avoids depending on a `year` column
+            # that isn't part of the events schema.
             cur.execute("""
                 SELECT event_key, name
                 FROM events
-                ORDER BY year, event_key
+                ORDER BY event_key
             """)
             
             for row in cur.fetchall():

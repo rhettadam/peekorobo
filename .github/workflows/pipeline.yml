@@ -1,0 +1,142 @@
+name: Data pipeline
+
+# Replaces the paid Heroku Scheduler with free GitHub Actions compute.
+#
+# Cadence (encoded in the cron month field):
+#   - In-season (Jan-Apr): cheap live refresh every 30 min (ACE active-only +
+#     rankings/awards), and a full ACE recompute every 6h.
+#   - Off-season (May-Dec): a full recompute once per day.
+#
+# The heavy ACE recompute is protected by the Postgres advisory lock in run.py,
+# and `concurrency` below prevents the live and full jobs from overlapping.
+on:
+  schedule:
+    - cron: "*/30 * * 1-4 *"   # in-season live refresh (every 30 min)
+    - cron: "17 */6 * 1-4 *"   # in-season full recompute (every 6h)
+    - cron: "0 7 * 5-12 *"     # off-season full recompute (daily)
+  workflow_dispatch:
+    inputs:
+      year:
+        description: "Season year (defaults to the current year)"
+        required: false
+      mode:
+        description: "full or live"
+        required: false
+        default: "full"
+
+concurrency:
+  group: peekorobo-pipeline
+  cancel-in-progress: false
+
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  TBA_API_KEYS: ${{ secrets.TBA_API_KEYS }}
+  RESTART_HEROKU: "0"
+  PYTHONPATH: ${{ github.workspace }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  CLOUDFLARE_PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
+
+jobs:
+  live:
+    name: Live refresh (active events)
+    if: >-
+      github.event.schedule == '*/30 * * 1-4 *' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'live')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Resolve season year
+        run: echo "YEAR=${{ github.event.inputs.year || '' }}" >> "$GITHUB_ENV"
+      - name: Default year to current
+        if: env.YEAR == ''
+        run: echo "YEAR=$(date -u +%Y)" >> "$GITHUB_ENV"
+      - name: Refresh ACE for active-event teams (incremental)
+        run: python data/run.py "$YEAR" --active-only
+      - name: Refresh rankings + awards (active events only)
+        run: |
+          python data/run_rankings.py "$YEAR" --active-only
+          python data/run_awards.py "$YEAR" --active-only
+
+  full:
+    name: Full recompute
+    if: >-
+      github.event.schedule == '17 */6 * 1-4 *' ||
+      github.event.schedule == '0 7 * 5-12 *' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode != 'live')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Resolve season year
+        run: echo "YEAR=${{ github.event.inputs.year || '' }}" >> "$GITHUB_ENV"
+      - name: Default year to current
+        if: env.YEAR == ''
+        run: echo "YEAR=$(date -u +%Y)" >> "$GITHUB_ENV"
+      - name: Full ACE recompute + ranks + predictions
+        run: python data/run.py "$YEAR"
+      - name: Refresh rankings + awards (all events)
+        run: |
+          python data/run_rankings.py "$YEAR"
+          python data/run_awards.py "$YEAR"
+      - name: Regenerate static exports
+        run: |
+          python data/generate_teams_search.py
+          python data/generate_events_search.py
+          python data/generate_leaderboards.py "$YEAR"
+      - name: Upload static exports (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-exports-full
+          path: |
+            data/teams.json
+            data/events.json
+            data/leaderboards/*.json
+          if-no-files-found: ignore
+      - name: Setup Node
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build SPA and bundle static data/assets
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_SEARCH_BASE_URL: /data
+          VITE_ASSETS_BASE_URL: /assets
+          VITE_CURRENT_YEAR: "2026"
+        run: |
+          npm ci
+          npm run build
+          mkdir -p dist/data/leaderboards dist/assets
+          cp -f ../data/teams.json dist/data/teams.json
+          cp -f ../data/events.json dist/data/events.json
+          if [ -d ../data/leaderboards ]; then cp -f ../data/leaderboards/*.json dist/data/leaderboards/ 2>/dev/null || true; fi
+          # Filter option JSON used by the SPA (if present in repo public/data or data/)
+          for f in countries.json states.json district_definitions.json; do
+            if [ -f "public/data/$f" ]; then cp -f "public/data/$f" "dist/data/$f"; fi
+            if [ -f "../data/$f" ]; then cp -f "../data/$f" "dist/data/$f"; fi
+          done
+          if [ -f public/data/districts.geojson ]; then cp -f public/data/districts.geojson dist/data/districts.geojson; fi
+          if [ -d ../assets ]; then cp -a ../assets/. dist/assets/; fi
+      - name: Deploy SPA + static files to Cloudflare Pages
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: frontend
+          command: pages deploy dist --project-name=peekorobo --commit-dirty=true

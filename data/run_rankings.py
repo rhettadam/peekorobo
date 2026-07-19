@@ -13,7 +13,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dotenv import load_dotenv
 load_dotenv()
 
-from run import get_pg_connection, tba_get
+from run import get_pg_connection, tba_get, tba_team_key_is_surrogate, parse_tba_team_number
+from active_events import resolve_event_keys
 
 
 def get_existing_rankings(conn, event_key):
@@ -29,17 +30,30 @@ def get_existing_rankings(conn, event_key):
 
 
 def fetch_rankings_for_event(event_key, year):
-    """Fetch rankings from TBA for a single event. Returns list of (event_key, team_number, rank, wins, losses, ties, dq)."""
+    """Fetch rankings from TBA for a single event.
+
+    Returns None when the underlying TBA request FAILED (tba_get returned None),
+    so callers can distinguish a transient failure from an authoritative empty
+    result. Returns a list (possibly empty) when TBA actually responded.
+    """
     ranks = tba_get(f"event/{event_key}/rankings")
-    if not ranks or not ranks.get("rankings"):
+    if ranks is None:
+        # Transient TBA failure (non-200 / exhausted retries). Signal failure so
+        # the caller can skip this event rather than wiping existing rows.
+        return None
+    if not ranks.get("rankings"):
+        # TBA responded but there are genuinely no rankings yet.
         return []
 
     result = []
     for r in ranks.get("rankings", []):
         team_key = r.get("team_key", "frc0")
-        if team_key.endswith("B"):
+        # Skip TBA surrogate entries (frc254B, frc498E, ...); keep real team numbers only.
+        if tba_team_key_is_surrogate(team_key):
             continue
-        t_num = int(team_key[3:])
+        t_num = parse_tba_team_number(team_key)
+        if t_num is None:
+            continue
 
         if str(year) == "2015":
             qual_avg = r.get("qual_average")
@@ -83,15 +97,19 @@ def get_events_for_year(conn, year):
     return event_keys
 
 
-def update_rankings_for_year(year):
-    """Fetch rankings for all events in a year and update the database."""
-    print(f"\nFetching rankings for {year}...")
+def update_rankings_for_year(year, active_only=False):
+    """Fetch rankings for events in a year and update the database.
+
+    When active_only is True, only events currently in their competition window
+    are refreshed - the cheap, high-frequency in-season path.
+    """
+    print(f"\nFetching rankings for {year}{' (active events only)' if active_only else ''}...")
 
     conn = get_pg_connection()
-    event_keys = get_events_for_year(conn, year)
+    event_keys = resolve_event_keys(conn, year, active_only)
 
     if not event_keys:
-        print(f"No events found for {year} in database")
+        print(f"No {'active ' if active_only else ''}events found for {year} in database")
         conn.close()
         return
 
@@ -102,27 +120,41 @@ def update_rankings_for_year(year):
         existing = get_existing_rankings(conn, event_key)
         new_rankings = fetch_rankings_for_event(event_key, year)
 
+        # Fetch failed (transient TBA error): skip entirely, never wipe.
+        if new_rankings is None:
+            print(f"  WARNING: rankings fetch failed for {event_key}; skipping to avoid wiping existing data")
+            skipped += 1
+            continue
+
+        # Fetch returned empty but we already have rows: treat as suspicious
+        # (likely a failure that slipped through) and skip rather than wipe.
+        if not new_rankings and existing:
+            print(f"  WARNING: rankings fetch returned empty for {event_key} which has existing rows; skipping to avoid wiping")
+            skipped += 1
+            continue
+
         if not rankings_changed(existing, new_rankings):
             skipped += 1
             continue
 
+        # Only reach here when there is new, non-empty data to write. Delete the
+        # old rows and insert the fresh set inside the same branch so we never
+        # delete-then-insert-nothing.
         cur = conn.cursor()
         cur.execute("DELETE FROM event_rankings WHERE event_key = %s", (event_key,))
-
-        if new_rankings:
-            cur.executemany(
-                """
-                INSERT INTO event_rankings (event_key, team_number, rank, wins, losses, ties, dq)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (event_key, team_number) DO UPDATE SET
-                    rank = EXCLUDED.rank,
-                    wins = EXCLUDED.wins,
-                    losses = EXCLUDED.losses,
-                    ties = EXCLUDED.ties,
-                    dq = EXCLUDED.dq
-                """,
-                new_rankings,
-            )
+        cur.executemany(
+            """
+            INSERT INTO event_rankings (event_key, team_number, rank, wins, losses, ties, dq)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (event_key, team_number) DO UPDATE SET
+                rank = EXCLUDED.rank,
+                wins = EXCLUDED.wins,
+                losses = EXCLUDED.losses,
+                ties = EXCLUDED.ties,
+                dq = EXCLUDED.dq
+            """,
+            new_rankings,
+        )
         cur.close()
         updated += 1
 
@@ -135,15 +167,17 @@ def update_rankings_for_year(year):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python run_rankings.py <year>")
-        print("Example: python run_rankings.py 2026")
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    active_only = "--active-only" in sys.argv[1:]
+    if len(args) != 1:
+        print("Usage: python run_rankings.py <year> [--active-only]")
+        print("Example: python run_rankings.py 2026 --active-only")
         sys.exit(1)
 
     try:
-        year = int(sys.argv[1])
+        year = int(args[0])
     except ValueError:
         print("Year must be an integer.")
         sys.exit(1)
 
-    update_rankings_for_year(year)
+    update_rankings_for_year(year, active_only=active_only)

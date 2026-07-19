@@ -1,0 +1,5 @@
+# Cloudflare Pages project for the Peekorobo SPA + static data/assets.
+# Deployed by GitHub Actions (pipeline full job and/or pages workflow).
+name = "peekorobo"
+compatibility_date = "2026-01-01"
+pages_build_output_dir = "dist"
