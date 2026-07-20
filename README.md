@@ -1,4 +1,4 @@
-![Peekorobo](assets/logo.png)
+![Peekorobo](assets/advbanner.png)
 
 # Peekorobo
 
@@ -13,10 +13,6 @@ Data-driven scouting and analysis for the [FIRST Robotics Competition](https://w
 1. [Features](#features)
 2. [ACE algorithm](#ace-algorithm)
 3. [Architecture & stack](#architecture--stack)
-4. [Data pipeline](#data-pipeline)
-5. [Local development](#local-development)
-6. [Deployment](#deployment)
-7. [Screenshots](#screenshots)
 8. [License](#license)
 
 ---
@@ -24,8 +20,6 @@ Data-driven scouting and analysis for the [FIRST Robotics Competition](https://w
 ## Features
 
 ### Home
-
-Global search for teams and events (year-aware event matching), plus quick links into Teams and Events.
 
 <!-- Screenshot: Home -->
 ![Home](docs/screenshots/home.png)
@@ -38,7 +32,6 @@ Browse every team for a season with:
 - **Avatars** — grid of team avatars
 - **Bubble chart** — configurable X/Y/color metrics, quantile bands, median lines, tooltips
 - Fast first paint (top ~100), then full-season load on filter/pagination
-- Top teams spotlight, game logo header, ACE percentile color key
 
 <!-- Screenshot: Teams leaderboard -->
 ![Teams leaderboard](docs/screenshots/teams.png)
@@ -130,19 +123,13 @@ Register / login (JWT), profile page with avatar gallery, favorites, follows, AP
 <!-- Screenshot: Profile -->
 ![User profile](docs/screenshots/profile.png)
 
-### Blue banners
-
-Chairman's / Impact, Winner, and Woodie Flowers awards are classified robustly (messy TBA names) and shown as a banner wall before ordinary awards.
-
 ---
 
 ## ACE algorithm
 
 **ACE** (Adjusted Contribution Estimate) is Peekorobo’s contribution rating:
 
-\[
-\text{ACE} = \text{RAW} \times \text{confidence}
-\]
+> **ACE = RAW × confidence**
 
 RAW estimates how many points a team contributes; confidence scales that by how trustworthy the estimate is. Implementation lives in [`data/run.py`](data/run.py) with year-specific scorers in [`data/yearmodels.py`](data/yearmodels.py).
 
@@ -191,10 +178,6 @@ If a team has no matches yet in the current year, season stats can fall back to 
 - Ranks (global / country / state / district) are computed from season ACE for all teams in the year.
 - Unplayed matches get red/blue win probabilities from current ACE + confidence.
 
-### 5. Incremental runs
-
-`--active-only` recomputes teams at currently active events (full season for those teams, identical math to a full run) and leaves everyone else untouched. Ranks and predictions still refresh over the full set. Full recomputes stay on the 6h / daily schedule.
-
 ---
 
 ## Architecture & stack
@@ -224,113 +207,11 @@ Cloudflare Pages ◄──── React SPA ──── FastAPI (Render)
 
 ---
 
-## Data pipeline
-
-Workflow: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml)
-
-| Cadence | Job | What runs |
-|---------|-----|-----------|
-| Every 30 min (Jan–Apr) | **Live** | `run.py --active-only`, rankings/awards for active events |
-| Every 6h (Jan–Apr) / daily (May–Dec) | **Full** | Full ACE recompute, all rankings/awards, regenerate `teams.json` / `events.json` / leaderboards, rebuild & deploy Pages |
-
-Secrets: `DATABASE_URL` (Neon pooler), `TBA_API_KEYS`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `VITE_API_BASE_URL`.
-
-Manual run: Actions → **Data pipeline** → `mode: full` or `live`.
-
----
-
-## Local development
-
-### API
-
-```bash
-cd peekorobo-api
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env   # DB_URL = Neon pooled URL (?sslmode=require)
-uvicorn main:app --reload --port 8000
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm ci
-npm run dev
-```
-
-For local search, copy `data/teams.json` and `data/events.json` into `frontend/public/data/`, or generate them:
-
-```bash
-pip install -r requirements.txt
-# set DATABASE_URL / TBA_API_KEYS
-python data/generate_teams_search.py
-python data/generate_events_search.py
-```
-
-### Pipeline (optional)
-
-```bash
-pip install -r requirements.txt
-python data/run.py 2026 --active-only   # or omit --active-only for a full year
-python data/run_rankings.py 2026 --active-only
-python data/run_awards.py 2026 --active-only
-```
-
----
-
-## Deployment
-
-See [`DEPLOYMENT.md`](DEPLOYMENT.md) and [`CUTOVER.md`](CUTOVER.md).
-
-Short version:
-
-1. **Neon** — Postgres (pooled URL for API + Actions)
-2. **Render** — Docker deploy of `peekorobo-api/` (`DB_URL`, `JWT_SECRET`, `PUBLIC_READ=true`)
-3. **Cloudflare Pages** — project `peekorobo`; GitHub **Deploy Pages** + full pipeline deploy SPA + `/data` + `/assets`
-4. **DNS** (when ready) — apex → Pages, `api.` → Render; then retire Heroku
-
----
-
-## Screenshots
-
-Drop PNGs into [`docs/screenshots/`](docs/screenshots/) using these filenames (referenced above):
-
-| File | Page |
-|------|------|
-| `home.png` | Home |
-| `teams.png` | Teams leaderboard |
-| `teams-bubble.png` | Bubble chart tab |
-| `team.png` | Team profile |
-| `team-history.png` | Team history |
-| `events.png` | Events list |
-| `event.png` | Event detail |
-| `match.png` | Match page |
-| `map.png` | Map |
-| `compare.png` | Compare |
-| `insights.png` | Insights |
-| `profile.png` | User profile |
-
-Until images are added, GitHub will show broken-image placeholders — that’s intentional.
-
----
-
-## Repo layout
-
-```
-frontend/          React SPA
-peekorobo-api/     FastAPI read/auth API
-data/              ACE pipeline, generators, geo helpers
-assets/            Logos, avatars, brand images (served on Pages)
-.github/workflows/ pipeline.yml, pages.yml
-```
-
----
-
 ## Acknowledgments
 
 Match and event data from [The Blue Alliance](https://www.thebluealliance.com/). FIRST® and FRC® are trademarks of FIRST.
+
+Special thanks to **Patrick A. Phillips** ([@RNGKing](https://github.com/RNGKing)) for helping build the API backend and for his ongoing guidance on the architecture of the site. His contributions have been a huge help in shaping Peekorobo.
 
 ## License
 
