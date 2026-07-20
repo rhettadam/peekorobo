@@ -3,7 +3,6 @@ import { Anchor, Box, Button, Grid, Group, Stack, Text, Title } from "@mantine/c
 import { IconCalendarEvent, IconUsers } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
 import { SearchBar } from "../components/SearchBar";
-import { CURRENT_YEAR } from "../lib/constants";
 import { BRAND } from "../lib/assets";
 
 export function Home() {
@@ -19,14 +18,14 @@ export function Home() {
             <img
               src={BRAND.home}
               alt="Peekorobo"
-              style={{ width: "100%", maxWidth: 460, height: "auto", display: "block" }}
+              style={{ width: "100%", maxWidth: 720, height: "auto", display: "block" }}
             />
           </Box>
           <Box hiddenFrom="md" style={{ display: "flex", justifyContent: "center" }}>
             <img
               src={BRAND.mobileHome}
               alt="Peekorobo"
-              style={{ width: "100%", maxWidth: 320, height: "auto", display: "block" }}
+              style={{ width: "100%", maxWidth: 420, height: "auto", display: "block" }}
             />
           </Box>
         </Grid.Col>
@@ -63,9 +62,6 @@ export function Home() {
                 Events
               </Button>
             </Group>
-            <Text size="sm" c="dimmed">
-              Jump into the {CURRENT_YEAR} season.
-            </Text>
           </Stack>
         </Grid.Col>
       </Grid>

@@ -1,8 +1,8 @@
-![Peekorobo](assets/advbanner.png)
+﻿![Peekorobo](assets/advbanner.png)
 
 # Peekorobo
 
-Data-driven scouting and analysis for the [FIRST Robotics Competition](https://www.firstinspires.org/robotics/frc). Peekorobo aggregates The Blue Alliance data, computes **ACE** (Adjusted Contribution Estimate) ratings, and serves them through a fast React app — teams, events, matches, maps, insights, and more.
+Data-driven scouting and analysis for the [FIRST Robotics Competition](https://www.firstinspires.org/robotics/frc). Peekorobo aggregates The Blue Alliance data, computes **ACE** (Adjusted Contribution Estimate) ratings, and serves teams, events, matches, maps, insights, and more.
 
 **Live:** [peekorobo.pages.dev](https://peekorobo.pages.dev/) · **API:** [peekorobo-api.onrender.com](https://peekorobo-api.onrender.com/docs)
 
@@ -95,7 +95,7 @@ Full-bleed interactive map (MapLibre GL):
 
 - Team avatar markers + event markers (by type)
 - Optional heatmap and district boundaries
-- 2D ⇄ 3D globe toggle
+- 2D / 3D globe toggle
 - Search to fly to a team or event
 - Collapsible layer controls
 
@@ -111,7 +111,7 @@ Side-by-side team comparison for a chosen year (metrics, records, ranks).
 
 ### Insights
 
-Season cards landing page → per-year insights: game info, manuals/reveal links when available, leaderboards and season summaries.
+Season cards landing page, then per-year insights: game info, manuals/reveal links when available, leaderboards and season summaries.
 
 <!-- Screenshot: Insights -->
 ![Insights](docs/screenshots/insights.png)
@@ -127,7 +127,7 @@ Register / login (JWT), profile page with avatar gallery, favorites, follows, AP
 
 ## ACE algorithm
 
-**ACE** (Adjusted Contribution Estimate) is Peekorobo’s contribution rating:
+**ACE** (Adjusted Contribution Estimate) is Peekorobo's contribution rating:
 
 > **ACE = RAW × confidence**
 
@@ -138,7 +138,7 @@ RAW estimates how many points a team contributes; confidence scales that by how 
 For each event a team plays:
 
 1. Walk matches in time order.
-2. From each match’s TBA `score_breakdown`, year-specific functions estimate the team’s **auto / teleop / endgame** contribution.
+2. From each match's TBA `score_breakdown`, year-specific functions estimate the team's **auto / teleop / endgame** contribution.
 3. Update running RAW with a learning-rate style update (match importance × early-season decay; damp large positive spikes).
 4. Track per-match contributions and dominance margins for confidence.
 
@@ -151,18 +151,18 @@ Confidence mixes five components (weights in `CONFIDENCE_WEIGHTS`):
 | Component | Weight | Meaning |
 |-----------|--------|---------|
 | **Consistency** | 0.35 | Low spread of per-match contributions vs peak |
-| **Dominance** | 0.35 | Score margin vs opponent (adjusted if “carried”) |
-| **Record alignment** | 0.10 | Win rate scaled into \[0.5, 1\] |
+| **Dominance** | 0.35 | Score margin vs opponent (adjusted if "carried") |
+| **Record alignment** | 0.10 | Win rate scaled into [0.5, 1] |
 | **Veteran** | 0.10 | Years of FRC experience |
 | **Events** | 0.10 | Boost from number of played events this season (1→0.5, 2→0.8, 3+→1.0) |
 
-Then non-linear scaling: high confidence slightly boosted, low confidence reduced, result capped to \[0, 1\].
+Then non-linear scaling: high confidence slightly boosted, low confidence reduced, result capped to [0, 1].
 
 **Event ACE** = event RAW × event confidence.
 
 ### 3. Season aggregate
 
-Across a team’s events:
+Across a team's events:
 
 1. Drop empty / zero-RAW events.
 2. Weight each event by **chronological weight × match count** (early season discounted, late season emphasized).
@@ -178,19 +178,23 @@ If a team has no matches yet in the current year, season stats can fall back to 
 - Ranks (global / country / state / district) are computed from season ACE for all teams in the year.
 - Unplayed matches get red/blue win probabilities from current ACE + confidence.
 
+### 5. Incremental runs
+
+`--active-only` recomputes teams at currently active events (full season for those teams, identical math to a full run) and leaves everyone else untouched. Ranks and predictions still refresh over the full set. Full recomputes stay on the 6h / daily schedule.
+
 ---
 
 ## Architecture & stack
 
 ```
 The Blue Alliance
-      │
-      ▼
-GitHub Actions  ──ACE pipeline──►  Neon Postgres
-      │                                    │
-      │ static JSON + assets               │
-      ▼                                    ▼
-Cloudflare Pages ◄──── React SPA ──── FastAPI (Render)
+      |
+      v
+GitHub Actions  --ACE pipeline-->  Neon Postgres
+      |                                    |
+      | static JSON + assets               |
+      v                                    v
+Cloudflare Pages <---- React SPA ---- FastAPI (Render)
    (SPA + /data + /assets)              (JSON API)
 ```
 
@@ -209,7 +213,7 @@ Cloudflare Pages ◄──── React SPA ──── FastAPI (Render)
 
 ## Acknowledgments
 
-Match and event data from [The Blue Alliance](https://www.thebluealliance.com/). FIRST® and FRC® are trademarks of FIRST.
+Match and event data from [The Blue Alliance](https://www.thebluealliance.com/). FIRST and FRC are trademarks of FIRST.
 
 Special thanks to **Patrick A. Phillips** ([@RNGKing](https://github.com/RNGKing)) for helping build the API backend and for his ongoing guidance on the architecture of the site. His contributions have been a huge help in shaping Peekorobo.
 
