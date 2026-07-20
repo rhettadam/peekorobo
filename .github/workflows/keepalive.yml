@@ -1,0 +1,35 @@
+# Ping the Render API so the free tier does not sleep.
+# Render Free spins down after ~15 min idle; cold starts are 30–60s+.
+
+name: Keep API awake
+
+on:
+  schedule:
+    # Every 10 minutes (GitHub may delay cron slightly).
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: peekorobo-keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    name: Ping API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: GET health endpoint
+        env:
+          API_URL: ${{ secrets.VITE_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          URL="${API_URL:-https://peekorobo-api.onrender.com}"
+          URL="${URL%/}"
+          echo "Pinging ${URL}/"
+          # Cold start can be slow; retry once if the first attempt times out.
+          if ! curl -fsS --retry 1 --retry-all-errors --max-time 120 -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" "${URL}/"; then
+            echo "Retry after short wait…"
+            sleep 15
+            curl -fsS --max-time 120 -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" "${URL}/"
+          fi
