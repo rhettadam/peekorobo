@@ -321,8 +321,6 @@ export function TeamHistory() {
         <Text c="dimmed">No historical performance data for team {teamNumber}.</Text>
       )}
 
-      <BlueBanners awards={awards} title="Blue Banners" />
-
       {seasonTrend.length > 1 ? (
         <Card withBorder padding="md" radius="md">
           <Text fw={600}>Global Rank by Season</Text>
@@ -363,6 +361,8 @@ export function TeamHistory() {
           />
         </Stack>
       ) : null}
+
+      <BlueBanners awards={awards} title="Blue Banners" />
 
       {awardsByYear.length > 0 ? (
         <Stack gap="sm">

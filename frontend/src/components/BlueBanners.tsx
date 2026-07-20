@@ -43,7 +43,7 @@ export function BlueBanners({ awards, title = "Blue Banners" }: BlueBannersProps
       <SimpleGrid cols={{ base: 3, xs: 4, sm: 5, md: 6, lg: 8 }} spacing="md">
         {banners.map((b, i) => (
           <Anchor
-            key={`${b.event_key}-${i}`}
+            key={`${b.event_key}-${b.award_name}-${i}`}
             component={Link}
             to={`/event/${b.event_key}`}
             underline="never"

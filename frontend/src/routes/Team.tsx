@@ -222,13 +222,13 @@ export function Team() {
 
   const awardsByEvent = useMemo(() => {
     const map = new Map<string, string[]>();
-    for (const a of awardsQuery.data?.awards ?? []) {
+    for (const a of seasonAwards) {
       const arr = map.get(a.event_key) ?? [];
       arr.push(a.award_name);
       map.set(a.event_key, arr);
     }
     return map;
-  }, [awardsQuery.data]);
+  }, [seasonAwards]);
 
   const teamEventKeys = useMemo(() => {
     const keys = [...(eventsQuery.data?.events ?? [])];
@@ -796,17 +796,25 @@ export function Team() {
 
         <Tabs.Panel value="awards" pt="md">
           <Stack gap="lg">
-            <BlueBanners awards={allAwardsQuery.data?.awards ?? []} title="Blue Banners" />
             <Card withBorder padding="md" radius="md">
-              <Text fw={600} mb="sm">
-                {selectedYear} Awards
-              </Text>
+              <Group justify="space-between" mb="sm">
+                <Text fw={600}>{selectedYear} Awards</Text>
+                {seasonAwards.length > 0 ? (
+                  <Badge variant="light" size="sm" radius="sm">
+                    {seasonAwards.length}
+                  </Badge>
+                ) : null}
+              </Group>
               {awardsQuery.isLoading ? (
                 <Text size="sm" c="dimmed">Loading awards...</Text>
               ) : seasonAwards.length > 0 ? (
                 <Stack gap={6}>
-                  {seasonAwards.map((a, i) => (
-                    <Group key={`${a.event_key}-${i}`} gap="xs" wrap="nowrap">
+                  {seasonAwards.map((a) => (
+                    <Group
+                      key={`${a.event_key}-${a.award_name}`}
+                      gap="xs"
+                      wrap="nowrap"
+                    >
                       <Anchor component={Link} to={`/event/${a.event_key}`} size="sm">
                         {a.event_key}
                       </Anchor>
@@ -823,6 +831,7 @@ export function Team() {
                 <Text size="sm" c="dimmed">No awards for this season.</Text>
               )}
             </Card>
+            <BlueBanners awards={seasonAwards} title={`${selectedYear} Blue Banners`} />
           </Stack>
         </Tabs.Panel>
       </Tabs>
