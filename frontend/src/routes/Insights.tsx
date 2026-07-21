@@ -113,28 +113,13 @@ export function Insights() {
 
   return (
     <Stack gap="xl" py="md">
-      <Group gap="md" align="flex-start" wrap="wrap">
-        <Box style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-          <img
-            src={gameLogo(CURRENT_YEAR)}
-            alt={`${CURRENT_YEAR} game`}
-            style={{
-              height: 56,
-              width: "auto",
-              objectFit: "contain",
-              display: "block",
-            }}
-            onError={(e) => (e.currentTarget.style.display = "none")}
-          />
-        </Box>
-        <Stack gap={4} style={{ minWidth: 0 }}>
-          <Title order={1}>Insights</Title>
-          <Text c="dimmed" maw={640}>
-            All-time FRC growth, ACE prediction accuracy, and career leaderboards — then dive into
-            any season for game info and ACE distributions.
-          </Text>
-        </Stack>
-      </Group>
+      <Stack gap={4}>
+        <Title order={1}>Insights</Title>
+        <Text c="dimmed" maw={640}>
+          All-time FRC growth, ACE prediction accuracy, and career leaderboards. Dive into any season
+          for game info and ACE distributions.
+        </Text>
+      </Stack>
 
       <Stack gap="sm">
         <Group gap="xs">

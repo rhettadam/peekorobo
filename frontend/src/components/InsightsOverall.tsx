@@ -285,14 +285,14 @@ export function InsightsOverall() {
 
       <Title order={3}>ACE Predictions</Title>
       <Text size="sm" c="dimmed" mt={-8}>
-        How well ACE win probabilities call match winners. Score MAE isn&apos;t available yet — we
+        How well ACE win probabilities call match winners. Score MAE isn&apos;t available yet; we
         only store win probs today, not predicted alliance scores.
       </Text>
 
       <SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} spacing="sm">
         <StatCard
           label="Winner accuracy"
-          value={predSummary?.pct != null ? `${predSummary.pct.toFixed(1)}%` : "—"}
+          value={predSummary?.pct != null ? `${predSummary.pct.toFixed(1)}%` : "-"}
         />
         <StatCard
           label="Matches scored"
@@ -300,19 +300,19 @@ export function InsightsOverall() {
         />
         <StatCard
           label="Brier score"
-          value={predSummary?.brier != null ? predSummary.brier.toFixed(3) : "—"}
+          value={predSummary?.brier != null ? predSummary.brier.toFixed(3) : "-"}
         />
         <StatCard
           label="Favorite hit rate"
           value={
             predSummary?.favorite_win_pct != null
               ? `${predSummary.favorite_win_pct.toFixed(1)}%`
-              : "—"
+              : "-"
           }
         />
         <StatCard
           label="Upset rate"
-          value={predSummary?.upset_pct != null ? `${predSummary.upset_pct.toFixed(1)}%` : "—"}
+          value={predSummary?.upset_pct != null ? `${predSummary.upset_pct.toFixed(1)}%` : "-"}
         />
       </SimpleGrid>
 
