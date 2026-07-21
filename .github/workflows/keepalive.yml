@@ -33,3 +33,5 @@ jobs:
             sleep 15
             curl -fsS --max-time 120 -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" "${URL}/"
           fi
+          # Warm the expensive insights overview cache (process + CDN).
+          curl -fsS --max-time 180 -o /dev/null -w "insights HTTP %{http_code} in %{time_total}s\n" "${URL}/insights/overview" || true

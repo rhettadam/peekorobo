@@ -60,7 +60,8 @@ export function useInsightsOverview(): UseQueryResult<InsightsOverviewResponse> 
   return useQuery({
     queryKey: ["insights-overview"],
     queryFn: () => apiGet<InsightsOverviewResponse>("/insights/overview"),
-    staleTime: FIVE_MIN,
+    staleTime: 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   });
 }
 

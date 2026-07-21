@@ -10,6 +10,7 @@ from itertools import combinations
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from data.db import SessionLocal
 from data.models.event_teams import EventTeams
 from data.models.notables import Notables
 from query.insights_overview import (
@@ -25,20 +26,19 @@ from query.insights_overview import (
 
 LEADER_LIMIT = 12
 TEAMUP_LIMIT = 12
-# Overview is expensive; keep a short process-local cache.
-_CACHE_TTL_SEC = 900.0
+_YEAR_FILTER = "event_key ~ '^[0-9]{4}'"
+# Overview changes only when the data pipeline runs; keep a long process cache.
+_CACHE_TTL_SEC = 3600.0
 _cache_payload: InsightsOverviewResponse | None = None
 _cache_at: float = 0.0
 
 WINNER_RE = re.compile(r"\b(?:winners?|champions?)\b", re.I)
 FINALIST_RE = re.compile(r"finalists?", re.I)
 
-# DB stores TBA event_type as human labels (not numeric codes).
 REGIONAL_TYPES = {"Regional"}
 DISTRICT_TYPES = {"District", "District Championship", "District Championship Division"}
 DCMP_TYPES = {"District Championship", "District Championship Division"}
 DIVISION_TYPES = {"Championship Division"}
-# Official events where alliance co-wins count as "teamups".
 TEAMUP_EVENT_TYPES = {
     "Regional",
     "District",
@@ -49,6 +49,118 @@ TEAMUP_EVENT_TYPES = {
     "Festival of Champions",
 }
 IMPACT_REGIONAL_DCMP_TYPES = REGIONAL_TYPES | DCMP_TYPES
+
+_PRED_MATERIALIZED_CTE = """
+WITH pred AS MATERIALIZED (
+  SELECT
+    CAST(LEFT(m.event_key, 4) AS INT) AS year,
+    COALESCE(m.comp_level, '') AS comp_level,
+    m.red_win_prob,
+    m.winning_alliance,
+    COALESCE(e.event_type, 'Unknown') AS event_type,
+    CASE
+      WHEN m.winning_alliance = 'red' THEN 1.0
+      WHEN m.winning_alliance = 'blue' THEN 0.0
+      ELSE 0.5
+    END AS red_outcome,
+    CASE
+      WHEN m.winning_alliance = 'red' AND m.red_win_prob > 0.5 THEN 1
+      WHEN m.winning_alliance = 'blue' AND m.red_win_prob < 0.5 THEN 1
+      WHEN COALESCE(m.winning_alliance, '') NOT IN ('red', 'blue')
+           AND m.red_win_prob = 0.5 THEN 1
+      ELSE 0
+    END AS is_correct,
+    ABS(m.red_win_prob - 0.5) AS edge,
+    CASE
+      WHEN m.red_win_prob > 0.5 THEN 'red'
+      WHEN m.red_win_prob < 0.5 THEN 'blue'
+      ELSE 'toss'
+    END AS favorite
+  FROM event_matches m
+  LEFT JOIN events e ON e.event_key = m.event_key
+  WHERE m.red_win_prob IS NOT NULL
+    AND m.event_key ~ '^[0-9]{4}'
+    AND (
+      COALESCE(m.red_score, 0) > 0
+      OR COALESCE(m.blue_score, 0) > 0
+      OR m.winning_alliance IN ('red', 'blue')
+    )
+    AND NOT (
+      COALESCE(m.winning_alliance, '') NOT IN ('red', 'blue')
+      AND m.red_win_prob IS DISTINCT FROM 0.5
+    )
+)
+"""
+
+_PRED_ROLLUP_SQL = (
+    _PRED_MATERIALIZED_CTE
+    + """
+SELECT bucket, sort_key, label, total, correct, brier, fav_total, fav_correct
+FROM (
+  SELECT 'summary'::text AS bucket, 0 AS sort_key, ''::text AS label,
+    COUNT(*)::bigint AS total,
+    SUM(is_correct)::bigint AS correct,
+    AVG(POWER(red_win_prob - red_outcome, 2))::double precision AS brier,
+    SUM(CASE WHEN favorite <> 'toss' THEN 1 ELSE 0 END)::bigint AS fav_total,
+    SUM(CASE WHEN favorite = winning_alliance THEN 1 ELSE 0 END)::bigint AS fav_correct
+  FROM pred
+  UNION ALL
+  SELECT 'year', year, '', COUNT(*)::bigint, SUM(is_correct)::bigint,
+    AVG(POWER(red_win_prob - red_outcome, 2))::double precision, NULL::bigint, NULL::bigint
+  FROM pred GROUP BY year
+  UNION ALL
+  SELECT 'conf',
+    CASE WHEN edge < 0.05 THEN 1 WHEN edge < 0.15 THEN 2 WHEN edge < 0.25 THEN 3 ELSE 4 END,
+    CASE
+      WHEN edge < 0.05 THEN '50-55% (toss-up)'
+      WHEN edge < 0.15 THEN '55-65%'
+      WHEN edge < 0.25 THEN '65-75%'
+      ELSE '75%+ (strong)'
+    END,
+    COUNT(*)::bigint, SUM(is_correct)::bigint,
+    AVG(POWER(red_win_prob - red_outcome, 2))::double precision, NULL::bigint, NULL::bigint
+  FROM pred GROUP BY 2, 3
+  UNION ALL
+  SELECT 'comp',
+    CASE
+      WHEN LOWER(comp_level) = 'qm' THEN 1
+      WHEN LOWER(comp_level) IN ('ef', 'qf', 'sf', 'f') THEN 2
+      ELSE 3
+    END,
+    CASE
+      WHEN LOWER(comp_level) = 'qm' THEN 'Quals'
+      WHEN LOWER(comp_level) IN ('ef', 'qf', 'sf', 'f') THEN 'Playoffs'
+      ELSE 'Other'
+    END,
+    COUNT(*)::bigint, SUM(is_correct)::bigint,
+    AVG(POWER(red_win_prob - red_outcome, 2))::double precision, NULL::bigint, NULL::bigint
+  FROM pred GROUP BY 2, 3
+  UNION ALL
+  SELECT 'etype',
+    CASE
+      WHEN event_type = 'Regional' THEN 1
+      WHEN event_type = 'District' THEN 2
+      WHEN event_type IN ('District Championship', 'District Championship Division') THEN 3
+      WHEN event_type IN ('Championship Division', 'Championship Finals', 'Festival of Champions') THEN 4
+      WHEN event_type IN ('Offseason', 'Preseason') THEN 5
+      ELSE 6
+    END,
+    CASE
+      WHEN event_type = 'Regional' THEN 'Regional'
+      WHEN event_type = 'District' THEN 'District'
+      WHEN event_type IN ('District Championship', 'District Championship Division') THEN 'District Champs'
+      WHEN event_type IN ('Championship Division', 'Championship Finals', 'Festival of Champions')
+        THEN 'World Champs'
+      WHEN event_type IN ('Offseason', 'Preseason') THEN 'Offseason'
+      ELSE 'Other'
+    END,
+    COUNT(*)::bigint, SUM(is_correct)::bigint,
+    AVG(POWER(red_win_prob - red_outcome, 2))::double precision, NULL::bigint, NULL::bigint
+  FROM pred GROUP BY 2, 3
+) rolled
+ORDER BY bucket, sort_key
+"""
+)
 
 
 def _banner_kind(award_name: str) -> str | None:
@@ -85,7 +197,6 @@ def _parse_team_key(team_key: str) -> int | None:
 
 
 def _longest_streak(years: list[int]) -> tuple[int, int, int]:
-    """Return (length, start, end) for the longest consecutive year run."""
     if not years:
         return 0, 0, 0
     ys = sorted(set(years))
@@ -111,180 +222,81 @@ def _top_counts(counter: dict[int, int], limit: int = LEADER_LIMIT) -> list[Lead
 
 def _top_teamups(counter: dict[tuple[int, int], int], limit: int = TEAMUP_LIMIT) -> list[TeamupRow]:
     rows = sorted(counter.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1]))[:limit]
-    return [
-        TeamupRow(team_a=a, team_b=b, count=c)
-        for (a, b), c in rows
-        if c > 0
-    ]
+    return [TeamupRow(team_a=a, team_b=b, count=c) for (a, b), c in rows if c > 0]
 
 
 def _pct(correct: int, total: int) -> float | None:
     return round(100.0 * correct / total, 2) if total else None
 
 
-def _roll_up_predictions(
-    rows: list,
-    event_types: dict[str, str],
-) -> tuple[PredictionStats, dict[int, int]]:
-    """Roll up win-prob accuracy + per-year match counts from one event_matches fetch.
+def _bucket_from_row(label: str, total, correct, brier) -> PredBucket:
+    total_i = int(total or 0)
+    correct_i = int(correct or 0)
+    return PredBucket(
+        label=label,
+        correct=correct_i,
+        total=total_i,
+        pct=_pct(correct_i, total_i),
+        brier=round(float(brier), 4) if brier is not None and total_i else None,
+    )
 
-    Each row is (event_key, comp_level, red_win_prob, winning_alliance, red_score, blue_score).
-    """
-    year_stats: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])
-    conf_stats: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])
-    comp_stats: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])
-    etype_stats: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])
-    match_counts: dict[int, int] = defaultdict(int)
 
-    total = 0
-    correct = 0
-    brier_sum = 0.0
-    fav_total = 0
-    fav_correct = 0
+def _compute_prediction_stats(db: Session) -> PredictionStats:
+    rows = db.execute(text(_PRED_ROLLUP_SQL)).all()
 
-    conf_labels = {
-        1: "50-55% (toss-up)",
-        2: "55-65%",
-        3: "65-75%",
-        4: "75%+ (strong)",
-    }
-    comp_labels = {1: "Quals", 2: "Playoffs", 3: "Other"}
-    etype_labels = {
-        1: "Regional",
-        2: "District",
-        3: "District Champs",
-        4: "World Champs",
-        5: "Offseason",
-        6: "Other",
-    }
+    summary = PredSummary(correct=0, total=0, pct=None, brier=None, favorite_win_pct=None, upset_pct=None)
+    by_year: list[AccuracyPoint] = []
+    by_confidence: list[PredBucket] = []
+    by_comp_level: list[PredBucket] = []
+    by_event_type: list[PredBucket] = []
 
-    for event_key, comp_level, red_win_prob, winning_alliance, red_score, blue_score in rows:
-        try:
-            year = int(str(event_key)[:4])
-        except (TypeError, ValueError):
-            continue
-        if year < 1992 or year > 2100:
-            continue
-        match_counts[year] += 1
-
-        if red_win_prob is None:
-            continue
-        wa = str(winning_alliance or "")
-        played = (red_score or 0) > 0 or (blue_score or 0) > 0 or wa in ("red", "blue")
-        if not played:
-            continue
-        # Skip unresolved ties unless the model called a toss-up.
-        if wa not in ("red", "blue") and float(red_win_prob) != 0.5:
-            continue
-
-        p = float(red_win_prob)
-        red_outcome = 1.0 if wa == "red" else (0.0 if wa == "blue" else 0.5)
-        is_correct = (
-            1
-            if (
-                (wa == "red" and p > 0.5)
-                or (wa == "blue" and p < 0.5)
-                or (wa not in ("red", "blue") and p == 0.5)
+    for bucket, sort_key, label, total, correct, brier, fav_total, fav_correct in rows:
+        total_i = int(total or 0)
+        correct_i = int(correct or 0)
+        brier_f = round(float(brier), 4) if brier is not None and total_i else None
+        if bucket == "summary":
+            fav_pct = _pct(int(fav_correct or 0), int(fav_total or 0))
+            summary = PredSummary(
+                correct=correct_i,
+                total=total_i,
+                pct=_pct(correct_i, total_i),
+                brier=brier_f,
+                favorite_win_pct=fav_pct,
+                upset_pct=round(100.0 - fav_pct, 2) if fav_pct is not None else None,
             )
-            else 0
-        )
-        edge = abs(p - 0.5)
-        favorite = "red" if p > 0.5 else ("blue" if p < 0.5 else "toss")
-        conf_ord = 1 if edge < 0.05 else (2 if edge < 0.15 else (3 if edge < 0.25 else 4))
-        cl = str(comp_level or "").lower()
-        comp_ord = 1 if cl == "qm" else (2 if cl in ("ef", "qf", "sf", "f") else 3)
-        et = event_types.get(str(event_key), "Unknown")
-        if et == "Regional":
-            etype_ord = 1
-        elif et == "District":
-            etype_ord = 2
-        elif et in ("District Championship", "District Championship Division"):
-            etype_ord = 3
-        elif et in ("Championship Division", "Championship Finals", "Festival of Champions"):
-            etype_ord = 4
-        elif et in ("Offseason", "Preseason"):
-            etype_ord = 5
-        else:
-            etype_ord = 6
+        elif bucket == "year":
+            by_year.append(
+                AccuracyPoint(
+                    year=int(sort_key),
+                    correct=correct_i,
+                    total=total_i,
+                    pct=_pct(correct_i, total_i),
+                    brier=brier_f,
+                )
+            )
+        elif bucket == "conf":
+            by_confidence.append(_bucket_from_row(str(label), total_i, correct_i, brier_f))
+        elif bucket == "comp":
+            by_comp_level.append(_bucket_from_row(str(label), total_i, correct_i, brier_f))
+        elif bucket == "etype":
+            by_event_type.append(_bucket_from_row(str(label), total_i, correct_i, brier_f))
 
-        brier = (p - red_outcome) ** 2
-        total += 1
-        correct += is_correct
-        brier_sum += brier
-        if favorite != "toss":
-            fav_total += 1
-            if favorite == wa:
-                fav_correct += 1
-
-        for bucket, key in (
-            (year_stats, year),
-            (conf_stats, conf_ord),
-            (comp_stats, comp_ord),
-            (etype_stats, etype_ord),
-        ):
-            bucket[key][0] += 1
-            bucket[key][1] += is_correct
-            bucket[key][2] += brier
-
-    fav_pct = _pct(fav_correct, fav_total)
-    summary = PredSummary(
-        correct=correct,
-        total=total,
-        pct=_pct(correct, total),
-        brier=round(brier_sum / total, 4) if total else None,
-        favorite_win_pct=fav_pct,
-        upset_pct=round(100.0 - fav_pct, 2) if fav_pct is not None else None,
+    return PredictionStats(
+        summary=summary,
+        by_year=by_year,
+        by_confidence=by_confidence,
+        by_comp_level=by_comp_level,
+        by_event_type=by_event_type,
     )
-    by_year = [
-        AccuracyPoint(
-            year=year,
-            correct=int(vals[1]),
-            total=int(vals[0]),
-            pct=_pct(int(vals[1]), int(vals[0])),
-            brier=round(vals[2] / vals[0], 4) if vals[0] else None,
-        )
-        for year, vals in sorted(year_stats.items())
-    ]
-    by_confidence = [
-        PredBucket(
-            label=conf_labels[k],
-            correct=int(vals[1]),
-            total=int(vals[0]),
-            pct=_pct(int(vals[1]), int(vals[0])),
-            brier=round(vals[2] / vals[0], 4) if vals[0] else None,
-        )
-        for k, vals in sorted(conf_stats.items())
-    ]
-    by_comp_level = [
-        PredBucket(
-            label=comp_labels[k],
-            correct=int(vals[1]),
-            total=int(vals[0]),
-            pct=_pct(int(vals[1]), int(vals[0])),
-            brier=round(vals[2] / vals[0], 4) if vals[0] else None,
-        )
-        for k, vals in sorted(comp_stats.items())
-    ]
-    by_event_type = [
-        PredBucket(
-            label=etype_labels[k],
-            correct=int(vals[1]),
-            total=int(vals[0]),
-            pct=_pct(int(vals[1]), int(vals[0])),
-            brier=round(vals[2] / vals[0], 4) if vals[0] else None,
-        )
-        for k, vals in sorted(etype_stats.items())
-    ]
-    return (
-        PredictionStats(
-            summary=summary,
-            by_year=by_year,
-            by_confidence=by_confidence,
-            by_comp_level=by_comp_level,
-            by_event_type=by_event_type,
-        ),
-        dict(match_counts),
-    )
+
+
+def prewarm_insights_cache() -> None:
+    """Populate the process cache (call from a background thread on startup)."""
+    db = SessionLocal()
+    try:
+        get_insights_overview(db)
+    finally:
+        db.close()
 
 
 def get_insights_overview(db: Session) -> InsightsOverviewResponse:
@@ -300,24 +312,35 @@ def get_insights_overview(db: Session) -> InsightsOverviewResponse:
 
 
 def _compute_insights_overview(db: Session) -> InsightsOverviewResponse:
-    # ---- Season series: teams + events; matches come from the prediction scan ----
     team_rows = db.execute(
         text(
-            """
+            f"""
             SELECT CAST(LEFT(event_key, 4) AS INT) AS year,
                    COUNT(DISTINCT team_number) AS team_count
             FROM event_teams
-            WHERE LEFT(event_key, 4) ~ '^[0-9]{4}$'
+            WHERE {_YEAR_FILTER}
             GROUP BY 1
+            ORDER BY 1
             """
         )
     ).all()
     event_meta_rows = db.execute(
-        text("SELECT event_key, event_type, name FROM events")
+        text(f"SELECT event_key, event_type, name FROM events WHERE {_YEAR_FILTER}")
     ).all()
-    event_types = {
-        str(ek): str(et or "Unknown") for ek, et, _name in event_meta_rows if ek
-    }
+    match_rows = db.execute(
+        text(
+            f"""
+            SELECT CAST(LEFT(event_key, 4) AS INT) AS year,
+                   COUNT(*) AS match_count
+            FROM event_matches
+            WHERE {_YEAR_FILTER}
+            GROUP BY 1
+            ORDER BY 1
+            """
+        )
+    ).all()
+
+    event_types = {str(ek): str(et or "Unknown") for ek, et, _name in event_meta_rows if ek}
     event_counts: dict[int, int] = defaultdict(int)
     einstein_keys_set: set[str] = set()
     for ek, _et, name in event_meta_rows:
@@ -332,21 +355,7 @@ def _compute_insights_overview(db: Session) -> InsightsOverviewResponse:
         if name and "einstein" in str(name).lower():
             einstein_keys_set.add(str(ek))
 
-    match_rows = db.execute(
-        text(
-            """
-            SELECT event_key,
-                   COALESCE(comp_level, ''),
-                   red_win_prob,
-                   COALESCE(winning_alliance, ''),
-                   COALESCE(red_score, 0),
-                   COALESCE(blue_score, 0)
-            FROM event_matches
-            WHERE LEFT(event_key, 4) ~ '^[0-9]{4}$'
-            """
-        )
-    ).all()
-    predictions, match_counts = _roll_up_predictions(match_rows, event_types)
+    predictions = _compute_prediction_stats(db)
 
     by_year: dict[int, dict[str, int]] = defaultdict(
         lambda: {"team_count": 0, "event_count": 0, "match_count": 0}
@@ -355,8 +364,8 @@ def _compute_insights_overview(db: Session) -> InsightsOverviewResponse:
         by_year[int(year)]["team_count"] = int(team_count or 0)
     for year, event_count in event_counts.items():
         by_year[year]["event_count"] = event_count
-    for year, match_count in match_counts.items():
-        by_year[year]["match_count"] = match_count
+    for year, match_count in match_rows:
+        by_year[int(year)]["match_count"] = int(match_count or 0)
 
     years = [
         YearSeriesPoint(year=y, **by_year[y])
@@ -369,7 +378,6 @@ def _compute_insights_overview(db: Session) -> InsightsOverviewResponse:
         for p in predictions.by_year
     ]
 
-    # ---- Awards scan (banners / wins / teamups) ----
     award_rows = db.execute(
         text(
             """
@@ -388,7 +396,6 @@ def _compute_insights_overview(db: Session) -> InsightsOverviewResponse:
     division_wins: dict[int, int] = defaultdict(int)
     woodie: dict[int, int] = defaultdict(int)
     champ_from_awards: dict[int, int] = defaultdict(int)
-
     winners_by_event: dict[str, set[int]] = defaultdict(set)
     einstein_winners_by_event: dict[str, set[int]] = defaultdict(set)
 
@@ -437,11 +444,7 @@ def _compute_insights_overview(db: Session) -> InsightsOverviewResponse:
             key=lambda x: (-x[1], x[0]),
         )[:LEADER_LIMIT]
         championship_wins = [
-            LeaderRow(
-                team_number=t,
-                count=c,
-                detail=", ".join(str(y) for y in ys),
-            )
+            LeaderRow(team_number=t, count=c, detail=", ".join(str(y) for y in ys))
             for t, c, ys in ranked
         ]
     else:
@@ -481,11 +484,7 @@ def _compute_insights_overview(db: Session) -> InsightsOverviewResponse:
             einstein_years_by_team[int(team_number)].append(year)
 
     einstein_appearances = sorted(
-        (
-            LeaderRow(team_number=t, count=len(set(ys)))
-            for t, ys in einstein_years_by_team.items()
-            if ys
-        ),
+        (LeaderRow(team_number=t, count=len(set(ys))) for t, ys in einstein_years_by_team.items() if ys),
         key=lambda r: (-r.count, r.team_number),
     )[:LEADER_LIMIT]
 

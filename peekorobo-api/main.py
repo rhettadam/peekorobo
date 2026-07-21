@@ -1,4 +1,5 @@
 import os
+import threading
 from typing import Annotated, Optional
 from time import time
 from datetime import datetime
@@ -82,6 +83,13 @@ CACHE_CONTROL_VALUE = f"public, max-age={CACHE_MAX_AGE}, stale-while-revalidate=
 MAP_CACHE_MAX_AGE = int(os.getenv("MAP_CACHE_MAX_AGE", "86400"))
 MAP_CACHE_SWR = int(os.getenv("MAP_CACHE_STALE_WHILE_REVALIDATE", "604800"))
 MAP_CACHE_CONTROL_VALUE = f"public, max-age={MAP_CACHE_MAX_AGE}, stale-while-revalidate={MAP_CACHE_SWR}"
+
+# Insights overview is expensive to compute but only changes when the pipeline runs.
+INSIGHTS_CACHE_MAX_AGE = int(os.getenv("INSIGHTS_CACHE_MAX_AGE", "3600"))
+INSIGHTS_CACHE_SWR = int(os.getenv("INSIGHTS_CACHE_STALE_WHILE_REVALIDATE", "86400"))
+INSIGHTS_CACHE_CONTROL_VALUE = (
+    f"public, max-age={INSIGHTS_CACHE_MAX_AGE}, stale-while-revalidate={INSIGHTS_CACHE_SWR}"
+)
 
 # Comma-separated list of allowed SPA origins, or "*" for any (read-only, no cookies).
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
@@ -374,12 +382,12 @@ async def get_event_insights(year: Annotated[int, Path(title="Year")], db: Sessi
     return event_insights.get_event_insights(db, year)
 
 @app.get("/insights/overview", dependencies=[Depends(read_access)], tags=["Insights"])
-def get_insights_overview(db: Session = Depends(get_db)) -> InsightsOverviewResponse:
-    """Career / all-time Insights: season series, prediction accuracy, leaderboards.
-
-    Sync handler so FastAPI runs the heavy DB work in a threadpool and does not
-    block other requests (frc_games, search, etc.) while overview computes.
-    """
+def get_insights_overview(
+    response: Response,
+    db: Session = Depends(get_db),
+) -> InsightsOverviewResponse:
+    """Career / all-time Insights: season series, prediction accuracy, leaderboards."""
+    response.headers["Cache-Control"] = INSIGHTS_CACHE_CONTROL_VALUE
     return insights_overview.get_insights_overview(db)
 
 @app.get("/events/{year}", response_model=EventResponse, dependencies=[Depends(read_access)], tags=["Events"])
@@ -491,6 +499,14 @@ def _startup_init_tables():
         print("User table init failed:", e)
     finally:
         db.close()
+
+    def _prewarm():
+        try:
+            insights_overview.prewarm_insights_cache()
+        except Exception as e:  # pragma: no cover - defensive
+            print("Insights cache prewarm failed:", e)
+
+    threading.Thread(target=_prewarm, daemon=True).start()
 
 
 # --- Auth endpoints -------------------------------------------------------
