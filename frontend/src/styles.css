@@ -118,3 +118,83 @@ a {
 .peeko-popup-link:hover {
   text-decoration: underline;
 }
+
+.peeko-popup-stack {
+  min-width: 200px;
+  max-width: 280px;
+}
+.peeko-popup-stack-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.peeko-popup-stack-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #242424;
+  color: #f1f3f5;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+.peeko-popup-stack-row:hover {
+  background: #2e2e2e;
+  color: #ffdd00;
+}
+.peeko-popup-stack-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.peeko-popup-stack-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.peeko-popup-stack-go {
+  color: #ffdd00;
+  flex-shrink: 0;
+}
+
+/* Team history: blue banners as left/right rails on desktop */
+.peeko-history-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.peeko-history-rail {
+  display: none;
+}
+.peeko-history-banners-mobile {
+  display: block;
+}
+@media (min-width: 1100px) {
+  .peeko-history-layout {
+    grid-template-columns: 140px minmax(0, 1fr) 140px;
+    gap: 1.5rem;
+  }
+  .peeko-history-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: sticky;
+    top: 72px;
+    /* Grow with the page — no nested scrollbar */
+    max-height: none;
+    overflow: visible;
+    padding-bottom: 1rem;
+  }
+  .peeko-history-banners-mobile {
+    display: none;
+  }
+}

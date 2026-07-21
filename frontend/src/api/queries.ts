@@ -21,6 +21,7 @@ import type {
   EventResponse,
   EventTeamsResponse,
   FrcGamesResponse,
+  InsightsOverviewResponse,
   MapEventsResponse,
   MapTeamsResponse,
   TeamAwardsResponse,
@@ -52,6 +53,14 @@ export function useFrcGames(): UseQueryResult<FrcGamesResponse> {
     queryFn: () => apiGet<FrcGamesResponse>("/frc_games"),
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
+  });
+}
+
+export function useInsightsOverview(): UseQueryResult<InsightsOverviewResponse> {
+  return useQuery({
+    queryKey: ["insights-overview"],
+    queryFn: () => apiGet<InsightsOverviewResponse>("/insights/overview"),
+    staleTime: FIVE_MIN,
   });
 }
 

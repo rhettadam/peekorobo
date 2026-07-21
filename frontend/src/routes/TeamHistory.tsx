@@ -15,8 +15,6 @@ import { LineChart } from "@mantine/charts";
 import {
   IconArrowLeft,
   IconAward,
-  IconBrandYoutube,
-  IconTrophy,
 } from "@tabler/icons-react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -27,7 +25,8 @@ import {
 } from "../api/queries";
 import { ErrorState, LoadingState } from "../components/StateWrappers";
 import { TeamAvatar } from "../components/TeamAvatar";
-import { BlueBanners } from "../components/BlueBanners";
+import { BlueBanners, BlueBannerTile, toBlueBannerItems } from "../components/BlueBanners";
+import { TeamProfileMeta } from "../components/TeamProfileMeta";
 import { RecordCell } from "../components/RecordCell";
 import { DataTable, type Column } from "../components/DataTable";
 import { contrastText } from "../lib/epa";
@@ -115,6 +114,9 @@ export function TeamHistory() {
   const info = infoQuery.data;
   const perfs = useMemo(() => perfsQuery.data?.team_perfs ?? [], [perfsQuery.data]);
   const awards = awardsQuery.data?.awards ?? [];
+  const bannerItems = useMemo(() => toBlueBannerItems(awards), [awards]);
+  const leftBanners = useMemo(() => bannerItems.filter((_, i) => i % 2 === 0), [bannerItems]);
+  const rightBanners = useMemo(() => bannerItems.filter((_, i) => i % 2 === 1), [bannerItems]);
   const notables = notablesQuery.data?.notables ?? [];
 
   useEffect(() => {
@@ -250,7 +252,14 @@ export function TeamHistory() {
   const headerText = primary ? contrastText(primary) : "#ffffff";
 
   return (
-    <Stack gap="lg" py="md">
+    <div className="peeko-history-layout">
+      <aside className="peeko-history-rail" aria-label="Blue banners">
+        {leftBanners.map((b, i) => (
+          <BlueBannerTile key={`${b.event_key}-${b.award_name}-${i}`} banner={b} compact />
+        ))}
+      </aside>
+
+      <Stack gap="lg" py="md" style={{ minWidth: 0 }}>
       <Card radius="lg" p="lg" style={{ background: gradient, color: headerText, border: "none" }}>
         <Group justify="space-between" align="center" wrap="nowrap">
           <Stack gap={6} style={{ minWidth: 0 }}>
@@ -269,33 +278,18 @@ export function TeamHistory() {
               Team {teamNumber}
               {info?.nickname ? `: ${info.nickname}` : ""} — History
             </Title>
-            {info ? (
-              <Text c={headerText} fw={500}>
-                {locationString(info.city, info.state_prov, info.country)}
-              </Text>
-            ) : null}
-            {notables.map((n) => (
-              <Group key={n.category} gap={8} wrap="nowrap">
-                <IconTrophy size={16} color={headerText} style={{ flexShrink: 0 }} />
-                <Text c={headerText} fw={700}>
-                  {n.label} ({n.years.join(", ")})
-                </Text>
-                {n.video ? (
-                  <Anchor
-                    href={n.video}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    c={headerText}
-                    fw={500}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4, textDecoration: "underline" }}
-                  >
-                    <IconBrandYoutube size={16} /> Impact Video
-                  </Anchor>
-                ) : null}
-              </Group>
-            ))}
+            <TeamProfileMeta
+              headerText={headerText}
+              location={
+                info
+                  ? locationString(info.city, info.state_prov, info.country) || undefined
+                  : undefined
+              }
+              teamNumber={teamNumber}
+              notables={notables}
+            />
           </Stack>
-          <Box visibleFrom="xs" style={{ flexShrink: 0 }}>
+          <Box visibleFrom="sm" style={{ flexShrink: 0 }}>
             <TeamAvatar teamNumber={teamNumber} size={110} radius={14} upscale />
           </Box>
         </Group>
@@ -362,8 +356,6 @@ export function TeamHistory() {
         </Stack>
       ) : null}
 
-      <BlueBanners awards={awards} title="Blue Banners" />
-
       {awardsByYear.length > 0 ? (
         <Stack gap="sm">
           <Title order={3}>Awards History</Title>
@@ -400,6 +392,17 @@ export function TeamHistory() {
           </Card>
         </Stack>
       ) : null}
-    </Stack>
+
+      <div className="peeko-history-banners-mobile">
+        <BlueBanners awards={awards} title="Blue Banners" />
+      </div>
+      </Stack>
+
+      <aside className="peeko-history-rail" aria-label="Blue banners">
+        {rightBanners.map((b, i) => (
+          <BlueBannerTile key={`${b.event_key}-${b.award_name}-${i}`} banner={b} compact />
+        ))}
+      </aside>
+    </div>
   );
 }

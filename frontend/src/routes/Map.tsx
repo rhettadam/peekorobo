@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Box, Loader, Overlay, Stack, Text } from "@mantine/core";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { GeoJSONSource, SkySpecification } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import { useMapEvents, useMapTeams } from "../api/queries";
@@ -16,10 +16,16 @@ import {
   BASEMAP_PRIMARY,
   DEFAULT_CENTER,
   DEFAULT_ZOOM,
+  coordKey,
   eventPopupHTML,
+  eventStackRowHTML,
   eventTypeColor,
   eventsToGeoJSON,
+  spreadByCoords,
+  stackPopupHTML,
+  stackRadiusForZoom,
   teamPopupHTML,
+  teamStackRowHTML,
   teamToPopupProps,
   teamsToGeoJSON,
   type EventFeatureProps,
@@ -68,9 +74,12 @@ export function Map() {
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const dataRef = useRef<{ teams: FeatureCollection; events: FeatureCollection } | null>(null);
   const teamsListRef = useRef<MapTeam[]>([]);
+  const eventsListRef = useRef<MapEvent[]>([]);
+  const eventsZoomRef = useRef<number>(-1);
   const markersRef = useRef<globalThis.Map<number, maplibregl.Marker>>(new globalThis.Map());
   const moveDebounceRef = useRef<number | undefined>(undefined);
   const updateMarkersRef = useRef<() => void>(() => {});
+  const refreshEventsRef = useRef<() => void>(() => {});
   const layersRef = useRef<LayerState>(INITIAL_LAYERS);
   const projectionRef = useRef<Projection>("mercator");
   const interactionsAddedRef = useRef(false);
@@ -80,6 +89,9 @@ export function Map() {
   const navigate = useNavigate();
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
+  const [searchParams] = useSearchParams();
+  const focusTeamParam = searchParams.get("team");
+  const focusAppliedRef = useRef<string | null>(null);
 
   const [projection, setProjection] = useState<Projection>("mercator");
   const [layers, setLayers] = useState<LayerState>(INITIAL_LAYERS);
@@ -101,7 +113,7 @@ export function Map() {
     const map = mapRef.current;
     if (!map) return;
     popupRef.current?.remove();
-    popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "260px", offset: 12 })
+    popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "300px", offset: 12 })
       .setLngLat(coords)
       .setHTML(html)
       .addTo(map);
@@ -200,12 +212,36 @@ export function Map() {
       interactionsAddedRef.current = true;
 
       map.on("click", "events-points", (e) => {
-        const f = e.features?.[0];
-        if (!f) return;
+        // Include every event under the cursor / same venue stack, not just the top feature.
+        const hits =
+          map.queryRenderedFeatures(e.point, { layers: ["events-points"] }) ?? e.features ?? [];
+        if (hits.length === 0) return;
+        const propsList = hits
+          .map((f) => f.properties as unknown as EventFeatureProps)
+          .filter((p) => p?.event_key);
+        // De-dupe by event_key (query can return duplicates across tiles).
+        const seen = new Set<string>();
+        const unique: EventFeatureProps[] = [];
+        for (const p of propsList) {
+          if (seen.has(p.event_key)) continue;
+          seen.add(p.event_key);
+          unique.push(p);
+        }
+        const first = hits[0];
         const coords = (
-          f.geometry as unknown as { coordinates: [number, number] }
+          first.geometry as unknown as { coordinates: [number, number] }
         ).coordinates.slice() as [number, number];
-        openPopup(coords, eventPopupHTML(f.properties as unknown as EventFeatureProps));
+        if (unique.length === 1) {
+          openPopup(coords, eventPopupHTML(unique[0]));
+        } else {
+          openPopup(
+            coords,
+            stackPopupHTML(
+              "events here",
+              unique.map((p) => eventStackRowHTML(p)),
+            ),
+          );
+        }
       });
 
       map.on("mouseenter", "events-points", () => {
@@ -220,6 +256,7 @@ export function Map() {
   // Viewport-culled team avatar markers. Only teams within the current bounds
   // (plus a buffer) get a live DOM marker; markers are pooled by team number and
   // removed when they scroll out of view, keeping the live count bounded.
+  // Co-located teams are fanned out in a small ring so avatars aren't buried.
   const updateTeamMarkers = useCallback(() => {
     const map = mapRef.current;
     if (!map || !styleReadyRef.current) return;
@@ -250,7 +287,14 @@ export function Map() {
         if (desired.length >= MAX_TEAM_MARKERS) break;
       }
     }
-    const desiredKeys = new Set(desired.map((t) => t.team_number));
+    const spread = spreadByCoords(
+      desired,
+      (t) => ({ lat: t.lat, lng: t.lng }),
+      stackRadiusForZoom(map.getZoom(), b.getCenter().lat),
+      (t) => t.team_number,
+    );
+    const byNumber = new globalThis.Map(spread.map((s) => [s.item.team_number, s] as const));
+    const desiredKeys = new Set(byNumber.keys());
 
     markers.forEach((m, key) => {
       if (!desiredKeys.has(key)) {
@@ -259,9 +303,11 @@ export function Map() {
       }
     });
 
-    for (const t of desired) {
+    for (const placed of spread) {
+      const t = placed.item;
       const existing = markers.get(t.team_number);
       if (existing) {
+        existing.setLngLat([placed.lng, placed.lat]);
         const el = existing.getElement();
         if (el.style.width !== `${size}px`) {
           el.style.width = `${size}px`;
@@ -281,16 +327,46 @@ export function Map() {
       });
       img.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        openPopup([t.lng, t.lat], teamPopupHTML(teamToPopupProps(t)));
+        const key = coordKey(placed.trueLat, placed.trueLng);
+        const neighbors = teamsListRef.current.filter(
+          (x) => coordKey(x.lat, x.lng) === key,
+        );
+        if (neighbors.length <= 1) {
+          openPopup([placed.lng, placed.lat], teamPopupHTML(teamToPopupProps(t)));
+        } else {
+          openPopup(
+            [placed.trueLng, placed.trueLat],
+            stackPopupHTML(
+              "teams here",
+              neighbors.map((n) => teamStackRowHTML(teamToPopupProps(n))),
+            ),
+          );
+        }
       });
       const marker = new maplibregl.Marker({ element: img, anchor: "center" })
-        .setLngLat([t.lng, t.lat])
+        .setLngLat([placed.lng, placed.lat])
         .addTo(map);
       markers.set(t.team_number, marker);
     }
   }, [openPopup]);
 
+  // Refresh event point spread when zoom changes enough that the ring radius moves.
+  const refreshEventSpread = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !styleReadyRef.current) return;
+    const zoom = map.getZoom();
+    // Skip tiny zoom jitter; radius formula is stepwise enough via continuous fn.
+    if (Math.abs(zoom - eventsZoomRef.current) < 0.35 && eventsZoomRef.current >= 0) return;
+    eventsZoomRef.current = zoom;
+    const src = map.getSource("events") as GeoJSONSource | undefined;
+    if (!src) return;
+    const geo = eventsToGeoJSON(eventsListRef.current, zoom, map.getCenter().lat) as FeatureCollection;
+    if (dataRef.current) dataRef.current.events = geo;
+    src.setData(geo);
+  }, []);
+
   updateMarkersRef.current = updateTeamMarkers;
+  refreshEventsRef.current = refreshEventSpread;
 
   // Create the map once on mount; tear it down on unmount (no hot-reload leaks).
   useEffect(() => {
@@ -316,12 +392,16 @@ export function Map() {
       addDataLayers();
       if (layersRef.current.districts) applyDistrictLayer();
       updateMarkersRef.current();
+      refreshEventsRef.current();
       setMapReady(true);
     });
 
     const onMoveEnd = () => {
       if (moveDebounceRef.current) window.clearTimeout(moveDebounceRef.current);
-      moveDebounceRef.current = window.setTimeout(() => updateMarkersRef.current(), 120);
+      moveDebounceRef.current = window.setTimeout(() => {
+        updateMarkersRef.current();
+        refreshEventsRef.current();
+      }, 120);
     };
     map.on("moveend", onMoveEnd);
 
@@ -380,17 +460,19 @@ export function Map() {
   useEffect(() => {
     dataRef.current = { teams: teamsGeo, events: eventsGeo };
     teamsListRef.current = teams;
+    eventsListRef.current = events;
+    eventsZoomRef.current = -1; // force respread at current zoom
     const map = mapRef.current;
     if (!map || !styleReadyRef.current) return;
     const heatSrc = map.getSource("teams-heat") as GeoJSONSource | undefined;
     if (heatSrc) {
       heatSrc.setData(teamsGeo);
-      (map.getSource("events") as GeoJSONSource | undefined)?.setData(eventsGeo);
+      refreshEventSpread();
     } else {
       addDataLayers();
     }
     updateTeamMarkers();
-  }, [teams, teamsGeo, eventsGeo, mapReady, addDataLayers, updateTeamMarkers]);
+  }, [teams, teamsGeo, events, eventsGeo, mapReady, addDataLayers, updateTeamMarkers, refreshEventSpread]);
 
   // Projection toggle (2D mercator <-> 3D globe).
   useEffect(() => {
@@ -457,6 +539,25 @@ export function Map() {
   const isLoading = teamsQuery.isLoading || eventsQuery.isLoading;
   const error = teamsQuery.error || eventsQuery.error;
 
+  // Deep link: /map?team=254 flies to that team once map + data are ready.
+  useEffect(() => {
+    if (!mapReady || isLoading) return;
+    if (!focusTeamParam) {
+      focusAppliedRef.current = null;
+      return;
+    }
+    if (focusAppliedRef.current === focusTeamParam) return;
+    const num = Number(focusTeamParam);
+    if (!Number.isFinite(num) || num <= 0) return;
+    const t = teams.find((x) => x.team_number === num);
+    if (!t) return;
+    focusAppliedRef.current = focusTeamParam;
+    const id = window.setTimeout(() => {
+      handleSearchSelect({ type: "team", team: t });
+    }, 120);
+    return () => window.clearTimeout(id);
+  }, [mapReady, isLoading, focusTeamParam, teams, handleSearchSelect]);
+
   return (
     <Box
       className="peeko-map"
@@ -484,7 +585,12 @@ export function Map() {
             teamCount={teams.length}
             eventCount={events.length}
           />
-          <MapSearch teams={teams} events={events} onSelect={handleSearchSelect} />
+          <MapSearch
+            teams={teams}
+            events={events}
+            onSelect={handleSearchSelect}
+            seedQuery={focusTeamParam}
+          />
 
           {isLoading ? (
             <Overlay color="#0f0f0f" backgroundOpacity={0.6} zIndex={4}>

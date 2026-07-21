@@ -179,6 +179,8 @@ export interface EventPerfsResponse {
 export interface TeamAwardData {
   event_key: string;
   award_name: string;
+  /** Display name from events table when available. */
+  event_name?: string | null;
 }
 
 export interface TeamAwardsResponse {
@@ -201,6 +203,85 @@ export interface EventInsightRow {
 export interface EventInsightsResponse {
   year: number;
   events: EventInsightRow[];
+}
+
+// ---- Insights overview (career / all-time) ----
+export interface InsightsYearPoint {
+  year: number;
+  team_count: number;
+  event_count: number;
+  match_count: number;
+}
+
+export interface InsightsAccuracyPoint {
+  year: number;
+  correct: number;
+  total: number;
+  pct: number | null;
+  brier?: number | null;
+}
+
+export interface InsightsPredBucket {
+  label: string;
+  correct: number;
+  total: number;
+  pct: number | null;
+  brier?: number | null;
+}
+
+export interface InsightsPredSummary {
+  correct: number;
+  total: number;
+  pct: number | null;
+  brier: number | null;
+  favorite_win_pct: number | null;
+  upset_pct: number | null;
+}
+
+export interface InsightsPredictionStats {
+  summary: InsightsPredSummary;
+  by_year: InsightsAccuracyPoint[];
+  by_confidence: InsightsPredBucket[];
+  by_comp_level: InsightsPredBucket[];
+  by_event_type: InsightsPredBucket[];
+}
+
+export interface InsightsLeaderRow {
+  team_number: number;
+  count: number;
+  detail?: string | null;
+}
+
+export interface InsightsTeamupRow {
+  team_a: number;
+  team_b: number;
+  count: number;
+}
+
+export interface InsightsOverviewResponse {
+  years: InsightsYearPoint[];
+  prediction_accuracy: InsightsAccuracyPoint[];
+  predictions: InsightsPredictionStats;
+  blue_banners: InsightsLeaderRow[];
+  championship_wins: InsightsLeaderRow[];
+  impact_chairmans: InsightsLeaderRow[];
+  regional_dcmp_impact: InsightsLeaderRow[];
+  regional_wins: InsightsLeaderRow[];
+  district_wins: InsightsLeaderRow[];
+  division_wins: InsightsLeaderRow[];
+  woodie_flowers: InsightsLeaderRow[];
+  einstein_appearances: InsightsLeaderRow[];
+  einstein_streaks: InsightsLeaderRow[];
+  event_teamups: InsightsTeamupRow[];
+  einstein_teamups: InsightsTeamupRow[];
+  totals: {
+    seasons: number;
+    events: number;
+    matches: number;
+    blue_banners: number;
+    predicted_matches: number;
+    teams_latest: number;
+  };
 }
 
 export interface TeamEventsResponse {

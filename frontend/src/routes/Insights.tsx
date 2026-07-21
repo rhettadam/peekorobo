@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import {
   Anchor,
+  Badge,
   Box,
   Button,
   Card,
@@ -16,6 +17,7 @@ import { IconArrowLeft, IconBook, IconBrandYoutube } from "@tabler/icons-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useFrcGames, useLeaderboard, useSearchIndex } from "../api/queries";
 import { ErrorState, LoadingState } from "../components/StateWrappers";
+import { InsightsOverall } from "../components/InsightsOverall";
 import { AceBadge } from "../components/AceBadge";
 import { TeamName } from "../components/TeamName";
 import { TeamAvatar } from "../components/TeamAvatar";
@@ -96,12 +98,12 @@ function SeasonCard({ game }: { game: FrcGameInfo }) {
   );
 }
 
-/** Insights landing: big header + a grid of clickable season cards (newest first). */
+/** Insights landing: overall career charts + season picker grid. */
 export function Insights() {
   const games = useFrcGames();
 
   useEffect(() => {
-    document.title = "Season Insights - Peekorobo";
+    document.title = "Insights - Peekorobo";
   }, []);
 
   const seasons = useMemo(() => {
@@ -110,43 +112,62 @@ export function Insights() {
   }, [games.data]);
 
   return (
-    <Stack gap="lg" py="md">
-      <Group gap="md" align="stretch" wrap="nowrap">
+    <Stack gap="xl" py="md">
+      <Group gap="md" align="flex-start" wrap="wrap">
         <Box style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
           <img
             src={gameLogo(CURRENT_YEAR)}
             alt={`${CURRENT_YEAR} game`}
             style={{
-              height: "100%",
+              height: 56,
               width: "auto",
-              maxHeight: 64,
               objectFit: "contain",
               display: "block",
             }}
             onError={(e) => (e.currentTarget.style.display = "none")}
           />
         </Box>
-        <Title order={1} style={{ fontSize: 56, lineHeight: 1, fontWeight: 800 }}>
-          Insights
-        </Title>
+        <Stack gap={4} style={{ minWidth: 0 }}>
+          <Title order={1}>Insights</Title>
+          <Text c="dimmed" maw={640}>
+            All-time FRC growth, ACE prediction accuracy, and career leaderboards — then dive into
+            any season for game info and ACE distributions.
+          </Text>
+        </Stack>
       </Group>
 
-      <Text c="dimmed">
-        Explore every FRC season. Pick a year to dive into its game, reveal video, leaderboards, and
-        ACE distribution.
-      </Text>
+      <Stack gap="sm">
+        <Group gap="xs">
+          <Title order={2}>Overall</Title>
+          <Badge color="cyan" variant="light" radius="sm">
+            All years
+          </Badge>
+        </Group>
+        <InsightsOverall />
+      </Stack>
 
-      {games.isLoading ? (
-        <LoadingState label="Loading seasons..." />
-      ) : games.error ? (
-        <ErrorState error={games.error} />
-      ) : (
-        <SimpleGrid cols={{ base: 2, xs: 3, sm: 4, md: 5, lg: 6 }} spacing="md">
-          {seasons.map((game) => (
-            <SeasonCard key={game.year} game={game} />
-          ))}
-        </SimpleGrid>
-      )}
+      <Stack gap="sm">
+        <Group gap="xs">
+          <Title order={2}>By Season</Title>
+          <Badge color="grape" variant="light" radius="sm">
+            Pick a year
+          </Badge>
+        </Group>
+        <Text c="dimmed" size="sm">
+          Explore a season&apos;s game, reveal video, leaderboards, and ACE distribution.
+        </Text>
+        {games.isLoading ? (
+          <LoadingState label="Loading seasons..." />
+        ) : games.error ? (
+          <ErrorState error={games.error} />
+        ) : (
+          <SimpleGrid cols={{ base: 2, xs: 3, sm: 4, md: 5, lg: 6 }} spacing="md">
+            {seasons.map((game) => (
+              <SeasonCard key={game.year} game={game} />
+            ))}
+          </SimpleGrid>
+        )}
+      </Stack>
     </Stack>
   );
 }

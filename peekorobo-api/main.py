@@ -22,6 +22,7 @@ from query.team_events import TeamEventsResponse, TeamEventsQuery
 from query.notables import TeamNotablesResponse
 from query.frc_games import FrcGamesResponse
 from query.event_insights import EventInsightsResponse
+from query.insights_overview import InsightsOverviewResponse
 from query.map import MapTeamsResponse, MapEventsResponse
 from data.db import SessionLocal
 from sqlalchemy.orm import Session
@@ -40,6 +41,7 @@ import data.models.notables as notables
 import data.models.events as events
 import data.models.frc_games as frc_games
 import data.models.event_insights as event_insights
+import data.models.insights_overview as insights_overview
 import data.models.map as map_data
 import data.models.users as users_model
 import data.models.favorites as favorites_model
@@ -370,6 +372,15 @@ async def get_event_keys(year: Annotated[int, Path(title="Year")], query: Annota
 @app.get("/events/{year}/insights", dependencies=[Depends(read_access)], tags=["Events"])
 async def get_event_insights(year: Annotated[int, Path(title="Year")], db: Session = Depends(get_db)) -> EventInsightsResponse:
     return event_insights.get_event_insights(db, year)
+
+@app.get("/insights/overview", dependencies=[Depends(read_access)], tags=["Insights"])
+def get_insights_overview(db: Session = Depends(get_db)) -> InsightsOverviewResponse:
+    """Career / all-time Insights: season series, prediction accuracy, leaderboards.
+
+    Sync handler so FastAPI runs the heavy DB work in a threadpool and does not
+    block other requests (frc_games, search, etc.) while overview computes.
+    """
+    return insights_overview.get_insights_overview(db)
 
 @app.get("/events/{year}", response_model=EventResponse, dependencies=[Depends(read_access)], tags=["Events"])
 async def get_events(year : Annotated[int , Path(title="Events from this year")], query : Annotated[EventQuery, Query()], db: Session = Depends(get_db)) -> EventResponse:

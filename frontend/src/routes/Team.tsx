@@ -16,12 +16,7 @@ import {
 } from "@mantine/core";
 import { AreaChart } from "@mantine/charts";
 import {
-  IconAward,
-  IconBrandYoutube,
   IconHistory,
-  IconMapPin,
-  IconTrophy,
-  IconWorld,
 } from "@tabler/icons-react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
@@ -39,6 +34,7 @@ import { FavoriteButton } from "../components/FavoriteButton";
 import { StatPill } from "../components/StatPill";
 import { TeamEventBlock } from "../components/TeamEventBlock";
 import { BlueBanners } from "../components/BlueBanners";
+import { TeamProfileMeta } from "../components/TeamProfileMeta";
 import type { EventData, EventPerfEntry, TeamPerfInfo } from "../types/api";
 import { CURRENT_YEAR } from "../lib/constants";
 import { BRAND } from "../lib/assets";
@@ -57,23 +53,41 @@ function RankCard({
   rank,
   count,
   to,
+  compact,
 }: {
   label: string;
   rank?: number | null;
   count?: number | null;
   to?: string;
+  /** Tighter layout for fitting 3 cards in one mobile row. */
+  compact?: boolean;
 }) {
   if (rank === null || rank === undefined) return null;
   const inner = (
     <>
-      <Text size="xs" c="dimmed" tt="uppercase" fw={700} ta="center" lh={1.2} lineClamp={2}>
+      <Text
+        size={compact ? "10px" : "xs"}
+        c="dimmed"
+        tt="uppercase"
+        fw={700}
+        ta="center"
+        lh={1.15}
+        lineClamp={2}
+      >
         {label}
       </Text>
-      <Text fz={40} fw={800} mt={6} ta="center" c="blue" lh={1.1}>
+      <Text
+        fz={compact ? { base: 26, sm: 40 } : 40}
+        fw={800}
+        mt={compact ? { base: 4, sm: 6 } : 6}
+        ta="center"
+        c="blue"
+        lh={1.1}
+      >
         {rank.toLocaleString()}
       </Text>
       {count ? (
-        <Text size="sm" c="dimmed" ta="center">
+        <Text size={compact ? "xs" : "sm"} c="dimmed" ta="center" mt={compact ? 2 : 0}>
           out of {count.toLocaleString()}
         </Text>
       ) : null}
@@ -83,7 +97,7 @@ function RankCard({
     return (
       <Card
         withBorder
-        padding="lg"
+        padding={compact ? "sm" : "lg"}
         radius="md"
         component={Link}
         to={to}
@@ -95,7 +109,7 @@ function RankCard({
     );
   }
   return (
-    <Card withBorder padding="lg" radius="md">
+    <Card withBorder padding={compact ? "sm" : "lg"} radius="md">
       {inner}
     </Card>
   );
@@ -242,7 +256,6 @@ export function Team() {
   const honors = useMemo(() => {
     const awards = allAwardsQuery.data?.awards ?? [];
     const champYears = new Set<number>();
-    const chairmanYears = new Set<number>();
     for (const a of awards) {
       const name = (a.award_name || "").toLowerCase();
       const yr = yearFromEventKey(a.event_key ?? "");
@@ -250,13 +263,9 @@ export function Team() {
       if (!isDivision && (name === "championship winner" || name === "championship winners")) {
         if (yr) champYears.add(yr);
       }
-      if (name.includes("chairman") || name.includes("impact")) {
-        if (yr) chairmanYears.add(yr);
-      }
     }
     return {
       champYears: [...champYears].sort((a, b) => a - b),
-      chairmanYears: [...chairmanYears].sort((a, b) => a - b),
     };
   }, [allAwardsQuery.data]);
 
@@ -410,7 +419,6 @@ export function Team() {
       ? `linear-gradient(135deg, ${primary}, ${secondary})`
       : "linear-gradient(135deg, #3a3a3a, #1a1a1a)";
   const headerText = primary ? contrastText(primary) : "#ffffff";
-  const dim = headerText === "#000000" ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.85)";
 
   return (
     <Stack gap="lg" py="md">
@@ -468,79 +476,27 @@ export function Team() {
         >
           {teamNumber}
         </Text>
-        <Group justify="space-between" align="center" wrap="nowrap" style={{ position: "relative", zIndex: 1 }}>
-          <Stack gap={8} style={{ minWidth: 0 }}>
+        <Group justify="space-between" align="center" wrap="nowrap" gap="md" style={{ position: "relative", zIndex: 1 }}>
+          <Stack gap={8} style={{ minWidth: 0, flex: 1 }}>
             <Title order={1} c={headerText} style={{ wordBreak: "break-word" }}>
               Team {teamNumber}
               {info?.nickname ? `: ${info.nickname}` : ""}
             </Title>
 
-            {info ? (
-              <Group gap={6} c={dim}>
-                <IconMapPin size={16} />
-                <Text c={headerText} fw={500}>
-                  {locationString(info.city, info.state_prov, info.country) || "Unknown location"}
-                </Text>
-                {district ? (
-                  <Badge variant="white" c="dark" ml={6}>
-                    {district}
-                  </Badge>
-                ) : null}
-              </Group>
-            ) : null}
-
-            {notables.map((n) => (
-              <Group key={n.category} gap={8} wrap="nowrap">
-                <IconTrophy size={16} color={headerText} style={{ flexShrink: 0 }} />
-                <Text c={headerText} fw={700}>
-                  {n.label} ({n.years.join(", ")})
-                </Text>
-                {n.video ? (
-                  <Anchor
-                    href={n.video}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    c={headerText}
-                    fw={500}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      textDecoration: "underline",
-                    }}
-                  >
-                    <IconBrandYoutube size={16} /> Impact Video
-                  </Anchor>
-                ) : null}
-              </Group>
-            ))}
-
-            {!hasWorldChampsNotable && honors.champYears.length > 0 ? (
-              <Group gap={6} wrap="nowrap">
-                <IconTrophy size={16} color={headerText} style={{ flexShrink: 0 }} />
-                <Text c={headerText} fw={600}>
-                  FIRST Championship Winner ({honors.champYears.join(", ")})
-                </Text>
-              </Group>
-            ) : null}
-
-            {honors.chairmanYears.length > 0 ? (
-              <Group gap={6} wrap="nowrap">
-                <IconAward size={16} color={headerText} style={{ flexShrink: 0 }} />
-                <Text c={headerText} fw={600}>
-                  Chairman's / Impact Award ({honors.chairmanYears.join(", ")})
-                </Text>
-              </Group>
-            ) : null}
-
-            {info?.website ? (
-              <Group gap={6}>
-                <IconWorld size={16} color={headerText} />
-                <Anchor href={info.website} target="_blank" rel="noopener noreferrer" c={headerText} style={{ textDecoration: "underline" }}>
-                  {info.website.replace(/^https?:\/\//, "")}
-                </Anchor>
-              </Group>
-            ) : null}
+            <TeamProfileMeta
+              headerText={headerText}
+              location={
+                info
+                  ? locationString(info.city, info.state_prov, info.country) || "Unknown location"
+                  : undefined
+              }
+              district={district}
+              website={info?.website}
+              teamNumber={teamNumber}
+              notables={notables}
+              champYears={honors.champYears}
+              showWorldChampHonor={!hasWorldChampsNotable && honors.champYears.length > 0}
+            />
 
             <Group gap="xs" mt={4} align="flex-end">
               {years.length > 0 ? (
@@ -594,7 +550,7 @@ export function Team() {
           </Stack>
 
           <Box
-            visibleFrom="xs"
+            visibleFrom="sm"
             mr={40}
             style={{
               flexShrink: 0,
@@ -626,9 +582,23 @@ export function Team() {
         <Tabs.Panel value="overview" pt="md">
           {perf ? (
             <Stack gap="lg">
-              <SimpleGrid cols={{ base: 2, sm: rankCards.length || 1 }} spacing="md">
+              <SimpleGrid
+                cols={{
+                  // 3 non-district ranks → one snug mobile row; 4 stays 2×2.
+                  base: rankCards.length === 3 ? 3 : 2,
+                  sm: rankCards.length || 1,
+                }}
+                spacing={rankCards.length === 3 ? "xs" : "md"}
+              >
                 {rankCards.map((c) => (
-                  <RankCard key={c.label} label={c.label} rank={c.rank} count={c.count} to={c.to} />
+                  <RankCard
+                    key={c.label}
+                    label={c.label}
+                    rank={c.rank}
+                    count={c.count}
+                    to={c.to}
+                    compact={rankCards.length === 3}
+                  />
                 ))}
               </SimpleGrid>
 
@@ -774,24 +744,46 @@ export function Team() {
         </Tabs.Panel>
 
         <Tabs.Panel value="events" pt="md">
-          <Card withBorder padding="md" radius="md">
-            <Text fw={600} mb="sm">
-              {selectedYear} Events
-            </Text>
-            {eventsQuery.isLoading ? (
-              <Text size="sm" c="dimmed">Loading events...</Text>
-            ) : eventsQuery.data && eventsQuery.data.events.length > 0 ? (
-              <Stack gap={6}>
-                {eventsQuery.data.events.map((ek) => (
-                  <Anchor key={ek} component={Link} to={`/event/${ek}`} size="sm">
-                    {ek}
-                  </Anchor>
-                ))}
-              </Stack>
-            ) : (
+          {eventsQuery.isLoading ? (
+            <Text size="sm" c="dimmed">Loading events...</Text>
+          ) : teamEventKeys.length > 0 ? (
+            <Stack gap="md">
+              <Group justify="space-between" align="baseline">
+                <Title order={3}>{selectedYear} Events</Title>
+                <Text size="sm" c="dimmed">
+                  {teamEventKeys.length} event{teamEventKeys.length === 1 ? "" : "s"}
+                </Text>
+              </Group>
+              {teamEventKeys.map((ek) => {
+                const meta = eventMetaByKey.get(ek);
+                return (
+                  <TeamEventBlock
+                    key={ek}
+                    eventKey={ek}
+                    teamNumber={teamNumber}
+                    year={selectedYear}
+                    eventName={meta?.event_data.name}
+                    weekLabel={eventWeekLabel(meta?.week)}
+                    location={
+                      meta
+                        ? locationString(
+                            meta.location_info.city,
+                            meta.location_info.state_prov,
+                            meta.location_info.country,
+                          )
+                        : undefined
+                    }
+                    perf={eventPerfByKey.get(ek)}
+                    awards={awardsByEvent.get(ek)}
+                  />
+                );
+              })}
+            </Stack>
+          ) : (
+            <Card withBorder padding="md" radius="md">
               <Text size="sm" c="dimmed">No events for this season.</Text>
-            )}
-          </Card>
+            </Card>
+          )}
         </Tabs.Panel>
 
         <Tabs.Panel value="awards" pt="md">

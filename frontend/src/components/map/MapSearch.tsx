@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge, Combobox, Group, Paper, Text, TextInput, useCombobox } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { IconCalendarEvent, IconMapPin, IconSearch } from "@tabler/icons-react";
@@ -12,12 +12,18 @@ interface MapSearchProps {
   teams: MapTeam[];
   events: MapEvent[];
   onSelect: (result: MapSearchResult) => void;
+  /** Prefill from a deep link like /map?team=254. */
+  seedQuery?: string | null;
 }
 
-export function MapSearch({ teams, events, onSelect }: MapSearchProps) {
+export function MapSearch({ teams, events, onSelect, seedQuery }: MapSearchProps) {
   const [value, setValue] = useState("");
   const combobox = useCombobox({ onDropdownClose: () => combobox.resetSelectedOption() });
   const isMobile = useMediaQuery("(max-width: 48em)");
+
+  useEffect(() => {
+    if (seedQuery) setValue(seedQuery);
+  }, [seedQuery]);
 
   const results = useMemo<MapSearchResult[]>(() => {
     const q = value.trim().toLowerCase();
