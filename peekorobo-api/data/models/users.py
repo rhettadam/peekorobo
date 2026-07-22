@@ -62,6 +62,12 @@ def init_user_tables(db: Session) -> None:
         ON saved_items (user_id, item_type)
         """
     ))
+    db.execute(text(
+        """
+        CREATE INDEX IF NOT EXISTS idx_saved_items_item
+        ON saved_items (item_type, item_key)
+        """
+    ))
     db.commit()
 
 

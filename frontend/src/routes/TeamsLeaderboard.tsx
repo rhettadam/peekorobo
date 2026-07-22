@@ -35,6 +35,8 @@ import { gameLogo, teamAvatar, STOCK_AVATAR } from "../lib/assets";
 import { availableYears, CURRENT_YEAR, isDemoTeam } from "../lib/constants";
 import { computePercentiles, contrastText, median } from "../lib/epa";
 import { formatNumber } from "../lib/format";
+import { useFavoriteCounts } from "../api/favorites";
+import { IconStarFilled } from "@tabler/icons-react";
 
 interface Row {
   teamNumber: number;
@@ -48,6 +50,7 @@ interface Row {
   losses: number | null;
   ties: number | null;
   rankGlobal: number | null;
+  favorites: number;
 }
 
 type AxisKey =
@@ -199,6 +202,7 @@ export function TeamsLeaderboard() {
 
   const { data: index } = useSearchIndex();
   const { data: filterOptions } = useFilterOptions();
+  const { data: favoriteCounts } = useFavoriteCounts("team");
 
   const leaderboardFilters = useMemo(
     () => ({
@@ -250,6 +254,7 @@ export function TeamsLeaderboard() {
 
   const rows: Row[] = useMemo(() => {
     const data = activeData ?? [];
+    const favByTeam = favoriteCounts?.counts ?? {};
     const flat: Row[] = data.map((tp) => {
       const p = tp.team_perfs[0];
       return {
@@ -264,11 +269,12 @@ export function TeamsLeaderboard() {
         losses: p?.losses ?? null,
         ties: p?.ties ?? null,
         rankGlobal: p?.rank_global ?? null,
+        favorites: favByTeam[String(tp.team_number)] ?? 0,
       };
     });
     flat.sort((a, b) => (b.ace ?? -Infinity) - (a.ace ?? -Infinity));
     return flat;
-  }, [activeData]);
+  }, [activeData, favoriteCounts]);
 
   const realRows = useMemo(() => rows.filter((r) => !isDemoTeam(r.teamNumber)), [rows]);
 
@@ -476,6 +482,20 @@ export function TeamsLeaderboard() {
         sortValue: (r) => r.wins,
         exportValue: (r) => `${r.wins ?? 0}-${r.losses ?? 0}-${r.ties ?? 0}`,
         render: (r) => <RecordCell wins={r.wins} losses={r.losses} ties={r.ties} />,
+      },
+      {
+        key: "favorites",
+        header: "Favorites",
+        width: 100,
+        sortValue: (r) => r.favorites,
+        render: (r) => (
+          <Group gap={4} wrap="nowrap" justify="flex-start">
+            <IconStarFilled size={14} color="#ffdd00" style={{ flexShrink: 0 }} />
+            <Text span fz="sm" fw={r.favorites > 0 ? 600 : 400}>
+              {r.favorites}
+            </Text>
+          </Group>
+        ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -60,7 +60,13 @@ from query.auth import (
     ApiKeyResponse,
 )
 import secrets
-from query.favorites import FavoriteRequest, FavoritesResponse, FavoriteStatusResponse
+from query.favorites import (
+    FavoriteCountsResponse,
+    FavoriteItemDetailResponse,
+    FavoriteRequest,
+    FavoritesResponse,
+    FavoriteStatusResponse,
+)
 
 load_dotenv()
 
@@ -742,6 +748,37 @@ async def list_favorites(
     current_user: UserResponse = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> FavoritesResponse:
     return favorites_model.list_favorites(db, current_user.id)
+
+
+@app.get(
+    "/favorites/item/{item_type}/{item_key}",
+    dependencies=[Depends(read_access)],
+    tags=["Favorites"],
+)
+async def favorite_item_detail(
+    item_type: Annotated[str, Path()],
+    item_key: Annotated[str, Path()],
+    db: Session = Depends(get_db),
+) -> FavoriteItemDetailResponse:
+    """Public: favorite count + users who favorited a team or event."""
+    if item_type not in ("team", "event"):
+        raise HTTPException(status_code=400, detail="item_type must be 'team' or 'event'")
+    return favorites_model.list_favoriters(db, item_type, item_key)
+
+
+@app.get(
+    "/favorites/counts",
+    dependencies=[Depends(read_access)],
+    tags=["Favorites"],
+)
+async def favorite_counts(
+    item_type: Annotated[str, Query()] = "team",
+    db: Session = Depends(get_db),
+) -> FavoriteCountsResponse:
+    """Public map of item_key -> favorite count (for leaderboards)."""
+    if item_type not in ("team", "event"):
+        raise HTTPException(status_code=400, detail="item_type must be 'team' or 'event'")
+    return favorites_model.favorite_counts(db, item_type)
 
 
 @app.get("/favorites/status", tags=["Favorites"])

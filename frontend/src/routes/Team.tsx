@@ -13,6 +13,7 @@ import {
   Tabs,
   Text,
   Title,
+  UnstyledButton,
 } from "@mantine/core";
 import { AreaChart } from "@mantine/charts";
 import {
@@ -28,9 +29,11 @@ import {
   useTeamNotables,
   useTeamPerfs,
 } from "../api/queries";
+import { useFavoriteItemDetail } from "../api/favorites";
 import { ErrorState, LoadingState } from "../components/StateWrappers";
 import { TeamAvatar } from "../components/TeamAvatar";
 import { FavoriteButton } from "../components/FavoriteButton";
+import { FavoritersModal } from "../components/FavoritersModal";
 import { StatPill } from "../components/StatPill";
 import { TeamEventBlock } from "../components/TeamEventBlock";
 import { BlueBanners } from "../components/BlueBanners";
@@ -193,6 +196,8 @@ export function Team() {
   const teamNumber = Number(params.teamNumber);
   const paramYear = params.year ? Number(params.year) : undefined;
   const [chartMode, setChartMode] = useState<"trend" | "breakdown">("trend");
+  const [favoritersOpen, setFavoritersOpen] = useState(false);
+  const favoriters = useFavoriteItemDetail("team", teamNumber);
 
   const infoQuery = useTeamInfo(teamNumber);
   const perfsQuery = useTeamPerfs(teamNumber);
@@ -443,7 +448,9 @@ export function Team() {
           overflow: "hidden",
         }}
       >
-        <Box
+        <Group
+          gap={4}
+          wrap="nowrap"
           style={{
             position: "absolute",
             top: 12,
@@ -452,10 +459,26 @@ export function Team() {
             background: "rgba(0,0,0,0.45)",
             borderRadius: 999,
             backdropFilter: "blur(6px)",
+            paddingRight: 10,
           }}
         >
           <FavoriteButton itemType="team" itemKey={teamNumber} size={22} />
-        </Box>
+          <UnstyledButton
+            onClick={() => setFavoritersOpen(true)}
+            aria-label="View who favorited this team"
+            style={{ color: headerText }}
+          >
+            <Text fw={700} fz="sm" c={headerText} style={{ whiteSpace: "nowrap" }}>
+              {favoriters.data?.count ?? 0}
+            </Text>
+          </UnstyledButton>
+        </Group>
+        <FavoritersModal
+          itemType="team"
+          itemKey={teamNumber}
+          opened={favoritersOpen}
+          onClose={() => setFavoritersOpen(false)}
+        />
         <Text
           aria-hidden
           style={{

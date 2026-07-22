@@ -1,10 +1,27 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { apiDelete, apiGet, apiPost } from "./client";
-import type { FavoriteItemType, FavoriteStatusResponse, FavoritesResponse } from "../types/api";
+import type {
+  FavoriteCountsResponse,
+  FavoriteItemDetailResponse,
+  FavoriteItemType,
+  FavoriteStatusResponse,
+  FavoritesResponse,
+} from "../types/api";
 import { useAuth } from "../auth/AuthContext";
 
 export function fetchFavorites(): Promise<FavoritesResponse> {
   return apiGet<FavoritesResponse>("/favorites");
+}
+
+export function fetchFavoriteItemDetail(
+  itemType: FavoriteItemType,
+  itemKey: string,
+): Promise<FavoriteItemDetailResponse> {
+  return apiGet<FavoriteItemDetailResponse>(`/favorites/item/${itemType}/${encodeURIComponent(itemKey)}`);
+}
+
+export function fetchFavoriteCounts(itemType: FavoriteItemType = "team"): Promise<FavoriteCountsResponse> {
+  return apiGet<FavoriteCountsResponse>("/favorites/counts", { item_type: itemType });
 }
 
 export function addFavorite(itemType: FavoriteItemType, itemKey: string): Promise<FavoriteStatusResponse> {
@@ -22,6 +39,29 @@ export function useFavorites(): UseQueryResult<FavoritesResponse> {
     queryKey: ["favorites"],
     queryFn: fetchFavorites,
     enabled: isAuthenticated,
+    staleTime: 60 * 1000,
+  });
+}
+
+/** Public: who favorited a team/event + total count. */
+export function useFavoriteItemDetail(
+  itemType: FavoriteItemType,
+  itemKey: string | number | undefined,
+): UseQueryResult<FavoriteItemDetailResponse> {
+  const key = itemKey != null ? String(itemKey) : "";
+  return useQuery({
+    queryKey: ["favorites", "item", itemType, key],
+    queryFn: () => fetchFavoriteItemDetail(itemType, key),
+    enabled: Boolean(key),
+    staleTime: 60 * 1000,
+  });
+}
+
+/** Public map of item_key -> favorite count (leaderboards). */
+export function useFavoriteCounts(itemType: FavoriteItemType = "team"): UseQueryResult<FavoriteCountsResponse> {
+  return useQuery({
+    queryKey: ["favorites", "counts", itemType],
+    queryFn: () => fetchFavoriteCounts(itemType),
     staleTime: 60 * 1000,
   });
 }
@@ -56,8 +96,12 @@ export function useToggleFavorite() {
     onError: (_err, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(["favorites"], context.previous);
     },
-    onSettled: () => {
+    onSettled: (_data, _err, vars) => {
       queryClient.invalidateQueries({ queryKey: ["favorites"] });
+      if (vars) {
+        queryClient.invalidateQueries({ queryKey: ["favorites", "item", vars.itemType, vars.itemKey] });
+        queryClient.invalidateQueries({ queryKey: ["favorites", "counts", vars.itemType] });
+      }
     },
   });
 }

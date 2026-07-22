@@ -425,6 +425,24 @@ export interface FavoriteStatusResponse {
   count: number;
 }
 
+export interface FavoriterUser {
+  id: number;
+  username: string;
+  avatar_key?: string | null;
+}
+
+export interface FavoriteItemDetailResponse {
+  item_type: FavoriteItemType;
+  item_key: string;
+  count: number;
+  users: FavoriterUser[];
+}
+
+export interface FavoriteCountsResponse {
+  item_type: FavoriteItemType;
+  counts: Record<string, number>;
+}
+
 // ---- Static search index (data/teams.json, data/events.json) ----
 export interface SearchTeamEntry {
   nickname: string;

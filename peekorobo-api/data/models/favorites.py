@@ -8,7 +8,12 @@ or the event key.
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from query.favorites import FavoritesResponse
+from query.favorites import (
+    FavoriteCountsResponse,
+    FavoriteItemDetailResponse,
+    FavoriterUser,
+    FavoritesResponse,
+)
 
 
 def list_favorites(db: Session, user_id: int) -> FavoritesResponse:
@@ -43,6 +48,55 @@ def favorite_count(db: Session, item_type: str, item_key: str) -> int:
         ),
         {"t": item_type, "k": item_key},
     ).scalar() or 0
+
+
+def list_favoriters(
+    db: Session, item_type: str, item_key: str, limit: int = 100
+) -> FavoriteItemDetailResponse:
+    """Public: who favorited this team/event (newest first)."""
+    rows = db.execute(
+        text(
+            """
+            SELECT u.id, u.username, u.avatar_key
+            FROM saved_items s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.item_type = :t AND s.item_key = :k
+            ORDER BY s.id DESC
+            LIMIT :lim
+            """
+        ),
+        {"t": item_type, "k": item_key, "lim": limit},
+    ).all()
+    users = [
+        FavoriterUser(id=int(r.id), username=r.username, avatar_key=r.avatar_key)
+        for r in rows
+    ]
+    total = favorite_count(db, item_type, item_key)
+    return FavoriteItemDetailResponse(
+        item_type=item_type,  # type: ignore[arg-type]
+        item_key=item_key,
+        count=total,
+        users=users,
+    )
+
+
+def favorite_counts(db: Session, item_type: str) -> FavoriteCountsResponse:
+    """Public map of item_key -> favorite count for leaderboards."""
+    rows = db.execute(
+        text(
+            """
+            SELECT item_key, COUNT(*) AS c
+            FROM saved_items
+            WHERE item_type = :t
+            GROUP BY item_key
+            """
+        ),
+        {"t": item_type},
+    ).all()
+    return FavoriteCountsResponse(
+        item_type=item_type,  # type: ignore[arg-type]
+        counts={str(r.item_key): int(r.c) for r in rows},
+    )
 
 
 def add_favorite(db: Session, user_id: int, item_type: str, item_key: str) -> None:
