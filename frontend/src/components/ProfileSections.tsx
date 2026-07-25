@@ -14,6 +14,7 @@ import {
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import {
   IconCalendarEvent,
   IconStarFilled,
@@ -37,6 +38,7 @@ interface ProfileHeroProps {
   favoritesCount?: number;
   onShowFollowers?: () => void;
   onShowFollowing?: () => void;
+  onShowFavorites?: () => void;
   actions?: ReactNode;
 }
 
@@ -45,8 +47,10 @@ export function ProfileHero({
   favoritesCount,
   onShowFollowers,
   onShowFollowing,
+  onShowFavorites,
   actions,
 }: ProfileHeroProps) {
+  const isMobile = useMediaQuery("(max-width: 48em)");
   const accent = user.color || null;
   const gradient = accent
     ? `linear-gradient(135deg, ${accent} 0%, #0d0d0d 135%)`
@@ -57,11 +61,13 @@ export function ProfileHero({
   const chipBg = onDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.1)";
   const chipBorder = onDark ? "rgba(255,255,255,0.32)" : "rgba(0,0,0,0.22)";
   const initials = user.username.slice(0, 2).toUpperCase();
+  const avatarSize = isMobile ? 72 : 104;
+  const frameRadius = isMobile ? 16 : 22;
 
   return (
     <Card
       radius="lg"
-      p="xl"
+      p={{ base: "md", sm: "xl" }}
       style={{
         position: "relative",
         background: [
@@ -77,91 +83,113 @@ export function ProfileHero({
         overflow: "hidden",
       }}
     >
-      <Group
-        justify="space-between"
-        align="flex-start"
-        wrap="nowrap"
-        style={{ position: "relative", zIndex: 1 }}
-      >
-        <Group align="center" wrap="nowrap" gap="lg">
-          <Box
-            style={{
-              flexShrink: 0,
-              padding: 6,
-              borderRadius: 22,
-              background: "rgba(0,0,0,0.32)",
-              border: "1px solid rgba(255,255,255,0.28)",
-              backdropFilter: "blur(8px)",
-              WebkitBackdropFilter: "blur(8px)",
-              boxShadow: "0 8px 26px rgba(0,0,0,0.32)",
-            }}
-          >
-            <Avatar src={userAvatar(user.avatar_key)} size={104} radius={16} alt={user.username}>
-              {initials}
-            </Avatar>
-          </Box>
-          <Stack gap={6} style={{ minWidth: 0 }}>
-            <Title order={1} c={text} style={{ wordBreak: "break-word", lineHeight: 1.1 }}>
-              {user.username}
-            </Title>
-            <Group gap="xs">
-              <Badge
-                radius="sm"
-                styles={{
-                  root: {
-                    background: chipBg,
-                    color: text,
-                    border: `1px solid ${chipBorder}`,
-                    textTransform: "none",
-                  },
-                }}
+      <Stack gap={isMobile ? "md" : "lg"} style={{ position: "relative", zIndex: 1 }}>
+        <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
+          <Group align="center" wrap="nowrap" gap={isMobile ? "sm" : "lg"} style={{ minWidth: 0, flex: 1 }}>
+            <Box
+              style={{
+                flexShrink: 0,
+                padding: isMobile ? 4 : 6,
+                borderRadius: frameRadius,
+                background: "rgba(0,0,0,0.32)",
+                border: "1px solid rgba(255,255,255,0.28)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+                boxShadow: "0 8px 26px rgba(0,0,0,0.32)",
+              }}
+            >
+              <Avatar
+                src={userAvatar(user.avatar_key)}
+                size={avatarSize}
+                radius={isMobile ? 12 : 16}
+                alt={user.username}
               >
-                {user.role || "Member"}
-              </Badge>
-              {user.team ? (
-                <Anchor
-                  component={Link}
-                  to={`/team/${user.team}`}
-                  c={text}
-                  fw={700}
-                  style={{ textDecoration: "underline" }}
+                {initials}
+              </Avatar>
+            </Box>
+            <Stack gap={6} style={{ minWidth: 0, flex: 1 }}>
+              <Title
+                order={1}
+                c={text}
+                fz={{ base: 26, sm: 34 }}
+                style={{ wordBreak: "break-word", lineHeight: 1.1 }}
+              >
+                {user.username}
+              </Title>
+              <Group gap="xs">
+                <Badge
+                  radius="sm"
+                  styles={{
+                    root: {
+                      background: chipBg,
+                      color: text,
+                      border: `1px solid ${chipBorder}`,
+                      textTransform: "none",
+                    },
+                  }}
                 >
-                  Team {user.team}
-                </Anchor>
-              ) : null}
-            </Group>
-            <Group gap={40} mt={6}>
-              <HeroStat
-                label="Followers"
-                value={user.followers_count}
-                onClick={onShowFollowers}
-                color={text}
-                dim={dim}
-              />
-              <HeroStat
-                label="Following"
-                value={user.following_count}
-                onClick={onShowFollowing}
-                color={text}
-                dim={dim}
-              />
-              {favoritesCount !== undefined ? (
-                <HeroStat label="Favorites" value={favoritesCount} color={text} dim={dim} />
-              ) : null}
-            </Group>
-            {user.bio ? (
-              <Text c={text} mt={6} style={{ whiteSpace: "pre-wrap", maxWidth: 560, opacity: 0.95 }}>
-                {user.bio}
-              </Text>
-            ) : null}
-          </Stack>
-        </Group>
-        {actions ? (
-          <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
-            {actions}
+                  {user.role || "Member"}
+                </Badge>
+                {user.team ? (
+                  <Anchor
+                    component={Link}
+                    to={`/team/${user.team}`}
+                    c={text}
+                    fw={700}
+                    style={{ textDecoration: "underline" }}
+                  >
+                    Team {user.team}
+                  </Anchor>
+                ) : null}
+              </Group>
+            </Stack>
           </Group>
+
+          {actions ? (
+            <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }} visibleFrom="sm">
+              {actions}
+            </Group>
+          ) : null}
+        </Group>
+
+        <Group gap={isMobile ? "lg" : 40} wrap="wrap">
+          <HeroStat
+            label="Followers"
+            value={user.followers_count}
+            onClick={onShowFollowers}
+            color={text}
+            dim={dim}
+          />
+          <HeroStat
+            label="Following"
+            value={user.following_count}
+            onClick={onShowFollowing}
+            color={text}
+            dim={dim}
+          />
+          {favoritesCount !== undefined ? (
+            <HeroStat
+              label="Favorites"
+              value={favoritesCount}
+              onClick={onShowFavorites}
+              color={text}
+              dim={dim}
+            />
+          ) : null}
+        </Group>
+
+        {user.bio ? (
+          <Text c={text} style={{ whiteSpace: "pre-wrap", maxWidth: 640, opacity: 0.95 }}>
+            {user.bio}
+          </Text>
         ) : null}
-      </Group>
+
+        {actions ? (
+          <Stack gap="xs" hiddenFrom="sm">
+            {actions}
+          </Stack>
+        ) : null}
+      </Stack>
     </Card>
   );
 }

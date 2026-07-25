@@ -3,6 +3,7 @@ import {
   Anchor,
   Badge,
   Box,
+  Button,
   Card,
   Group,
   SegmentedControl,
@@ -13,7 +14,7 @@ import {
   ThemeIcon,
   Title,
 } from "@mantine/core";
-import { IconTrophy } from "@tabler/icons-react";
+import { IconBroadcast, IconExternalLink, IconTrophy } from "@tabler/icons-react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   useEvent,
@@ -52,9 +53,11 @@ import {
   eventWeekLabel,
   formatDateRange,
   formatNumber,
+  formatPredictedTime,
   locationString,
   yearFromEventKey,
 } from "../lib/format";
+import { webcastLink } from "../lib/webcast";
 
 const COMP_LEVEL_ORDER: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
 
@@ -142,15 +145,22 @@ function MatchesTable({
       {
         key: "score",
         header: "Score",
-        width: 100,
-        sortValue: (m) => (isPlayed(m) ? Math.max(m.red_score, m.blue_score) : -1),
+        width: 140,
+        sortValue: (m) =>
+          isPlayed(m) ? Math.max(m.red_score, m.blue_score) : (m.predicted_time ?? -1),
+        exportValue: (m) => {
+          if (isPlayed(m)) return `${m.red_score}-${m.blue_score}`;
+          return formatPredictedTime(m.predicted_time) ?? "";
+        },
         render: (m) => {
-          if (!isPlayed(m))
+          if (!isPlayed(m)) {
+            const when = formatPredictedTime(m.predicted_time);
             return (
-              <Text c="dimmed" span>
-                TBD
+              <Text c="dimmed" span size="sm" title={when ? "Predicted start (local time)" : undefined}>
+                {when ?? "TBD"}
               </Text>
             );
+          }
           const redWin = m.winning_alliance === "red";
           const blueWin = m.winning_alliance === "blue";
           return (
@@ -920,6 +930,12 @@ export function Event() {
   if (eventQuery.isLoading) return <LoadingState label={`Loading ${eventKey}...`} />;
   if (eventQuery.error) return <ErrorState error={eventQuery.error} />;
 
+  const stream = event
+    ? webcastLink({ type: event.webcast_type, channel: event.webcast_channel })
+    : null;
+  const website =
+    event?.website && /^https?:\/\//i.test(event.website.trim()) ? event.website.trim() : null;
+
   return (
     <Stack gap="lg" py="md">
       <Group gap="md" align="stretch" wrap="nowrap">
@@ -968,6 +984,37 @@ export function Event() {
           <Text size="sm" c="dimmed">
             {formatDateRange(event.event_data.start_date, event.event_data.end_date)}
           </Text>
+        ) : null}
+        {stream || website ? (
+          <Group gap="xs" mt={4} wrap="wrap">
+            {stream ? (
+              <Button
+                component="a"
+                href={stream.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                size="compact-sm"
+                variant="filled"
+                color="red"
+                leftSection={<IconBroadcast size={14} />}
+              >
+                {stream.label}
+              </Button>
+            ) : null}
+            {website ? (
+              <Button
+                component="a"
+                href={website}
+                target="_blank"
+                rel="noopener noreferrer"
+                size="compact-sm"
+                variant="light"
+                leftSection={<IconExternalLink size={14} />}
+              >
+                Event website
+              </Button>
+            ) : null}
+          </Group>
         ) : null}
         </Stack>
       </Group>

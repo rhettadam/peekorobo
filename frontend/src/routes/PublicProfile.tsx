@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button, Card, SimpleGrid, Stack } from "@mantine/core";
 import { IconUserMinus, IconUserPlus } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { fetchPublicProfile } from "../api/auth";
 import { useToggleFollow } from "../api/follows";
 import { useAuth } from "../auth/AuthContext";
@@ -67,6 +67,9 @@ export function PublicProfile() {
         favoritesCount={favorite_teams.length + favorite_events.length}
         onShowFollowers={() => setListMode("followers")}
         onShowFollowing={() => setListMode("following")}
+        onShowFavorites={() =>
+          document.getElementById("profile-favorites")?.scrollIntoView({ behavior: "smooth", block: "start" })
+        }
         actions={
           !is_self ? (
             <Button
@@ -79,7 +82,11 @@ export function PublicProfile() {
             >
               {is_following ? "Unfollow" : "Follow"}
             </Button>
-          ) : null
+          ) : (
+            <Button component={Link} to="/user?edit=1" variant="white" color="dark" size="sm">
+              Edit profile
+            </Button>
+          )
         }
       />
 
@@ -92,7 +99,7 @@ export function PublicProfile() {
         />
       ) : null}
 
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+      <SimpleGrid id="profile-favorites" cols={{ base: 1, md: 2 }} spacing="lg">
         <Card withBorder radius="md" p="md">
           <FavoritesSectionHeader label="Favorite Teams" count={teams.length} />
           {teams.length === 0 ? (

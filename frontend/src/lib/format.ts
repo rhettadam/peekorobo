@@ -99,3 +99,21 @@ export function eventTypeLabel(eventType?: string | null): string {
 export function locationString(city?: string, state?: string, country?: string): string {
   return [city, state, country].map((p) => (p || "").trim()).filter(Boolean).join(", ");
 }
+
+/**
+ * Format TBA `predicted_time` (unix seconds, or ms if oversized) in the client's
+ * local timezone. Returns null when missing/invalid.
+ */
+export function formatPredictedTime(predictedTime?: number | null): string | null {
+  if (predictedTime == null || !Number.isFinite(predictedTime) || predictedTime <= 0) return null;
+  const ms = predictedTime > 1e12 ? predictedTime : predictedTime * 1000;
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}

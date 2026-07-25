@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Literal, Optional
 
 
 class EventInsightRow(BaseModel):
@@ -12,6 +12,8 @@ class EventInsightRow(BaseModel):
     median_ace: float
     iqr_ace: float
     std_ace: float
+    # "event" = rolled up from per-event ACE; "season" = season totals fallback
+    source: Literal["event", "season"] = "season"
 
 
 class EventInsightsResponse(BaseModel):

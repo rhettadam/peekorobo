@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ActionIcon,
   Alert,
+  Anchor,
   Button,
   Card,
   Code,
@@ -23,13 +24,14 @@ import {
   IconAlertCircle,
   IconCheck,
   IconCopy,
+  IconExternalLink,
   IconKey,
   IconLogout,
   IconRefresh,
   IconTrash,
 } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useFavorites, useToggleFavorite } from "../api/favorites";
 import { fetchApiKey, generateApiKey, revokeApiKey, updateProfile } from "../api/auth";
@@ -58,7 +60,13 @@ function FavoriteTeamsCard() {
           Loading...
         </Text>
       ) : teams.length === 0 ? (
-        <EmptyState>No favorite teams yet. Star a team to see it here.</EmptyState>
+        <EmptyState>
+          No favorite teams yet.{" "}
+          <Anchor component={Link} to="/teams" size="sm">
+            Browse teams
+          </Anchor>{" "}
+          and star ones you follow.
+        </EmptyState>
       ) : (
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
           {teams.map((t) => (
@@ -86,7 +94,13 @@ function FavoriteEventsCard() {
           Loading...
         </Text>
       ) : events.length === 0 ? (
-        <EmptyState>No favorite events yet. Star an event to see it here.</EmptyState>
+        <EmptyState>
+          No favorite events yet.{" "}
+          <Anchor component={Link} to="/events" size="sm">
+            Browse events
+          </Anchor>{" "}
+          and star ones you care about.
+        </EmptyState>
       ) : (
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
           {events.map((e) => (
@@ -217,6 +231,8 @@ function ApiKeySection() {
 
 export function Profile() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, isLoading, isAuthenticated, logout, setUser } = useAuth();
   const { data: favorites } = useFavorites();
 
@@ -242,6 +258,30 @@ export function Profile() {
   useEffect(() => {
     if (!isLoading && !isAuthenticated) navigate("/login", { replace: true });
   }, [isLoading, isAuthenticated, navigate]);
+
+  // Deep-links from the account menu: ?edit=1 opens the editor; #profile-favorites scrolls down.
+  useEffect(() => {
+    if (!user) return;
+    if (searchParams.get("edit") === "1") {
+      setEditing(true);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("edit");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [user, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!user || location.hash !== "#profile-favorites") return;
+    const id = window.setTimeout(() => {
+      document.getElementById("profile-favorites")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+    return () => window.clearTimeout(id);
+  }, [user, location.hash, favorites]);
 
   useEffect(() => {
     if (user) {
@@ -298,8 +338,21 @@ export function Profile() {
         favoritesCount={favoritesCount}
         onShowFollowers={() => setListMode("followers")}
         onShowFollowing={() => setListMode("following")}
+        onShowFavorites={() =>
+          document.getElementById("profile-favorites")?.scrollIntoView({ behavior: "smooth", block: "start" })
+        }
         actions={
           <>
+            <Button
+              component={Link}
+              to={`/user/${user.username}`}
+              variant="white"
+              color="dark"
+              size="sm"
+              leftSection={<IconExternalLink size={16} />}
+            >
+              Public page
+            </Button>
             <Button variant="white" color="dark" size="sm" onClick={() => setEditing((v) => !v)}>
               {editing ? "Cancel" : "Edit Profile"}
             </Button>
@@ -377,7 +430,7 @@ export function Profile() {
         </Card>
       ) : null}
 
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+      <SimpleGrid id="profile-favorites" cols={{ base: 1, md: 2 }} spacing="lg">
         <FavoriteTeamsCard />
         <FavoriteEventsCard />
       </SimpleGrid>

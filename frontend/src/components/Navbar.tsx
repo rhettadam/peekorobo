@@ -17,6 +17,7 @@ import {
   IconChevronDown,
   IconLogout,
   IconMoon,
+  IconPencil,
   IconStar,
   IconSun,
   IconUser,
@@ -120,17 +121,43 @@ function UserMenu({ onNavigate }: { onNavigate: () => void }) {
             {user.username}
           </Text>
         </Menu.Label>
-        <Menu.Item leftSection={<IconUser size={16} />} onClick={() => navigate("/user")}>
+        <Menu.Item
+          leftSection={<IconUser size={16} />}
+          onClick={() => {
+            onNavigate();
+            navigate("/user");
+          }}
+        >
           My Profile
         </Menu.Item>
-        <Menu.Item leftSection={<IconStar size={16} />} onClick={() => navigate("/user")}>
+        <Menu.Item
+          leftSection={<IconStar size={16} />}
+          onClick={() => {
+            onNavigate();
+            navigate("/user#profile-favorites");
+          }}
+        >
           Favorites
         </Menu.Item>
+        <Menu.Item
+          leftSection={<IconPencil size={16} />}
+          onClick={() => {
+            onNavigate();
+            navigate("/user?edit=1");
+          }}
+        >
+          Edit Profile
+        </Menu.Item>
         <Divider />
-        <Menu.Item color="red" leftSection={<IconLogout size={16} />} onClick={() => {
-          logout();
-          navigate("/");
-        }}>
+        <Menu.Item
+          color="red"
+          leftSection={<IconLogout size={16} />}
+          onClick={() => {
+            logout();
+            onNavigate();
+            navigate("/");
+          }}
+        >
           Logout
         </Menu.Item>
       </Menu.Dropdown>
@@ -158,6 +185,12 @@ function MobileAuthLinks({ onNavigate }: { onNavigate: () => void }) {
     <>
       <NavLink to="/user" onClick={onNavigate} style={linkStyle}>
         My Profile
+      </NavLink>
+      <NavLink to="/user#profile-favorites" onClick={onNavigate} style={linkStyle}>
+        Favorites
+      </NavLink>
+      <NavLink to="/user?edit=1" onClick={onNavigate} style={linkStyle}>
+        Edit Profile
       </NavLink>
       <Text
         component="button"

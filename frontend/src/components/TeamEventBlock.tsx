@@ -6,6 +6,7 @@ import { TeamName } from "../components/TeamName";
 import { StatPill } from "../components/StatPill";
 import { RecordCell } from "../components/RecordCell";
 import { predictionColor, isPlayed } from "../lib/prediction";
+import { formatPredictedTime } from "../lib/format";
 import type { EventPerfEntry, MatchResponse } from "../types/api";
 
 const COMP_LEVEL_ORDER: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
@@ -187,7 +188,7 @@ export function TeamEventBlock({
                   <Table.Th w={80}>Match</Table.Th>
                   <Table.Th>Red</Table.Th>
                   <Table.Th>Blue</Table.Th>
-                  <Table.Th w={90}>Score</Table.Th>
+                  <Table.Th w={130}>Score</Table.Th>
                   <Table.Th w={90}>Prediction</Table.Th>
                   <Table.Th w={80}>Outcome</Table.Th>
                 </Table.Tr>
@@ -266,8 +267,17 @@ export function TeamEventBlock({
                             </Text>
                           </>
                         ) : (
-                          <Text span c="dimmed">
-                            TBD
+                          <Text
+                            span
+                            c="dimmed"
+                            size="sm"
+                            title={
+                              formatPredictedTime(m.predicted_time)
+                                ? "Predicted start (local time)"
+                                : undefined
+                            }
+                          >
+                            {formatPredictedTime(m.predicted_time) ?? "TBD"}
                           </Text>
                         )}
                       </Table.Td>

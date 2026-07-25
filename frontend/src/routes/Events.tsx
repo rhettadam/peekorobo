@@ -21,6 +21,7 @@ import { ErrorState, LoadingState, EmptyState } from "../components/StateWrapper
 import { DataTable, type Column } from "../components/DataTable";
 import { MetricCell } from "../components/MetricCell";
 import { AceLegend } from "../components/AceLegend";
+import { EventFigures, type InsightRow } from "../components/EventFigures";
 import { gameLogo } from "../lib/assets";
 import { availableYears, CURRENT_YEAR } from "../lib/constants";
 import { computePercentiles } from "../lib/epa";
@@ -34,9 +35,6 @@ import {
 } from "../lib/format";
 
 const ALL = "all";
-
-/** An event-insights stat row joined with its event metadata for display. */
-type InsightRow = EventInsightRow & { event: EventData };
 
 function EventCard({ event }: { event: EventData }) {
   return (
@@ -240,7 +238,7 @@ export function Events() {
   }, [filtered]);
 
   // ---- Event Insights: season-wide per-event ACE stats (deferred until tab open) ----
-  const insightsQuery = useEventInsights(year, { enabled: view === "insights" });
+  const insightsQuery = useEventInsights(year, { enabled: view === "insights" || view === "figures" });
   const insightsByKey = useMemo(() => {
     const m = new Map<string, EventInsightRow>();
     for (const r of insightsQuery.data?.events ?? []) m.set(r.event_key, r);
@@ -322,6 +320,17 @@ export function Events() {
         width: 110,
         sortValue: (r) => eventTypeLabel(r.event.event_data.event_type),
         render: (r) => eventTypeLabel(r.event.event_data.event_type),
+      },
+      {
+        key: "source",
+        header: "Source",
+        width: 90,
+        sortValue: (r) => r.source ?? "season",
+        render: (r) => (
+          <Badge variant="light" color={(r.source ?? "season") === "event" ? "teal" : "gray"} size="sm">
+            {(r.source ?? "season") === "event" ? "Event" : "Season"}
+          </Badge>
+        ),
       },
       {
         key: "teams",
@@ -487,6 +496,7 @@ export function Events() {
             <Tabs.Tab value="cards">Cards</Tabs.Tab>
             <Tabs.Tab value="list">List</Tabs.Tab>
             <Tabs.Tab value="insights">Event Insights</Tabs.Tab>
+            <Tabs.Tab value="figures">Figures</Tabs.Tab>
           </Tabs.List>
 
           <Tabs.Panel value="cards" pt="md">
@@ -551,8 +561,8 @@ export function Events() {
             ) : (
               <Stack gap="sm">
                 <Text size="sm" c="dimmed">
-                  Season-wide ACE statistics across each event's participating teams. Sorted by Top 8
-                  ACE.
+                  Per-event ACE when an event has event perfs; otherwise season ACE of attending
+                  teams. Sorted by Top 8 ACE.
                 </Text>
                 <AceLegend />
                 <DataTable
@@ -566,6 +576,18 @@ export function Events() {
                   exportFileName={`peekorobo-event-insights-${year}`}
                 />
               </Stack>
+            )}
+          </Tabs.Panel>
+
+          <Tabs.Panel value="figures" pt="md">
+            {insightsQuery.isLoading ? (
+              <LoadingState label={`Computing ${year} event figures...`} />
+            ) : insightsQuery.error ? (
+              <ErrorState error={insightsQuery.error} />
+            ) : insightRows.length === 0 ? (
+              <EmptyState>No event figures available for these filters.</EmptyState>
+            ) : (
+              <EventFigures year={year} rows={insightRows} />
             )}
           </Tabs.Panel>
         </Tabs>

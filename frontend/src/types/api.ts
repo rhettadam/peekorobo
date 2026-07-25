@@ -198,6 +198,8 @@ export interface EventInsightRow {
   median_ace: number;
   iqr_ace: number;
   std_ace: number;
+  /** "event" = per-event ACE; "season" = season totals fallback */
+  source?: "event" | "season";
 }
 
 export interface EventInsightsResponse {
