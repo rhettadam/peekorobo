@@ -185,7 +185,6 @@ export function EventFigures({ year, rows }: EventFiguresProps) {
       rows.map((r) => ({
         teamCount: r.team_count,
         ace: Number(valueOf(r).toFixed(2)),
-        name: r.event.event_data.name,
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, metric],
