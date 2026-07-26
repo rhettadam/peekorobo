@@ -10,7 +10,7 @@ from datetime import datetime, date, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 import random
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 from functools import wraps
 import signal
 import sys
@@ -21,6 +21,7 @@ import traceback
 
 from yearmodels import *
 from active_events import get_active_event_keys
+from ace_attribution import Method, simulate_event, TeamPhaseState
 
 start_time = time.time()
 
@@ -28,6 +29,26 @@ load_dotenv()
 
 # Verbose per-team EPA trace logs; off in production to reduce log I/O and noise.
 _EPA_DEBUG = os.environ.get("EPA_DEBUG", "").lower() in ("1", "true", "yes")
+
+# ACE attribution method. residual_shrink (default) = residual obs blended toward S/n
+# to limit carry-inflation / stacked-alliance suppression. Override with ACE_METHOD.
+_ACE_METHOD: Method = os.environ.get("ACE_METHOD", "residual_shrink").strip().lower()  # type: ignore[assignment]
+if _ACE_METHOD not in ("residual", "equal_split", "residual_shrink", "baseline_current"):
+    _ACE_METHOD = "residual_shrink"
+
+# Blend toward equal share when using residual_shrink (0 = pure residual).
+_ACE_SHRINK = float(os.environ.get("ACE_SHRINK", "0.05"))
+
+# EMA learning rate and spike dampening (1.0 = no damp).
+_ACE_K_BASE = float(os.environ.get("ACE_K_BASE", "0.4"))
+_ACE_SPIKE_DAMP = float(os.environ.get("ACE_SPIKE_DAMP", "1.0"))
+
+# Cross-event RAW prior: seed each event from season-to-date phase estimates.
+_ACE_CARRY_PRIOR = os.environ.get("ACE_CARRY_PRIOR", "1").strip().lower() in ("1", "true", "yes")
+_ACE_PRIOR_BLEND = float(os.environ.get("ACE_PRIOR_BLEND", "1.0"))
+
+# Logistic scale for win probs on RAW/ACE diffs (retuned for debiased residual RAW).
+_WIN_PROB_SCALE_BASE = float(os.environ.get("ACE_WIN_PROB_SCALE", "0.04"))
 
 TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
 
@@ -74,6 +95,9 @@ def _release_pipeline_lock(conn) -> None:
 
 # Global match cache to avoid redundant API calls
 match_cache = {}
+# event_key -> {team_key: event_epa dict} for match-centric residual attribution
+_event_epa_cache: Dict[str, Dict[str, dict]] = {}
+_event_epa_lock = threading.Lock()
 
 # API call counter
 api_call_counter = 0
@@ -87,21 +111,16 @@ CONFIDENCE_WEIGHTS = {
     "events": 0.10,
 }
 
-CONFIDENCE_THRESHOLDS = {
-    "high": 0.9,  # Lower threshold for high confidence boost
-    "low": 0.7,   # Higher threshold for low confidence reduction
-}
-
-CONFIDENCE_MULTIPLIERS = {
-    "high_boost": 1.05,  # Reduced multiplier for high confidence
-    "low_reduction": 0.85  # Increased multiplier for low confidence
-}
+# Component-weighted sum is typically ~0.55–0.93. Divide by this ceiling so
+# elite sums (~0.88+) map to ~1.0, strong teams (~0.79) land near ~0.90, and a
+# mid-pack sum (~0.54) lands near ~0.60. No nonlinear high/low cut.
+CONFIDENCE_CEILING = float(os.environ.get("ACE_CONFIDENCE_CEILING", "0.88"))
 
 # Confidence "event_boost" from number of distinct played events in the season (not chronological).
 EVENT_BOOSTS = {
-    1: 0.5,   # Single event
-    2: 0.8,  # Two events
-    3: 1.0    # Three or more events
+    1: 0.75,  # Was 0.5 — single-event teams were over-penalized
+    2: 0.90,
+    3: 1.0,
 }
 
 WEEK_RANGES_BY_YEAR = None
@@ -201,7 +220,11 @@ def tba_get(endpoint: str):
     print(f"API call {api_call_counter}: {endpoint}")
     
     api_key = random.choice(API_KEYS)
-    headers = {"X-TBA-Auth-Key": api_key}
+    headers = {
+        "X-TBA-Auth-Key": api_key,
+        "User-Agent": "peekorobo-eval/1.0 (local bakeoff; contact github.com/peekorobo)",
+        "Accept": "application/json",
+    }
     url = f"{TBA_BASE_URL}/{endpoint}"
     try:
         r = requests.get(url, headers=headers, timeout=30)  # Add 30 second timeout
@@ -1051,6 +1074,82 @@ def get_teams_for_year(year):
     return teams
 
 
+def stratified_team_sample(teams: List[dict], year: int, fraction: float, seed: int = 42) -> List[dict]:
+    """Pick ~fraction of teams across ACE performance strata for fast iteration.
+
+    Buckets by existing season ACE (zeros / missing in their own bucket), then
+    samples ``fraction`` from each stratum so elites, midfield, and bottom are
+    all represented.
+    """
+    import random as _random
+
+    fraction = max(0.01, min(1.0, float(fraction)))
+    if fraction >= 0.999 or len(teams) <= 20:
+        return list(teams)
+
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT team_number, COALESCE(ace, 0) FROM team_epas WHERE year = %s",
+        (year,),
+    )
+    ace_by_team = {int(r[0]): float(r[1] or 0) for r in cur.fetchall()}
+    cur.close()
+    conn.close()
+
+    scored = []
+    unscored = []
+    for t in teams:
+        tn = int(t["team_number"])
+        ace = ace_by_team.get(tn)
+        if ace is None or ace <= 0:
+            unscored.append(t)
+        else:
+            scored.append((ace, t))
+
+    scored.sort(key=lambda x: x[0])
+    n_bins = 5
+    bins: List[List[dict]] = [[] for _ in range(n_bins)]
+    if scored:
+        for i, (_, t) in enumerate(scored):
+            bins[min(n_bins - 1, (i * n_bins) // len(scored))].append(t)
+    if unscored:
+        bins.append(unscored)
+
+    rng = _random.Random(seed)
+    picked: List[dict] = []
+    for bucket in bins:
+        if not bucket:
+            continue
+        k = max(1, int(round(len(bucket) * fraction)))
+        k = min(k, len(bucket))
+        picked.extend(rng.sample(bucket, k))
+
+    picked.sort(key=lambda t: t["team_number"])
+    return picked
+
+
+def event_keys_for_teams(year: int, team_numbers) -> List[str]:
+    """All event keys in ``year`` attended by any of ``team_numbers``."""
+    team_numbers = list(team_numbers)
+    if not team_numbers:
+        return []
+    conn = get_pg_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT DISTINCT event_key
+        FROM event_teams
+        WHERE LEFT(event_key, 4) = %s AND team_number = ANY(%s)
+        """,
+        (str(year), team_numbers),
+    )
+    keys = [r[0] for r in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return keys
+
+
 def get_active_scope(year, buffer_days=2):
     """
     Resolve the incremental ("active-only") work set for a season.
@@ -1711,7 +1810,7 @@ def insert_event_data(results, year):
     conn.close()
 
 
-def fetch_and_store_team_data(year, active_only=False):
+def fetch_and_store_team_data(year, active_only=False, sample_fraction: Optional[float] = None):
     """
     Fetch and store team EPA data. Uses a Postgres advisory lock so only one pipeline
     runs at a time across scheduler one-off dynos; if another run holds the lock, exit.
@@ -1721,6 +1820,10 @@ def fetch_and_store_team_data(year, active_only=False):
     run would); all other teams' rows are left untouched. Ranks and predictions are
     still recomputed over the full team set. The advisory lock also serializes the
     active-only path against the full recompute so they never overlap.
+
+    sample_fraction (e.g. 0.1): stratified ~N% of teams across ACE levels for fast
+    local iteration. Skips global ranks/predictions so a partial write cannot distort
+    the full leaderboard.
     """
     lock_conn = get_pg_connection()
     cur = lock_conn.cursor()
@@ -1746,21 +1849,29 @@ def fetch_and_store_team_data(year, active_only=False):
         return
 
     try:
-        _fetch_and_store_team_data_impl(year, active_only=active_only)
+        _fetch_and_store_team_data_impl(
+            year, active_only=active_only, sample_fraction=sample_fraction
+        )
     finally:
         _release_pipeline_lock(lock_conn)
 
 
-def _fetch_and_store_team_data_impl(year, active_only=False):
+def _fetch_and_store_team_data_impl(
+    year, active_only=False, sample_fraction: Optional[float] = None
+):
     # Fetch and store team data, only updating what's changed
     global match_cache
     match_cache.clear()  # Clear cache for new year
+    with _event_epa_lock:
+        _event_epa_cache.clear()
     # Clear per-run memoization caches (mirrors match_cache) so a re-run in the
     # same process never serves stale team/event values.
     _team_experience_cache.clear()
     _team_played_events_cache.clear()
     _event_start_date_cache.clear()
     _event_meta_loaded_years.clear()
+
+    sample_mode = sample_fraction is not None and float(sample_fraction) < 0.999
 
     # Active-only: resolve the set of teams playing at currently-active events and
     # the full set of events those teams attend (needed so each active team's whole
@@ -1787,6 +1898,20 @@ def _fetch_and_store_team_data_impl(year, active_only=False):
             print("No active teams registered yet; refreshed active events only.")
             return
 
+    # Sample mode resolves the team list before event fetch so we only pull their events.
+    all_teams = get_teams_for_year(year)
+    if active_only:
+        all_teams = [t for t in all_teams if t["team_number"] in active_team_numbers]
+    if sample_mode:
+        before = len(all_teams)
+        all_teams = stratified_team_sample(all_teams, year, float(sample_fraction))
+        only_event_keys = event_keys_for_teams(year, [t["team_number"] for t in all_teams])
+        print(
+            f"Sample mode: {len(all_teams)}/{before} teams "
+            f"(~{100 * float(sample_fraction):.0f}% stratified by ACE), "
+            f"{len(only_event_keys)} event(s) to fetch."
+        )
+
     create_event_db(year, only_event_keys=only_event_keys)
     
     if shutdown_event.is_set():
@@ -1802,11 +1927,14 @@ def _fetch_and_store_team_data_impl(year, active_only=False):
     # get correct chronological weights during an active-only run.
     preload_event_metadata(year)
 
-    # Get all teams directly from PostgreSQL
-    all_teams = get_teams_for_year(year)
-    if active_only:
-        all_teams = [t for t in all_teams if t["team_number"] in active_team_numbers]
+    # One chronological simulation pass over match_cache (applies K/shrink/spike
+    # and optional cross-event priors before per-team aggregation).
+    precompute_season_event_epas(year)
+
+    if active_only and not sample_mode:
         print(f"Total active teams to process: {len(all_teams)}")
+    elif sample_mode:
+        print(f"Total sample teams to process: {len(all_teams)}")
     else:
         print(f"Total unique teams found from events: {len(all_teams)}")
 
@@ -1890,12 +2018,14 @@ def _fetch_and_store_team_data_impl(year, active_only=False):
         print("Shutdown requested, stopping team data update...")
         return
 
-    if not shutdown_event.is_set():
+    if not shutdown_event.is_set() and not sample_mode:
         try:
             compute_and_store_team_epa_ranks(year)
         except Exception as e:
             print(f"Failed to compute/store team ACE ranks for {year}: {e}")
             traceback.print_exc()
+    elif sample_mode:
+        print("Sample mode: skipping full-season ranks refresh.")
     
     print(f"\nTeam Update Summary for {year}:")
     print(f"  Total teams processed: {len(all_teams)}")
@@ -1911,7 +2041,7 @@ def _fetch_and_store_team_data_impl(year, active_only=False):
             print(f"  ... and {len(failed_teams) - 10} more")
 
     # Match predictions + Heroku restart (in-memory app cache; see restart_heroku_app).
-    if not shutdown_event.is_set():
+    if not shutdown_event.is_set() and not sample_mode:
         try:
             calculate_and_store_match_predictions(year)
         except Exception as e:
@@ -1920,6 +2050,8 @@ def _fetch_and_store_team_data_impl(year, active_only=False):
             # Runs after predictions success or exception; not reached if we returned early above
             # (e.g. shutdown) or if this process never got the pipeline lock in fetch_and_store_team_data.
             restart_heroku_app()
+    elif sample_mode:
+        print("Sample mode: skipping match predictions + app restart.")
 
 def get_team_experience(team_number: int, up_to_year: int) -> int:
     # Determine how many years a team has competed up to and including up_to_year.
@@ -1975,14 +2107,10 @@ def calculate_confidence(consistency: float, dominance: float, event_boost: floa
         CONFIDENCE_WEIGHTS["veteran"] * veteran_boost +
         CONFIDENCE_WEIGHTS["events"] * event_boost
     )
-    
-    # Apply non-linear scaling
-    if raw_confidence > CONFIDENCE_THRESHOLDS["high"]:
-        raw_confidence = CONFIDENCE_THRESHOLDS["high"] + (raw_confidence - CONFIDENCE_THRESHOLDS["high"]) * CONFIDENCE_MULTIPLIERS["high_boost"]
-    elif raw_confidence < CONFIDENCE_THRESHOLDS["low"]:
-        raw_confidence = raw_confidence * CONFIDENCE_MULTIPLIERS["low_reduction"]
-    
-    capped_confidence = max(0.0, min(1.0, raw_confidence))
+
+    # Linear map only: elite component sums (~0.90+) → ~1.0; mid-pack (~0.54) → ~0.60.
+    ceiling = CONFIDENCE_CEILING if CONFIDENCE_CEILING > 0 else 1.0
+    capped_confidence = max(0.0, min(1.0, raw_confidence / ceiling))
     return raw_confidence, capped_confidence, record_alignment
 
 def _effective_epa(team_infos: List[Dict]) -> float:
@@ -2006,7 +2134,7 @@ def predict_win_probability(red_info: List[Dict], blue_info: List[Dict]) -> tupl
         return 0.5, 0.5
 
     diff = red_eff - blue_eff
-    scale = (0.06 + 0.3 * (1 - reliability))
+    scale = (_WIN_PROB_SCALE_BASE + 0.3 * (1 - reliability))
     p_red = 1 / (1 + math.exp(-scale * diff))
     p_red = max(0.02, min(0.98, p_red))
     return p_red, 1 - p_red
@@ -2183,9 +2311,306 @@ def calculate_and_store_match_predictions(year: int):
         cur.close()
         conn.close()
 
-def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) -> Dict:
+def _empty_event_epa() -> Dict:
+    return {
+        "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
+        "confidence": 0.0, "ace": 0.0,
+        "match_count": 0, "raw_confidence": 0.0,
+        "consistency": 0.0, "dominance": 0.0,
+        "event_boost": 0.0, "veteran_boost": 0.0,
+        "years_experience": 0, "weights": {}, "record_alignment": 0.0,
+        "wins": 0, "losses": 0, "ties": 0,
+    }
+
+
+def _event_key_from_matches(matches: List[Dict]) -> Optional[str]:
+    if not matches:
+        return None
+    m = matches[0]
+    if m.get("event_key"):
+        return m["event_key"]
+    key = m.get("key") or ""
+    for marker in ("_qm", "_qf", "_sf", "_f", "_ef"):
+        if marker in key:
+            return key.split(marker)[0]
+    return key or None
+
+
+def _consistency_from_contributions(contributions: List[float]) -> float:
+    """Stability of the smoothed RAW path (skip cold-start ramp)."""
+    if len(contributions) < 2:
+        return 0.7
+    # Drop the first third so the initial climb from 0 does not look "inconsistent."
+    start = 0 if len(contributions) < 6 else len(contributions) // 3
+    series = contributions[start:]
+    if len(series) < 2:
+        series = contributions
+    peak = max(abs(x) for x in series) or 1.0
+    mean_c = abs(statistics.mean(series)) or 1.0
+    stdev = statistics.stdev(series)
+    # Softer than pure peak CV: blend peak + mean so stable mid-tier estimates score well.
+    scale = 0.6 * peak + 0.4 * mean_c
+    return max(0.55, min(1.0, 1.0 - stdev / (scale + 1e-6)))
+
+
+def _finalize_state_to_event_epa(
+    st: TeamPhaseState, team_key: str, team_number: int, year: int
+) -> Dict:
+    if st.match_count <= 0:
+        return _empty_event_epa()
+
+    consistency = _consistency_from_contributions(st.contributions)
+    dominance = min(1.0, statistics.mean(st.dominance_scores)) if st.dominance_scores else 0.0
+    played_event_keys = get_team_played_events(team_number, int(year))
+    total_events = len(played_event_keys)
+    event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])
+    raw_confidence, confidence, record_alignment = calculate_confidence(
+        consistency, dominance, event_boost, team_number, st.wins, st.losses, int(year)
+    )
+    overall = max(0.0, st.raw)
+    years = get_team_experience(team_number, int(year))
+    veteran_boost = get_veteran_boost(years)
+    return {
+        "raw": round(overall, 2),
+        "auto_raw": round(max(0.0, st.auto), 2),
+        "teleop_raw": round(max(0.0, st.teleop), 2),
+        "endgame_raw": round(max(0.0, st.endgame), 2),
+        "confidence": round(confidence, 2),
+        "ace": round(overall * confidence, 2),
+        "match_count": st.match_count,
+        "raw_confidence": raw_confidence,
+        "consistency": consistency,
+        "dominance": dominance,
+        "event_boost": event_boost,
+        "veteran_boost": veteran_boost,
+        "years_experience": years,
+        "weights": CONFIDENCE_WEIGHTS,
+        "record_alignment": record_alignment,
+        "wins": st.wins,
+        "losses": st.losses,
+        "ties": st.ties,
+    }
+
+
+def preload_confidence_lookups_from_match_cache(year: int) -> None:
+    """Fill played-event + experience caches without per-team SQL during precompute.
+
+    Played events are derived from ``match_cache`` (already fetched). Experience is
+    one grouped query for every team that appears in those matches.
+    """
+    y = int(year)
+    # event_key -> set of team_numbers that have a played match there
+    played: Dict[int, set] = {}
+    for ek, matches in match_cache.items():
+        for match in matches or []:
+            red = (match.get("alliances") or {}).get("red", {}).get("score")
+            blue = (match.get("alliances") or {}).get("blue", {}).get("score")
+            winning = match.get("winning_alliance")
+            if red == 0 and blue == 0 and winning not in ("red", "blue"):
+                continue
+            for color in ("red", "blue"):
+                for key in (match.get("alliances") or {}).get(color, {}).get("team_keys") or []:
+                    digits = "".join(ch for ch in str(key) if ch.isdigit())
+                    if not digits:
+                        continue
+                    tn = int(digits)
+                    played.setdefault(tn, set()).add(ek)
+
+    with _team_played_events_lock:
+        for tn, eks in played.items():
+            _team_played_events_cache[(tn, y)] = list(eks)
+
+    team_numbers = list(played.keys())
+    if not team_numbers:
+        return
+
     try:
-        # --- BEGIN FUNCTION BODY ---
+        with _pooled_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT team_number, COUNT(DISTINCT year)
+                FROM team_epas
+                WHERE year <= %s AND team_number = ANY(%s)
+                GROUP BY team_number
+                """,
+                (y, team_numbers),
+            )
+            rows = cur.fetchall()
+            cur.close()
+    except Exception as e:
+        print(f"preload experience lookup failed (non-fatal): {e}", flush=True)
+        return
+
+    with _team_experience_lock:
+        for tn, years in rows:
+            _team_experience_cache[(int(tn), y)] = int(years) if years else 1
+        # Teams with no prior team_epas rows still need a cache hit (rookie = 1).
+        for tn in team_numbers:
+            key = (tn, y)
+            if key not in _team_experience_cache:
+                _team_experience_cache[key] = 1
+
+
+def _get_or_compute_event_epa_map(matches: List[Dict], year: int, method: Method) -> Dict[str, dict]:
+    event_key = _event_key_from_matches(matches) or f"unknown-{id(matches)}"
+    cache_key = f"{event_key}::{method}"
+    with _event_epa_lock:
+        cached = _event_epa_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    states = simulate_event(
+        matches,
+        year,
+        method=method,
+        k_base=_ACE_K_BASE,
+        shrink=_ACE_SHRINK,
+        spike_damp=_ACE_SPIKE_DAMP,
+        prior_means=None,
+        seed_priors=False,
+    )
+    out: Dict[str, dict] = {}
+    for key, st in states.items():
+        digits = "".join(ch for ch in str(key) if ch.isdigit())
+        tn = int(digits) if digits else 0
+        out[key] = _finalize_state_to_event_epa(st, key, tn, year)
+
+    with _event_epa_lock:
+        _event_epa_cache[cache_key] = out
+    return out
+
+
+def precompute_season_event_epas(year: int) -> None:
+    """Simulate every cached event in chronological order (optional RAW prior carry).
+
+    Must run after ``match_cache`` is populated. Ensures one shared simulation per
+    event with the configured K/shrink/spike settings, and seeds later events from
+    earlier finals when ``ACE_CARRY_PRIOR`` is enabled.
+    """
+    if _ACE_METHOD == "baseline_current":
+        return
+    if not match_cache:
+        return
+
+    print(
+        f"Precomputing event EPA for {len(match_cache)} cached event(s) "
+        f"(carry_prior={int(_ACE_CARRY_PRIOR)})...",
+        flush=True,
+    )
+    preload_confidence_lookups_from_match_cache(year)
+
+    def _start(ek: str) -> str:
+        sd = _event_start_date_cache.get(ek)
+        return str(sd) if sd else ""
+
+    event_keys = sorted(match_cache.keys(), key=lambda ek: (_start(ek), ek))
+    priors: Dict[str, Tuple[float, float, float]] = {}
+    computed = 0
+    total = len(event_keys)
+    for i, ek in enumerate(event_keys, 1):
+        matches = match_cache.get(ek) or []
+        if not matches:
+            continue
+        cache_key = f"{ek}::{_ACE_METHOD}"
+        with _event_epa_lock:
+            if cache_key in _event_epa_cache:
+                if _ACE_CARRY_PRIOR:
+                    for key, epa in _event_epa_cache[cache_key].items():
+                        new = (
+                            float(epa.get("auto_raw") or 0.0),
+                            float(epa.get("teleop_raw") or 0.0),
+                            float(epa.get("endgame_raw") or 0.0),
+                        )
+                        if new == (0.0, 0.0, 0.0):
+                            continue
+                        old = priors.get(key)
+                        if not old or _ACE_PRIOR_BLEND >= 1.0:
+                            priors[key] = new
+                        else:
+                            b = _ACE_PRIOR_BLEND
+                            priors[key] = (
+                                (1.0 - b) * old[0] + b * new[0],
+                                (1.0 - b) * old[1] + b * new[1],
+                                (1.0 - b) * old[2] + b * new[2],
+                            )
+                continue
+
+        states = simulate_event(
+            matches,
+            int(year),
+            method=_ACE_METHOD,
+            k_base=_ACE_K_BASE,
+            shrink=_ACE_SHRINK,
+            spike_damp=_ACE_SPIKE_DAMP,
+            prior_means=priors if _ACE_CARRY_PRIOR else None,
+            seed_priors=_ACE_CARRY_PRIOR,
+        )
+        out: Dict[str, dict] = {}
+        for key, st in states.items():
+            digits = "".join(ch for ch in str(key) if ch.isdigit())
+            tn = int(digits) if digits else 0
+            out[key] = _finalize_state_to_event_epa(st, key, tn, int(year))
+            if _ACE_CARRY_PRIOR and st.initialized:
+                new = (st.auto, st.teleop, st.endgame)
+                old = priors.get(key)
+                if not old or _ACE_PRIOR_BLEND >= 1.0:
+                    priors[key] = new
+                else:
+                    b = _ACE_PRIOR_BLEND
+                    priors[key] = (
+                        (1.0 - b) * old[0] + b * new[0],
+                        (1.0 - b) * old[1] + b * new[1],
+                        (1.0 - b) * old[2] + b * new[2],
+                    )
+        with _event_epa_lock:
+            _event_epa_cache[cache_key] = out
+        computed += 1
+        if i == 1 or i % 25 == 0 or i == total:
+            print(f"  event EPA precompute {i}/{total} ({ek})", flush=True)
+
+    print(
+        f"Precomputed event EPA for {computed} event(s) "
+        f"(method={_ACE_METHOD}, shrink={_ACE_SHRINK}, k={_ACE_K_BASE}, "
+        f"spike_damp={_ACE_SPIKE_DAMP}, carry_prior={int(_ACE_CARRY_PRIOR)})",
+        flush=True,
+    )
+
+
+def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) -> Dict:
+    """Per-event ACE components for one team.
+
+    Default path uses match-centric residual attribution (shared across the event).
+    Set ACE_METHOD=baseline_current to use the legacy log-scaled cumulative EMA.
+    """
+    try:
+        if not matches:
+            return _empty_event_epa()
+        year = matches[0].get("event_key", matches[0].get("key", "2025"))[:4]
+        try:
+            year_int = int(year)
+        except Exception:
+            year_int = 2025
+
+        if _ACE_METHOD == "baseline_current":
+            return _calculate_event_epa_legacy(matches, team_key, team_number)
+
+        epa_map = _get_or_compute_event_epa_map(matches, year_int, _ACE_METHOD)
+        result = epa_map.get(team_key)
+        if result is None:
+            # Try alternate key forms
+            alt = f"frc{team_number}"
+            result = epa_map.get(alt)
+        return result or _empty_event_epa()
+    except Exception as e:
+        print(f"EPA FATAL ERROR for team {team_key}: {e}")
+        traceback.print_exc()
+        return _empty_event_epa()
+
+
+def _calculate_event_epa_legacy(matches: List[Dict], team_key: str, team_number: int) -> Dict:
+    try:
+        # --- BEGIN LEGACY FUNCTION BODY ---
         importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
         matches = sorted(matches, key=lambda m: m.get("time") or 0)
 
@@ -2411,12 +2836,7 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
                 "wins": 0, "losses": 0, "ties": 0
             }
 
-        if len(contributions) >= 2:
-            peak = max(contributions)
-            stdev = statistics.stdev(contributions)
-            consistency = max(0.0, 1.0 - stdev / (peak + 1e-6))
-        else:
-            consistency = 0.7
+        consistency = _consistency_from_contributions(contributions)
 
         dominance = min(1., statistics.mean(dominance_scores)) if dominance_scores else 0.0
 
@@ -2722,30 +3142,18 @@ def aggregate_overall_epa(event_epas: List[Dict], year: int = None, team_number:
         avg_event_boost = total_event_boost / total_weighted_match_count
         avg_record_alignment = total_record_alignment / total_weighted_match_count
 
-        # Calculate the weighted components for display
-        weights = valid_events[0].get("weights", {})
+        # Display components (informational) — do NOT rebuild season confidence from
+        # these and re-apply nonlinear scaling. That double-penalized residual noise
+        # and dropped median confidence into the mid-50s. Season confidence is the
+        # weighted mean of already-computed event confidences.
+        weights = valid_events[0].get("weights", {}) or CONFIDENCE_WEIGHTS
         consistency_component = weights.get("consistency", 0.0) * avg_consistency
         record_component = weights.get("record_alignment", 0.0) * avg_record_alignment
         veteran_component = weights.get("veteran", 0.0) * avg_veteran_boost
         dominance_component = weights.get("dominance", 0.0) * avg_dominance
         event_component = weights.get("events", 0.0) * avg_event_boost
-
-        # Calculate raw confidence from components
-        raw_confidence = (
-            consistency_component +
-            record_component +
-            veteran_component +
-            dominance_component +
-            event_component
-        )
-
-        # Apply non-linear scaling
-        if 'CONFIDENCE_THRESHOLDS' in globals() and 'CONFIDENCE_MULTIPLIERS' in globals():
-            if raw_confidence > CONFIDENCE_THRESHOLDS["high"]:
-                raw_confidence = CONFIDENCE_THRESHOLDS["high"] + (raw_confidence - CONFIDENCE_THRESHOLDS["high"]) * CONFIDENCE_MULTIPLIERS["high_boost"]
-            elif raw_confidence < CONFIDENCE_THRESHOLDS["low"]:
-                raw_confidence = raw_confidence * CONFIDENCE_MULTIPLIERS["low_reduction"]
-        final_confidence = max(0.0, min(1.0, raw_confidence))
+        raw_confidence = avg_confidence
+        final_confidence = max(0.0, min(1.0, avg_confidence))
 
         return {
             "raw": round(total_overall / total_weighted_match_count, 2),
@@ -2932,6 +3340,17 @@ if __name__ == "__main__":
         flags = {a for a in sys.argv[1:] if a.startswith("--")}
         ranks_only = "--ranks-only" in flags
         active_only = "--active-only" in flags
+        sample_fraction = None
+        for a in list(flags):
+            if a.startswith("--sample="):
+                try:
+                    sample_fraction = float(a.split("=", 1)[1])
+                except ValueError:
+                    print("Invalid --sample= value; use e.g. --sample=0.1")
+                    sys.exit(1)
+            elif a == "--sample":
+                # Bare flag defaults to 10% stratified sample
+                sample_fraction = 0.1
         if positional:
             try:
                 year = int(positional[0])
@@ -2942,7 +3361,9 @@ if __name__ == "__main__":
                 compute_and_store_team_epa_ranks(year)
                 restart_heroku_app()
             else:
-                fetch_and_store_team_data(year, active_only=active_only)
+                fetch_and_store_team_data(
+                    year, active_only=active_only, sample_fraction=sample_fraction
+                )
         else:
             main()
     except KeyboardInterrupt:

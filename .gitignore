@@ -10,3 +10,6 @@ peekorobo-api/.venv/
 
 # Local dev server logs
 *.log
+
+# Local ACE bake-off / recompute scratch
+data/tmp_eval/

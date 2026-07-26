@@ -1,3 +1,10 @@
+"""Year-specific TBA score_breakdown parsers (legacy cumulative scorers).
+
+Production residual ACE uses ``phase_totals.py`` for alliance phase totals
+(no log scaling). These functions remain for ``ACE_METHOD=baseline_current``
+and as a fallback recovery path for older seasons in ``phase_totals``.
+"""
+
 import statistics
 import math
 
@@ -1416,10 +1423,5 @@ def endgame_2026(breakdown, index):
         "L2": 20, "l2": 20, "Level2": 20, "level2": 20,
         "L3": 30, "l3": 30, "Level3": 30, "level3": 30,
     }.get(robot_endgame, 0)
-
-    if endgame_points == 0:
-        tower_points = breakdown.get("endGameTowerPoints")
-        if tower_points:
-            endgame_points = tower_points / 3
 
     return endgame_points

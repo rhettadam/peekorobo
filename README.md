@@ -1,4 +1,4 @@
-﻿![Peekorobo](assets/advbanner.png)
+![Peekorobo](assets/advbanner.png)
 
 # Peekorobo
 
@@ -13,7 +13,7 @@ Data-driven scouting and analysis for the [FIRST Robotics Competition](https://w
 1. [Features](#features)
 2. [ACE algorithm](#ace-algorithm)
 3. [Architecture & stack](#architecture--stack)
-8. [License](#license)
+4. [License](#license)
 
 ---
 
@@ -129,58 +129,78 @@ Register / login (JWT), profile page with avatar gallery, favorites, follows, AP
 
 **ACE** (Adjusted Contribution Estimate) is Peekorobo's contribution rating:
 
-> **ACE = RAW × confidence**
+$$
+\mathrm{ACE} = \mathrm{RAW} \times \mathrm{confidence}
+$$
 
-RAW estimates how many points a team contributes; confidence scales that by how trustworthy the estimate is. Implementation lives in [`data/run.py`](data/run.py) with year-specific scorers in [`data/yearmodels.py`](data/yearmodels.py).
+RAW estimates how many points a team contributes. Confidence scales that by how trustworthy the estimate is.
 
-### 1. Per-event RAW
+### Phase totals
 
-For each event a team plays:
+Each alliance score is split into auto, teleop, and endgame from TBA `score_breakdown`:
 
-1. Walk matches in time order.
-2. From each match's TBA `score_breakdown`, year-specific functions estimate the team's **auto / teleop / endgame** contribution.
-3. Update running RAW with a learning-rate style update (match importance × early-season decay; damp large positive spikes).
-4. Track per-match contributions and dominance margins for confidence.
+$$
+S_{\mathrm{auto}} = \mathrm{autoPoints},\quad
+S_{\mathrm{end}} = \text{(year-specific endgame)},\quad
+S_{\mathrm{teleop}} = \mathrm{totalPoints} - S_{\mathrm{auto}} - S_{\mathrm{end}}
+$$
 
-Legacy years (no breakdown) fall back to scaled alliance scores.
+so $S_{\mathrm{auto}} + S_{\mathrm{teleop}} + S_{\mathrm{end}} = \mathrm{totalPoints}$. Fouls and adjustments are absorbed into teleop. Phases are floored at zero.
 
-### 2. Per-event confidence
+### Residual attribution
 
-Confidence mixes five components (weights in `CONFIDENCE_WEIGHTS`):
+Within an event, played matches are walked in time order. For a shared phase with alliance total $S$ and $n$ robots, team $i$ with partners $j,k$ gets observation
+
+$$
+\mathrm{obs}_i = S - r_j - r_k
+$$
+
+(cold partners use equal share $S/n$). A light shrink blends toward equal share:
+
+$$
+\mathrm{obs}_i \leftarrow (1-\alpha)\,\mathrm{obs}_i + \alpha\,\frac{S}{n},\quad \alpha \approx 0.05
+$$
+
+then $\mathrm{obs}_i = \max(0, \mathrm{obs}_i)$. Per-robot endgame (climb/dock) uses the TBA value directly.
+
+Phase RAW updates with an exponential moving average. The first observation sets $r = \mathrm{obs}$; afterward
+
+$$
+r \leftarrow r + K(\mathrm{obs} - r),\quad K = K_0 \cdot w_{\mathrm{early}}
+$$
+
+with $K_0 \approx 0.4$ and $w_{\mathrm{early}}$ ramping from ~0.75 to 1 over the first few matches. Qual and playoff matches use the same $K$.
+
+Predicted alliance score is the sum of the three teams' RAW. Events run in season order; each team's final phase RAW seeds the next event as a prior so later events do not cold-start at zero.
+
+**Event RAW** is auto + teleop + endgame after the event. **Event ACE** = event RAW × event confidence.
+
+### Confidence
+
+Event confidence is a weighted mix of five components, then scaled linearly toward a ceiling $\approx 0.88$:
 
 | Component | Weight | Meaning |
 |-----------|--------|---------|
-| **Consistency** | 0.35 | Low spread of per-match contributions vs peak |
-| **Dominance** | 0.35 | Score margin vs opponent (adjusted if "carried") |
-| **Record alignment** | 0.10 | Win rate scaled into [0.5, 1] |
-| **Veteran** | 0.10 | Years of FRC experience |
-| **Events** | 0.10 | Boost from number of played events this season (1→0.5, 2→0.8, 3+→1.0) |
+| Consistency | 0.35 | Stability of the smoothed (post-EMA) RAW path |
+| Dominance | 0.35 | Attributed points vs fair share of alliance score |
+| Record | 0.10 | Win rate mapped into $[0.5, 1]$ |
+| Veteran | 0.10 | Years of FRC experience |
+| Events | 0.10 | Boost from events played this season |
 
-Then non-linear scaling: high confidence slightly boosted, low confidence reduced, result capped to [0, 1].
+### Season aggregate
 
-**Event ACE** = event RAW × event confidence.
+Across a team's events, drop empty / zero-RAW events and weight each by chronological weight × match count (early season discounted, late season emphasized):
 
-### 3. Season aggregate
+$$
+\mathrm{RAW}_{\mathrm{season}} = \frac{\sum_e w_e\,\mathrm{RAW}_e}{\sum_e w_e},\quad
+\mathrm{conf}_{\mathrm{season}} = \frac{\sum_e w_e\,\mathrm{conf}_e}{\sum_e w_e}
+$$
 
-Across a team's events:
+$$
+\mathrm{ACE}_{\mathrm{season}} = \mathrm{RAW}_{\mathrm{season}} \times \mathrm{conf}_{\mathrm{season}}
+$$
 
-1. Drop empty / zero-RAW events.
-2. Weight each event by **chronological weight × match count** (early season discounted, late season emphasized).
-3. Season RAW = weighted mean of event RAWs (and phase RAWs).
-4. Rebuild season confidence from weighted-mean components + the same non-linear scaling.
-5. **Season ACE** = season RAW × season confidence.
-6. W / L / T are summed across events.
-
-If a team has no matches yet in the current year, season stats can fall back to the previous year.
-
-### 4. Ranks & predictions
-
-- Ranks (global / country / state / district) are computed from season ACE for all teams in the year.
-- Unplayed matches get red/blue win probabilities from current ACE + confidence.
-
-### 5. Incremental runs
-
-`--active-only` recomputes teams at currently active events (full season for those teams, identical math to a full run) and leaves everyone else untouched. Ranks and predictions still refresh over the full set. Full recomputes stay on the 6h / daily schedule.
+W/L/T sum across events. Ranks use season ACE. Unplayed matches get win probabilities from a logistic on ACE (or RAW) differentials.
 
 ---
 
