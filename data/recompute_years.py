@@ -86,18 +86,19 @@ def main() -> None:
     # Locked ACE principles
     os.environ["RESTART_HEROKU"] = "0"
     os.environ["ACE_METHOD"] = "residual_shrink"
-    os.environ["ACE_SHRINK"] = "0.05"
+    os.environ["ACE_SHRINK"] = "0.02"
     os.environ["ACE_K_BASE"] = "0.4"
     os.environ["ACE_SPIKE_DAMP"] = "1.0"
     os.environ["ACE_CARRY_PRIOR"] = "1"
     os.environ["ACE_PRIOR_BLEND"] = "1.0"
     os.environ["ACE_WIN_PROB_SCALE"] = "0.04"
+    os.environ["ACE_CONFIDENCE_CEILING"] = "0.75"
     os.environ["PYTHONUNBUFFERED"] = "1"
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     py = _python()
     years = list(range(args.start, args.end + 1))
-    print(f"Recomputing years {years} with shrink=0.05 residual_shrink prior carry")
+    print(f"Recomputing years {years} with shrink=0.02 residual_shrink ceiling=0.75 prior carry")
     print(f"Using python: {py}")
 
     for y in years:

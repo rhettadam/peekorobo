@@ -24,6 +24,35 @@ export function isPlayed(m: MatchResponse): boolean {
   return m.red_score > 0 || m.blue_score > 0 || m.winning_alliance === "red" || m.winning_alliance === "blue";
 }
 
+/** Sum of team ACE for an alliance (missing ACE → 0). Null if no team has ACE. */
+export function allianceAceSum(
+  teams: number[],
+  aceByTeam: Map<number, number | null | undefined> | undefined,
+): number | null {
+  if (!aceByTeam || teams.length === 0) return null;
+  let sum = 0;
+  let known = 0;
+  for (const t of teams) {
+    const v = aceByTeam.get(t);
+    if (typeof v === "number" && Number.isFinite(v)) {
+      sum += v;
+      known += 1;
+    }
+  }
+  return known > 0 ? sum : null;
+}
+
+/** Predicted red/blue scores = sum of each alliance's team ACE. */
+export function predictedMatchScores(
+  m: MatchResponse,
+  aceByTeam: Map<number, number | null | undefined> | undefined,
+): { red: number; blue: number } | null {
+  const red = allianceAceSum(m.red_teams, aceByTeam);
+  const blue = allianceAceSum(m.blue_teams, aceByTeam);
+  if (red === null || blue === null) return null;
+  return { red, blue };
+}
+
 /**
  * Prediction accuracy for a set of matches, mirroring compute_accuracy in the
  * Dash app: only count played matches that have a prediction; ties are excluded

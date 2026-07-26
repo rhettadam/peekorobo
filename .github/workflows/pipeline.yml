@@ -38,13 +38,13 @@ env:
   CLOUDFLARE_PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
   # Locked ACE production knobs (must match data/run.py defaults).
   ACE_METHOD: residual_shrink
-  ACE_SHRINK: "0.05"
+  ACE_SHRINK: "0.02"
   ACE_K_BASE: "0.4"
   ACE_SPIKE_DAMP: "1.0"
   ACE_CARRY_PRIOR: "1"
   ACE_PRIOR_BLEND: "1.0"
   ACE_WIN_PROB_SCALE: "0.04"
-  ACE_CONFIDENCE_CEILING: "0.88"
+  ACE_CONFIDENCE_CEILING: "0.75"
 
 jobs:
   live:

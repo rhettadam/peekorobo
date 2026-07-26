@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { Anchor, Badge, Card, Group, Stack, Table, Text } from "@mantine/core";
 import { Link } from "react-router-dom";
-import { useEventMatches, useEventRankings } from "../api/queries";
+import { useEventMatches, useEventPerfs, useEventRankings } from "../api/queries";
 import { TeamName } from "../components/TeamName";
 import { StatPill } from "../components/StatPill";
 import { RecordCell } from "../components/RecordCell";
+import { MatchActualScoreCell, MatchPredScoreCell } from "../components/MatchScoreCell";
 import { predictionColor, isPlayed } from "../lib/prediction";
-import { formatPredictedTime } from "../lib/format";
 import type { EventPerfEntry, MatchResponse } from "../types/api";
 
 const COMP_LEVEL_ORDER: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
@@ -54,6 +54,13 @@ export function TeamEventBlock({
 }: TeamEventBlockProps) {
   const matchesQuery = useEventMatches(eventKey);
   const rankingsQuery = useEventRankings(eventKey);
+  const perfsQuery = useEventPerfs(eventKey);
+
+  const aceByTeam = useMemo(() => {
+    const map = new Map<number, number | null>();
+    for (const p of perfsQuery.data?.perfs ?? []) map.set(p.team_number, p.ace);
+    return map;
+  }, [perfsQuery.data]);
 
   const teamMatches = useMemo(
     () =>
@@ -188,8 +195,9 @@ export function TeamEventBlock({
                   <Table.Th w={80}>Match</Table.Th>
                   <Table.Th>Red</Table.Th>
                   <Table.Th>Blue</Table.Th>
-                  <Table.Th w={130}>Score</Table.Th>
-                  <Table.Th w={90}>Prediction</Table.Th>
+                  <Table.Th w={90}>Score</Table.Th>
+                  <Table.Th w={90}>Pred</Table.Th>
+                  <Table.Th w={90}>Win %</Table.Th>
                   <Table.Th w={80}>Outcome</Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -203,8 +211,6 @@ export function TeamEventBlock({
                     (isRed && m.winning_alliance === "red") ||
                     (!isRed && m.winning_alliance === "blue");
                   const tie = m.winning_alliance !== "red" && m.winning_alliance !== "blue";
-                  const redWin = m.winning_alliance === "red";
-                  const blueWin = m.winning_alliance === "blue";
                   return (
                     <Table.Tr key={m.match_key}>
                       <Table.Td>
@@ -256,30 +262,10 @@ export function TeamEventBlock({
                         </Group>
                       </Table.Td>
                       <Table.Td>
-                        {played ? (
-                          <>
-                            <Text span fw={redWin ? 700 : 400} c={redWin ? "red" : undefined}>
-                              {m.red_score}
-                            </Text>
-                            {" - "}
-                            <Text span fw={blueWin ? 700 : 400} c={blueWin ? "blue" : undefined}>
-                              {m.blue_score}
-                            </Text>
-                          </>
-                        ) : (
-                          <Text
-                            span
-                            c="dimmed"
-                            size="sm"
-                            title={
-                              formatPredictedTime(m.predicted_time)
-                                ? "Predicted start (local time)"
-                                : undefined
-                            }
-                          >
-                            {formatPredictedTime(m.predicted_time) ?? "TBD"}
-                          </Text>
-                        )}
+                        <MatchActualScoreCell match={m} />
+                      </Table.Td>
+                      <Table.Td>
+                        <MatchPredScoreCell match={m} aceByTeam={aceByTeam} />
                       </Table.Td>
                       <Table.Td style={predColor ? { backgroundColor: predColor, fontWeight: 600 } : undefined}>
                         {prob !== null && prob !== undefined ? `${Math.round(prob * 100)}%` : "–"}

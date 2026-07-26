@@ -37,7 +37,7 @@ if _ACE_METHOD not in ("residual", "equal_split", "residual_shrink", "baseline_c
     _ACE_METHOD = "residual_shrink"
 
 # Blend toward equal share when using residual_shrink (0 = pure residual).
-_ACE_SHRINK = float(os.environ.get("ACE_SHRINK", "0.05"))
+_ACE_SHRINK = float(os.environ.get("ACE_SHRINK", "0.02"))
 
 # EMA learning rate and spike dampening (1.0 = no damp).
 _ACE_K_BASE = float(os.environ.get("ACE_K_BASE", "0.4"))
@@ -112,9 +112,9 @@ CONFIDENCE_WEIGHTS = {
 }
 
 # Component-weighted sum is typically ~0.55–0.93. Divide by this ceiling so
-# elite sums (~0.88+) map to ~1.0, strong teams (~0.79) land near ~0.90, and a
-# mid-pack sum (~0.54) lands near ~0.60. No nonlinear high/low cut.
-CONFIDENCE_CEILING = float(os.environ.get("ACE_CONFIDENCE_CEILING", "0.88"))
+# elite sums (~0.75+) → ~1.0 and mid-pack (~0.54) lands near ~0.72 (was ~0.60
+# at 0.88 — that under-predicted alliance scores when summing ACE).
+CONFIDENCE_CEILING = float(os.environ.get("ACE_CONFIDENCE_CEILING", "0.75"))
 
 # Confidence "event_boost" from number of distinct played events in the season (not chronological).
 EVENT_BOOSTS = {

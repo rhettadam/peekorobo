@@ -47,7 +47,9 @@ import {
   matchInsights,
   predictionAccuracy,
   predictionColor,
+  predictedMatchScores,
 } from "../lib/prediction";
+import { MatchActualScoreCell, MatchPredScoreCell } from "../components/MatchScoreCell";
 import {
   eventTypeLabel,
   eventWeekLabel,
@@ -72,10 +74,12 @@ function MatchesTable({
   eventKey,
   title,
   matches,
+  aceByTeam,
 }: {
   eventKey: string;
   title: string;
   matches: MatchResponse[];
+  aceByTeam?: Map<number, number | null>;
 }) {
   const acc = predictionAccuracy(matches);
   const matchYear = yearFromEventKey(eventKey) ?? undefined;
@@ -145,36 +149,28 @@ function MatchesTable({
       {
         key: "score",
         header: "Score",
-        width: 140,
+        width: 100,
         sortValue: (m) =>
           isPlayed(m) ? Math.max(m.red_score, m.blue_score) : (m.predicted_time ?? -1),
         exportValue: (m) => {
           if (isPlayed(m)) return `${m.red_score}-${m.blue_score}`;
           return formatPredictedTime(m.predicted_time) ?? "";
         },
-        render: (m) => {
-          if (!isPlayed(m)) {
-            const when = formatPredictedTime(m.predicted_time);
-            return (
-              <Text c="dimmed" span size="sm" title={when ? "Predicted start (local time)" : undefined}>
-                {when ?? "TBD"}
-              </Text>
-            );
-          }
-          const redWin = m.winning_alliance === "red";
-          const blueWin = m.winning_alliance === "blue";
-          return (
-            <>
-              <Text fw={redWin ? 700 : 400} c={redWin ? "red" : undefined} span>
-                {m.red_score}
-              </Text>
-              {" - "}
-              <Text fw={blueWin ? 700 : 400} c={blueWin ? "blue" : undefined} span>
-                {m.blue_score}
-              </Text>
-            </>
-          );
+        render: (m) => <MatchActualScoreCell match={m} />,
+      },
+      {
+        key: "pred",
+        header: "Pred",
+        width: 100,
+        sortValue: (m) => {
+          const p = predictedMatchScores(m, aceByTeam);
+          return p ? Math.max(p.red, p.blue) : null;
         },
+        exportValue: (m) => {
+          const p = predictedMatchScores(m, aceByTeam);
+          return p ? `${Math.round(p.red)}-${Math.round(p.blue)}` : "";
+        },
+        render: (m) => <MatchPredScoreCell match={m} aceByTeam={aceByTeam} />,
       },
       {
         key: "winner",
@@ -236,7 +232,7 @@ function MatchesTable({
         },
       },
     ],
-    [eventKey, matchYear],
+    [eventKey, matchYear, aceByTeam],
   );
 
   return (
@@ -254,7 +250,7 @@ function MatchesTable({
         columns={columns}
         getRowKey={(m) => m.match_key}
         initialSort={{ key: "match", dir: "asc" }}
-        minWidth={760}
+        minWidth={860}
         defaultPageSize={25}
         exportFileName={`${eventKey}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
       />
@@ -323,14 +319,18 @@ function playoffColumns(playoff: MatchResponse[]): BracketColumn[] {
 function BracketAlliance({
   teams,
   score,
+  predScore,
   win,
+  predWin,
   played,
   color,
   year,
 }: {
   teams: number[];
   score: number;
+  predScore: number | null;
   win: boolean;
+  predWin: boolean;
   played: boolean;
   color: "red" | "blue";
   year?: number;
@@ -350,9 +350,19 @@ function BracketAlliance({
           <TeamName key={t} teamNumber={t} year={year} numberOnly fw={win ? 800 : 500} />
         ))}
       </Group>
-      <Text size="sm" fw={win ? 800 : 500} c={win ? color : "dimmed"}>
-        {played ? score : "-"}
-      </Text>
+      <Group gap={6} wrap="nowrap">
+        <Text size="sm" fw={win ? 800 : 500} c={played ? (win ? color : "dimmed") : "dimmed"}>
+          {played ? score : "–"}
+        </Text>
+        <Text
+          size="xs"
+          fw={predWin ? 700 : 400}
+          c={predWin ? color : "dimmed"}
+          title="Predicted (event ACE sum)"
+        >
+          {predScore !== null ? Math.round(predScore) : "–"}
+        </Text>
+      </Group>
     </Group>
   );
 }
@@ -361,18 +371,21 @@ function BracketMatch({
   eventKey,
   m,
   year,
+  aceByTeam,
 }: {
   eventKey: string;
   m: MatchResponse;
   year?: number;
+  aceByTeam?: Map<number, number | null>;
 }) {
   const played = isPlayed(m);
+  const pred = predictedMatchScores(m, aceByTeam);
   return (
     <Card
       withBorder
       radius="md"
       padding="xs"
-      w={210}
+      w={230}
       component={Link}
       to={`/match/${eventKey}/${m.match_key}`}
       style={{ textDecoration: "none", flexShrink: 0 }}
@@ -383,7 +396,9 @@ function BracketMatch({
       <BracketAlliance
         teams={m.red_teams}
         score={m.red_score}
+        predScore={pred?.red ?? null}
         win={m.winning_alliance === "red"}
+        predWin={Boolean(pred && pred.red > pred.blue)}
         played={played}
         color="red"
         year={year}
@@ -391,7 +406,9 @@ function BracketMatch({
       <BracketAlliance
         teams={m.blue_teams}
         score={m.blue_score}
+        predScore={pred?.blue ?? null}
         win={m.winning_alliance === "blue"}
+        predWin={Boolean(pred && pred.blue > pred.red)}
         played={played}
         color="blue"
         year={year}
@@ -404,10 +421,12 @@ function PlayoffBracket({
   eventKey,
   matches,
   year,
+  aceByTeam,
 }: {
   eventKey: string;
   matches: MatchResponse[];
   year?: number;
+  aceByTeam?: Map<number, number | null>;
 }) {
   const cols = useMemo(() => playoffColumns(matches), [matches]);
   if (cols.length === 0) return null;
@@ -423,7 +442,13 @@ function PlayoffBracket({
               {col.label}
             </Text>
             {col.matches.map((m) => (
-              <BracketMatch key={m.match_key} eventKey={eventKey} m={m} year={year} />
+              <BracketMatch
+                key={m.match_key}
+                eventKey={eventKey}
+                m={m}
+                year={year}
+                aceByTeam={aceByTeam}
+              />
             ))}
           </Stack>
         ))}
@@ -1153,6 +1178,7 @@ export function Event() {
                   eventKey={eventKey}
                   title="Qualification Matches"
                   matches={qualMatches}
+                  aceByTeam={perfByTeam}
                 />
               ) : null}
               {playoffMatches.length > 0 ? (
@@ -1160,6 +1186,7 @@ export function Event() {
                   eventKey={eventKey}
                   title="Playoff Matches"
                   matches={playoffMatches}
+                  aceByTeam={perfByTeam}
                 />
               ) : null}
             </Stack>
@@ -1189,7 +1216,12 @@ export function Event() {
               </Stack>
             )}
             {playoffMatches.length > 0 ? (
-              <PlayoffBracket eventKey={eventKey} matches={playoffMatches} year={year ?? undefined} />
+              <PlayoffBracket
+                eventKey={eventKey}
+                matches={playoffMatches}
+                year={year ?? undefined}
+                aceByTeam={perfByTeam}
+              />
             ) : null}
           </Stack>
         </Tabs.Panel>
