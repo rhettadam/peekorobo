@@ -73,6 +73,9 @@ export async function loadStaticLeaderboard(year: number): Promise<TeamPerfRespo
       headers: { Accept: "application/json" },
     });
     if (!res.ok) return null;
+    // Pages SPA fallback returns 200 HTML when the snapshot is missing; don't treat that as data.
+    const ctype = res.headers.get("content-type") || "";
+    if (!ctype.includes("application/json")) return null;
     const data = (await res.json()) as StaticLeaderboard;
     if (!data || !Array.isArray(data.teams)) return null;
     return data.teams.map((r) => ({

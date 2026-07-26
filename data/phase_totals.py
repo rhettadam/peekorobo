@@ -30,7 +30,18 @@ def _tba_auto(b: dict) -> float:
         return _f(b.get("autoPoints"))
     if b.get("auto_points") is not None:
         return _f(b.get("auto_points"))
+    # 2026 TBA schema
+    if b.get("totalAutoPoints") is not None:
+        return _f(b.get("totalAutoPoints"))
+    hub = b.get("hubScore")
+    if isinstance(hub, dict) and hub.get("autoPoints") is not None:
+        return _f(hub.get("autoPoints"))
     return 0.0
+
+
+def _hub(b: dict) -> dict:
+    hub = b.get("hubScore")
+    return hub if isinstance(hub, dict) else {}
 
 
 def _tba_total(b: dict) -> float:
@@ -38,6 +49,9 @@ def _tba_total(b: dict) -> float:
         return _f(b.get("totalPoints"))
     if b.get("total_points") is not None:
         return _f(b.get("total_points"))
+    hub = _hub(b)
+    if hub.get("totalPoints") is not None:
+        return _f(hub.get("totalPoints"))
     # Last resort: auto + teleop + fouls (may miss year-specific extras)
     tele = _f(b.get("teleopPoints", b.get("teleop_points")))
     foul = _f(b.get("foulPoints", b.get("foul_points"))) + _f(
@@ -106,7 +120,15 @@ def _per_robot_ends(year: int, b: dict, team_count: int) -> Optional[List[float]
     if y == 2015:
         return [0.0] * n
     if y == 2026:
-        return [robot_endgame_2026(b, i) for i in range(1, n + 1)]
+        # Prefer per-robot tower statuses when TBA fills them; otherwise hub endgame
+        # is an alliance-shared fuel total (common in 2026 dumps).
+        ends = [robot_endgame_2026(b, i) for i in range(1, n + 1)]
+        if sum(ends) > 0:
+            official = _f(_hub(b).get("endgamePoints"))
+            if official > 0:
+                return _scale_ends_to_official(ends, official, n)
+            return ends
+        return None
     if y == 2025:
         return [robot_endgame_2025(b, i) for i in range(1, n + 1)]
     if y == 2019:
@@ -149,6 +171,11 @@ def _scale_ends_to_official(ends: List[float], official: float, n: int) -> List[
 
 def _shared_endgame(year: int, b: dict) -> float:
     y = int(year)
+    if y == 2026:
+        hub = _hub(b)
+        if hub.get("endgamePoints") is not None:
+            return _f(hub.get("endgamePoints"))
+        return _f(b.get("endGameTowerPoints"))
     if y == 2024:
         return alliance_endgame_2024(b)
     if y == 2017:
@@ -167,19 +194,19 @@ def _shared_endgame(year: int, b: dict) -> float:
 
 
 def alliance_auto(year: int, breakdown: dict, team_count: int = 3) -> float:
-    """Official TBA auto total (preferred)."""
-    y = int(year)
+    """Official TBA auto total (preferred). Never use log-scaled yearmodel means here."""
     auto = _tba_auto(breakdown)
-    if auto or breakdown.get("autoPoints") is not None or breakdown.get("auto_points") is not None:
+    if (
+        auto
+        or breakdown.get("autoPoints") is not None
+        or breakdown.get("auto_points") is not None
+        or breakdown.get("totalAutoPoints") is not None
+        or _hub(breakdown).get("autoPoints") is not None
+    ):
         return auto
-    # Rare fallback: yearmodels invert (should be uncommon once TBA fields exist)
-    fn = getattr(yearmodels, f"auto_{y}", None)
-    if fn is None:
-        return 0.0
-    try:
-        return float(fn([breakdown], max(1, team_count)) or 0.0)
-    except Exception:
-        return 0.0
+    # Rare fallback: year-specific invert from a single breakdown (no log trim path).
+    # Prefer hub/year fields already handled above; keep 0 rather than log-scaled EPA helpers.
+    return 0.0
 
 
 def phase_totals(
