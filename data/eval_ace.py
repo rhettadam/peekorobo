@@ -198,7 +198,7 @@ def run_config_bakeoff(
     configs = []
     # Grid centered on production defaults; includes neighbors for regression checks.
     for carry in (False, True):
-        for shrink in (0.02, 0.05, 0.10, 0.15):
+        for shrink in (0.05, 0.10, 0.15, 0.25):
             for k_base in (0.35, 0.40, 0.50):
                 for spike_damp in (0.5, 1.0):
                     for blend in (1.0,):
@@ -298,7 +298,7 @@ def run_config_bakeoff(
             for r in warm_rows
             if (
                 r["carry"]
-                and r["shrink"] == 0.02
+                and r["shrink"] == 0.05
                 and r["k_base"] == 0.40
                 and r["spike_damp"] == 1.0
                 and r["prior_blend"] == 1.0
@@ -344,7 +344,7 @@ def main() -> None:
     ap.add_argument("--year", type=int, required=True)
     ap.add_argument("--limit-events", type=int, default=25)
     ap.add_argument("--k-base", type=float, default=0.4)
-    ap.add_argument("--shrink", type=float, default=0.02)
+    ap.add_argument("--shrink", type=float, default=0.05)
     ap.add_argument("--win-scale", type=float, default=0.04, help="Logistic scale for win probs")
     ap.add_argument(
         "--config-bakeoff",

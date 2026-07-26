@@ -38,13 +38,19 @@ env:
   CLOUDFLARE_PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
   # Locked ACE production knobs (must match data/run.py defaults).
   ACE_METHOD: residual_shrink
-  ACE_SHRINK: "0.02"
+  ACE_SHRINK: "0.05"
   ACE_K_BASE: "0.4"
+  ACE_K_UP: "1.0"
+  ACE_K_DOWN: "1.0"
+  ACE_PARTNER_CAP: "1.25"
   ACE_SPIKE_DAMP: "1.0"
   ACE_CARRY_PRIOR: "1"
   ACE_PRIOR_BLEND: "1.0"
   ACE_WIN_PROB_SCALE: "0.04"
-  ACE_CONFIDENCE_CEILING: "0.75"
+  ACE_CONFIDENCE_CEILING: "0.88"
+  # Intentional: Actions writes to Neon. Local recomputes still need this unset
+  # (or use data/.env.local) so day-to-day work cannot hammer prod.
+  ACE_ALLOW_PROD_WRITE: "1"
 
 jobs:
   live:

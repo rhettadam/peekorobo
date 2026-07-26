@@ -37,11 +37,19 @@ if _ACE_METHOD not in ("residual", "equal_split", "residual_shrink", "baseline_c
     _ACE_METHOD = "residual_shrink"
 
 # Blend toward equal share when using residual_shrink (0 = pure residual).
-_ACE_SHRINK = float(os.environ.get("ACE_SHRINK", "0.02"))
+_ACE_SHRINK = float(os.environ.get("ACE_SHRINK", "0.05"))
 
 # EMA learning rate and spike dampening (1.0 = no damp).
 _ACE_K_BASE = float(os.environ.get("ACE_K_BASE", "0.4"))
 _ACE_SPIKE_DAMP = float(os.environ.get("ACE_SPIKE_DAMP", "1.0"))
+# Asymmetric EMA multipliers (1.0 = symmetric). Kept for experiments; production
+# defaults stay symmetric after partner-cap became the elite-lift lever.
+_ACE_K_UP = float(os.environ.get("ACE_K_UP", "1.0"))
+_ACE_K_DOWN = float(os.environ.get("ACE_K_DOWN", "1.0"))
+
+# Cap each partner's credited RAW at alpha * (S/n) when forming residual obs.
+# 0 disables. Local #3 experiment uses 1.25; prod Neon unchanged until explicit allow.
+_ACE_PARTNER_CAP = float(os.environ.get("ACE_PARTNER_CAP", "1.25"))
 
 # Cross-event RAW prior: seed each event from season-to-date phase estimates.
 _ACE_CARRY_PRIOR = os.environ.get("ACE_CARRY_PRIOR", "1").strip().lower() in ("1", "true", "yes")
@@ -112,9 +120,9 @@ CONFIDENCE_WEIGHTS = {
 }
 
 # Component-weighted sum is typically ~0.55–0.93. Divide by this ceiling so
-# elite sums (~0.75+) → ~1.0 and mid-pack (~0.54) lands near ~0.72 (was ~0.60
-# at 0.88 — that under-predicted alliance scores when summing ACE).
-CONFIDENCE_CEILING = float(os.environ.get("ACE_CONFIDENCE_CEILING", "0.75"))
+# elite sums (~0.88+) map to ~1.0, strong teams (~0.79) land near ~0.90, and a
+# mid-pack sum (~0.54) lands near ~0.60. No nonlinear high/low cut.
+CONFIDENCE_CEILING = float(os.environ.get("ACE_CONFIDENCE_CEILING", "0.88"))
 
 # Confidence "event_boost" from number of distinct played events in the season (not chronological).
 EVENT_BOOSTS = {
@@ -2491,6 +2499,9 @@ def _get_or_compute_event_epa_map(matches: List[Dict], year: int, method: Method
         spike_damp=_ACE_SPIKE_DAMP,
         prior_means=None,
         seed_priors=False,
+        k_up=_ACE_K_UP,
+        k_down=_ACE_K_DOWN,
+        partner_cap=_ACE_PARTNER_CAP,
     )
     out: Dict[str, dict] = {}
     for key, st in states.items():
@@ -2567,6 +2578,9 @@ def precompute_season_event_epas(year: int) -> None:
             spike_damp=_ACE_SPIKE_DAMP,
             prior_means=priors if _ACE_CARRY_PRIOR else None,
             seed_priors=_ACE_CARRY_PRIOR,
+            k_up=_ACE_K_UP,
+            k_down=_ACE_K_DOWN,
+            partner_cap=_ACE_PARTNER_CAP,
         )
         out: Dict[str, dict] = {}
         for key, st in states.items():
@@ -2594,6 +2608,7 @@ def precompute_season_event_epas(year: int) -> None:
     print(
         f"Precomputed event EPA for {computed} event(s) "
         f"(method={_ACE_METHOD}, shrink={_ACE_SHRINK}, k={_ACE_K_BASE}, "
+        f"k_up={_ACE_K_UP}, k_down={_ACE_K_DOWN}, partner_cap={_ACE_PARTNER_CAP}, "
         f"spike_damp={_ACE_SPIKE_DAMP}, carry_prior={int(_ACE_CARRY_PRIOR)})",
         flush=True,
     )
@@ -3358,6 +3373,23 @@ def main():
 
 if __name__ == "__main__":
     try:
+        # Prefer data/.env.local over Neon when present (local ACE experiments).
+        _env_local = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.local")
+        if os.path.isfile(_env_local):
+            with open(_env_local, encoding="utf-8") as _ef:
+                for _line in _ef:
+                    _line = _line.strip()
+                    if not _line or _line.startswith("#") or "=" not in _line:
+                        continue
+                    _k, _v = _line.split("=", 1)
+                    _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
+                    if _k:
+                        os.environ[_k] = _v
+        from db_target import assert_safe_db_target, describe_db_target
+
+        assert_safe_db_target("run.py")
+        print(f"DB target: {describe_db_target()}", flush=True)
+
         positional = [a for a in sys.argv[1:] if not a.startswith("--")]
         flags = {a for a in sys.argv[1:] if a.startswith("--")}
         ranks_only = "--ranks-only" in flags

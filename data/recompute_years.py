@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Chronological multi-year ACE recompute with locked knobs + smoke checks.
 
+Defaults to a **local** DATABASE_URL (data/.env.local). Refuses Neon/prod
+unless ACE_ALLOW_PROD_WRITE=1.
+
 Usage (from data/):
 
-    python recompute_years.py --start 2015 --end 2026
+    python recompute_years.py --start 2026 --end 2026
 """
 
 from __future__ import annotations
@@ -16,6 +19,36 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 LOG_DIR = ROOT / "tmp_eval"  # gitignored scratch for per-year logs
+
+sys.path.insert(0, str(ROOT))
+from db_target import assert_safe_db_target, describe_db_target  # noqa: E402
+
+
+def _load_env_file(path: Path, *, override: bool = False) -> None:
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k, v = k.strip(), v.strip().strip('"').strip("'")
+        if not k:
+            continue
+        if override or k not in os.environ:
+            os.environ[k] = v
+
+
+def _bootstrap_env() -> None:
+    """Load TBA keys from api .env, then prefer data/.env.local for DATABASE_URL."""
+    _load_env_file(ROOT.parent / "peekorobo-api" / ".env", override=False)
+    _load_env_file(ROOT / ".env.local", override=True)
+    # Normalize aliases
+    if not os.environ.get("DATABASE_URL"):
+        if os.environ.get("DB_URL"):
+            os.environ["DATABASE_URL"] = os.environ["DB_URL"]
+        elif os.environ.get("NEON_URL"):
+            os.environ["DATABASE_URL"] = os.environ["NEON_URL"]
 
 
 def _python() -> Path:
@@ -34,10 +67,7 @@ def _python() -> Path:
 def _clear_locks() -> None:
     import psycopg2
 
-    url = os.environ.get("DATABASE_URL") or os.environ.get("DB_URL") or os.environ.get("NEON_URL")
-    if not url:
-        print("No DB URL; skip lock clear")
-        return
+    url = assert_safe_db_target("clear locks")
     conn = psycopg2.connect(url)
     conn.autocommit = True
     cur = conn.cursor()
@@ -78,27 +108,34 @@ def _smoke(year: int) -> None:
 
 
 def main() -> None:
+    _bootstrap_env()
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", type=int, default=2015)
     ap.add_argument("--end", type=int, default=2026)
     args = ap.parse_args()
 
+    assert_safe_db_target("recompute")
+    print(f"DB target: {describe_db_target()}")
+
     # Locked ACE principles
     os.environ["RESTART_HEROKU"] = "0"
     os.environ["ACE_METHOD"] = "residual_shrink"
-    os.environ["ACE_SHRINK"] = "0.02"
+    os.environ["ACE_SHRINK"] = "0.05"
     os.environ["ACE_K_BASE"] = "0.4"
+    os.environ["ACE_K_UP"] = "1.0"
+    os.environ["ACE_K_DOWN"] = "1.0"
+    os.environ["ACE_PARTNER_CAP"] = "1.25"
     os.environ["ACE_SPIKE_DAMP"] = "1.0"
     os.environ["ACE_CARRY_PRIOR"] = "1"
     os.environ["ACE_PRIOR_BLEND"] = "1.0"
     os.environ["ACE_WIN_PROB_SCALE"] = "0.04"
-    os.environ["ACE_CONFIDENCE_CEILING"] = "0.75"
+    os.environ["ACE_CONFIDENCE_CEILING"] = "0.88"
     os.environ["PYTHONUNBUFFERED"] = "1"
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     py = _python()
     years = list(range(args.start, args.end + 1))
-    print(f"Recomputing years {years} with shrink=0.02 residual_shrink ceiling=0.75 prior carry")
+    print(f"Recomputing years {years} with shrink=0.05 residual_shrink ceiling=0.88 partner_cap=1.25 prior carry")
     print(f"Using python: {py}")
 
     for y in years:

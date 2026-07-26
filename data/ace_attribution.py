@@ -82,6 +82,7 @@ def observation_for_phase(
     team_count: int,
     prior_mean: float,
     shrink: float,
+    partner_cap: float = 0.0,
 ) -> float:
     n = max(1, team_count)
     if method == "equal_split":
@@ -93,6 +94,13 @@ def observation_for_phase(
     else:
         # Cold partners: assume equal share of the remainder
         partners = partner_rs + [alliance_total / n] * max(0, (n - 1) - len(partner_rs))
+
+    # Cap each partner's credited RAW so overrated partners cannot zero a
+    # stacked elite. partner_cap <= 0 disables. Cap = alpha * (S/n).
+    if partner_cap and partner_cap > 0:
+        equal = alliance_total / n
+        ceil = partner_cap * equal
+        partners = [min(float(p), ceil) for p in partners]
 
     obs = alliance_total - sum(partners)
     if method == "residual_shrink":
@@ -117,6 +125,8 @@ def ema_update(
     early_weight_floor: float = 0.75,
     spike_damp: float = 0.5,
     spike_ratio: float = 1.4,
+    k_up: float = 1.0,
+    k_down: float = 1.0,
 ) -> Tuple[float, bool]:
     # First observation: take obs as-is so residual equal-share inits still sum to S.
     if not initialized:
@@ -125,6 +135,12 @@ def ema_update(
     early_weight = max(early_weight_floor, min(1.0, match_count / early_match_target))
     # comp_level intentionally ignored — no match-importance scaling.
     K = k_base * early_weight
+    # Asymmetric learning: faster catch-up on positive residuals (underpredicted
+    # elites), optional faster/slower decay on negative residuals.
+    if obs > current:
+        K *= max(0.0, float(k_up))
+    elif obs < current:
+        K *= max(0.0, float(k_down))
     # spike_damp=1.0 disables; <1 slows large positive jumps.
     if spike_damp < 1.0 and current > 10 and obs > current * spike_ratio:
         K *= spike_damp
@@ -161,9 +177,12 @@ def apply_match_updates(
     year: int,
     method: Method,
     k_base: float = 0.4,
-    shrink: float = 0.02,
+    shrink: float = 0.05,
     prior_means: Optional[Dict[str, Tuple[float, float, float]]] = None,
     spike_damp: float = 0.5,
+    k_up: float = 1.0,
+    k_down: float = 1.0,
+    partner_cap: float = 0.0,
 ) -> None:
     """Update states in-place for one played match (all six robots)."""
     prior_means = prior_means or {}
@@ -234,10 +253,24 @@ def apply_match_updates(
                 obs_end = end_s if end_per_robot else end_s * scale
             else:
                 obs_auto = observation_for_phase(
-                    method, auto_s, snapshots[key][0], partner_auto, n, prior[0], shrink
+                    method,
+                    auto_s,
+                    snapshots[key][0],
+                    partner_auto,
+                    n,
+                    prior[0],
+                    shrink,
+                    partner_cap=partner_cap,
                 )
                 obs_teleop = observation_for_phase(
-                    method, teleop_s, snapshots[key][1], partner_teleop, n, prior[1], shrink
+                    method,
+                    teleop_s,
+                    snapshots[key][1],
+                    partner_teleop,
+                    n,
+                    prior[1],
+                    shrink,
+                    partner_cap=partner_cap,
                 )
                 if end_per_robot:
                     obs_end = end_s
@@ -248,18 +281,49 @@ def apply_match_updates(
                         if k != key
                     ]
                     obs_end = observation_for_phase(
-                        method, end_s, snapshots[key][2], partner_end, n, prior[2], shrink
+                        method,
+                        end_s,
+                        snapshots[key][2],
+                        partner_end,
+                        n,
+                        prior[2],
+                        shrink,
+                        partner_cap=partner_cap,
                     )
 
             was_init = st.initialized
             st.auto, _ = ema_update(
-                st.auto, obs_auto, st.match_count, comp, was_init, k_base=k_base, spike_damp=spike_damp
+                st.auto,
+                obs_auto,
+                st.match_count,
+                comp,
+                was_init,
+                k_base=k_base,
+                spike_damp=spike_damp,
+                k_up=k_up,
+                k_down=k_down,
             )
             st.teleop, _ = ema_update(
-                st.teleop, obs_teleop, st.match_count, comp, was_init, k_base=k_base, spike_damp=spike_damp
+                st.teleop,
+                obs_teleop,
+                st.match_count,
+                comp,
+                was_init,
+                k_base=k_base,
+                spike_damp=spike_damp,
+                k_up=k_up,
+                k_down=k_down,
             )
             st.endgame, _ = ema_update(
-                st.endgame, obs_end, st.match_count, comp, was_init, k_base=k_base, spike_damp=spike_damp
+                st.endgame,
+                obs_end,
+                st.match_count,
+                comp,
+                was_init,
+                k_base=k_base,
+                spike_damp=spike_damp,
+                k_up=k_up,
+                k_down=k_down,
             )
             st.initialized = True
 
@@ -283,10 +347,13 @@ def simulate_event(
     year: int,
     method: Method = "residual_shrink",
     k_base: float = 0.4,
-    shrink: float = 0.02,
+    shrink: float = 0.05,
     prior_means: Optional[Dict[str, Tuple[float, float, float]]] = None,
     spike_damp: float = 0.5,
     seed_priors: bool = True,
+    k_up: float = 1.0,
+    k_down: float = 1.0,
+    partner_cap: float = 0.0,
 ) -> Dict[str, TeamPhaseState]:
     """Match-centric walk: update all alliance members from each played match."""
     states: Dict[str, TeamPhaseState] = {}
@@ -297,7 +364,17 @@ def simulate_event(
         if not _played(match):
             continue
         apply_match_updates(
-            states, match, year, method, k_base, shrink, prior_means, spike_damp=spike_damp
+            states,
+            match,
+            year,
+            method,
+            k_base,
+            shrink,
+            prior_means,
+            spike_damp=spike_damp,
+            k_up=k_up,
+            k_down=k_down,
+            partner_cap=partner_cap,
         )
     return states
 
@@ -319,12 +396,15 @@ def walk_forward_metrics(
     year: int,
     method: Method,
     k_base: float = 0.4,
-    shrink: float = 0.02,
+    shrink: float = 0.05,
     win_scale: float = 0.06,
     spike_damp: float = 0.5,
     prior_means: Optional[Dict[str, Tuple[float, float, float]]] = None,
     seed_priors: bool = True,
     warmup_frac: float = 0.0,
+    k_up: float = 1.0,
+    k_down: float = 1.0,
+    partner_cap: float = 0.0,
 ) -> Dict[str, float]:
     """Single pass: score MAE/bias from RAW before each match, then update."""
     states: Dict[str, TeamPhaseState] = {}
@@ -337,6 +417,8 @@ def walk_forward_metrics(
     total_wl = 0
     brier_sum = 0.0
     n_brier = 0
+    # Per-alliance prediction rows for stratified bias analysis.
+    score_rows: List[dict] = []
 
     ordered = sorted(matches, key=lambda m: m.get("time") or 0)
     played = [m for m in ordered if _played(m)]
@@ -352,6 +434,14 @@ def walk_forward_metrics(
                 abs_err += abs(pred - actual)
                 bias_sum += pred - actual
                 n_score += 1
+                score_rows.append(
+                    {
+                        "keys": keys,
+                        "pred": pred,
+                        "actual": actual,
+                        "bias": pred - actual,
+                    }
+                )
 
             red_keys = list(match["alliances"]["red"].get("team_keys") or [])
             blue_keys = list(match["alliances"]["blue"].get("team_keys") or [])
@@ -371,7 +461,17 @@ def walk_forward_metrics(
                 total_wl += 1
 
         apply_match_updates(
-            states, match, year, method, k_base, shrink, prior_means, spike_damp=spike_damp
+            states,
+            match,
+            year,
+            method,
+            k_base,
+            shrink,
+            prior_means,
+            spike_damp=spike_damp,
+            k_up=k_up,
+            k_down=k_down,
+            partner_cap=partner_cap,
         )
 
     return {
@@ -383,6 +483,7 @@ def walk_forward_metrics(
         "n_wl": float(total_wl),
         "n_brier": float(n_brier),
         "final_states": states,  # type: ignore[dict-item]
+        "score_rows": score_rows,  # type: ignore[dict-item]
     }
 
 
@@ -391,12 +492,15 @@ def multi_event_walk_forward(
     year: int,
     method: Method,
     k_base: float = 0.4,
-    shrink: float = 0.02,
+    shrink: float = 0.05,
     win_scale: float = 0.06,
     spike_damp: float = 0.5,
     carry_prior: bool = False,
     prior_blend: float = 0.5,
     warmup_frac: float = 0.0,
+    k_up: float = 1.0,
+    k_down: float = 1.0,
+    partner_cap: float = 0.0,
 ) -> Dict[str, float]:
     """Walk events in order; optionally carry RAW priors between events.
 
@@ -423,6 +527,9 @@ def multi_event_walk_forward(
             prior_means=priors if carry_prior else None,
             seed_priors=carry_prior,
             warmup_frac=warmup_frac,
+            k_up=k_up,
+            k_down=k_down,
+            partner_cap=partner_cap,
         )
         ns = int(m["n_score_obs"])
         nw = int(m["n_wl"])
