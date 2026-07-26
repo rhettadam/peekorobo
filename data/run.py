@@ -340,13 +340,22 @@ def restart_heroku_app():
     except Exception as e:
         print(f"[heroku] Error requesting dyno restart: {e}", flush=True)
 
-# Robust retry for DB connection
-@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception))
+# Robust retry for DB connection (Neon pooler can cold-start / flake after heavy runs).
+@retry(
+    stop=stop_after_attempt(12),
+    wait=wait_exponential(multiplier=1.5, min=2, max=45),
+    retry=retry_if_exception_type(Exception),
+    reraise=True,
+)
 def get_pg_connection():
     if shutdown_event.is_set():
         raise Exception("Shutdown requested")
     kwargs, host = _connect_kwargs_from_database_url()
-    conn = psycopg2.connect(**kwargs)
+    try:
+        conn = psycopg2.connect(**kwargs)
+    except Exception as e:
+        print(f"[db] connect failed ({host}): {e}", flush=True)
+        raise
     if "-pooler." in host:
         try:
             with conn.cursor() as cur:
@@ -396,14 +405,27 @@ def _connect_kwargs_from_database_url():
     if "?" in dbname:
         dbname = dbname.split("?", 1)[0]
     host = result.hostname or ""
+    # GitHub Actions runners often cannot reach Neon over IPv6 ("Network is
+    # unreachable"). Prefer an IPv4 hostaddr while keeping `host` for TLS/SNI.
+    hostaddr = None
+    try:
+        import socket
+
+        infos = socket.getaddrinfo(host, result.port or 5432, socket.AF_INET, socket.SOCK_STREAM)
+        if infos:
+            hostaddr = infos[0][4][0]
+    except Exception:
+        hostaddr = None
     kwargs = dict(
         database=dbname,
         user=result.username,
         password=result.password,
         host=host,
         port=result.port or 5432,
-        connect_timeout=30,
+        connect_timeout=int(os.environ.get("PG_CONNECT_TIMEOUT", "60")),
     )
+    if hostaddr:
+        kwargs["hostaddr"] = hostaddr
     if "neon.tech" in host or "sslmode=require" in url:
         kwargs["sslmode"] = "require"
     # Neon pooler rejects startup `options`; set timeout after connect instead.

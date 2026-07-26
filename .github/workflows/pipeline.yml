@@ -95,7 +95,9 @@ jobs:
       - name: Full ACE recompute + ranks + predictions
         run: python data/run.py "$YEAR"
       - name: Refresh rankings + awards (all events)
+        # Brief pause so Neon can settle after the ACE writer drops its pool.
         run: |
+          sleep 15
           python data/run_rankings.py "$YEAR"
           python data/run_awards.py "$YEAR"
       - name: Regenerate static exports
