@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getToken, setToken } from "../api/client";
-import { fetchMe, loginRequest, registerRequest } from "../api/auth";
+import { getToken, setToken, setApiKey } from "../api/client";
+import { fetchMe, loginRequest, registerRequest, fetchApiKey } from "../api/auth";
 import type { AuthUser, LoginPayload, RegisterPayload } from "../types/api";
 
 interface AuthContextValue {
@@ -33,7 +33,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     fetchMe()
       .then((u) => {
-        if (!cancelled) setUser(u);
+        if (!cancelled) {
+          setUser(u);
+          // Fetch and cache the user's API key for read requests
+          fetchApiKey()
+            .then((k) => { if (!cancelled) setApiKey(k?.api_key ?? null); })
+            .catch(() => { if (!cancelled) setApiKey(null); });
+        }
       })
       .catch(() => {
         // Token invalid/expired: clear it.
@@ -55,6 +61,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await loginRequest(payload);
       setToken(res.access_token);
       setUser(res.user);
+      // Fetch and cache API key for this user
+      try {
+        const keyRes = await fetchApiKey();
+        setApiKey(keyRes?.api_key ?? null);
+      } catch {
+        setApiKey(null);
+      }
       await queryClient.invalidateQueries({ queryKey: ["favorites"] });
       return res.user;
     },
@@ -66,6 +79,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await registerRequest(payload);
       setToken(res.access_token);
       setUser(res.user);
+      // Fetch and cache API key for this user
+      try {
+        const keyRes = await fetchApiKey();
+        setApiKey(keyRes?.api_key ?? null);
+      } catch {
+        setApiKey(null);
+      }
       await queryClient.invalidateQueries({ queryKey: ["favorites"] });
       return res.user;
     },
@@ -75,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
+    setApiKey(null);
     // Drop any per-user cached data (favorites, etc.).
     queryClient.removeQueries({ queryKey: ["favorites"] });
     queryClient.removeQueries({ queryKey: ["favorite-status"] });

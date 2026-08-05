@@ -3,7 +3,10 @@
 // caching, de-duplication, background refetch, and loading/error states for free.
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-import { apiGet, type QueryParams } from "./client";
+import { apiGet, type QueryParams, getToken, getApiKey } from "./client";
+
+// Helper: enable read queries only when we have a JWT or a cached API key
+const authEnabled = () => Boolean(getToken() || getApiKey());
 import {
   loadFilterOptions,
   loadSearchIndex,
@@ -50,6 +53,7 @@ export function useSearchIndex(): UseQueryResult<SearchIndex> {
 export function useFrcGames(): UseQueryResult<FrcGamesResponse> {
   return useQuery({
     queryKey: ["frc-games"],
+    enabled: authEnabled(),
     queryFn: () => apiGet<FrcGamesResponse>("/frc_games"),
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
@@ -59,6 +63,7 @@ export function useFrcGames(): UseQueryResult<FrcGamesResponse> {
 export function useInsightsOverview(): UseQueryResult<InsightsOverviewResponse> {
   return useQuery({
     queryKey: ["insights-overview"],
+    enabled: authEnabled(),
     queryFn: () => apiGet<InsightsOverviewResponse>("/insights/overview"),
     staleTime: 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
@@ -79,7 +84,7 @@ export function useFilterOptions(): UseQueryResult<FilterOptions> {
 export function useTeamInfo(teamNumber: number): UseQueryResult<TeamData | null> {
   return useQuery({
     queryKey: ["team-info", teamNumber],
-    enabled: Number.isFinite(teamNumber) && teamNumber > 0,
+    enabled: Number.isFinite(teamNumber) && teamNumber > 0 && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: async () => {
       const res = await apiGet<{ team_info: TeamData[] }>("/teams", { team_number: teamNumber });
@@ -94,7 +99,7 @@ export function useTeamPerfs(
 ): UseQueryResult<TeamPerfResponse> {
   return useQuery({
     queryKey: ["team-perfs", teamNumber, year ?? "all"],
-    enabled: Number.isFinite(teamNumber) && teamNumber > 0,
+    enabled: Number.isFinite(teamNumber) && teamNumber > 0 && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: () =>
       apiGet<TeamPerfResponse>(`/team_perfs/${teamNumber}`, year ? { year } : undefined),
@@ -108,7 +113,7 @@ export function useTeamEvents(
   const path = year ? `/team/${teamNumber}/events/${year}` : `/team/${teamNumber}/events`;
   return useQuery({
     queryKey: ["team-events", teamNumber, year ?? "all"],
-    enabled: Number.isFinite(teamNumber) && teamNumber > 0,
+    enabled: Number.isFinite(teamNumber) && teamNumber > 0 && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: () => apiGet<TeamEventsResponse>(path),
   });
@@ -117,7 +122,7 @@ export function useTeamEvents(
 export function useTeamNotables(teamNumber: number): UseQueryResult<TeamNotablesResponse> {
   return useQuery({
     queryKey: ["team-notables", teamNumber],
-    enabled: Number.isFinite(teamNumber) && teamNumber > 0,
+    enabled: Number.isFinite(teamNumber) && teamNumber > 0 && authEnabled(),
     staleTime: 24 * 60 * 60 * 1000,
     queryFn: () => apiGet<TeamNotablesResponse>(`/team/${teamNumber}/notables`),
   });
@@ -130,7 +135,7 @@ export function useTeamAwards(
   const path = year ? `/team/${teamNumber}/awards/${year}` : `/team/${teamNumber}/awards`;
   return useQuery({
     queryKey: ["team-awards", teamNumber, year ?? "all"],
-    enabled: Number.isFinite(teamNumber) && teamNumber > 0,
+    enabled: Number.isFinite(teamNumber) && teamNumber > 0 && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: () => apiGet<TeamAwardsResponse>(path),
   });
@@ -140,7 +145,7 @@ export function useTeamAwards(
 export function useEvents(year: number, params?: QueryParams): UseQueryResult<EventResponse> {
   return useQuery({
     queryKey: ["events", year, params ?? {}],
-    enabled: Number.isFinite(year),
+    enabled: Number.isFinite(year) && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: () => apiGet<EventResponse>(`/events/${year}`, params),
   });
@@ -153,7 +158,7 @@ export function useEventInsights(
 ): UseQueryResult<EventInsightsResponse> {
   return useQuery({
     queryKey: ["event-insights", year],
-    enabled: Number.isFinite(year) && (options.enabled ?? true),
+    enabled: Number.isFinite(year) && (options.enabled ?? true) && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: () => apiGet<EventInsightsResponse>(`/events/${year}/insights`),
   });
@@ -164,7 +169,7 @@ export function useEvent(eventKey: string): UseQueryResult<EventData | null> {
   const year = yearFromEventKey(eventKey);
   return useQuery({
     queryKey: ["event", eventKey],
-    enabled: Boolean(eventKey) && year !== null,
+    enabled: Boolean(eventKey) && year !== null && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: async () => {
       const res = await apiGet<EventResponse>(`/events/${year}`);
@@ -176,7 +181,7 @@ export function useEvent(eventKey: string): UseQueryResult<EventData | null> {
 export function useEventTeams(eventKey: string): UseQueryResult<EventTeamsResponse> {
   return useQuery({
     queryKey: ["event-teams", eventKey],
-    enabled: Boolean(eventKey),
+    enabled: Boolean(eventKey) && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: () => apiGet<EventTeamsResponse>(`/event/${eventKey}/teams`),
   });
@@ -188,7 +193,7 @@ export function useEventMatches(
 ): UseQueryResult<EventMatchResponse> {
   return useQuery({
     queryKey: ["event-matches", eventKey, params ?? {}],
-    enabled: Boolean(eventKey),
+    enabled: Boolean(eventKey) && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: () => apiGet<EventMatchResponse>(`/event/${eventKey}/matches`, params),
   });
@@ -197,7 +202,7 @@ export function useEventMatches(
 export function useEventRankings(eventKey: string): UseQueryResult<EventRankingsResponse> {
   return useQuery({
     queryKey: ["event-rankings", eventKey],
-    enabled: Boolean(eventKey),
+    enabled: Boolean(eventKey) && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: () => apiGet<EventRankingsResponse>(`/event/${eventKey}/rankings`),
   });
@@ -206,7 +211,7 @@ export function useEventRankings(eventKey: string): UseQueryResult<EventRankings
 export function useEventAwards(eventKey: string): UseQueryResult<EventAwardsResponse> {
   return useQuery({
     queryKey: ["event-awards", eventKey],
-    enabled: Boolean(eventKey),
+    enabled: Boolean(eventKey) && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: () => apiGet<EventAwardsResponse>(`/event/${eventKey}/awards`),
   });
@@ -215,7 +220,7 @@ export function useEventAwards(eventKey: string): UseQueryResult<EventAwardsResp
 export function useEventPerfs(eventKey: string): UseQueryResult<EventPerfsResponse> {
   return useQuery({
     queryKey: ["event-perfs", eventKey],
-    enabled: Boolean(eventKey),
+    enabled: Boolean(eventKey) && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: () => apiGet<EventPerfsResponse>(`/event/${eventKey}/event_perfs`),
   });
@@ -225,6 +230,7 @@ export function useEventPerfs(eventKey: string): UseQueryResult<EventPerfsRespon
 export function useMapTeams(): UseQueryResult<MapTeamsResponse> {
   return useQuery({
     queryKey: ["map-teams"],
+    enabled: authEnabled(),
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     queryFn: () => apiGet<MapTeamsResponse>("/map/teams"),
@@ -234,7 +240,7 @@ export function useMapTeams(): UseQueryResult<MapTeamsResponse> {
 export function useMapEvents(year: number): UseQueryResult<MapEventsResponse> {
   return useQuery({
     queryKey: ["map-events", year],
-    enabled: Number.isFinite(year),
+    enabled: Number.isFinite(year) && authEnabled(),
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     queryFn: () => apiGet<MapEventsResponse>("/map/events", { year }),
@@ -300,7 +306,7 @@ export function useLeaderboardPreview(
 ): UseQueryResult<TeamPerfResponse[]> {
   return useQuery({
     queryKey: ["leaderboard-preview", year, limit],
-    enabled: Number.isFinite(year),
+    enabled: Number.isFinite(year) && authEnabled(),
     staleTime: FIVE_MIN,
     queryFn: async () => {
       const res = await apiGet<TeamPerfListResponse>("/team_perfs", {

@@ -18,6 +18,7 @@ export type QueryParams = Record<
 
 // ---- Auth token persistence (SPA stores the JWT in localStorage) ----
 const TOKEN_KEY = "peekorobo_token";
+const API_KEY_STORAGE = "peekorobo_api_key";
 
 export function getToken(): string | null {
   try {
@@ -34,6 +35,33 @@ export function setToken(token: string | null): void {
   } catch {
     // ignore storage errors (e.g. private mode)
   }
+}
+
+export function getApiKey(): string | null {
+  try {
+    return localStorage.getItem(API_KEY_STORAGE);
+  } catch {
+    return null;
+  }
+}
+
+export function setApiKey(key: string | null): void {
+  try {
+    if (key) localStorage.setItem(API_KEY_STORAGE, key);
+    else localStorage.removeItem(API_KEY_STORAGE);
+  } catch {
+    // ignore storage errors (e.g. private mode)
+  }
+}
+
+// New headers builder that includes stored API key (if present)
+export function newAuthHeaders(): Record<string, string> {
+  const token = getToken();
+  const apiKey = getApiKey();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (apiKey) headers["X-API-Key"] = apiKey;
+  return headers;
 }
 
 function buildQuery(params?: QueryParams): string {
@@ -70,7 +98,7 @@ export async function apiGet<T>(path: string, params?: QueryParams): Promise<T> 
   const url = `${API_BASE}${path}${buildQuery(params)}`;
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Accept: "application/json", ...authHeaders() } });
+    res = await fetch(url, { headers: { Accept: "application/json", ...newAuthHeaders() } });
   } catch (err) {
     throw new ApiError(0, `Network error contacting the API: ${(err as Error).message}`);
   }
@@ -91,7 +119,7 @@ async function apiSend<T>(
       headers: {
         Accept: "application/json",
         ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
-        ...authHeaders(),
+                ...newAuthHeaders(),
       },
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });

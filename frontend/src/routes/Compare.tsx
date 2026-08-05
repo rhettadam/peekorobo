@@ -18,7 +18,8 @@ import { IconPlus, IconX } from "@tabler/icons-react";
 import { LineChart } from "@mantine/charts";
 import { useQueries } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { apiGet } from "../api/client";
+import { apiGet, getToken, getApiKey } from "../api/client";
+const authEnabled = () => Boolean(getToken() || getApiKey());
 import { useSearchIndex } from "../api/queries";
 import { TeamName } from "../components/TeamName";
 import { TeamAvatar } from "../components/TeamAvatar";
@@ -132,6 +133,7 @@ export function Compare() {
   const results = useQueries({
     queries: teams.map((tn) => ({
       queryKey: ["team-perfs", tn, "all"],
+      enabled: authEnabled(),
       queryFn: () => apiGet<TeamPerfResponse>(`/team_perfs/${tn}`),
       staleTime: 5 * 60 * 1000,
     })),
