@@ -45,14 +45,3 @@ jobs:
           if [ -d ../data/leaderboards ]; then cp -f ../data/leaderboards/*.json dist/data/leaderboards/ 2>/dev/null || true; fi
           if [ -f public/data/districts.geojson ]; then cp -f public/data/districts.geojson dist/data/districts.geojson; fi
           if [ -d ../assets ]; then cp -a ../assets/. dist/assets/; fi
-      - name: Deploy to Cloudflare Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: frontend
-          command: pages deploy dist --project-name=peekorobo --branch=main --commit-dirty=true

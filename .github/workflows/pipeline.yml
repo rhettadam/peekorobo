@@ -149,11 +149,3 @@ jobs:
           done
           if [ -f public/data/districts.geojson ]; then cp -f public/data/districts.geojson dist/data/districts.geojson; fi
           if [ -d ../assets ]; then cp -a ../assets/. dist/assets/; fi
-      - name: Deploy SPA + static files to Cloudflare Pages
-        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: frontend
-          command: pages deploy dist --project-name=peekorobo --branch=main --commit-dirty=true
