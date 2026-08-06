@@ -1,1 +1,7 @@
-/*    /index.html   200
+# Do NOT add a catch-all `/* /index.html 200` here. On Cloudflare Pages, redirect
+# rules run even when a static file exists, which forces /assets/* and /data/* to
+# return the SPA shell (HTML) instead of PNG/JSON. Client-side routes are handled
+# by Pages SPA mode automatically when no top-level 404.html is present.
+
+/assets/*  /assets/:splat  200
+/data/*    /data/:splat    200

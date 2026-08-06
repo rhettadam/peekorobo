@@ -1,4 +1,6 @@
 import os
+import re
+import logging
 import threading
 from typing import Annotated, Optional
 from time import time
@@ -268,26 +270,69 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Optional rate limiting (safety net behind the CDN). slowapi is optional so the
-# API still runs if it isn't installed. Keyed by API key when present, else IP.
+# Rate limiting (safety net behind the CDN). Keyed by API key when present, else client IP.
+# Heroku terminates TLS and forwards X-Forwarded-For; without parsing it, every request
+# appears to come from the router and limits do not protect the database.
+_logger = logging.getLogger("peekorobo.api")
+
 try:
     from slowapi import Limiter, _rate_limit_exceeded_handler
     from slowapi.util import get_remote_address
     from slowapi.errors import RateLimitExceeded
     from slowapi.middleware import SlowAPIMiddleware
 
+    def _client_ip(request: Request) -> str:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        real_ip = request.headers.get("X-Real-Ip")
+        if real_ip:
+            return real_ip.strip()
+        if request.client and request.client.host:
+            return request.client.host
+        return get_remote_address(request)
+
     def _rate_limit_key(request: Request) -> str:
-        return request.headers.get("X-API-Key") or get_remote_address(request)
+        api_key = request.headers.get("X-API-Key")
+        if api_key:
+            return f"key:{api_key.strip()}"
+        return f"ip:{_client_ip(request)}"
+
+    _anonymous_limit = os.getenv("RATE_LIMIT_ANONYMOUS", "90/minute")
+    _application_limit = os.getenv("RATE_LIMIT_APPLICATION", "1200/minute")
 
     limiter = Limiter(
         key_func=_rate_limit_key,
-        default_limits=[os.getenv("RATE_LIMIT_DEFAULT", "240/minute")],
+        default_limits=[_anonymous_limit],
+        application_limits=[_application_limit],
+        headers_enabled=True,
     )
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
 except ImportError:
     limiter = None
+    _logger.warning("slowapi is not installed; API rate limiting is disabled")
+
+# Fast-reject aggressive scrapers before opening a DB connection (anonymous reads only).
+_SUSPICIOUS_UA = re.compile(
+    r"(?:bytespider|petalbot|semrush|ahrefs|mj12bot|dotbot|gptbot|claudebot|"
+    r"scrapy|python-requests|curl/|wget/|go-http-client|java/|libwww-perl|"
+    r"httpx/|aiohttp/|okhttp/)",
+    re.IGNORECASE,
+)
+_BOT_BLOCK_PREFIXES = (
+    "/teams",
+    "/events",
+    "/team",
+    "/event",
+    "/map",
+    "/insights",
+    "/team_perfs",
+    "/frc_games",
+    "/favorites/item",
+    "/favorites/counts",
+)
 
 
 NO_CACHE_PREFIXES = ("/authorize", "/docs", "/openapi.json", "/redoc", "/auth", "/favorites")
@@ -304,6 +349,25 @@ async def add_cache_headers(request: Request, call_next):
         else:
             response.headers.setdefault("Cache-Control", CACHE_CONTROL_VALUE)
     return response
+
+
+@app.middleware("http")
+async def reject_suspicious_scrapers(request: Request, call_next):
+    if request.method != "GET":
+        return await call_next(request)
+    if request.headers.get("X-API-Key"):
+        return await call_next(request)
+    path = request.url.path
+    if not any(path == p or path.startswith(f"{p}/") for p in _BOT_BLOCK_PREFIXES):
+        return await call_next(request)
+    ua = request.headers.get("user-agent") or ""
+    if _SUSPICIOUS_UA.search(ua):
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": "Too many requests"},
+            headers={"Retry-After": "60"},
+        )
+    return await call_next(request)
 
 # Header and footer for Swagger docs (matches peekorobo.com branding)
 SWAGGER_HEADER_HTML = """
