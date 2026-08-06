@@ -1,8 +1,10 @@
 // Central helpers for referencing Peekorobo's static image assets.
 //
 // In dev, VITE_ASSETS_BASE_URL defaults to "/assets" and Vite serves the
-// repo-root assets/ folder (see vite.config.ts). In production, point
-// VITE_ASSETS_BASE_URL at the CDN/bucket that hosts the assets/ contents.
+// repo-root assets/ folder (see vite.config.ts). Brand icons also live under
+// frontend/public/assets/ so Cloudflare Pages always ships logo/tba/etc. even
+// when the post-build copy of ../assets is skipped. Avatars/game logos still
+// come from the repo-root assets/ copy in CI.
 
 export const ASSETS_BASE = (import.meta.env.VITE_ASSETS_BASE_URL ?? "/assets").replace(/\/$/, "");
 

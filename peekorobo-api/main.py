@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 import logging
@@ -30,7 +31,7 @@ from query.map import MapTeamsResponse, MapEventsResponse
 from data.db import SessionLocal
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, TimeoutError as SATimeoutError
 import data.models.teams as teams
 import data.models.team_epas as team_epas
 import data.models.event_teams as event_teams
@@ -74,6 +75,10 @@ load_dotenv()
 
 AUTH_TIMEOUT_MS = 2000  # 2 seconds
 AUTH_CACHE_TTL_SECONDS = 300  # 5 min
+READ_STATEMENT_TIMEOUT_MS = int(os.getenv("READ_STATEMENT_TIMEOUT_MS", "15000"))
+DB_MAX_CONCURRENT = int(os.getenv("DB_MAX_CONCURRENT", "6"))
+DB_WAIT_TIMEOUT = float(os.getenv("DB_WAIT_TIMEOUT", "5"))
+_db_semaphore = asyncio.Semaphore(DB_MAX_CONCURRENT)
 
 # When PUBLIC_READ is enabled the read endpoints the SPA needs are served without
 # an API key (rate-limited + CDN-cached). The keyed developer API, /docs and
@@ -104,19 +109,25 @@ CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if 
 
 _auth_cache: dict[str, float] = {}  # api_key -> cached_at
 
-def _apply_auth_timeout(db: Session) -> None:
+def _apply_statement_timeout(db: Session, timeout_ms: int) -> None:
     bind = db.get_bind()
     if bind is None:
         return
     if bind.dialect.name == "postgresql":
         db.execute(
             text("SET LOCAL statement_timeout = :timeout_ms"),
-            {"timeout_ms": AUTH_TIMEOUT_MS}
+            {"timeout_ms": timeout_ms},
         )
+
+
+def _apply_auth_timeout(db: Session) -> None:
+    _apply_statement_timeout(db, AUTH_TIMEOUT_MS)
+
 
 def get_db():
     db = SessionLocal()
     try:
+        _apply_statement_timeout(db, READ_STATEMENT_TIMEOUT_MS)
         yield db
     finally:
         db.close()
@@ -298,8 +309,8 @@ try:
             return f"key:{api_key.strip()}"
         return f"ip:{_client_ip(request)}"
 
-    _anonymous_limit = os.getenv("RATE_LIMIT_ANONYMOUS", "90/minute")
-    _application_limit = os.getenv("RATE_LIMIT_APPLICATION", "1200/minute")
+    _anonymous_limit = os.getenv("RATE_LIMIT_ANONYMOUS", "60/minute")
+    _application_limit = os.getenv("RATE_LIMIT_APPLICATION", "600/minute")
 
     limiter = Limiter(
         key_func=_rate_limit_key,
@@ -368,6 +379,39 @@ async def reject_suspicious_scrapers(request: Request, call_next):
             headers={"Retry-After": "60"},
         )
     return await call_next(request)
+
+
+_DB_GUARD_SKIP_PREFIXES = ("/docs", "/openapi.json", "/redoc")
+
+
+@app.middleware("http")
+async def guard_db_concurrency(request: Request, call_next):
+    """Cap concurrent DB work so pool exhaustion fails fast with 503 instead of H12."""
+    path = request.url.path
+    if path == "/" or any(path == p or path.startswith(p) for p in _DB_GUARD_SKIP_PREFIXES):
+        return await call_next(request)
+    try:
+        await asyncio.wait_for(_db_semaphore.acquire(), timeout=DB_WAIT_TIMEOUT)
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": "Server busy, try again shortly"},
+            headers={"Retry-After": "5"},
+        )
+    try:
+        return await call_next(request)
+    finally:
+        _db_semaphore.release()
+
+
+@app.exception_handler(SATimeoutError)
+async def sqlalchemy_pool_timeout_handler(_request: Request, _exc: SATimeoutError):
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "Database busy, try again shortly"},
+        headers={"Retry-After": "5"},
+    )
+
 
 # Header and footer for Swagger docs (matches peekorobo.com branding)
 SWAGGER_HEADER_HTML = """

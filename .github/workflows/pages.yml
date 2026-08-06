@@ -45,6 +45,8 @@ jobs:
           if [ -d ../data/leaderboards ]; then cp -f ../data/leaderboards/*.json dist/data/leaderboards/ 2>/dev/null || true; fi
           if [ -f public/data/districts.geojson ]; then cp -f public/data/districts.geojson dist/data/districts.geojson; fi
           if [ -d ../assets ]; then cp -a ../assets/. dist/assets/; fi
+          test -f dist/assets/logo.png || (echo "Build missing dist/assets/logo.png" && exit 1)
+          test -f dist/assets/tba.png || (echo "Build missing dist/assets/tba.png" && exit 1)
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
