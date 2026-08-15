@@ -19,6 +19,8 @@ class MatchResponse(BaseModel):
     predicted_time : Optional[int] = None
     red_win_prob : Optional[float] = None
     blue_win_prob : Optional[float] = None
+    red_predicted_score : Optional[float] = None
+    blue_predicted_score : Optional[float] = None
 
 class EventMatchResponse(BaseModel):
     event_key : str

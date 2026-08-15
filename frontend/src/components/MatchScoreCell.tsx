@@ -55,7 +55,7 @@ export function MatchPredScoreCell({
   const redWin = pred.red > pred.blue;
   const blueWin = pred.blue > pred.red;
   return (
-    <Text span size="sm" title="Predicted score (sum of event ACE)" style={{ whiteSpace: "nowrap" }}>
+    <Text span size="sm" title="Predicted score (event ACE sum)" style={{ whiteSpace: "nowrap" }}>
       <Text fw={redWin ? 700 : 400} c={redWin ? "red" : undefined} span>
         {Math.round(pred.red)}
       </Text>

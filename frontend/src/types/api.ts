@@ -128,6 +128,8 @@ export interface MatchResponse {
   predicted_time?: number | null;
   red_win_prob?: number | null;
   blue_win_prob?: number | null;
+  red_predicted_score?: number | null;
+  blue_predicted_score?: number | null;
 }
 
 export interface EventMatchResponse {

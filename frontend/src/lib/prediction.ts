@@ -42,11 +42,19 @@ export function allianceAceSum(
   return known > 0 ? sum : null;
 }
 
-/** Predicted red/blue scores = sum of each alliance's team ACE. */
+/** Predicted red/blue scores from stored DB values, else event ACE sum. */
 export function predictedMatchScores(
   m: MatchResponse,
   aceByTeam: Map<number, number | null | undefined> | undefined,
 ): { red: number; blue: number } | null {
+  if (
+    typeof m.red_predicted_score === "number" &&
+    Number.isFinite(m.red_predicted_score) &&
+    typeof m.blue_predicted_score === "number" &&
+    Number.isFinite(m.blue_predicted_score)
+  ) {
+    return { red: m.red_predicted_score, blue: m.blue_predicted_score };
+  }
   const red = allianceAceSum(m.red_teams, aceByTeam);
   const blue = allianceAceSum(m.blue_teams, aceByTeam);
   if (red === null || blue === null) return null;

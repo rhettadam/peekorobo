@@ -1,0 +1,429 @@
+"""DB-only match prediction from stored RAW/ACE ratings.
+
+Predictions combine team ratings already persisted in ``team_epas`` (season and
+``event_perf`` JSON). No TBA calls at prediction time.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import os
+from dataclasses import dataclass, field
+from typing import Dict, List, Literal, Optional, Tuple
+
+RatingField = Literal["ace", "raw"]
+RatingScope = Literal[
+    "event",
+    "prior_event",
+    "prior_event_or_prior_year",
+    "season",
+    "prior_year",
+]
+Aggregation = Literal["sum", "mean"]
+
+
+@dataclass
+class PredictionConfig:
+    """Production prediction parameters."""
+
+    win_scale_base: float = 6.4
+    prob_min: float = 0.02
+    prob_max: float = 0.98
+    rating_field: RatingField = "ace"
+    rating_scope: RatingScope = "event"
+    aggregation: Aggregation = "sum"
+
+    @classmethod
+    def from_env(cls) -> "PredictionConfig":
+        return cls(
+            win_scale_base=float(os.environ.get("ACE_WIN_PROB_SCALE", "6.4")),
+            rating_field=_normalize_rating_field(
+                os.environ.get("PRED_RATING_FIELD", "ace")
+            ),
+            rating_scope=os.environ.get("PRED_RATING_SCOPE", "event").strip().lower(),  # type: ignore[arg-type]
+            aggregation=os.environ.get("PRED_AGGREGATION", "sum").strip().lower(),  # type: ignore[arg-type]
+        )
+
+    def label(self) -> str:
+        return (
+            f"scope={self.rating_scope} field={self.rating_field} "
+            f"agg={self.aggregation} scale={self.win_scale_base}"
+        )
+
+
+@dataclass
+class MatchRow:
+    match_key: str
+    event_key: str
+    red_teams: List[int]
+    blue_teams: List[int]
+    red_score: int
+    blue_score: int
+    winning_alliance: str
+    predicted_time: Optional[int] = None
+    comp_level: str = "qm"
+    red_win_prob: Optional[float] = None
+    blue_win_prob: Optional[float] = None
+    red_predicted_score: Optional[float] = None
+    blue_predicted_score: Optional[float] = None
+
+
+@dataclass
+class TeamSeasonData:
+    ace: float = 0.0
+    raw: float = 0.0
+    confidence: float = 0.0
+    event_perf: Dict[str, Dict[str, float]] = field(default_factory=dict)
+
+
+@dataclass
+class DbPredictionData:
+    year: int
+    event_order: Dict[str, Tuple[str, str]]  # event_key -> (start_date, event_key)
+    season: Dict[int, TeamSeasonData]
+    prior_season: Dict[int, TeamSeasonData]
+    matches: List[MatchRow]
+
+
+@dataclass
+class MatchPrediction:
+    match_key: str
+    p_red: float
+    p_blue: float
+    red_predicted_score: float
+    blue_predicted_score: float
+
+
+def _normalize_rating_field(value: str) -> RatingField:
+    """ACE is RAW × confidence; treat legacy raw_x_conf as ace."""
+    field = (value or "ace").strip().lower()
+    if field in ("raw_x_conf", "rawxconf"):
+        return "ace"
+    if field == "raw":
+        return "raw"
+    return "ace"
+
+
+def is_played(row: MatchRow) -> bool:
+    if row.red_score > 0 or row.blue_score > 0:
+        return True
+    return row.winning_alliance in ("red", "blue")
+
+
+def _parse_event_perf(raw_val) -> Dict[str, Dict[str, float]]:
+    if raw_val is None:
+        return {}
+    data = raw_val
+    if isinstance(raw_val, str):
+        try:
+            data = json.loads(raw_val)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    if not isinstance(data, list):
+        return {}
+    out: Dict[str, Dict[str, float]] = {}
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        ek = entry.get("event_key")
+        if not ek:
+            continue
+        out[str(ek)] = {
+            "ace": float(entry.get("ace") or 0.0),
+            "raw": float(entry.get("raw") or 0.0),
+            "confidence": float(entry.get("confidence") or 0.0),
+        }
+    return out
+
+
+_PRED_SCORE_COLS: Optional[bool] = None
+
+
+def _event_matches_has_pred_scores(cur) -> bool:
+    global _PRED_SCORE_COLS
+    if _PRED_SCORE_COLS is not None:
+        return _PRED_SCORE_COLS
+    cur.execute(
+        """
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'event_matches'
+          AND column_name = 'red_predicted_score'
+        LIMIT 1
+        """
+    )
+    _PRED_SCORE_COLS = cur.fetchone() is not None
+    return _PRED_SCORE_COLS
+
+
+def _event_matches_select_sql(cur) -> str:
+    """SELECT list for event_matches; predicted score cols optional (added by pipeline)."""
+    score_cols = ""
+    if _event_matches_has_pred_scores(cur):
+        score_cols = ", red_predicted_score, blue_predicted_score"
+    return f"""
+            SELECT match_key, event_key, red_teams, blue_teams,
+                   COALESCE(red_score, 0), COALESCE(blue_score, 0),
+                   COALESCE(winning_alliance, ''), predicted_time, COALESCE(comp_level, 'qm'),
+                   red_win_prob, blue_win_prob{score_cols}
+            """
+
+
+def load_prediction_data_from_db(conn, year: int, *, limit_events: Optional[int] = None) -> DbPredictionData:
+    """Load matches, event order, and team ratings from Postgres."""
+    cur = conn.cursor()
+
+    match_select = _event_matches_select_sql(cur)
+    has_pred_scores = "red_predicted_score" in match_select
+
+    cur.execute(
+        """
+        SELECT event_key, COALESCE(start_date::text, ''), COALESCE(event_type, '')
+        FROM events
+        WHERE event_key LIKE %s
+        ORDER BY start_date NULLS LAST, event_key
+        """,
+        (f"{year}%",),
+    )
+    event_rows = cur.fetchall()
+    if limit_events:
+        event_rows = event_rows[:limit_events]
+    allowed_events = {r[0] for r in event_rows}
+    event_order = {r[0]: (r[1] or "", r[0]) for r in event_rows}
+
+    def _load_season(y: int) -> Dict[int, TeamSeasonData]:
+        cur.execute(
+            """
+            SELECT team_number, ace, confidence, raw, event_perf
+            FROM team_epas
+            WHERE year = %s
+            """,
+            (y,),
+        )
+        result: Dict[int, TeamSeasonData] = {}
+        for team_number, ace, confidence, raw, event_perf_raw in cur.fetchall():
+            result[int(team_number)] = TeamSeasonData(
+                ace=float(ace or 0.0),
+                raw=float(raw or 0.0),
+                confidence=float(confidence or 0.0),
+                event_perf=_parse_event_perf(event_perf_raw),
+            )
+        return result
+
+    season = _load_season(year)
+    prior_season = _load_season(year - 1)
+
+    if allowed_events:
+        cur.execute(
+            match_select
+            + """
+            FROM event_matches
+            WHERE event_key = ANY(%s)
+            ORDER BY event_key, predicted_time NULLS LAST, comp_level, match_key
+            """,
+            (list(allowed_events),),
+        )
+    else:
+        cur.execute(
+            match_select
+            + """
+            FROM event_matches
+            WHERE event_key LIKE %s
+            ORDER BY event_key, predicted_time NULLS LAST, comp_level, match_key
+            """,
+            (f"{year}%",),
+        )
+
+    matches: List[MatchRow] = []
+    for row in cur.fetchall():
+        if has_pred_scores:
+            (
+                match_key,
+                event_key,
+                red_teams,
+                blue_teams,
+                red_score,
+                blue_score,
+                winning_alliance,
+                predicted_time,
+                comp_level,
+                red_win_prob,
+                blue_win_prob,
+                red_pred_score,
+                blue_pred_score,
+            ) = row
+        else:
+            (
+                match_key,
+                event_key,
+                red_teams,
+                blue_teams,
+                red_score,
+                blue_score,
+                winning_alliance,
+                predicted_time,
+                comp_level,
+                red_win_prob,
+                blue_win_prob,
+            ) = row
+            red_pred_score = blue_pred_score = None
+        if allowed_events and event_key not in allowed_events:
+            continue
+        matches.append(
+            MatchRow(
+                match_key=match_key,
+                event_key=event_key or "",
+                red_teams=_parse_team_csv(red_teams),
+                blue_teams=_parse_team_csv(blue_teams),
+                red_score=int(red_score or 0),
+                blue_score=int(blue_score or 0),
+                winning_alliance=winning_alliance or "",
+                predicted_time=predicted_time,
+                comp_level=comp_level or "qm",
+                red_win_prob=float(red_win_prob) if red_win_prob is not None else None,
+                blue_win_prob=float(blue_win_prob) if blue_win_prob is not None else None,
+                red_predicted_score=float(red_pred_score) if red_pred_score is not None else None,
+                blue_predicted_score=float(blue_pred_score) if blue_pred_score is not None else None,
+            )
+        )
+
+    cur.close()
+    return DbPredictionData(
+        year=year,
+        event_order=event_order,
+        season=season,
+        prior_season=prior_season,
+        matches=matches,
+    )
+
+
+def _parse_team_csv(team_csv) -> List[int]:
+    if not team_csv:
+        return []
+    out: List[int] = []
+    for raw in str(team_csv).split(","):
+        tok = raw.strip()
+        if tok.lower().startswith("frc"):
+            tok = tok[3:]
+        digits = "".join(ch for ch in tok if ch.isdigit())
+        if digits:
+            out.append(int(digits))
+    return out
+
+
+def _event_sort_key(data: DbPredictionData, event_key: str) -> Tuple[str, str]:
+    return data.event_order.get(event_key, ("", event_key))
+
+
+def _prior_event_key(data: DbPredictionData, team: TeamSeasonData, event_key: str) -> Optional[str]:
+    current = _event_sort_key(data, event_key)
+    candidates: List[Tuple[Tuple[str, str], str]] = []
+    for ek, perf in team.event_perf.items():
+        if ek == event_key:
+            continue
+        sort_key = _event_sort_key(data, ek)
+        if sort_key < current:
+            candidates.append((sort_key, ek))
+    if not candidates:
+        return None
+    candidates.sort()
+    return candidates[-1][1]
+
+
+def team_rating_value(
+    data: DbPredictionData,
+    team_number: int,
+    event_key: str,
+    config: PredictionConfig,
+) -> float:
+    """Return rating value for one team."""
+    team = data.season.get(team_number)
+    prior = data.prior_season.get(team_number)
+
+    def _from_perf(perf: Dict[str, float]) -> float:
+        if config.rating_field == "raw":
+            return float(perf.get("raw") or 0.0)
+        return float(perf.get("ace") or 0.0)
+
+    def _from_season(td: Optional[TeamSeasonData]) -> float:
+        if not td:
+            return 0.0
+        if config.rating_field == "raw":
+            return td.raw
+        return td.ace
+
+    scope = config.rating_scope
+
+    if scope == "season":
+        return _from_season(team)
+
+    if scope == "prior_year":
+        return _from_season(prior)
+
+    if team:
+        if scope == "event":
+            perf = team.event_perf.get(event_key)
+            if perf:
+                return _from_perf(perf)
+        elif scope in ("prior_event", "prior_event_or_prior_year"):
+            pek = _prior_event_key(data, team, event_key)
+            if pek and pek in team.event_perf:
+                return _from_perf(team.event_perf[pek])
+            if scope == "prior_event_or_prior_year" and prior:
+                return _from_season(prior)
+
+    if prior and scope in ("event", "prior_event", "prior_event_or_prior_year"):
+        return _from_season(prior)
+
+    return 0.0
+
+
+def alliance_strength_db(
+    data: DbPredictionData,
+    team_numbers: List[int],
+    event_key: str,
+    config: PredictionConfig,
+) -> float:
+    ratings = [team_rating_value(data, tn, event_key, config) for tn in team_numbers]
+    if not ratings:
+        return 0.0
+    if config.aggregation == "mean":
+        return sum(ratings) / len(ratings)
+    return sum(ratings)
+
+
+def predict_win_probability(
+    red_strength: float,
+    blue_strength: float,
+    config: PredictionConfig,
+) -> Tuple[float, float]:
+    """Map alliance strength differential to win probability.
+
+    Uses logistic on normalized margin (red−blue)/(red+blue), which is invariant
+    when ACE values shift across game seasons (e.g. 2026 vs 2024 scoring scale).
+    """
+    total = red_strength + blue_strength
+    if total == 0:
+        return 0.5, 0.5
+    margin = (red_strength - blue_strength) / total
+    x = max(-60.0, min(60.0, -config.win_scale_base * margin))
+    p_red = 1.0 / (1.0 + math.exp(x))
+    p_red = max(config.prob_min, min(config.prob_max, p_red))
+    return p_red, 1.0 - p_red
+
+
+def predict_match_db(data: DbPredictionData, row: MatchRow, config: PredictionConfig) -> MatchPrediction:
+    red_strength = alliance_strength_db(data, row.red_teams, row.event_key, config)
+    blue_strength = alliance_strength_db(data, row.blue_teams, row.event_key, config)
+    p_red, p_blue = predict_win_probability(red_strength, blue_strength, config)
+    return MatchPrediction(
+        match_key=row.match_key,
+        p_red=p_red,
+        p_blue=p_blue,
+        red_predicted_score=red_strength,
+        blue_predicted_score=blue_strength,
+    )
+
+
+def predict_all_matches_db(data: DbPredictionData, config: PredictionConfig) -> List[MatchPrediction]:
+    return [predict_match_db(data, row, config) for row in data.matches]

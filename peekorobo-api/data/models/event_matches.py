@@ -44,6 +44,8 @@ class EventMatch(Base):
     predicted_time: Mapped[Optional[int]] = mapped_column(INT)
     red_win_prob: Mapped[Optional[float]] = mapped_column(DOUBLE_PRECISION)
     blue_win_prob: Mapped[Optional[float]] = mapped_column(DOUBLE_PRECISION)
+    red_predicted_score: Mapped[Optional[float]] = mapped_column(DOUBLE_PRECISION)
+    blue_predicted_score: Mapped[Optional[float]] = mapped_column(DOUBLE_PRECISION)
 
 
 def get_event_matches(db: Session, event_key: str, query: EventMatchesRequest) -> EventMatchResponse:
@@ -74,6 +76,8 @@ def get_event_matches(db: Session, event_key: str, query: EventMatchesRequest) -
             predicted_time=r.predicted_time,
             red_win_prob=r.red_win_prob,
             blue_win_prob=r.blue_win_prob,
+            red_predicted_score=r.red_predicted_score,
+            blue_predicted_score=r.blue_predicted_score,
         )
         for r in rows
     ]

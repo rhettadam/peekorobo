@@ -10,7 +10,7 @@ from datetime import datetime, date, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 import random
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 from functools import wraps
 import signal
 import sys
@@ -22,6 +22,7 @@ import traceback
 from yearmodels import *
 from active_events import get_active_event_keys
 from ace_attribution import Method, simulate_event, TeamPhaseState
+from prediction import PredictionConfig, load_prediction_data_from_db, predict_all_matches_db
 
 start_time = time.time()
 
@@ -33,7 +34,7 @@ _EPA_DEBUG = os.environ.get("EPA_DEBUG", "").lower() in ("1", "true", "yes")
 # ACE attribution method. residual_shrink (default) = residual obs blended toward S/n
 # to limit carry-inflation / stacked-alliance suppression. Override with ACE_METHOD.
 _ACE_METHOD: Method = os.environ.get("ACE_METHOD", "residual_shrink").strip().lower()  # type: ignore[assignment]
-if _ACE_METHOD not in ("residual", "equal_split", "residual_shrink", "baseline_current"):
+if _ACE_METHOD not in ("residual", "equal_split", "residual_shrink"):
     _ACE_METHOD = "residual_shrink"
 
 # Blend toward equal share when using residual_shrink (0 = pure residual).
@@ -55,12 +56,11 @@ _ACE_PARTNER_CAP = float(os.environ.get("ACE_PARTNER_CAP", "1.25"))
 _ACE_CARRY_PRIOR = os.environ.get("ACE_CARRY_PRIOR", "1").strip().lower() in ("1", "true", "yes")
 _ACE_PRIOR_BLEND = float(os.environ.get("ACE_PRIOR_BLEND", "1.0"))
 
-# Logistic scale for win probs on RAW/ACE diffs (retuned for debiased residual RAW).
-_WIN_PROB_SCALE_BASE = float(os.environ.get("ACE_WIN_PROB_SCALE", "0.04"))
+# Logistic scale on normalized ACE margin (pooled 2024-2026 tune: 6.4).
 
 TBA_BASE_URL = "https://www.thebluealliance.com/api/v3"
 
-API_KEYS = os.getenv("TBA_API_KEYS").split(',')
+API_KEYS = [k.strip() for k in (os.getenv("TBA_API_KEYS") or "").split(",") if k.strip()]
 
 import psycopg2
 from psycopg2.extras import execute_values
@@ -384,8 +384,8 @@ def get_pg_connection():
 # thread-safe pool instead.
 #
 # get_pg_connection() above is deliberately left untouched so it stays backward
-# compatible: external importers (run_rankings / run_awards / active_events /
-# backfill_latlng / add_latlng_columns) and the bounded one-off internal callers
+# compatible: external importers (run_rankings / run_awards / active_events)
+# and the bounded one-off internal callers
 # keep receiving a fresh, self-owned raw connection that they close themselves.
 # ---------------------------------------------------------------------------
 
@@ -519,7 +519,6 @@ _team_played_events_lock = threading.Lock()
 # once per run so the per-event chronological weight + start-date reads (which
 # previously read the SAME events row twice per event) become dict lookups.
 _event_start_date_cache = {}
-_event_meta_loaded_years = set()
 _event_meta_lock = threading.Lock()
 
 
@@ -546,7 +545,6 @@ def preload_event_metadata(year):
     with _event_meta_lock:
         for event_key, start_date in rows:
             _event_start_date_cache[event_key] = start_date if start_date else None
-        _event_meta_loaded_years.add(int(year))
 
 def _normalize_district_key(key):
     """TBA uses 2024fim; normalize to FIM."""
@@ -760,15 +758,6 @@ def _rank_and_count_row_unchanged(
         na, nb = _db_int_or_none(a), _db_int_or_none(b)
         if na != nb:
             return False
-    return True
-
-
-def _match_unplayed_for_prediction(red_score, blue_score, winning_alliance) -> bool:
-    """Unplayed: no real scores and no winning alliance (matches logic used elsewhere in this file)."""
-    rs = red_score
-    bs = blue_score
-    if (rs and float(rs) > 0) or (bs and float(bs) > 0) or winning_alliance in ("red", "blue"):
-        return False
     return True
 
 
@@ -1280,46 +1269,6 @@ def get_existing_event_data(event_key):
         "matches": matches,
     }
 
-def event_has_started(event_key, start_date):
-    try:
-        now = datetime.now(timezone.utc)
-        if start_date:
-            try:
-                start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
-                if start_date_obj > now.date():
-                    return False
-            except Exception:
-                pass
-
-        conn = get_pg_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT red_score, blue_score, winning_alliance, predicted_time
-            FROM event_matches
-            WHERE event_key = %s
-            """,
-            (event_key,),
-        )
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-
-        if not rows:
-            return True  # No match data yet; allow initial load (create_event_db needs this to process new events)
-
-        for red_score, blue_score, winning_alliance, _ in rows:
-            if (red_score and red_score > 0) or (blue_score and blue_score > 0) or winning_alliance in ("red", "blue"):
-                return True
-
-        predicted_times = [_predicted_time_to_datetime(r[3]) for r in rows]
-        predicted_times = [pt for pt in predicted_times if pt is not None]
-        if predicted_times and min(predicted_times) > now:
-            return False
-        return True
-    except Exception:
-        return True
-
 def get_existing_team_epa(team_number, year):
     # Get existing team EPA data from database for comparison
     with _pooled_connection() as conn:
@@ -1541,12 +1490,7 @@ def create_event_db(year, only_event_keys=None):
         return
     
     events_to_process = []
-    events_skipped = 0
     events_skipped_future = 0
-    try:
-        is_historical = int(year) < datetime.now().year
-    except Exception:
-        is_historical = False
     
     print(f"Checking {len(events)} events for updates...")
     
@@ -1587,7 +1531,6 @@ def create_event_db(year, only_event_keys=None):
         events_to_process.append(event)
 
     print(f"Processing {len(events_to_process)} events (including {events_skipped_future} future events for team schedules)")
-    print(f"DEBUG: Events to process: {[e['key'] for e in events_to_process[:5]]}")  # Show first 5 event keys
 
     def fetch_and_compare(event):
         if shutdown_event.is_set():
@@ -1622,14 +1565,10 @@ def create_event_db(year, only_event_keys=None):
         # Fetch teams once
         try:
             teams = tba_get(f"event/{key}/teams")
-            if not teams:
-                print(f"DEBUG: No teams found for event {key} - continuing with event data only")
-                # Don't return None - continue processing the event even without teams
-            else:
+            if teams:
                 for t in teams:
                     team_number = t.get("team_number")
                     if team_number is None:
-                        print(f"DEBUG: Skipping team with null team_number in event {key}: {t.get('nickname', 'Unknown')}")
                         continue
                     new_data["teams"].append((
                         key,
@@ -1640,8 +1579,7 @@ def create_event_db(year, only_event_keys=None):
                         t.get("country")
                     ))
         except Exception as e:
-            print(f"DEBUG: Error processing teams for event {key}: {e}")
-            # Don't return None on team fetch error - continue with event data
+            print(f"Error processing teams for event {key}: {e}")
 
         
         # Fetch matches
@@ -1711,11 +1649,8 @@ def create_event_db(year, only_event_keys=None):
                 result = f.result()
                 if result:
                     all_results.append(result)
-                    print(f"DEBUG: Successfully processed event {result.get('event_key', 'unknown')}")
-                else:
-                    print(f"DEBUG: Event processing returned None")
             except Exception as e:
-                print(f"DEBUG: Error processing event: {e}")
+                print(f"Error processing event: {e}")
     finally:
         if executor:
             cleanup_executor(executor)
@@ -1899,7 +1834,6 @@ def _fetch_and_store_team_data_impl(
     _team_experience_cache.clear()
     _team_played_events_cache.clear()
     _event_start_date_cache.clear()
-    _event_meta_loaded_years.clear()
 
     sample_mode = sample_fraction is not None and float(sample_fraction) < 0.999
 
@@ -2143,57 +2077,23 @@ def calculate_confidence(consistency: float, dominance: float, event_boost: floa
     capped_confidence = max(0.0, min(1.0, raw_confidence / ceiling))
     return raw_confidence, capped_confidence, record_alignment
 
-def _effective_epa(team_infos: List[Dict]) -> float:
-    if not team_infos:
-        return 0.0
-    weighted_epas = []
-    for t in team_infos:
-        epa = t.get("ace", 0) or 0
-        conf = t.get("confidence", 0) or 0
-        reliability = 1.0 * conf
-        weighted_epas.append(epa * reliability)
-    return float(sum(weighted_epas) / len(weighted_epas)) if weighted_epas else 0.0
-
-def predict_win_probability(red_info: List[Dict], blue_info: List[Dict]) -> tuple[float, float]:
-    red_eff = _effective_epa(red_info)
-    blue_eff = _effective_epa(blue_info)
-    all_infos = (red_info or []) + (blue_info or [])
-    reliability = float(sum(t.get("confidence", 0) or 0 for t in all_infos) / len(all_infos)) if all_infos else 0.0
-
-    if red_eff + blue_eff == 0:
-        return 0.5, 0.5
-
-    diff = red_eff - blue_eff
-    scale = (_WIN_PROB_SCALE_BASE + 0.3 * (1 - reliability))
-    p_red = 1 / (1 + math.exp(-scale * diff))
-    p_red = max(0.02, min(0.98, p_red))
-    return p_red, 1 - p_red
-
-def _load_team_prediction_lookup(year: int) -> Dict[int, Dict[str, float]]:
+def _ensure_prediction_score_columns() -> None:
+    """Add predicted score columns if missing (idempotent)."""
     conn = get_pg_connection()
     cur = conn.cursor()
     try:
         cur.execute(
             """
-            SELECT team_number, ace, confidence
-            FROM team_epas
-            WHERE year = %s
-            """,
-            (year,),
+            ALTER TABLE event_matches
+            ADD COLUMN IF NOT EXISTS red_predicted_score DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS blue_predicted_score DOUBLE PRECISION
+            """
         )
-        return {row[0]: {"ace": row[1] or 0.0, "confidence": row[2] or 0.0} for row in cur.fetchall()}
+        conn.commit()
     finally:
         cur.close()
         conn.close()
 
-def _team_prediction_info(team_number: int, current_year_lookup: Dict[int, Dict[str, float]], prev_year_lookup: Dict[int, Dict[str, float]]) -> Dict[str, float]:
-    data = current_year_lookup.get(team_number)
-    if data and data.get("ace", 0):
-        return data
-    data = prev_year_lookup.get(team_number)
-    if data and data.get("ace", 0):
-        return data
-    return {"ace": 0.0, "confidence": 0.7}
 
 
 def parse_tba_team_number(team_key) -> Optional[int]:
@@ -2234,107 +2134,96 @@ def tba_team_key_is_surrogate(team_key) -> bool:
     return i > 0 and i < len(tok)
 
 
-def _parse_match_alliance_teams(team_csv) -> List[int]:
-    """
-    Parse red_teams / blue_teams from event_matches (comma-separated).
-    Matches TBA ingest: numeric strings; tolerate leading 'frc' and any
-    trailing surrogate letter markers (B, E, ...).
-    """
-    if team_csv is None:
-        return []
-    out: List[int] = []
-    for raw in str(team_csv).split(","):
-        t_num = parse_tba_team_number(raw)
-        if t_num is not None:
-            out.append(t_num)
-    return out
-
-
 def calculate_and_store_match_predictions(year: int):
     """
-    Fill ``red_win_prob`` / ``blue_win_prob`` for not-yet-played matches from current ACE/confidence.
-    Skips matches that already have a result; skips DB updates when stored probs match the
-    newly computed values (within a small epsilon).
+    DB-only predictions from stored season / event_perf RAW and ACE ratings.
+
+    Writes ``red_win_prob``, ``blue_win_prob``, and predicted scores to
+    ``event_matches``. Does not call TBA or replay score breakdowns.
     """
     if shutdown_event.is_set():
         return
 
-    current_lookup = _load_team_prediction_lookup(year)
-    prev_lookup = _load_team_prediction_lookup(year - 1)
+    _ensure_prediction_score_columns()
+    config = PredictionConfig.from_env()
+
+    conn = get_pg_connection()
+    try:
+        data = load_prediction_data_from_db(conn, year)
+    finally:
+        conn.close()
+
+    if not data.matches:
+        print(f"Match predictions {year}: no matches in DB", flush=True)
+        return
+
+    predictions = predict_all_matches_db(data, config)
+    pred_by_key = {p.match_key: p for p in predictions}
 
     conn = get_pg_connection()
     cur = conn.cursor()
     try:
         cur.execute(
             """
-            SELECT match_key, red_teams, blue_teams,
-                   red_score, blue_score, winning_alliance, red_win_prob, blue_win_prob
+            SELECT match_key, red_win_prob, blue_win_prob,
+                   red_predicted_score, blue_predicted_score
             FROM event_matches
             WHERE LEFT(event_key, 4) = %s
             """,
             (str(year),),
         )
-        match_rows = cur.fetchall()
+        existing = {row[0]: row[1:] for row in cur.fetchall()}
 
         updates = []
-        skipped_no_teams = 0
-        skipped_bad_prob = 0
-        skipped_played = 0
+        skipped_missing = 0
         skipped_unchanged = 0
-        for (
-            match_key,
-            red_teams,
-            blue_teams,
-            red_score,
-            blue_score,
-            winning_alliance,
-            ex_pr,
-            ex_pb,
-        ) in match_rows:
-            if not _match_unplayed_for_prediction(red_score, blue_score, winning_alliance):
-                skipped_played += 1
-                continue
-            red_list = _parse_match_alliance_teams(red_teams)
-            blue_list = _parse_match_alliance_teams(blue_teams)
-            if not red_list or not blue_list:
-                # Do not UPDATE with NULL — preserves existing probs if alliances were briefly empty/malformed.
-                skipped_no_teams += 1
-                continue
+        skipped_bad = 0
 
-            red_info = [
-                _team_prediction_info(t, current_lookup, prev_lookup) for t in red_list
-            ]
-            blue_info = [
-                _team_prediction_info(t, current_lookup, prev_lookup) for t in blue_list
-            ]
-
-            p_red, p_blue = predict_win_probability(red_info, blue_info)
-            if not math.isfinite(p_red) or not math.isfinite(p_blue):
-                skipped_bad_prob += 1
+        for match_key, pred in pred_by_key.items():
+            if match_key not in existing:
+                skipped_missing += 1
                 continue
-            if _probs_unchanged(p_red, p_blue, ex_pr, ex_pb):
+            ex_pr, ex_pb, ex_rs, ex_bs = existing[match_key]
+            if not math.isfinite(pred.p_red) or not math.isfinite(pred.p_blue):
+                skipped_bad += 1
+                continue
+            if (
+                _probs_unchanged(pred.p_red, pred.p_blue, ex_pr, ex_pb)
+                and ex_rs is not None
+                and ex_bs is not None
+                and abs(float(ex_rs) - pred.red_predicted_score) < 1e-6
+                and abs(float(ex_bs) - pred.blue_predicted_score) < 1e-6
+            ):
                 skipped_unchanged += 1
                 continue
-            updates.append((p_red, p_blue, match_key))
+            updates.append(
+                (
+                    pred.p_red,
+                    pred.p_blue,
+                    pred.red_predicted_score,
+                    pred.blue_predicted_score,
+                    match_key,
+                )
+            )
 
         if updates:
-            # COALESCE: never overwrite existing non-NULL probs with NULL (defense in depth).
-            # Rows we skip above are not in `updates`, so good predictions stay untouched.
             cur.executemany(
                 """
                 UPDATE event_matches
                 SET red_win_prob = COALESCE(%s::double precision, red_win_prob),
-                    blue_win_prob = COALESCE(%s::double precision, blue_win_prob)
+                    blue_win_prob = COALESCE(%s::double precision, blue_win_prob),
+                    red_predicted_score = COALESCE(%s::double precision, red_predicted_score),
+                    blue_predicted_score = COALESCE(%s::double precision, blue_predicted_score)
                 WHERE match_key = %s
                 """,
                 updates,
             )
         conn.commit()
-        n_rows = len(match_rows)
         print(
-            f"Match predictions {year}: wrote {len(updates)} of {n_rows} row(s) — "
-            f"skipped: {skipped_played} already played, {skipped_unchanged} prob unchanged, "
-            f"{skipped_no_teams} missing alliances, {skipped_bad_prob} non-finite prob",
+            f"Match predictions {year}: wrote {len(updates)} of {len(pred_by_key)} computed "
+            f"(scope={config.rating_scope} field={config.rating_field} agg={config.aggregation}) — "
+            f"skipped: {skipped_unchanged} unchanged, {skipped_missing} not in DB, "
+            f"{skipped_bad} non-finite",
             flush=True,
         )
     finally:
@@ -2517,12 +2406,8 @@ def _get_or_compute_event_epa_map(matches: List[Dict], year: int, method: Method
 def precompute_season_event_epas(year: int) -> None:
     """Simulate every cached event in chronological order (optional RAW prior carry).
 
-    Must run after ``match_cache`` is populated. Ensures one shared simulation per
-    event with the configured K/shrink/spike settings, and seeds later events from
-    earlier finals when ``ACE_CARRY_PRIOR`` is enabled.
+    Must run after ``match_cache`` is populated.
     """
-    if _ACE_METHOD == "baseline_current":
-        return
     if not match_cache:
         return
 
@@ -2615,11 +2500,7 @@ def precompute_season_event_epas(year: int) -> None:
 
 
 def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) -> Dict:
-    """Per-event ACE components for one team.
-
-    Default path uses match-centric residual attribution (shared across the event).
-    Set ACE_METHOD=baseline_current to use the legacy log-scaled cumulative EMA.
-    """
+    """Per-event ACE components for one team (match-centric residual attribution)."""
     try:
         if not matches:
             return _empty_event_epa()
@@ -2629,13 +2510,9 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         except Exception:
             year_int = 2025
 
-        if _ACE_METHOD == "baseline_current":
-            return _calculate_event_epa_legacy(matches, team_key, team_number)
-
         epa_map = _get_or_compute_event_epa_map(matches, year_int, _ACE_METHOD)
         result = epa_map.get(team_key)
         if result is None:
-            # Try alternate key forms
             alt = f"frc{team_number}"
             result = epa_map.get(alt)
         return result or _empty_event_epa()
@@ -2644,287 +2521,6 @@ def calculate_event_epa(matches: List[Dict], team_key: str, team_number: int) ->
         traceback.print_exc()
         return _empty_event_epa()
 
-
-def _calculate_event_epa_legacy(matches: List[Dict], team_key: str, team_number: int) -> Dict:
-    try:
-        # --- BEGIN LEGACY FUNCTION BODY ---
-        importance = {"qm": 1.1, "qf": 1.0, "sf": 1.0, "f": 1.0}
-        matches = sorted(matches, key=lambda m: m.get("time") or 0)
-
-        if _EPA_DEBUG:
-            if matches:
-                print(f"EPA DEBUG: Processing team {team_key} for year {matches[0]['event_key'][:4]}")
-            else:
-                print(f"EPA DEBUG: Processing team {team_key} (no matches)")
-
-        match_count = 0
-        overall_epa = 0.0
-        auto_epa = 0.0
-        teleop_epa = 0.0
-        endgame_epa = 0.0
-        contributions, teammate_epas = [], []
-        breakdowns = []
-        dominance_scores = []
-        event_wins = 0
-        event_losses = 0
-        event_ties = 0  # Add tie counter
-
-        # Get the year from the first match's event key
-        year = matches[0]["event_key"][:4] if matches else "2025"
-        try:
-            year_int = int(year)
-        except Exception:
-            year_int = 2025
-
-        # Get the appropriate scoring functions for this year
-        try:
-            auto_func = globals()[f"auto_{year}"]
-            teleop_func = globals()[f"teleop_{year}"]
-            endgame_func = globals()[f"endgame_{year}"]
-        except KeyError:
-            auto_func = auto_2025
-            teleop_func = teleop_2025
-            endgame_func = endgame_2025
-
-        early_match_target = 5
-        # Within a single event: first matches use weight in [0.75, 1.0], ramping by match_count/5.
-        early_weight_floor = 0.75
-
-        for match in matches:
-            if team_key not in match["alliances"]["red"]["team_keys"] and team_key not in match["alliances"]["blue"]["team_keys"]:
-                continue
-
-            red_score = match["alliances"]["red"]["score"]
-            blue_score = match["alliances"]["blue"]["score"]
-            winning_alliance = match.get("winning_alliance")
-
-            # Unplayed matches are typically 0-0 with no winning alliance.
-            # Skip them entirely so they do not inflate match_count or tie count.
-            if red_score == 0 and blue_score == 0 and winning_alliance not in ("red", "blue"):
-                continue
-
-            match_count += 1
-            early_weight = max(early_weight_floor, min(1.0, match_count / early_match_target)) if match_count > 0 else early_weight_floor
-            alliance = "red" if team_key in match["alliances"]["red"]["team_keys"] else "blue"
-            opponent_alliance = "blue" if alliance == "red" else "red"
-
-            # Track wins/losses/ties (existing logic) ...
-            if year == "2015":
-                if alliance == "red":
-                    if red_score > blue_score:
-                        event_wins += 1
-                    elif red_score < blue_score:
-                        event_losses += 1
-                    else:
-                        event_ties += 1
-                else:
-                    if blue_score > red_score:
-                        event_wins += 1
-                    elif blue_score < red_score:
-                        event_losses += 1
-                    else:
-                        event_ties += 1
-            else:
-                # Determine win/loss/tie based on scores instead of winning_alliance
-                # Handle disqualifications (score of 0) as ties
-                if red_score == 0 or blue_score == 0:
-                    event_ties += 1
-                elif alliance == "red":
-                    if red_score > blue_score:
-                        event_wins += 1
-                    elif red_score < blue_score:
-                        event_losses += 1
-                    else:  # Equal scores = tie
-                        event_ties += 1
-                else:  # alliance == "blue"
-                    if blue_score > red_score:
-                        event_wins += 1
-                    elif blue_score < red_score:
-                        event_losses += 1
-                    else:  # Equal scores = tie
-                        event_ties += 1
-
-            team_keys = match["alliances"][alliance].get("team_keys", [])
-            team_count = len(team_keys)
-            index = team_keys.index(team_key) + 1
-
-            breakdown = match.get("score_breakdown")
-            legacy_year = 1992 <= year_int <= 2014
-
-            # --- Legacy years: use alliance score ---
-            if legacy_year:
-                auto = 0
-                endgame = 0
-                scaling_factor = 1 / (1 + math.log(team_count)) if team_count > 1 else 1.0
-                teleop = match["alliances"][alliance]["score"] * scaling_factor if team_count else 0
-                actual_overall = teleop
-                opponent_score = match["alliances"][opponent_alliance]["score"] * scaling_factor if team_count else 0
-                margin = actual_overall - opponent_score
-                scaled_margin = margin / (opponent_score + 1e-6)
-                norm_margin = (scaled_margin + 1) / 1.3
-                dominance_scores.append(min(1.0, max(0.0, norm_margin)))
-                # Robust fallback: set to 0.0 if any are None
-                if (auto_epa is None or teleop_epa is None or endgame_epa is None) and _EPA_DEBUG:
-                    print(f"EPA DEBUG: NoneType EPA before math in match {match.get('key', 'unknown')}: auto_epa={auto_epa}, teleop_epa={teleop_epa}, endgame_epa={endgame_epa}, teleop={teleop}")
-                if auto_epa is None:
-                    auto_epa = 0.0
-                if teleop_epa is None:
-                    teleop_epa = 0.0
-                if endgame_epa is None:
-                    endgame_epa = 0.0
-                if overall_epa == 0.0 and auto_epa == 0.0 and teleop_epa == 0.0 and endgame_epa == 0.0:
-                    overall_epa = actual_overall * early_weight
-                    auto_epa = auto * early_weight
-                    endgame_epa = endgame * early_weight
-                    teleop_epa = teleop * early_weight
-                    continue
-                K = 0.4 * early_weight
-                if teleop_epa > 10 and teleop > teleop_epa * 1.4:
-                    K *= 0.5
-                # Fallback: always ensure teleop_epa is a float
-                try:
-                    delta_teleop = K * (teleop - teleop_epa)
-                except Exception as e:
-                    if _EPA_DEBUG:
-                        print(f"EPA DEBUG ERROR: teleop={teleop}, teleop_epa={teleop_epa}, match={match.get('key', 'unknown')}, error={e}")
-                    teleop_epa = 0.0
-                    delta_teleop = K * (teleop - teleop_epa)
-                teleop_epa += delta_teleop
-                overall_epa = teleop_epa
-                contributions.append(actual_overall)
-                continue
-
-            # --- Modern years: use breakdown as before ---
-            # (existing breakdown logic)
-            # Safely get and validate breakdown
-            if isinstance(breakdown, str):
-                try:
-                    breakdown = json.loads(breakdown)
-                except json.JSONDecodeError:
-                    print(f"Warning: Could not parse breakdown JSON for match {match.get('key', 'unknown')}")
-                    continue
-            if not isinstance(breakdown, dict):
-                print(f"Warning: Invalid breakdown format for match {match.get('key', 'unknown')}: {type(breakdown)}")
-                continue
-            alliance_breakdown = breakdown.get(alliance, {})
-            if not isinstance(alliance_breakdown, dict):
-                print(f"Warning: Invalid alliance breakdown format for match {match.get('key', 'unknown')}: {type(alliance_breakdown)}")
-                continue
-            breakdowns.append(alliance_breakdown)
-            # Robust fallback for modern years
-            if auto_epa is None:
-                auto_epa = 0.0
-            if teleop_epa is None:
-                teleop_epa = 0.0
-            if endgame_epa is None:
-                endgame_epa = 0.0
-            try:
-                actual_auto = auto_func(breakdowns, team_count)
-                actual_teleop = teleop_func(breakdowns, team_count)
-                if year == "2023" or year == "2017" or year == "2016":
-                    actual_endgame = endgame_func(breakdowns, team_count)
-                else:
-                    actual_endgame = endgame_func(alliance_breakdown, index)
-                actual_overall = actual_auto + actual_teleop + actual_endgame
-                opponent_score = match["alliances"][opponent_alliance]["score"] / team_count
-                margin = actual_overall - opponent_score
-                scaled_margin = margin / (opponent_score + 1e-6)
-                norm_margin = (scaled_margin + 1) / 1.3
-                # Scale down dominance if team was carried (contributed less than alliance average)
-                alliance_total = match["alliances"][alliance]["score"] or 1
-                alliance_avg = alliance_total / team_count
-                contribution_share = actual_overall / (alliance_avg + 1e-6)
-                adjustment = min(1.0, contribution_share)
-                norm_margin = norm_margin * adjustment
-                dominance_scores.append(min(1.0, max(0.0, norm_margin)))
-                match_importance = importance.get(match.get("comp_level", "qm"), 1.0)
-                decay = early_weight
-                if overall_epa == 0.0 and auto_epa == 0.0 and teleop_epa == 0.0 and endgame_epa == 0.0:
-                    overall_epa = actual_overall * early_weight
-                    auto_epa = actual_auto * early_weight
-                    endgame_epa = actual_endgame * early_weight
-                    teleop_epa = actual_teleop * early_weight
-                    continue
-                K = 0.4
-                K *= match_importance * decay
-                # Dampen large positive surprises (possible carried matches) - don't let a few spikes overestimate
-                if overall_epa > 10 and actual_overall > overall_epa * 1.4:
-                    K *= 0.5
-                delta_auto = K * (actual_auto - auto_epa)
-                delta_teleop = K * (actual_teleop - teleop_epa)
-                delta_endgame = K * (actual_endgame - endgame_epa)
-                auto_epa += delta_auto
-                teleop_epa += delta_teleop
-                endgame_epa += delta_endgame
-                overall_epa = auto_epa + teleop_epa + endgame_epa
-                contributions.append(actual_overall)
-            except Exception as e:
-                if _EPA_DEBUG:
-                    print(f"EPA DEBUG ERROR: Modern block, match={match.get('key', 'unknown')}, error={e}")
-
-        if not match_count:
-            return {
-                "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
-                "confidence": 0.0, "ace": 0.0,
-                "match_count": 0, "raw_confidence": 0.0,
-                "consistency": 0.0, "dominance": 0.0,
-                "event_boost": 0.0, "veteran_boost": 0.0,
-                "years_experience": 0, "weights": {}, "record_alignment": 0.0,
-                "wins": 0, "losses": 0, "ties": 0
-            }
-
-        consistency = _consistency_from_contributions(contributions)
-
-        dominance = min(1., statistics.mean(dominance_scores)) if dominance_scores else 0.0
-
-        # Get total number of played events for this team
-        played_event_keys = get_team_played_events(team_number, int(year))
-        total_events = len(played_event_keys)
-
-        # Calculate event boost based on number of played events
-        event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])
-        
-        # Calculate confidence using universal function
-        raw_confidence, confidence, record_alignment = calculate_confidence(consistency, dominance, event_boost, team_number, event_wins, event_losses, int(year))
-        actual_epa = (overall_epa * confidence) if overall_epa is not None else 0.0
-
-        # Get years of experience for display
-        years = get_team_experience(team_number, int(year))
-        veteran_boost = get_veteran_boost(years)
-
-        return {
-            "raw": round(overall_epa, 2) if overall_epa is not None else 0.0,
-            "auto_raw": round(auto_epa, 2) if auto_epa is not None else 0.0,
-            "teleop_raw": round(teleop_epa, 2) if teleop_epa is not None else 0.0,
-            "endgame_raw": round(endgame_epa, 2) if endgame_epa is not None else 0.0,
-            "confidence": round(confidence, 2),
-            "ace": round(actual_epa, 2),
-            "match_count": match_count,
-            "raw_confidence": raw_confidence,
-            "consistency": consistency,
-            "dominance": dominance,
-            "event_boost": event_boost,
-            "veteran_boost": veteran_boost,
-            "years_experience": years,
-            "weights": CONFIDENCE_WEIGHTS,
-            "record_alignment": record_alignment,
-            "wins": event_wins,
-            "losses": event_losses,
-            "ties": event_ties
-        }
-    except Exception as e:
-        print(f"EPA FATAL ERROR for team {team_key}: {e}")
-        traceback.print_exc()
-        print(f"Locals: {locals()}")
-        return {
-            "raw": 0.0, "auto_raw": 0.0, "teleop_raw": 0.0, "endgame_raw": 0.0,
-            "confidence": 0.0, "ace": 0.0,
-            "match_count": 0, "raw_confidence": 0.0,
-            "consistency": 0.0, "dominance": 0.0,
-            "event_boost": 0.0, "veteran_boost": 0.0,
-            "years_experience": 0, "weights": {}, "record_alignment": 0.0,
-            "wins": 0, "losses": 0, "ties": 0
-        }
 
 def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, str]:
     """
@@ -3342,9 +2938,6 @@ def fetch_team_components(team, year):
         "event_perf": event_epa_results,
     }
 
-# Single team analysis has been moved to single_team_analysis.py
-# Import the function from the new file
-
 
 def finalize():
     """Clean up executors/connections and print runtime. Call from main entry point."""
@@ -3393,6 +2986,7 @@ if __name__ == "__main__":
         positional = [a for a in sys.argv[1:] if not a.startswith("--")]
         flags = {a for a in sys.argv[1:] if a.startswith("--")}
         ranks_only = "--ranks-only" in flags
+        predictions_only = "--predictions-only" in flags
         active_only = "--active-only" in flags
         sample_fraction = None
         for a in list(flags):
@@ -3413,6 +3007,9 @@ if __name__ == "__main__":
                 sys.exit(1)
             if ranks_only:
                 compute_and_store_team_epa_ranks(year)
+                restart_heroku_app()
+            elif predictions_only:
+                calculate_and_store_match_predictions(year)
                 restart_heroku_app()
             else:
                 fetch_and_store_team_data(
