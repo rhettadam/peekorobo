@@ -49,6 +49,14 @@ export function fetchFollowing(username: string): Promise<UserListResponse> {
   return apiGet<UserListResponse>(`/users/${encodeURIComponent(username)}/following`);
 }
 
+export function searchUsers(q: string, limit = 12): Promise<UserListResponse> {
+  return apiGet<UserListResponse>("/users/search", { q, limit });
+}
+
+export function fetchUsersByTeam(teamNumber: string, limit = 12): Promise<UserListResponse> {
+  return apiGet<UserListResponse>(`/users/by-team/${encodeURIComponent(teamNumber)}`, { limit });
+}
+
 // ---- API key ----
 export function fetchApiKey(): Promise<ApiKeyResponse> {
   return apiGet<ApiKeyResponse>("/auth/api-key");

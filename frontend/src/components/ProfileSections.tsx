@@ -252,7 +252,7 @@ export function CommunityCard({
   return (
     <Card withBorder radius="md" p="md">
       <Group gap={6} mb="md">
-        <IconUsersGroup size={16} color="#ffdd00" />
+        <IconUsersGroup size={16} color="var(--peeko-link)" />
         <Text fw={600}>Community</Text>
       </Group>
       <Stack gap="lg">
@@ -337,9 +337,13 @@ function FriendStrip({
 export function FavoriteTeamCard({
   teamNumber,
   onRemove,
+  subtitle,
+  compact,
 }: {
   teamNumber: string;
   onRemove?: () => void;
+  subtitle?: string;
+  compact?: boolean;
 }) {
   const { data: index } = useSearchIndex();
   const entry = index?.teams[teamNumber];
@@ -353,7 +357,12 @@ export function FavoriteTeamCard({
       component={Link}
       to={`/team/${teamNumber}${year ? `/${year}` : ""}`}
       className="hover-lift"
-      style={{ textDecoration: "none", color: "inherit" }}
+      style={{
+        textDecoration: "none",
+        color: "inherit",
+        minWidth: compact ? 220 : undefined,
+        flex: compact ? "0 0 auto" : undefined,
+      }}
     >
       <Group gap="sm" wrap="nowrap">
         <TeamAvatar teamNumber={Number(teamNumber)} size={44} radius={8} bordered />
@@ -362,6 +371,11 @@ export function FavoriteTeamCard({
           <Text size="sm" c="dimmed" lineClamp={1}>
             {nickname || "\u00a0"}
           </Text>
+          {subtitle ? (
+            <Text size="xs" c="dimmed" lineClamp={1}>
+              {subtitle}
+            </Text>
+          ) : null}
         </Stack>
         {onRemove ? (
           <ActionIcon
@@ -385,9 +399,13 @@ export function FavoriteTeamCard({
 export function FavoriteEventCard({
   eventKey,
   onRemove,
+  subtitle,
+  compact,
 }: {
   eventKey: string;
   onRemove?: () => void;
+  subtitle?: string;
+  compact?: boolean;
 }) {
   const { data: index } = useSearchIndex();
   const name = index?.events[eventKey] ?? eventKey;
@@ -400,7 +418,12 @@ export function FavoriteEventCard({
       component={Link}
       to={`/event/${eventKey}`}
       className="hover-lift"
-      style={{ textDecoration: "none", color: "inherit" }}
+      style={{
+        textDecoration: "none",
+        color: "inherit",
+        minWidth: compact ? 240 : undefined,
+        flex: compact ? "0 0 auto" : undefined,
+      }}
     >
       <Group gap="sm" wrap="nowrap">
         <Avatar size={44} radius={8} color="yellow" variant="light">
@@ -411,7 +434,7 @@ export function FavoriteEventCard({
             {year ? `${year} ${name}` : name}
           </Text>
           <Text size="xs" c="dimmed">
-            {eventKey}
+            {subtitle ?? eventKey}
           </Text>
         </Stack>
         {onRemove ? (
@@ -442,7 +465,7 @@ export function FavoritesSectionHeader({
 }) {
   return (
     <Group gap={6} mb="sm">
-      <IconStarFilled size={16} color="#ffdd00" />
+      <IconStarFilled size={16} color="var(--peeko-link)" />
       <Text fw={600}>{label}</Text>
       <Badge variant="light" size="sm">
         {count}

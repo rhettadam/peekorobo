@@ -54,7 +54,7 @@ export function FavoriteButton({ itemType, itemKey, variant = "icon", size = 22 
   };
 
   const StarIcon = favorited ? IconStarFilled : IconStar;
-  const gold = "#ffdd00";
+  const gold = "var(--peeko-link)";
 
   if (variant === "button") {
     return (

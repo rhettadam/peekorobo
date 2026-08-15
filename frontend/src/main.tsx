@@ -10,7 +10,7 @@ import "@mantine/charts/styles.css";
 import "@mantine/notifications/styles.css";
 import "./styles.css";
 
-import { theme } from "./theme";
+import { theme, peekoCssVariablesResolver } from "./theme";
 import { App } from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 
@@ -31,7 +31,7 @@ if (!rootEl) throw new Error("Root element #root not found");
 createRoot(rootEl).render(
   <StrictMode>
     <ColorSchemeScript defaultColorScheme="dark" />
-    <MantineProvider theme={theme} defaultColorScheme="dark">
+    <MantineProvider theme={theme} defaultColorScheme="dark" cssVariablesResolver={peekoCssVariablesResolver}>
       <Notifications position="top-right" />
       <QueryClientProvider client={queryClient}>
         <AuthProvider>

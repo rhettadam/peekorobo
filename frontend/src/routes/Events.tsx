@@ -493,7 +493,7 @@ export function Events() {
           </Button>
           {filter || weekFilter !== ALL || typeFilter !== ALL || districtFilter !== ALL ? (
             <Button
-              variant="subtle"
+              variant="default"
               mb={1}
               onClick={() => {
                 setFilter("");

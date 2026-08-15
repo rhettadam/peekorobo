@@ -1131,7 +1131,7 @@ export function Event() {
                 target="_blank"
                 rel="noopener noreferrer"
                 size="compact-sm"
-                variant="light"
+                variant="default"
                 leftSection={<IconExternalLink size={14} />}
               >
                 Website

@@ -14,6 +14,206 @@ a {
   color: inherit;
 }
 
+/* ---- Tactile controls (Cloudflare / Apple-inspired depth) ---- */
+.mantine-Button-root,
+.mantine-ActionIcon-root {
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    filter 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.mantine-Button-root[data-variant="filled"]:not([data-disabled]),
+.mantine-ActionIcon-root[data-variant="filled"]:not([data-disabled]) {
+  border: 1px solid color-mix(in srgb, var(--button-bg, var(--ai-bg)) 70%, black);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--button-bg, var(--ai-bg)) 82%, white) 0%,
+    var(--button-bg, var(--ai-bg)) 46%,
+    color-mix(in srgb, var(--button-bg, var(--ai-bg)) 84%, black) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 1px 2px rgba(0, 0, 0, 0.34),
+    0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+.mantine-Button-root[data-variant="filled"]:not([data-disabled]):hover,
+.mantine-ActionIcon-root[data-variant="filled"]:not([data-disabled]):hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--button-bg, var(--ai-bg)) 76%, white) 0%,
+    color-mix(in srgb, var(--button-bg, var(--ai-bg)) 92%, white) 46%,
+    color-mix(in srgb, var(--button-bg, var(--ai-bg)) 86%, black) 100%
+  );
+  filter: none;
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.36),
+    0 6px 16px rgba(0, 0, 0, 0.28);
+}
+
+.mantine-Button-root[data-variant="filled"]:not([data-disabled]):active,
+.mantine-ActionIcon-root[data-variant="filled"]:not([data-disabled]):active {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--button-bg, var(--ai-bg)) 88%, black) 0%,
+    color-mix(in srgb, var(--button-bg, var(--ai-bg)) 78%, black) 100%
+  );
+  filter: none;
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.28),
+    0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+/* Primary peeko gold — explicit gradient beats generic color-mix on bright yellow */
+.mantine-Button-root.peeko-tactile-btn[data-variant="filled"]:not([data-disabled]),
+.mantine-ActionIcon-root.peeko-tactile-btn[data-variant="filled"]:not([data-disabled]) {
+  color: #1a1a1a;
+  border: 1px solid #b89200;
+  background: linear-gradient(180deg, #fff176 0%, #ffdd00 44%, #d4a900 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.58),
+    inset 0 -1px 0 rgba(130, 92, 0, 0.28),
+    0 1px 2px rgba(0, 0, 0, 0.28),
+    0 3px 10px rgba(0, 0, 0, 0.22);
+}
+
+.mantine-Button-root.peeko-tactile-btn[data-variant="filled"]:not([data-disabled]):hover,
+.mantine-ActionIcon-root.peeko-tactile-btn[data-variant="filled"]:not([data-disabled]):hover {
+  color: #1a1a1a;
+  border-color: #c9a000;
+  background: linear-gradient(180deg, #fff59d 0%, #ffe93b 42%, #ffdd00 100%);
+  filter: none;
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -1px 0 rgba(130, 92, 0, 0.18),
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 8px 18px rgba(0, 0, 0, 0.26),
+    0 0 18px rgba(255, 221, 0, 0.14);
+}
+
+.mantine-Button-root.peeko-tactile-btn[data-variant="filled"]:not([data-disabled]):active,
+.mantine-ActionIcon-root.peeko-tactile-btn[data-variant="filled"]:not([data-disabled]):active {
+  color: #1a1a1a;
+  border-color: #a67c00;
+  background: linear-gradient(180deg, #ffdd00 0%, #c99700 100%);
+  filter: none;
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 3px 7px rgba(110, 78, 0, 0.38),
+    0 1px 1px rgba(0, 0, 0, 0.18);
+}
+
+.mantine-Button-root[data-variant="default"]:not([data-disabled]),
+.mantine-Button-root[data-variant="subtle"]:not([data-disabled]),
+.mantine-Button-root[data-variant="transparent"]:not([data-disabled]),
+.mantine-ActionIcon-root[data-variant="default"]:not([data-disabled]),
+.mantine-ActionIcon-root[data-variant="light"]:not([data-disabled]) {
+  color: var(--btn-secondary-text);
+  background: var(--btn-secondary-bg);
+  border: 1px solid var(--btn-secondary-border);
+  box-shadow: var(--btn-secondary-shadow);
+}
+
+.mantine-Button-root[data-variant="default"]:not([data-disabled]):hover,
+.mantine-Button-root[data-variant="subtle"]:not([data-disabled]):hover,
+.mantine-Button-root[data-variant="transparent"]:not([data-disabled]):hover,
+.mantine-ActionIcon-root[data-variant="default"]:not([data-disabled]):hover,
+.mantine-ActionIcon-root[data-variant="light"]:not([data-disabled]):hover {
+  color: var(--btn-secondary-text);
+  background: var(--btn-secondary-bg-hover);
+  border-color: var(--btn-secondary-border-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--btn-secondary-shadow-hover);
+}
+
+.mantine-Button-root[data-variant="default"]:not([data-disabled]):active,
+.mantine-Button-root[data-variant="subtle"]:not([data-disabled]):active,
+.mantine-Button-root[data-variant="transparent"]:not([data-disabled]):active,
+.mantine-ActionIcon-root[data-variant="default"]:not([data-disabled]):active,
+.mantine-ActionIcon-root[data-variant="light"]:not([data-disabled]):active {
+  color: var(--btn-secondary-text);
+  background: var(--btn-secondary-bg-active);
+  transform: translateY(1px);
+  box-shadow: var(--btn-secondary-shadow-active);
+}
+
+/* Tinted secondary — keeps semantic colors (red logout, etc.) with the same depth */
+.mantine-Button-root[data-variant="light"]:not([data-disabled]) {
+  color: var(--button-color);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--button-bg) 36%, var(--btn-tint-base)) 0%,
+    color-mix(in srgb, var(--button-bg) 24%, var(--btn-tint-base)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--button-bg) 40%, var(--btn-secondary-border));
+  box-shadow: var(--btn-secondary-shadow);
+}
+
+.mantine-Button-root[data-variant="light"]:not([data-disabled]):hover {
+  color: var(--button-hover-color, var(--button-color));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--button-bg) 42%, var(--btn-tint-base)) 0%,
+    color-mix(in srgb, var(--button-bg) 30%, var(--btn-tint-base)) 100%
+  );
+  border-color: color-mix(in srgb, var(--button-bg) 45%, var(--btn-secondary-border-hover));
+  transform: translateY(-1px);
+  box-shadow: var(--btn-secondary-shadow-hover);
+}
+
+.mantine-Button-root[data-variant="light"]:not([data-disabled]):active {
+  transform: translateY(1px);
+  box-shadow: var(--btn-secondary-shadow-active);
+}
+
+.mantine-Button-root[data-variant="white"]:not([data-disabled]) {
+  background: linear-gradient(180deg, #ffffff 0%, #f0f0f0 100%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.mantine-Button-root[data-variant="white"]:not([data-disabled]):hover {
+  background: linear-gradient(180deg, #ffffff 0%, #f5f5f5 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 2px 4px rgba(0, 0, 0, 0.2),
+    0 4px 12px rgba(0, 0, 0, 0.14);
+}
+
+.mantine-Button-root[data-variant="white"]:not([data-disabled]):active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.12),
+    0 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+.mantine-Button-root[data-variant="outline"]:not([data-disabled]),
+.mantine-ActionIcon-root[data-variant="outline"]:not([data-disabled]) {
+  box-shadow: var(--btn-secondary-shadow);
+}
+
+.mantine-Button-root[data-variant="outline"]:not([data-disabled]):hover,
+.mantine-ActionIcon-root[data-variant="outline"]:not([data-disabled]):hover {
+  transform: translateY(-1px);
+  box-shadow: var(--btn-secondary-shadow-hover);
+}
+
+.mantine-Button-root[data-variant="outline"]:not([data-disabled]):active,
+.mantine-ActionIcon-root[data-variant="outline"]:not([data-disabled]):active {
+  transform: translateY(1px);
+}
+
 /* Let table rows show a subtle pointer/hover when interactive */
 .clickable-row {
   cursor: pointer;
@@ -28,6 +228,25 @@ a {
   transform: translateY(-2px);
   border-color: var(--mantine-color-peeko-6);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.profile-discover-results {
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-md);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.profile-discover-row {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+.profile-discover-row:last-child {
+  border-bottom: none;
+}
+
+.profile-insight-card {
+  height: 100%;
 }
 
 /* ---- MapLibre map (routes/Map.tsx) ---- */

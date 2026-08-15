@@ -228,7 +228,7 @@ export function Compare() {
           leftSection={<IconPlus size={16} />}
           onClick={addTeam}
           disabled={teams.length >= MAX_TEAMS}
-          variant="light"
+          variant="default"
         >
           Add
         </Button>

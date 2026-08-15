@@ -219,6 +219,69 @@ def list_users_by_ids(db: Session, ids: List[int]) -> List[dict]:
     return [by_id[i] for i in ids if i in by_id]
 
 
+def search_users(db: Session, query: str, limit: int = 12) -> List[dict]:
+    """Prefix/substring username search for discover."""
+    q = query.strip().lower()
+    if len(q) < 2:
+        return []
+    rows = db.execute(
+        text(
+            """
+            SELECT id, username, avatar_key, team, role
+            FROM users
+            WHERE LOWER(username) LIKE :pat
+            ORDER BY
+              CASE WHEN LOWER(username) = :exact THEN 0
+                   WHEN LOWER(username) LIKE :prefix THEN 1
+                   ELSE 2 END,
+              username
+            LIMIT :lim
+            """
+        ),
+        {"pat": f"%{q}%", "exact": q, "prefix": f"{q}%", "lim": limit},
+    ).all()
+    return [
+        {
+            "id": r.id,
+            "username": r.username,
+            "avatar_key": r.avatar_key,
+            "team": r.team,
+            "role": r.role,
+        }
+        for r in rows
+    ]
+
+
+def users_on_team(
+    db: Session, team: str, limit: int = 12, exclude_id: Optional[int] = None
+) -> List[dict]:
+    """Users who listed the same FRC team on their profile."""
+    t = team.strip()
+    if not t:
+        return []
+    sql = """
+        SELECT id, username, avatar_key, team, role
+        FROM users
+        WHERE team = :team
+    """
+    params: dict = {"team": t, "lim": limit}
+    if exclude_id is not None:
+        sql += " AND id != :exclude_id"
+        params["exclude_id"] = exclude_id
+    sql += " ORDER BY username LIMIT :lim"
+    rows = db.execute(text(sql), params).all()
+    return [
+        {
+            "id": r.id,
+            "username": r.username,
+            "avatar_key": r.avatar_key,
+            "team": r.team,
+            "role": r.role,
+        }
+        for r in rows
+    ]
+
+
 # --- API keys -------------------------------------------------------------
 def get_api_key(db: Session, user_id: int) -> Optional[str]:
     row = db.execute(text("SELECT api_key FROM users WHERE id = :id"), {"id": user_id}).first()

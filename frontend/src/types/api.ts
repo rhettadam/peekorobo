@@ -382,6 +382,8 @@ export interface UserSummary {
   id: number;
   username: string;
   avatar_key: string | null;
+  team?: string | null;
+  role?: string | null;
 }
 
 export interface UserListResponse {

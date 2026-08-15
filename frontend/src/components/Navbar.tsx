@@ -96,7 +96,7 @@ function UserMenu({ onNavigate }: { onNavigate: () => void }) {
   if (!isAuthenticated || !user) {
     return (
       <Group gap="xs" wrap="nowrap" visibleFrom="md">
-        <Button component={Link} to="/login" variant="subtle" color="gray" size="sm" onClick={onNavigate}>
+        <Button component={Link} to="/login" variant="default" size="sm" onClick={onNavigate}>
           Login
         </Button>
         <Button component={Link} to="/register" size="sm" onClick={onNavigate}>

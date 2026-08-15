@@ -733,6 +733,28 @@ async def update_me(
     return users_model.get_user_by_id(db, current_user.id)
 
 
+@app.get("/users/search", tags=["Accounts"])
+async def search_users(
+    q: Annotated[str, Query(min_length=2, max_length=50)],
+    limit: Annotated[int, Query(ge=1, le=24)] = 12,
+    db: Session = Depends(get_db),
+) -> UserListResponse:
+    rows = users_model.search_users(db, q, limit=limit)
+    return UserListResponse(users=[UserSummary(**u) for u in rows])
+
+
+@app.get("/users/by-team/{team_number}", tags=["Accounts"])
+async def users_by_team(
+    team_number: Annotated[str, Path(title="FRC team number")],
+    limit: Annotated[int, Query(ge=1, le=24)] = 12,
+    db: Session = Depends(get_db),
+    viewer: Optional[UserResponse] = Depends(get_optional_user),
+) -> UserListResponse:
+    exclude = viewer.id if viewer else None
+    rows = users_model.users_on_team(db, team_number.strip(), limit=limit, exclude_id=exclude)
+    return UserListResponse(users=[UserSummary(**u) for u in rows])
+
+
 @app.get("/users/{username}", tags=["Accounts"])
 async def get_public_profile(
     username: Annotated[str, Path(title="Username")],

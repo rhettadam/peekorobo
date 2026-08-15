@@ -7,7 +7,7 @@ export function NotFound() {
       <Stack align="center" gap="sm">
         <Title order={1}>404</Title>
         <Text c="dimmed">This page could not be found.</Text>
-        <Button component={Link} to="/" variant="light">
+        <Button component={Link} to="/" variant="default">
           Back home
         </Button>
       </Stack>

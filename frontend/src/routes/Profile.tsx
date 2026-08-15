@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ActionIcon,
+  Accordion,
   Alert,
-  Anchor,
   Button,
   Card,
   Code,
@@ -12,7 +12,6 @@ import {
   Grid,
   Group,
   PasswordInput,
-  SimpleGrid,
   Stack,
   Text,
   Textarea,
@@ -33,90 +32,18 @@ import {
 import { notifications } from "@mantine/notifications";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { useFavorites, useToggleFavorite } from "../api/favorites";
+import { useFavorites } from "../api/favorites";
 import { fetchApiKey, generateApiKey, revokeApiKey, updateProfile } from "../api/auth";
 import { ApiError } from "../api/client";
 import { AvatarPicker } from "../components/AvatarPicker";
-import { LoadingState, EmptyState } from "../components/StateWrappers";
+import { ProfileDiscover } from "../components/ProfileDiscover";
+import { ProfileFavoriteInsights } from "../components/ProfileFavoriteInsights";
+import { LoadingState } from "../components/StateWrappers";
 import { UserListModal } from "../components/UserListModal";
-import {
-  CommunityCard,
-  FavoriteEventCard,
-  FavoriteTeamCard,
-  FavoritesSectionHeader,
-  ProfileHero,
-} from "../components/ProfileSections";
+import { CommunityCard, ProfileHero } from "../components/ProfileSections";
 import type { ApiKeyResponse, UpdateProfilePayload } from "../types/api";
 
-function FavoriteTeamsCard() {
-  const { data, isLoading } = useFavorites();
-  const toggle = useToggleFavorite();
-  const teams = (data?.teams ?? []).slice().sort((a, b) => Number(a) - Number(b));
-  return (
-    <Card withBorder radius="md" p="md">
-      <FavoritesSectionHeader label="Favorite Teams" count={teams.length} />
-      {isLoading ? (
-        <Text size="sm" c="dimmed">
-          Loading...
-        </Text>
-      ) : teams.length === 0 ? (
-        <EmptyState>
-          No favorite teams yet.{" "}
-          <Anchor component={Link} to="/teams" size="sm">
-            Browse teams
-          </Anchor>{" "}
-          and star ones you follow.
-        </EmptyState>
-      ) : (
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-          {teams.map((t) => (
-            <FavoriteTeamCard
-              key={t}
-              teamNumber={t}
-              onRemove={() => toggle.mutate({ itemType: "team", itemKey: t, favorited: true })}
-            />
-          ))}
-        </SimpleGrid>
-      )}
-    </Card>
-  );
-}
-
-function FavoriteEventsCard() {
-  const { data, isLoading } = useFavorites();
-  const toggle = useToggleFavorite();
-  const events = (data?.events ?? []).slice().sort();
-  return (
-    <Card withBorder radius="md" p="md">
-      <FavoritesSectionHeader label="Favorite Events" count={events.length} />
-      {isLoading ? (
-        <Text size="sm" c="dimmed">
-          Loading...
-        </Text>
-      ) : events.length === 0 ? (
-        <EmptyState>
-          No favorite events yet.{" "}
-          <Anchor component={Link} to="/events" size="sm">
-            Browse events
-          </Anchor>{" "}
-          and star ones you care about.
-        </EmptyState>
-      ) : (
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-          {events.map((e) => (
-            <FavoriteEventCard
-              key={e}
-              eventKey={e}
-              onRemove={() => toggle.mutate({ itemType: "event", itemKey: e, favorited: true })}
-            />
-          ))}
-        </SimpleGrid>
-      )}
-    </Card>
-  );
-}
-
-function ApiKeySection() {
+function ApiKeySection({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["api-key"],
@@ -160,12 +87,14 @@ function ApiKeySection() {
   const apiKey = data?.api_key ?? null;
   const masked = apiKey ? "•".repeat(Math.min(apiKey.length, 43)) : "";
 
-  return (
-    <Card withBorder radius="lg" p="lg">
-      <Group gap={8} mb="xs">
-        <IconKey size={18} />
-        <Title order={4}>Developer API Key</Title>
-      </Group>
+  const body = (
+    <>
+      {!embedded ? (
+        <Group gap={8} mb="xs">
+          <IconKey size={18} />
+          <Title order={4}>Developer API Key</Title>
+        </Group>
+      ) : null}
       <Text size="sm" c="dimmed" mb="md">
         Use this key in the <Code>X-API-Key</Code> header to get a dedicated rate-limit bucket on the
         Peekorobo API. Keep it secret; anyone with the key can use it as you.
@@ -196,7 +125,7 @@ function ApiKeySection() {
           </Group>
           <Group gap="sm">
             <Button
-              variant="light"
+              variant="default"
               size="xs"
               leftSection={<IconRefresh size={14} />}
               loading={generate.isPending}
@@ -225,6 +154,14 @@ function ApiKeySection() {
           Generate API Key
         </Button>
       )}
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <Card withBorder radius="lg" p="lg">
+      {body}
     </Card>
   );
 }
@@ -430,14 +367,24 @@ export function Profile() {
         </Card>
       ) : null}
 
-      <SimpleGrid id="profile-favorites" cols={{ base: 1, md: 2 }} spacing="lg">
-        <FavoriteTeamsCard />
-        <FavoriteEventsCard />
-      </SimpleGrid>
+      <ProfileFavoriteInsights
+        teamKeys={favorites?.teams ?? []}
+        eventKeys={favorites?.events ?? []}
+        canRemove
+      />
+
+      <ProfileDiscover user={user} />
 
       <CommunityCard username={user.username} onOpen={(mode) => setListMode(mode)} />
 
-      <ApiKeySection />
+      <Accordion variant="separated" radius="md">
+        <Accordion.Item value="api-key">
+          <Accordion.Control icon={<IconKey size={18} />}>Developer API Key</Accordion.Control>
+          <Accordion.Panel>
+            <ApiKeySection embedded />
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
     </Stack>
   );
 }

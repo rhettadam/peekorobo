@@ -11,8 +11,8 @@ export function Footer() {
         marginTop: "var(--mantine-spacing-lg)",
         marginInline: "calc(var(--app-shell-padding, 16px) * -1)",
         marginBottom: "calc(var(--app-shell-padding, 16px) * -1)",
-        borderTop: "1px solid #2b2b2b",
-        backgroundColor: "#1a1a1a",
+        borderTop: "1px solid var(--peeko-chrome-border)",
+        backgroundColor: "var(--peeko-chrome-bg)",
       }}
     >
       <Container size="xl" py="sm" px={{ base: "xs", sm: "md" }}>

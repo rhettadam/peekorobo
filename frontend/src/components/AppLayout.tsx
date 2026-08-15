@@ -20,7 +20,12 @@ export function AppLayout() {
 
   return (
     <AppShell header={{ height: 60 }} padding={fullBleed ? 0 : "md"}>
-      <AppShell.Header style={{ backgroundColor: "#1a1a1a", borderBottom: "1px solid #2b2b2b" }}>
+      <AppShell.Header
+        style={{
+          backgroundColor: "var(--peeko-chrome-bg)",
+          borderBottom: "1px solid var(--peeko-chrome-border)",
+        }}
+      >
         <Navbar mobileOpened={mobileOpened} onToggleMobile={toggleMobile} onNavigate={closeMobile} />
       </AppShell.Header>
 

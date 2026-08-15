@@ -1,4 +1,4 @@
-import { aceColor, type PercentileThresholds } from "../lib/epa";
+import { aceColor, contrastText, type PercentileThresholds } from "../lib/epa";
 import { formatNumber } from "../lib/format";
 
 const CONFIDENCE_TINT = "#e5393575"; // production: below-median confidence gets a red tint
@@ -25,6 +25,7 @@ export function MetricCell({ value, thresholds, decimals = 1 }: MetricCellProps)
       </span>
     );
   }
+  const fg = contrastText(color);
   return (
     <span
       style={{
@@ -32,8 +33,8 @@ export function MetricCell({ value, thresholds, decimals = 1 }: MetricCellProps)
         minWidth: PILL_MIN_WIDTH,
         textAlign: "center",
         backgroundColor: color,
-        color: "#ffffff",
-        textShadow: "0 1px 2px rgba(0,0,0,0.65)",
+        color: fg,
+        textShadow: fg === "#FFFFFF" ? "0 1px 2px rgba(0,0,0,0.65)" : undefined,
         borderRadius: 6,
         padding: "4px 6px",
         fontWeight: 600,

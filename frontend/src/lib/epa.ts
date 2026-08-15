@@ -74,10 +74,10 @@ export function aceColor(
   return ACE_COLOR_STOPS[ACE_COLOR_STOPS.length - 1][1];
 }
 
-/** Return black or white text for readable contrast against a hex background (WCAG). */
-export function contrastText(hex: string): string {
+/** WCAG relative luminance for a hex color (0 = black, 1 = white). */
+export function relativeLuminance(hex: string): number {
   const clean = hex.replace("#", "").slice(0, 6);
-  if (clean.length < 6) return "#000000";
+  if (clean.length < 6) return 0;
   const r = parseInt(clean.slice(0, 2), 16);
   const g = parseInt(clean.slice(2, 4), 16);
   const b = parseInt(clean.slice(4, 6), 16);
@@ -86,13 +86,15 @@ export function contrastText(hex: string): string {
     const s = c / 255;
     return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
   };
-  const lum = 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-  const ratio = (l1: number, l2: number) => (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
-  const withBlack = ratio(lum, 0);
-  const withWhite = ratio(lum, 1);
-  if (withBlack >= 3.0) return "#000000";
-  if (withWhite >= 3.0) return "#FFFFFF";
-  return withBlack > withWhite ? "#000000" : "#FFFFFF";
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+/** Luminance above which dark text reads better on saturated UI fills (≈80–75% ACE swatches). */
+const LIGHT_SWATCH_LUM_THRESHOLD = 0.53;
+
+/** Black or white label text for colored pills, badges, and the ACE key. */
+export function contrastText(hex: string): string {
+  return relativeLuminance(hex) >= LIGHT_SWATCH_LUM_THRESHOLD ? "#000000" : "#FFFFFF";
 }
 
 /** Simple percentile-bucket color (mirrors utils.get_user_epa_color). */

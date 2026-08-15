@@ -151,8 +151,7 @@ function SpotlightCard({
             component={Link}
             to={`/team/${teamNumber}/${year}`}
             size="xs"
-            variant="white"
-            color="dark"
+            variant="default"
             mt={6}
             w="fit-content"
           >
@@ -490,7 +489,7 @@ export function TeamsLeaderboard() {
         sortValue: (r) => r.favorites,
         render: (r) => (
           <Group gap={4} wrap="nowrap" justify="flex-start">
-            <IconStarFilled size={14} color="#ffdd00" style={{ flexShrink: 0 }} />
+            <IconStarFilled size={14} color="var(--peeko-link)" style={{ flexShrink: 0 }} />
             <Text span fz="sm" fw={r.favorites > 0 ? 600 : 400}>
               {r.favorites}
             </Text>
@@ -588,7 +587,7 @@ export function TeamsLeaderboard() {
           />
           {hasLocationFilter || filter ? (
             <Button
-              variant="subtle"
+              variant="default"
               size="sm"
               mb={2}
               onClick={() => {
@@ -641,7 +640,7 @@ export function TeamsLeaderboard() {
                   Showing the top {filtered.length} teams for a fast load.
                 </Text>
                 <Button
-                  variant="light"
+                  variant="default"
                   size="xs"
                   loading={loadingFull}
                   onClick={() => setFullRequested(true)}
@@ -693,7 +692,7 @@ export function TeamsLeaderboard() {
                   />
                 </Group>
                 <Button
-                  variant="light"
+                  variant="default"
                   size="xs"
                   onClick={() => setTileBg((b) => (b === "blue" ? "red" : "blue"))}
                 >

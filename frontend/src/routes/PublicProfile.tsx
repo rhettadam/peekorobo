@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, Card, SimpleGrid, Stack } from "@mantine/core";
+import { Button, Stack } from "@mantine/core";
 import { IconUserMinus, IconUserPlus } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -8,14 +8,9 @@ import { fetchPublicProfile } from "../api/auth";
 import { useToggleFollow } from "../api/follows";
 import { useAuth } from "../auth/AuthContext";
 import { UserListModal } from "../components/UserListModal";
-import {
-  CommunityCard,
-  FavoriteEventCard,
-  FavoriteTeamCard,
-  FavoritesSectionHeader,
-  ProfileHero,
-} from "../components/ProfileSections";
-import { EmptyState, ErrorState, LoadingState } from "../components/StateWrappers";
+import { ProfileFavoriteInsights } from "../components/ProfileFavoriteInsights";
+import { CommunityCard, ProfileHero } from "../components/ProfileSections";
+import { ErrorState, LoadingState } from "../components/StateWrappers";
 
 export function PublicProfile() {
   const { username = "" } = useParams();
@@ -38,8 +33,6 @@ export function PublicProfile() {
   if (!query.data) return null;
 
   const { user, favorite_teams, favorite_events, is_following, is_self } = query.data;
-  const teams = favorite_teams.slice().sort((a, b) => Number(a) - Number(b));
-  const events = favorite_events.slice().sort();
 
   const handleFollow = () => {
     if (!isAuthenticated) {
@@ -99,33 +92,7 @@ export function PublicProfile() {
         />
       ) : null}
 
-      <SimpleGrid id="profile-favorites" cols={{ base: 1, md: 2 }} spacing="lg">
-        <Card withBorder radius="md" p="md">
-          <FavoritesSectionHeader label="Favorite Teams" count={teams.length} />
-          {teams.length === 0 ? (
-            <EmptyState>No favorite teams.</EmptyState>
-          ) : (
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-              {teams.map((t) => (
-                <FavoriteTeamCard key={t} teamNumber={t} />
-              ))}
-            </SimpleGrid>
-          )}
-        </Card>
-
-        <Card withBorder radius="md" p="md">
-          <FavoritesSectionHeader label="Favorite Events" count={events.length} />
-          {events.length === 0 ? (
-            <EmptyState>No favorite events.</EmptyState>
-          ) : (
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-              {events.map((e) => (
-                <FavoriteEventCard key={e} eventKey={e} />
-              ))}
-            </SimpleGrid>
-          )}
-        </Card>
-      </SimpleGrid>
+      <ProfileFavoriteInsights teamKeys={favorite_teams} eventKeys={favorite_events} />
 
       <CommunityCard username={username} onOpen={(mode) => setListMode(mode)} />
     </Stack>

@@ -65,6 +65,8 @@ class UserSummary(BaseModel):
     id: int
     username: str
     avatar_key: Optional[str] = None
+    team: Optional[str] = None
+    role: Optional[str] = None
 
 
 class UserListResponse(BaseModel):

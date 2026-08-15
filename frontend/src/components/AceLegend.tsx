@@ -1,5 +1,5 @@
 import { Group, Paper, Text } from "@mantine/core";
-import { ACE_LEGEND } from "../lib/epa";
+import { ACE_LEGEND, contrastText } from "../lib/epa";
 
 /** ACE percentile color key, mirroring ace_legend_layout in the Dash app. */
 export function AceLegend() {
@@ -9,23 +9,26 @@ export function AceLegend() {
         ACE Color Key (Percentiles)
       </Text>
       <Group gap={4} wrap="wrap">
-        {ACE_LEGEND.map((row) => (
-          <span
-            key={row.label}
-            style={{
-              backgroundColor: row.color,
-              color: "#ffffff",
-              textShadow: "0 1px 2px rgba(0,0,0,0.65)",
-              borderRadius: 4,
-              padding: "2px 6px",
-              fontSize: 11,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {row.label}
-          </span>
-        ))}
+        {ACE_LEGEND.map((row) => {
+          const fg = contrastText(row.color);
+          return (
+            <span
+              key={row.label}
+              style={{
+                backgroundColor: row.color,
+                color: fg,
+                textShadow: fg === "#FFFFFF" ? "0 1px 2px rgba(0,0,0,0.65)" : undefined,
+                borderRadius: 4,
+                padding: "2px 6px",
+                fontSize: 11,
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {row.label}
+            </span>
+          );
+        })}
       </Group>
     </Paper>
   );
