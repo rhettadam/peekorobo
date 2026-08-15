@@ -2,8 +2,8 @@
 
 Client-side React SPA for Peekorobo (FRC team & event scouting/analysis). Built
 with Vite + React + TypeScript, Mantine (UI + charts), React Router, and
-TanStack Query. It consumes the Peekorobo FastAPI backend and a static search
-index served from a CDN.
+TanStack Query. It consumes the Peekorobo FastAPI backend and a small set of
+static JSON served from `/data` (leaderboard snapshots, filter options).
 
 ## Stack
 
@@ -28,13 +28,13 @@ src/
 ## Data flow
 
 ```
-CDN (static teams.json/events.json) ─┐
-                                     ├─► React (TanStack Query cache) ─► UI
-FastAPI  ─► CDN cache (~5 min TTL) ──┘
+FastAPI  ─► CDN cache (~5 min TTL, search index ~1 hr) ─► React (TanStack Query cache) ─► UI
+Static /data JSON (leaderboards, filters) ────────────────────────────────────────────────┘
 ```
 
 Components declare what data they need via query hooks in `src/api/queries.ts`.
-Each hook caches for ~5 minutes to match the backend/CDN freshness target.
+Each hook caches for ~5 minutes to match the backend/CDN freshness target. The
+search index is fetched once per session from `GET /search/index`.
 
 ## Local development
 
@@ -61,15 +61,7 @@ uvicorn main:app --reload --port 8000
    The Vite dev server proxies `/api/*` to `http://localhost:8000` (see
    `vite.config.ts`), so the default `VITE_API_BASE_URL=/api` works out of the box.
 
-4. Provide the search index for local dev (see `public/data/README.md`):
-
-```bash
-# from the repo root
-cp data/teams.json frontend/public/data/teams.json
-cp data/events.json frontend/public/data/events.json
-```
-
-5. Start the dev server:
+4. Start the dev server:
 
 ```bash
 npm run dev
@@ -87,12 +79,12 @@ npm run preview    # preview the production build locally
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | Base URL of the FastAPI backend | `/api` |
-| `VITE_SEARCH_BASE_URL` | Base URL for the static search index | `/data` |
+| `VITE_SEARCH_BASE_URL` | Base URL for static `/data` JSON (leaderboards, filters) | `/data` |
 | `VITE_CURRENT_YEAR` | Default FRC season | `2026` |
 
 ## Deployment
 
 Deploy `dist/` to any static host (Cloudflare Pages, Vercel, Netlify). Set the
-`VITE_*` env vars at build time to point at the deployed API and CDN-hosted
-search index. Because it is an SPA, configure the host to serve `index.html` for
-unknown routes (SPA fallback).
+`VITE_*` env vars at build time to point at the deployed API and static data.
+Because it is an SPA, configure the host to serve `index.html` for unknown
+routes (SPA fallback).

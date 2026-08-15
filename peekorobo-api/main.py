@@ -28,6 +28,7 @@ from query.frc_games import FrcGamesResponse
 from query.event_insights import EventInsightsResponse
 from query.insights_overview import InsightsOverviewResponse
 from query.map import MapTeamsResponse, MapEventsResponse
+from query.search_index import SearchIndexResponse
 from data.db import SessionLocal
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -47,6 +48,7 @@ import data.models.frc_games as frc_games
 import data.models.event_insights as event_insights
 import data.models.insights_overview as insights_overview
 import data.models.map as map_data
+import data.models.search_index as search_index
 import data.models.users as users_model
 import data.models.favorites as favorites_model
 import security
@@ -102,6 +104,13 @@ INSIGHTS_CACHE_MAX_AGE = int(os.getenv("INSIGHTS_CACHE_MAX_AGE", "3600"))
 INSIGHTS_CACHE_SWR = int(os.getenv("INSIGHTS_CACHE_STALE_WHILE_REVALIDATE", "86400"))
 INSIGHTS_CACHE_CONTROL_VALUE = (
     f"public, max-age={INSIGHTS_CACHE_MAX_AGE}, stale-while-revalidate={INSIGHTS_CACHE_SWR}"
+)
+
+# Search index is a large blob that only changes when the pipeline refreshes teams/events.
+SEARCH_INDEX_CACHE_MAX_AGE = int(os.getenv("SEARCH_INDEX_CACHE_MAX_AGE", "3600"))
+SEARCH_INDEX_CACHE_SWR = int(os.getenv("SEARCH_INDEX_CACHE_STALE_WHILE_REVALIDATE", "86400"))
+SEARCH_INDEX_CACHE_CONTROL_VALUE = (
+    f"public, max-age={SEARCH_INDEX_CACHE_MAX_AGE}, stale-while-revalidate={SEARCH_INDEX_CACHE_SWR}"
 )
 
 # Comma-separated list of allowed SPA origins, or "*" for any (read-only, no cookies).
@@ -338,6 +347,7 @@ _BOT_BLOCK_PREFIXES = (
     "/team",
     "/event",
     "/map",
+    "/search",
     "/insights",
     "/team_perfs",
     "/frc_games",
@@ -586,6 +596,11 @@ async def get_event_perfs(event_key: Annotated[str, Path(title="Event key (e.g. 
 @app.get("/frc_games", dependencies=[Depends(read_access)], tags=["Events"])
 async def get_frc_games(db: Session = Depends(get_db)) -> FrcGamesResponse:
     return frc_games.get_frc_games(db)
+
+@app.get("/search/index", dependencies=[Depends(read_access)], tags=["Search"])
+async def get_search_index(response: Response, db: Session = Depends(get_db)) -> SearchIndexResponse:
+    response.headers["Cache-Control"] = SEARCH_INDEX_CACHE_CONTROL_VALUE
+    return search_index.get_search_index(db)
 
 @app.get("/map/teams", dependencies=[Depends(read_access)], tags=["Map"])
 async def get_map_teams(response: Response, db: Session = Depends(get_db)) -> MapTeamsResponse:

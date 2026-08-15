@@ -96,27 +96,30 @@ def get_team_colors(team_number):
 
 def generate_team_colors():
     """Generate colors for all teams and save to JSON."""
-    # Load team data to get all team numbers
-    with open("data/teams.json", "r", encoding="utf-8") as f:
-        team_data = json.load(f)
-    
+    from dotenv import load_dotenv
+    from db_connection import DatabaseConnection
+
+    load_dotenv()
+
+    team_numbers: list[int] = []
+    with DatabaseConnection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT team_number FROM teams ORDER BY team_number")
+        team_numbers = [int(row[0]) for row in cur.fetchall()]
+
     team_colors = {}
-    total_teams = len(team_data)
-    
+    total_teams = len(team_numbers)
+
     print(f"Processing {total_teams} teams...")
-    
-    for i, (team_number_str, team_info) in enumerate(team_data.items()):
-        try:
-            team_number = int(team_number_str)
-        except ValueError:
-            continue
-            
+
+    for i, team_number in enumerate(team_numbers):
+        team_number_str = str(team_number)
         colors = get_team_colors(team_number)
         team_colors[team_number_str] = {
             "primary": colors[0],
             "secondary": colors[1]
         }
-        
+
         # Progress indicator
         if (i + 1) % 100 == 0:
             print(f"Processed {i + 1}/{total_teams} teams...")

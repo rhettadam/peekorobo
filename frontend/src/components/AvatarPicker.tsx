@@ -16,7 +16,7 @@ const MAX_RESULTS = 48;
 
 /**
  * Avatar gallery picker mirroring the old Dash app: pick from team avatars or the
- * stock avatar. Uses the static search index for team numbers/nicknames and only
+ * stock avatar. Uses the API search index for team numbers/nicknames and only
  * renders a capped number of tiles at once (search to narrow), so it stays fast
  * even though there are thousands of teams.
  */

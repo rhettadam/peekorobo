@@ -447,7 +447,7 @@ export interface FavoriteCountsResponse {
   counts: Record<string, number>;
 }
 
-// ---- Static search index (data/teams.json, data/events.json) ----
+// ---- Search index (/search/index) ----
 export interface SearchTeamEntry {
   nickname: string;
   last_year: number | null;
@@ -455,6 +455,11 @@ export interface SearchTeamEntry {
 
 export type TeamSearchIndex = Record<string, SearchTeamEntry>;
 export type EventSearchIndex = Record<string, string>;
+
+export interface SearchIndexResponse {
+  teams: TeamSearchIndex;
+  events: EventSearchIndex;
+}
 
 // ---- Team notables (query/notables.py): Hall of Fame + World Champions ----
 export interface TeamNotable {

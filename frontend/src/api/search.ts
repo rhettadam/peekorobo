@@ -1,15 +1,12 @@
-// Loads the static search index (teams.json, events.json) once and caches it.
-// These files are large and rarely change, so they are served from a CDN/static
-// host (VITE_SEARCH_BASE_URL) rather than through the API.
+// Loads the search index from the API once and caches it in memory for
+// client-side prefix/substring matching in the navbar and avatar picker.
 
-import type { EventSearchIndex, TeamSearchIndex, TeamPerfResponse } from "../types/api";
+import { apiGet } from "./client";
+import type { SearchIndexResponse, TeamPerfResponse } from "../types/api";
 
 const SEARCH_BASE = (import.meta.env.VITE_SEARCH_BASE_URL ?? "/data").replace(/\/$/, "");
 
-export interface SearchIndex {
-  teams: TeamSearchIndex;
-  events: EventSearchIndex;
-}
+export type SearchIndex = SearchIndexResponse;
 
 let cache: SearchIndex | null = null;
 let inflight: Promise<SearchIndex> | null = null;
@@ -24,11 +21,11 @@ export async function loadSearchIndex(): Promise<SearchIndex> {
   if (cache) return cache;
   if (inflight) return inflight;
   inflight = (async () => {
-    const [teams, events] = await Promise.all([
-      fetchJson<TeamSearchIndex>("/teams.json").catch(() => ({}) as TeamSearchIndex),
-      fetchJson<EventSearchIndex>("/events.json").catch(() => ({}) as EventSearchIndex),
-    ]);
-    cache = { teams, events };
+    try {
+      cache = await apiGet<SearchIndexResponse>("/search/index");
+    } catch {
+      cache = { teams: {}, events: {} };
+    }
     return cache;
   })();
   return inflight;

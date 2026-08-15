@@ -37,8 +37,8 @@ jobs:
           npm ci
           npm run build
           mkdir -p dist/data/leaderboards dist/assets
-          # Prefer freshly generated search indexes from the repo data/ folder when present
-          for f in teams.json events.json countries.json states.json district_definitions.json; do
+          # Filter option JSON and leaderboard snapshots used by the SPA
+          for f in countries.json states.json district_definitions.json; do
             if [ -f "../data/$f" ]; then cp -f "../data/$f" "dist/data/$f"; fi
             if [ -f "public/data/$f" ]; then cp -f "public/data/$f" "dist/data/$f"; fi
           done

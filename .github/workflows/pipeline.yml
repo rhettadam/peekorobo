@@ -111,16 +111,12 @@ jobs:
           python data/run_awards.py "$YEAR"
       - name: Regenerate static exports
         run: |
-          python data/generate_teams_search.py
-          python data/generate_events_search.py
           python data/generate_leaderboards.py "$YEAR"
       - name: Upload static exports (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: static-exports-full
           path: |
-            data/teams.json
-            data/events.json
             data/leaderboards/*.json
           if-no-files-found: ignore
       - name: Setup Node
@@ -142,8 +138,6 @@ jobs:
           npm ci
           npm run build
           mkdir -p dist/data/leaderboards dist/assets
-          cp -f ../data/teams.json dist/data/teams.json
-          cp -f ../data/events.json dist/data/events.json
           if [ -d ../data/leaderboards ]; then cp -f ../data/leaderboards/*.json dist/data/leaderboards/ 2>/dev/null || true; fi
           # Filter option JSON used by the SPA (if present in repo public/data or data/)
           for f in countries.json states.json district_definitions.json; do
