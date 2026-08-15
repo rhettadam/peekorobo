@@ -6,7 +6,7 @@ import { TeamName } from "../components/TeamName";
 import { StatPill } from "../components/StatPill";
 import { RecordCell } from "../components/RecordCell";
 import { MatchActualScoreCell, MatchPredScoreCell } from "../components/MatchScoreCell";
-import { predictionColor, isPlayed } from "../lib/prediction";
+import { predictionColor, isPlayed, predictionScoreMae } from "../lib/prediction";
 import type { EventPerfEntry, MatchResponse } from "../types/api";
 
 const COMP_LEVEL_ORDER: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
@@ -111,6 +111,11 @@ export function TeamEventBlock({
     return total ? { correct, total, pct: (correct / total) * 100 } : null;
   }, [teamMatches, teamNumber]);
 
+  const scoreMae = useMemo(
+    () => predictionScoreMae(teamMatches, aceByTeam),
+    [teamMatches, aceByTeam],
+  );
+
   const hasPills =
     year >= 2015 &&
     perf &&
@@ -160,10 +165,19 @@ export function TeamEventBlock({
               </Text>
             ) : null}
           </Stack>
-          {accuracy ? (
-            <Badge variant="light" color="grape">
-              Prediction Accuracy: {accuracy.correct}/{accuracy.total} ({accuracy.pct.toFixed(0)}%)
-            </Badge>
+          {(accuracy || scoreMae.mae !== null) ? (
+            <Group gap="xs">
+              {accuracy ? (
+                <Badge variant="light" color="grape">
+                  Prediction Accuracy: {accuracy.correct}/{accuracy.total} ({accuracy.pct.toFixed(0)}%)
+                </Badge>
+              ) : null}
+              {scoreMae.mae !== null ? (
+                <Badge variant="light" color="blue">
+                  Score MAE: {scoreMae.mae.toFixed(1)}
+                </Badge>
+              ) : null}
+            </Group>
           ) : null}
         </Group>
 

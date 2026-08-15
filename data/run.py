@@ -131,95 +131,38 @@ EVENT_BOOSTS = {
     3: 1.0,
 }
 
-WEEK_RANGES_BY_YEAR = None
+_event_week_cache: dict[str, int | None] = {}
+# Per-year regular-season bounds derived from stored TBA weeks (min start, max end, max week index).
+_season_bounds_cache: dict[int, tuple[datetime | None, datetime | None, int]] = {}
 
 
-def load_week_ranges():
-    global WEEK_RANGES_BY_YEAR
-    if WEEK_RANGES_BY_YEAR is not None:
-        return WEEK_RANGES_BY_YEAR
-    possible_paths = [
-        'week_ranges.json',
-        'data/week_ranges.json',
-        '../data/week_ranges.json',
-        os.path.join(os.path.dirname(__file__), 'week_ranges.json'),
-        os.path.join(os.path.dirname(__file__), '..', 'data', 'week_ranges.json')
-    ]
-    for path in possible_paths:
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                WEEK_RANGES_BY_YEAR = json.load(f)
-            break
-        except (FileNotFoundError, IOError, json.JSONDecodeError):
-            continue
-    if WEEK_RANGES_BY_YEAR is None:
-        WEEK_RANGES_BY_YEAR = {}
-        print("Warning: Could not load week_ranges.json from any of the attempted paths")
-    return WEEK_RANGES_BY_YEAR
-
-def get_event_week_number(start_date: Optional[str], end_date: Optional[str], event_key: Optional[str] = None) -> Optional[int]:
-    week_ranges_by_year = load_week_ranges()
-    if not week_ranges_by_year:
+def _coerce_event_datetime(value) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if hasattr(value, "year") and hasattr(value, "month") and not isinstance(value, datetime):
+        return datetime(value.year, value.month, value.day)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text[:10], "%Y-%m-%d")
+    except ValueError:
         return None
 
-    start_dt = None
-    end_dt = None
-    year = None
 
-    if start_date:
-        try:
-            start_dt = date.fromisoformat(start_date)
-            year = str(start_dt.year)
-        except Exception:
-            start_dt = None
-    if end_date:
-        try:
-            end_dt = date.fromisoformat(end_date)
-            if year is None:
-                year = str(end_dt.year)
-        except Exception:
-            end_dt = None
-    if year is None and event_key and len(event_key) >= 4 and event_key[:4].isdigit():
-        year = event_key[:4]
-
-    if not year:
+def resolve_event_week(event: dict) -> int | None:
+    """TBA week field (0-indexed, same as our DB). Null when TBA has no week."""
+    raw = event.get("week")
+    if raw is None:
+        return None
+    try:
+        w = int(raw)
+        return w if w >= 0 else None
+    except (TypeError, ValueError):
         return None
 
-    week_ranges = week_ranges_by_year.get(year)
-    if not week_ranges:
-        return None
-
-    def week_for_date(dt: date) -> Optional[int]:
-        for i, (start, end) in enumerate(week_ranges):
-            try:
-                start_range = date.fromisoformat(start)
-                end_range = date.fromisoformat(end)
-            except Exception:
-                continue
-            if start_range <= dt <= end_range:
-                return i
-        return None
-
-    if start_dt:
-        week = week_for_date(start_dt)
-        if week is not None:
-            return week
-    if end_dt:
-        week = week_for_date(end_dt)
-        if week is not None:
-            return week
-
-    if start_dt and end_dt:
-        for i, (start, end) in enumerate(week_ranges):
-            try:
-                start_range = date.fromisoformat(start)
-                end_range = date.fromisoformat(end)
-            except Exception:
-                continue
-            if start_dt <= end_range and end_dt >= start_range:
-                return i
-
-    return None
 
 @retry(stop=stop_never, wait=wait_exponential(min=0.5, max=5), retry=retry_if_exception_type(Exception))
 def tba_get(endpoint: str):
@@ -522,29 +465,81 @@ _event_start_date_cache = {}
 _event_meta_lock = threading.Lock()
 
 
-def preload_event_metadata(year):
-    """
-    Load start_date for every event of the season once so per-event chronological
-    weighting / sorting are dict lookups instead of two identical DB reads per
-    event. Falsy start_dates are normalized to None to exactly match the old
-    get_event_start_date_from_db behavior (which returned None for empty values).
-    """
+def _get_season_bounds(year: int) -> tuple[datetime | None, datetime | None, int]:
+    """Regular-season window from events with a TBA week (cached per year)."""
+    if year in _season_bounds_cache:
+        return _season_bounds_cache[year]
+    season_start: datetime | None = None
+    season_end: datetime | None = None
+    max_week = 0
     try:
         with _pooled_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT event_key, start_date FROM events WHERE LEFT(event_key, 4) = %s",
+                """
+                SELECT MIN(start_date), MAX(end_date), MAX(week)
+                FROM events
+                WHERE LEFT(event_key, 4) = %s AND week IS NOT NULL
+                """,
+                (str(year),),
+            )
+            row = cur.fetchone()
+            cur.close()
+        if row:
+            season_start = _coerce_event_datetime(row[0])
+            season_end = _coerce_event_datetime(row[1])
+            if row[2] is not None:
+                max_week = int(row[2])
+    except Exception as e:
+        print(f"_get_season_bounds failed for {year}: {e}", flush=True)
+    bounds = (season_start, season_end, max_week)
+    _season_bounds_cache[year] = bounds
+    return bounds
+
+
+def preload_event_metadata(year):
+    """
+    Load start_date/week for every event of the season once so per-event chronological
+    weighting / sorting are dict lookups instead of repeated DB reads.
+    """
+    global _season_bounds_cache
+    try:
+        with _pooled_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT event_key, start_date, end_date, week
+                FROM events
+                WHERE LEFT(event_key, 4) = %s
+                """,
                 (str(year),),
             )
             rows = cur.fetchall()
             cur.close()
     except Exception as e:
-        # Non-fatal: helpers fall back to per-event DB reads if the cache is empty.
         print(f"preload_event_metadata failed for {year}: {e}", flush=True)
         return
+
+    season_start: datetime | None = None
+    season_end: datetime | None = None
+    max_week = 0
+
     with _event_meta_lock:
-        for event_key, start_date in rows:
+        for event_key, start_date, end_date, week in rows:
             _event_start_date_cache[event_key] = start_date if start_date else None
+            _event_week_cache[event_key] = int(week) if week is not None else None
+            if week is None:
+                continue
+            w = int(week)
+            if w > max_week:
+                max_week = w
+            sd = _coerce_event_datetime(start_date)
+            ed = _coerce_event_datetime(end_date)
+            if sd and (season_start is None or sd < season_start):
+                season_start = sd
+            if ed and (season_end is None or ed > season_end):
+                season_end = ed
+        _season_bounds_cache[year] = (season_start, season_end, max_week)
 
 def _normalize_district_key(key):
     """TBA uses 2024fim; normalize to FIM."""
@@ -1542,7 +1537,7 @@ def create_event_db(year, only_event_keys=None):
         # Fetch new data
         event_start = event.get("start_date")
         event_end = event.get("end_date")
-        event_week = get_event_week_number(event_start, event_end, key)
+        event_week = resolve_event_week(event)
         new_data = {
             "event": (
                 key, event.get("name"),
@@ -1834,6 +1829,8 @@ def _fetch_and_store_team_data_impl(
     _team_experience_cache.clear()
     _team_played_events_cache.clear()
     _event_start_date_cache.clear()
+    _event_week_cache.clear()
+    _season_bounds_cache.clear()
 
     sample_mode = sample_fraction is not None and float(sample_fraction) < 0.999
 
@@ -2530,63 +2527,50 @@ def get_event_chronological_weight(event_key: str, year: int) -> tuple[float, st
     Fixed weights:
       - Preseason (before first regular week): 0.05
       - Offseason (after last regular week): 0.10
-      - Unknown / no week_ranges / no start_date: 1.0
+      - Unknown / no season bounds / no start_date: 1.0
 
-    Regular season: piecewise linear in season_progress (0 = season start, 1 = season end).
-    Steeper than before so late weeks are weighted much more than early weeks:
-      - First 20% of season: 0.12 -> 0.32
-      - 20% - 80%: 0.32 -> 0.84
-      - Last 20%: 0.84 -> 1.00
+    Regular season bounds come from MIN(start_date)..MAX(end_date) over events with a
+    stored TBA week. Progress uses week index when available, else date within that window.
     """
     try:
         # start_date comes from the per-run preloaded cache (falling back to a DB
         # read on a miss); the weight math below is unchanged.
         start_date = get_event_start_date_from_db(event_key)
-        return _chronological_weight_from_start_date(start_date, year)
+        week = _event_week_cache.get(event_key)
+        return _chronological_weight_from_start_date(start_date, year, week=week)
     except Exception as e:
         print(f"Error calculating chronological weight for {event_key}: {e}")
         return 1.0, 'unknown'
 
 
-def _chronological_weight_from_start_date(start_date: Optional[str], year: int) -> tuple[float, str]:
-    """Pure computation extracted verbatim from get_event_chronological_weight (no DB access)."""
-    # Load week ranges for the year
-    week_ranges = load_week_ranges()
-    if not week_ranges:
-        return 1.0, 'unknown'
+def _chronological_weight_from_start_date(
+    start_date,
+    year: int,
+    week: int | None = None,
+) -> tuple[float, str]:
+    """Season progress from stored TBA weeks + event dates (no week_ranges.json)."""
+    season_start, season_end, max_week = _get_season_bounds(year)
+    if not season_start or not season_end:
+        return 1.0, "unknown"
 
-    year_str = str(year)
-    if year_str not in week_ranges:
-        return 1.0, 'unknown'
+    event_start = _coerce_event_datetime(start_date)
+    if not event_start:
+        return 1.0, "unknown"
 
-    if not start_date:  # start_date is None or empty
-        return 1.0, 'unknown'
+    if event_start < season_start:
+        return 0.05, "preseason"
+    if event_start > season_end:
+        return 0.1, "offseason"
 
-    event_start = datetime.strptime(start_date, '%Y-%m-%d')
+    if week is not None and max_week > 0:
+        season_progress = max(0.0, min(1.0, week / max_week))
+    else:
+        season_duration = (season_end - season_start).days
+        if season_duration <= 0:
+            return 1.0, "regular"
+        days_into_season = (event_start - season_start).days
+        season_progress = max(0.0, min(1.0, days_into_season / season_duration))
 
-    # Pre-season events (before first regular week)
-    first_regular_week = datetime.strptime(week_ranges[year_str][0][0], '%Y-%m-%d')
-    if event_start < first_regular_week:
-        return 0.05, 'preseason'  # Minimal weight for pre-season
-
-    # Off-season events (after last regular week)
-    last_regular_week = datetime.strptime(week_ranges[year_str][-1][1], '%Y-%m-%d')
-    if event_start > last_regular_week:
-        return 0.1, 'offseason'  # Very minimal weight for off-season
-
-    # Regular season events - calculate position within season
-    season_start = first_regular_week
-    season_end = last_regular_week
-    season_duration = (season_end - season_start).days
-
-    if season_duration <= 0:
-        return 1.0, 'regular'
-
-    # Calculate how far into the season this event is (0.0 to 1.0)
-    days_into_season = (event_start - season_start).days
-    season_progress = max(0.0, min(1.0, days_into_season / season_duration))
-
-    # Piecewise linear: discount early season, emphasize late season (same structure as before).
     if season_progress <= 0.2:
         weight = 0.12 + (season_progress / 0.2) * 0.2
     elif season_progress <= 0.8:
@@ -2594,7 +2578,7 @@ def _chronological_weight_from_start_date(start_date: Optional[str], year: int) 
     else:
         weight = 0.84 + ((season_progress - 0.8) / 0.2) * 0.16
 
-    return round(weight, 3), 'regular'
+    return round(weight, 3), "regular"
 
 def get_event_start_date_from_db(event_key: str) -> str:
     """Get event start date. Uses the per-run preloaded cache; falls back to a DB read."""
@@ -2631,7 +2615,8 @@ def sort_events_chronologically(event_epas: List[Dict], year: int) -> List[Dict]
     def sort_key(event_epa):
         start_date = event_epa.get('event_start_date')
         if start_date:
-            return datetime.strptime(start_date, '%Y-%m-%d')
+            dt = _coerce_event_datetime(start_date)
+            return dt if dt else datetime.max
         return datetime.max  # Put events without dates at the end
     
     return sorted(event_epas, key=sort_key)

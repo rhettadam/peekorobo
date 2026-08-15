@@ -14,7 +14,7 @@ import {
   ThemeIcon,
   Title,
 } from "@mantine/core";
-import { IconBroadcast, IconExternalLink, IconTrophy } from "@tabler/icons-react";
+import { IconExternalLink, IconTrophy } from "@tabler/icons-react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   useEvent,
@@ -30,23 +30,25 @@ import { ErrorState, LoadingState, EmptyState } from "../components/StateWrapper
 import { AceBadge } from "../components/AceBadge";
 import { TeamName } from "../components/TeamName";
 import { TeamAvatar } from "../components/TeamAvatar";
-import { FavoriteButton } from "../components/FavoriteButton";
+import { FavoriteWithCount } from "../components/FavoriteWithCount";
+import { EventExternalLinks, WebcastButton } from "../components/WebcastControl";
 import { MetricCell, ConfidenceCell } from "../components/MetricCell";
 import { AceLegend } from "../components/AceLegend";
 import { DataTable, type Column } from "../components/DataTable";
 import type {
   EventPerfInfo,
-  EventTeamEntry,
   MatchResponse,
   TeamRankingInfo,
 } from "../types/api";
 import { gameLogo } from "../lib/assets";
+import { gameLogoBannerStyle, useGameLogoColors } from "../lib/gameLogoColors";
 import { computePercentiles, median } from "../lib/epa";
 import {
   isPlayed,
   matchInsights,
   predictionAccuracy,
   predictionColor,
+  predictionScoreMae,
   predictedMatchScores,
 } from "../lib/prediction";
 import { MatchActualScoreCell, MatchPredScoreCell } from "../components/MatchScoreCell";
@@ -59,7 +61,6 @@ import {
   locationString,
   yearFromEventKey,
 } from "../lib/format";
-import { webcastLink } from "../lib/webcast";
 
 const COMP_LEVEL_ORDER: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
 
@@ -82,6 +83,7 @@ function MatchesTable({
   aceByTeam?: Map<number, number | null>;
 }) {
   const acc = predictionAccuracy(matches);
+  const scoreMae = predictionScoreMae(matches, aceByTeam);
   const matchYear = yearFromEventKey(eventKey) ?? undefined;
 
   const columns = useMemo<Column<MatchResponse>[]>(
@@ -239,11 +241,18 @@ function MatchesTable({
     <Stack gap="xs">
       <Group justify="space-between" align="center">
         <Text fw={700}>{title}</Text>
-        {acc.pct !== null ? (
-          <Badge variant="light" color="grape">
-            Prediction Accuracy: {acc.correct}/{acc.total} ({acc.pct.toFixed(0)}%)
-          </Badge>
-        ) : null}
+        <Group gap="xs">
+          {acc.pct !== null ? (
+            <Badge variant="light" color="grape">
+              Prediction Accuracy: {acc.correct}/{acc.total} ({acc.pct.toFixed(0)}%)
+            </Badge>
+          ) : null}
+          {scoreMae.mae !== null ? (
+            <Badge variant="light" color="blue">
+              Score MAE: {scoreMae.mae.toFixed(1)}
+            </Badge>
+          ) : null}
+        </Group>
       </Group>
       <DataTable
         data={matches}
@@ -507,6 +516,8 @@ export function Event() {
 
   const year = yearFromEventKey(eventKey);
   const [metricsMode, setMetricsMode] = useState<"event" | "season">("event");
+  const logoColors = useGameLogoColors(year);
+  const bannerStyle = gameLogoBannerStyle(logoColors);
 
   const eventQuery = useEvent(eventKey);
   const teamsQuery = useEventTeams(eventKey);
@@ -516,9 +527,9 @@ export function Event() {
   const awardsQuery = useEventAwards(eventKey);
   const { data: searchIdx } = useSearchIndex();
   const nicknameOf = (tn: number) => searchIdx?.teams[String(tn)]?.nickname ?? "";
-  // Season EPAs for the whole year (used only by the "By Season" metrics view).
+  // Season EPAs for the whole year (teams tab + "By Season" metrics view).
   const seasonQuery = useLeaderboard(year ?? 0, {}, {
-    enabled: Boolean(year) && tab === "metrics" && metricsMode === "season",
+    enabled: Boolean(year) && (tab === "teams" || (tab === "metrics" && metricsMode === "season")),
   });
 
   const event = eventQuery.data;
@@ -669,10 +680,42 @@ export function Event() {
     [rankingsQuery.data],
   );
 
-  const sortedTeams = useMemo(
-    () => [...(teamsQuery.data?.teams ?? [])].sort((a, b) => a.team_number - b.team_number),
-    [teamsQuery.data],
-  );
+  interface EventTeamRow {
+    team_number: number;
+    nickname: string;
+    city: string;
+    state_prov: string;
+    country: string;
+    event: EventPerfInfo | null;
+    season: EventPerfInfo | null;
+  }
+
+  const eventTeamRows = useMemo<EventTeamRow[]>(() => {
+    const perfMap = new Map<number, EventPerfInfo>();
+    for (const p of perfsQuery.data?.perfs ?? []) perfMap.set(p.team_number, p);
+    const teams = teamsQuery.data?.teams ?? [];
+    const source =
+      teams.length > 0
+        ? teams
+        : [...perfMap.values()].map((p) => ({
+            team_number: p.team_number,
+            nickname: nicknameOf(p.team_number),
+            city: "",
+            state_prov: "",
+            country: "",
+          }));
+    return source
+      .map((t) => ({
+        team_number: t.team_number,
+        nickname: t.nickname || nicknameOf(t.team_number),
+        city: t.city,
+        state_prov: t.state_prov,
+        country: t.country,
+        event: perfMap.get(t.team_number) ?? null,
+        season: seasonPerfByTeam.get(t.team_number) ?? null,
+      }))
+      .sort((a, b) => (b.event?.ace ?? -Infinity) - (a.event?.ace ?? -Infinity));
+  }, [teamsQuery.data, perfsQuery.data, seasonPerfByTeam, searchIdx]);
 
   const sortedPerfs = useMemo(
     () =>
@@ -772,26 +815,26 @@ export function Event() {
     [activeThresholds, activeConfMedian, year, searchIdx],
   );
 
-  const teamColumns = useMemo<Column<EventTeamEntry>[]>(
+  const eventTeamColumns = useMemo<Column<EventTeamRow>[]>(
     () => [
       {
-        key: "num",
+        key: "rank",
         header: "#",
-        width: 80,
-        sortValue: (t) => t.team_number,
-        render: (t) => <TeamName teamNumber={t.team_number} numberOnly year={year ?? undefined} />,
+        width: 50,
+        sortValue: (r) => aceRankByTeam.get(r.team_number) ?? null,
+        render: (r) => aceRankByTeam.get(r.team_number) ?? "–",
       },
       {
         key: "team",
         header: "Team",
-        sortValue: (t) => (t.nickname || "").toLowerCase(),
-        exportValue: (t) => t.nickname || "",
-        render: (t) => (
+        sortValue: (r) => (r.nickname || nicknameOf(r.team_number)).toLowerCase(),
+        exportValue: (r) => r.nickname || nicknameOf(r.team_number),
+        render: (r) => (
           <Group gap="sm" wrap="nowrap">
-            <TeamAvatar teamNumber={t.team_number} size={28} radius={6} bordered />
+            <TeamAvatar teamNumber={r.team_number} size={28} radius={6} bordered />
             <TeamName
-              teamNumber={t.team_number}
-              nickname={t.nickname || undefined}
+              teamNumber={r.team_number}
+              nickname={r.nickname || undefined}
               withNumber={false}
               year={year ?? undefined}
             />
@@ -801,21 +844,71 @@ export function Event() {
       {
         key: "location",
         header: "Location",
-        sortValue: (t) => locationString(t.city, t.state_prov, t.country),
-        render: (t) => locationString(t.city, t.state_prov, t.country),
+        sortValue: (r) => locationString(r.city, r.state_prov, r.country),
+        render: (r) => locationString(r.city, r.state_prov, r.country),
       },
       {
-        key: "ace",
+        key: "eventAce",
         header: "Event ACE",
-        width: 120,
-        sortValue: (t) => perfByTeam.get(t.team_number) ?? null,
-        render: (t) => (
-          <AceBadge value={perfByTeam.get(t.team_number) ?? null} thresholds={aceThresholds} />
+        width: 100,
+        sortValue: (r) => r.event?.ace ?? null,
+        render: (r) => (
+          <MetricCell value={r.event?.ace ?? null} thresholds={metricThresholds.ace} />
         ),
+      },
+      {
+        key: "seasonAce",
+        header: "Season ACE",
+        width: 110,
+        sortValue: (r) => r.season?.ace ?? null,
+        render: (r) => (
+          <MetricCell value={r.season?.ace ?? null} thresholds={seasonThresholds.ace} />
+        ),
+      },
+      {
+        key: "auto",
+        header: "Auto",
+        width: 80,
+        sortValue: (r) => r.event?.auto_raw ?? null,
+        render: (r) => (
+          <MetricCell value={r.event?.auto_raw ?? null} thresholds={metricThresholds.auto} />
+        ),
+      },
+      {
+        key: "teleop",
+        header: "Teleop",
+        width: 80,
+        sortValue: (r) => r.event?.teleop_raw ?? null,
+        render: (r) => (
+          <MetricCell value={r.event?.teleop_raw ?? null} thresholds={metricThresholds.teleop} />
+        ),
+      },
+      {
+        key: "endgame",
+        header: "Endgame",
+        width: 90,
+        sortValue: (r) => r.event?.endgame_raw ?? null,
+        render: (r) => (
+          <MetricCell value={r.event?.endgame_raw ?? null} thresholds={metricThresholds.endgame} />
+        ),
+      },
+      {
+        key: "confidence",
+        header: "Confidence",
+        width: 110,
+        sortValue: (r) => r.event?.confidence ?? null,
+        render: (r) => <ConfidenceCell value={r.event?.confidence ?? null} median={confMedian} />,
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [perfByTeam, aceThresholds, year, searchIdx],
+    [
+      aceRankByTeam,
+      metricThresholds,
+      seasonThresholds,
+      confMedian,
+      year,
+      searchIdx,
+    ],
   );
 
   const rankingColumns = useMemo<Column<TeamRankingInfo>[]>(
@@ -955,77 +1048,82 @@ export function Event() {
   if (eventQuery.isLoading) return <LoadingState label={`Loading ${eventKey}...`} />;
   if (eventQuery.error) return <ErrorState error={eventQuery.error} />;
 
-  const stream = event
-    ? webcastLink({ type: event.webcast_type, channel: event.webcast_channel })
-    : null;
   const website =
     event?.website && /^https?:\/\//i.test(event.website.trim()) ? event.website.trim() : null;
 
   return (
     <Stack gap="lg" py="md">
-      <Group gap="md" align="stretch" wrap="nowrap">
-        {year ? (
-          <Box style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-            <img
-              src={gameLogo(year)}
-              alt=""
-              style={{
-                height: "100%",
-                width: "auto",
-                maxHeight: 110,
-                objectFit: "contain",
-                display: "block",
-              }}
-              onError={(e) => (e.currentTarget.style.display = "none")}
-            />
-          </Box>
-        ) : null}
-        <Stack gap={4} style={{ minWidth: 0, flex: 1 }}>
-        <Group gap="xs" wrap="nowrap" justify="space-between" align="flex-start">
-          <Title order={1}>{event?.event_data.name ?? eventKey}</Title>
-          <FavoriteButton itemType="event" itemKey={eventKey} />
-        </Group>
-        <Group gap="xs">
-          <Text c="dimmed">{eventKey}</Text>
-          {event ? (
-            <>
-              <Text c="dimmed">
-                {locationString(
-                  event.location_info.city,
-                  event.location_info.state_prov,
-                  event.location_info.country,
-                )}
-              </Text>
-              {eventWeekLabel(event.week) ? (
-                <Badge variant="light">{eventWeekLabel(event.week)}</Badge>
-              ) : null}
-              <Badge variant="light" color="gray">
-                {eventTypeLabel(event.event_data.event_type)}
-              </Badge>
-            </>
-          ) : null}
-        </Group>
-        {event ? (
-          <Text size="sm" c="dimmed">
-            {formatDateRange(event.event_data.start_date, event.event_data.end_date)}
-          </Text>
-        ) : null}
-        {stream || website ? (
-          <Group gap="xs" mt={4} wrap="wrap">
-            {stream ? (
-              <Button
-                component="a"
-                href={stream.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                size="compact-sm"
-                variant="filled"
-                color="red"
-                leftSection={<IconBroadcast size={14} />}
-              >
-                {stream.label}
-              </Button>
+      <Card
+        padding="md"
+        radius="lg"
+        withBorder
+        style={{
+          background: bannerStyle.background,
+          borderColor: bannerStyle.borderColor,
+          overflow: "hidden",
+        }}
+      >
+        <Stack gap="md">
+          <Group align="flex-start" wrap="wrap" gap="md">
+            {year ? (
+              <Box style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+                <img
+                  src={gameLogo(year)}
+                  alt=""
+                  style={{
+                    width: "auto",
+                    maxHeight: 64,
+                    objectFit: "contain",
+                    display: "block",
+                  }}
+                  className="event-banner-logo"
+                  onError={(e) => (e.currentTarget.style.display = "none")}
+                />
+              </Box>
             ) : null}
+            <Stack gap={6} style={{ minWidth: 0, flex: 1 }}>
+              <Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">
+                <Title order={1} fz={{ base: "h2", sm: "h1" }} style={{ lineHeight: 1.15, flex: 1, minWidth: 0 }}>
+                  {event?.event_data.name ?? eventKey}
+                </Title>
+                <Box style={{ flexShrink: 0 }}>
+                  <FavoriteWithCount itemType="event" itemKey={eventKey} size={22} />
+                </Box>
+              </Group>
+              <Group gap="xs" wrap="wrap">
+                <Text c="dimmed" size="sm">
+                  {eventKey}
+                </Text>
+                {event ? (
+                  <>
+                    <Text c="dimmed" size="sm">
+                      {locationString(
+                        event.location_info.city,
+                        event.location_info.state_prov,
+                        event.location_info.country,
+                      )}
+                    </Text>
+                    {eventWeekLabel(event.week) ? (
+                      <Badge variant="light">{eventWeekLabel(event.week)}</Badge>
+                    ) : null}
+                    <Badge variant="light" color="gray">
+                      {eventTypeLabel(event.event_data.event_type)}
+                    </Badge>
+                  </>
+                ) : null}
+              </Group>
+              {event ? (
+                <Text size="sm" c="dimmed">
+                  {formatDateRange(event.event_data.start_date, event.event_data.end_date)}
+                </Text>
+              ) : null}
+            </Stack>
+          </Group>
+          <Group gap="xs" wrap="wrap" align="center">
+            <WebcastButton
+              webcastType={event?.webcast_type}
+              webcastChannel={event?.webcast_channel}
+            />
             {website ? (
               <Button
                 component="a"
@@ -1036,13 +1134,13 @@ export function Event() {
                 variant="light"
                 leftSection={<IconExternalLink size={14} />}
               >
-                Event website
+                Website
               </Button>
             ) : null}
+            <EventExternalLinks eventKey={eventKey} year={year} />
           </Group>
-        ) : null}
         </Stack>
-      </Group>
+      </Card>
 
       <Tabs value={tab} onChange={(val) => setSearchParams(val ? { tab: val } : {})} keepMounted={false}>
         <Tabs.List>
@@ -1055,20 +1153,27 @@ export function Event() {
         </Tabs.List>
 
         <Tabs.Panel value="teams" pt="md">
-          {teamsQuery.isLoading ? (
+          {teamsQuery.isLoading || perfsQuery.isLoading ? (
             <LoadingState />
-          ) : sortedTeams.length === 0 ? (
+          ) : eventTeamRows.length === 0 ? (
             <EmptyState>No teams listed for this event yet.</EmptyState>
           ) : (
-            <DataTable
-              data={sortedTeams}
-              columns={teamColumns}
-              getRowKey={(t) => t.team_number}
-              initialSort={{ key: "team", dir: "asc" }}
-              minWidth={560}
-              defaultPageSize={50}
-              exportFileName={`${eventKey}-teams`}
-            />
+            <Stack gap="sm">
+              <Text size="sm" c="dimmed">
+                Sorted by event ACE. Component columns are from this event; season ACE is the
+                team&apos;s full-year total.
+              </Text>
+              <AceLegend />
+              <DataTable
+                data={eventTeamRows}
+                columns={eventTeamColumns}
+                getRowKey={(t) => t.team_number}
+                initialSort={{ key: "eventAce", dir: "desc" }}
+                minWidth={980}
+                defaultPageSize={50}
+                exportFileName={`${eventKey}-teams`}
+              />
+            </Stack>
           )}
         </Tabs.Panel>
 
@@ -1085,14 +1190,14 @@ export function Event() {
               />
               <Text size="xs" c="dimmed">
                 {metricsMode === "event"
-                  ? "EPA earned at this event only."
-                  : `Full ${year ?? ""} season EPA for these teams.`}
+                  ? "ACE earned at this event only."
+                  : `Full ${year ?? ""} season ACE for these teams.`}
               </Text>
             </Group>
             {(metricsMode === "event" ? perfsQuery.isLoading : seasonQuery.isLoading) ? (
               <LoadingState />
             ) : metricRows.length === 0 ? (
-              <EmptyState>No EPA metrics available for this event yet.</EmptyState>
+              <EmptyState>No ACE metrics available for this event yet.</EmptyState>
             ) : (
               <>
                 <AceLegend />

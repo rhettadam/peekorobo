@@ -5,8 +5,11 @@ import os
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", "data", ".env"))
 
-DB_URL = os.environ["DB_URL"]
+DB_URL = os.environ.get("DB_URL") or os.environ.get("DATABASE_URL")
+if not DB_URL:
+    raise RuntimeError("DB_URL or DATABASE_URL must be set in the environment.")
 if DB_URL.startswith("postgres://"):
     DB_URL = DB_URL.replace("postgres://", "postgresql://", 1)
 

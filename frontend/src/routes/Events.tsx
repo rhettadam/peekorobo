@@ -22,6 +22,7 @@ import { DataTable, type Column } from "../components/DataTable";
 import { MetricCell } from "../components/MetricCell";
 import { AceLegend } from "../components/AceLegend";
 import { EventFigures, type InsightRow } from "../components/EventFigures";
+import { WebcastButton, WebcastPill } from "../components/WebcastControl";
 import { gameLogo } from "../lib/assets";
 import { availableYears, CURRENT_YEAR } from "../lib/constants";
 import { computePercentiles } from "../lib/epa";
@@ -56,7 +57,7 @@ function EventCard({ event }: { event: EventData }) {
         <Text size="sm" c="dimmed">
           {formatDateRange(event.event_data.start_date, event.event_data.end_date)}
         </Text>
-        <Group gap={6} mt="auto">
+        <Group gap={6} mt="auto" wrap="wrap">
           {eventWeekLabel(event.week) ? (
             <Badge variant="light" size="sm">
               {eventWeekLabel(event.week)}
@@ -65,6 +66,11 @@ function EventCard({ event }: { event: EventData }) {
           <Badge variant="light" color="gray" size="sm">
             {eventTypeLabel(event.event_data.event_type)}
           </Badge>
+          <WebcastButton
+            webcastType={event.webcast_type}
+            webcastChannel={event.webcast_channel}
+            stopPropagation
+          />
         </Group>
       </Stack>
     </Card>
@@ -116,6 +122,20 @@ const EVENT_LIST_COLUMNS: Column<EventData>[] = [
     header: "Type",
     sortValue: (e) => eventTypeLabel(e.event_data.event_type),
     render: (e) => eventTypeLabel(e.event_data.event_type),
+  },
+  {
+    key: "webcast",
+    header: "Stream",
+    width: 100,
+    sortValue: (e) => e.webcast_type ?? "",
+    render: (e) =>
+      e.webcast_channel ? (
+        <WebcastPill webcastType={e.webcast_type} webcastChannel={e.webcast_channel} />
+      ) : (
+        <Text size="sm" c="dimmed">
+          -
+        </Text>
+      ),
   },
   {
     key: "dates",

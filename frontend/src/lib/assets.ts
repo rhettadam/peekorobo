@@ -44,7 +44,6 @@ export const BRAND = {
   favicon: asset("favicon.ico"),
   frc: asset("frc.png"),
   tba: asset("tba.png"),
-  statbotics: asset("statbotics.png"),
   github: asset("github.png"),
   trophy: asset("trophy.png"),
   pin: asset("pin.png"),

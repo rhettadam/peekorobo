@@ -15,6 +15,17 @@ function normalizeType(type: string): string {
   return type.trim().toLowerCase();
 }
 
+export function webcastButtonColor(provider: string): string {
+  switch (provider) {
+    case "twitch":
+      return "violet";
+    case "youtube":
+      return "red";
+    default:
+      return "gray";
+  }
+}
+
 /**
  * Map TBA webcast fields to an external stream URL.
  * Only the first stored webcast is available (pipeline saves webcasts[0]).

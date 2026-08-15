@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Badge, Combobox, Group, Text, TextInput, useCombobox } from "@mantine/core";
+import { Combobox, Group, Text, TextInput, useCombobox } from "@mantine/core";
 import { IconCalendarEvent, IconSearch } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 import { useSearchIndex } from "../api/queries";
@@ -64,11 +64,9 @@ export function SearchBar({ onNavigate, size }: SearchBarProps) {
             {s.type === "team" ? `${s.teamNumber} | ${s.nickname}` : s.name}
           </Text>
         </Group>
-        {s.type === "team" ? (
-          <Badge size="xs" variant="light" color="gray">Team</Badge>
-        ) : (
+        {s.type === "event" ? (
           <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>{s.eventKey}</Text>
-        )}
+        ) : null}
       </Group>
     </Combobox.Option>
   ));

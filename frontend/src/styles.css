@@ -178,6 +178,14 @@ a {
 .peeko-history-banners-mobile {
   display: block;
 }
+.event-banner-logo {
+  max-height: 64px;
+}
+@media (min-width: 48em) {
+  .event-banner-logo {
+    max-height: 110px;
+  }
+}
 @media (min-width: 1100px) {
   .peeko-history-layout {
     grid-template-columns: 140px minmax(0, 1fr) 140px;

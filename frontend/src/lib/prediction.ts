@@ -93,6 +93,26 @@ export function predictionAccuracy(matches: MatchResponse[]): {
   return { correct, total, pct: total ? (correct / total) * 100 : null };
 }
 
+/**
+ * Mean absolute error of predicted red/blue scores vs actual, averaged per alliance
+ * per match. Uses stored predicted scores when present, else ACE-sum fallback.
+ */
+export function predictionScoreMae(
+  matches: MatchResponse[],
+  aceByTeam?: Map<number, number | null | undefined>,
+): { mae: number | null; count: number } {
+  let sum = 0;
+  let count = 0;
+  for (const m of matches) {
+    if (!isPlayed(m)) continue;
+    const pred = predictedMatchScores(m, aceByTeam);
+    if (!pred) continue;
+    sum += (Math.abs(pred.red - m.red_score) + Math.abs(pred.blue - m.blue_score)) / 2;
+    count += 1;
+  }
+  return { mae: count ? sum / count : null, count };
+}
+
 export interface MatchInsights {
   numMatches: number;
   avgScore: number | null;

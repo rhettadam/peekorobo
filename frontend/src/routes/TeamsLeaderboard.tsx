@@ -708,7 +708,7 @@ export function TeamsLeaderboard() {
                 gap: 8,
               }}
             >
-              {filtered.slice(0, 600).map((r) => (
+              {filtered.map((r) => (
                 <Link
                   key={r.teamNumber}
                   to={`/team/${r.teamNumber}/${year}`}
@@ -739,11 +739,6 @@ export function TeamsLeaderboard() {
                 </Link>
               ))}
             </div>
-            {filtered.length > 600 ? (
-              <Text size="xs" c="dimmed" ta="center">
-                Showing first 600 — narrow with the filter to see more.
-              </Text>
-            ) : null}
           </Stack>
         </Tabs.Panel>
 
