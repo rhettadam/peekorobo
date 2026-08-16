@@ -53,6 +53,7 @@ env:
   PRED_AGGREGATION: sum
   PRED_PROB_MIN: "0.05"
   PRED_PROB_MAX: "0.95"
+  PG_POOL_MAXCONN: "4"
   # Intentional: Actions writes to Neon. Local recomputes still need this unset
   # (or use data/.env.local) so day-to-day work cannot hammer prod.
   ACE_ALLOW_PROD_WRITE: "1"
@@ -90,7 +91,7 @@ jobs:
       github.event.schedule == '0 7 * 5-12 *' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode != 'live')
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

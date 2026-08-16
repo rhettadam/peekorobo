@@ -21,7 +21,7 @@ import traceback
 
 from yearmodels import *
 from active_events import get_active_event_keys
-from ace_attribution import Method, simulate_event, TeamPhaseState
+from ace_attribution import Method, simulate_event, simulate_event_pre_match_snapshots, TeamPhaseState
 from prediction import (
     AceParams,
     PredictionConfig,
@@ -121,7 +121,10 @@ def _release_pipeline_lock(conn) -> None:
 
 # Global match cache to avoid redundant API calls
 match_cache = {}
-# event_key -> {team_key: event_epa dict} for match-centric residual attribution
+# match_key -> team_number -> pre-match rating (filled during EPA precompute).
+_pre_match_ratings_by_match: Dict[str, Dict[int, float]] = {}
+# Team phase priors after EPA precompute (for tail walk-forward without replay).
+_carry_priors_snapshot: Dict[str, Tuple[float, float, float]] = {}
 _event_epa_cache: Dict[str, Dict[str, dict]] = {}
 _event_epa_lock = threading.Lock()
 
@@ -1840,6 +1843,8 @@ def _fetch_and_store_team_data_impl(
     # Fetch and store team data, only updating what's changed
     global match_cache
     match_cache.clear()  # Clear cache for new year
+    _pre_match_ratings_by_match.clear()
+    _carry_priors_snapshot.clear()
     with _event_epa_lock:
         _event_epa_cache.clear()
     # Clear per-run memoization caches (mirrors match_cache) so a re-run in the
@@ -2173,28 +2178,44 @@ def fetch_tba_matches_by_event(event_keys: List[str], *, max_workers: int = 10) 
     return out
 
 
-def _matches_by_event_for_predictions(year: int, data) -> Dict[str, List[dict]]:
-    """Resolve TBA match payloads for pre_match scope (cache first, else fetch)."""
-    event_keys = sorted(data.event_order.keys())
-    if match_cache:
-        cached = {ek: match_cache[ek] for ek in event_keys if ek in match_cache and match_cache[ek]}
-        if cached:
-            missing = [ek for ek in event_keys if ek not in cached]
-            if missing:
-                print(
-                    f"Match predictions {year}: fetching TBA matches for "
-                    f"{len(missing)} event(s) not in match_cache",
-                    flush=True,
-                )
-                cached.update(fetch_tba_matches_by_event(missing))
-            return cached
+def _events_needing_pre_match_sim(data) -> set[str]:
+    """Events with at least one DB match lacking a precomputed pre-match snapshot."""
+    need: set[str] = set()
+    for row in data.matches:
+        if row.match_key not in _pre_match_ratings_by_match:
+            need.add(row.event_key)
+    return need
 
-    print(
-        f"Match predictions {year}: match_cache empty — fetching TBA matches "
-        f"for {len(event_keys)} event(s)",
-        flush=True,
-    )
-    return fetch_tba_matches_by_event(event_keys)
+
+def _matches_by_event_for_predictions(year: int, data) -> Dict[str, List[dict]]:
+    """TBA payloads only for events that still need walk-forward (match_cache first)."""
+    need_events = _events_needing_pre_match_sim(data)
+    if not need_events:
+        return {}
+
+    result: Dict[str, List[dict]] = {}
+    fetch_list: List[str] = []
+    for ek in sorted(need_events, key=lambda k: data.event_order.get(k, ("", k))):
+        cached = match_cache.get(ek)
+        if cached:
+            result[ek] = cached
+        else:
+            fetch_list.append(ek)
+
+    if fetch_list:
+        print(
+            f"Match predictions {year}: TBA fetch for {len(fetch_list)} event(s) "
+            f"({len(result)} from match_cache, 0 new API calls for precomputed events)",
+            flush=True,
+        )
+        result.update(fetch_tba_matches_by_event(fetch_list))
+    elif result:
+        print(
+            f"Match predictions {year}: using match_cache for {len(result)} event(s), "
+            f"no TBA fetch",
+            flush=True,
+        )
+    return result
 
 
 def calculate_and_store_match_predictions(year: int):
@@ -2221,27 +2242,47 @@ def calculate_and_store_match_predictions(year: int):
         return
 
     if config.rating_scope == "pre_match":
-        matches_by_event = _matches_by_event_for_predictions(year, data)
-        if not matches_by_event:
-            print(f"Match predictions {year}: no TBA match data available", flush=True)
-            return
-        for ek, matches in matches_by_event.items():
-            if ek not in match_cache:
-                match_cache[ek] = matches
-        preload_confidence_lookups_from_match_cache(year)
+        db_match_keys = {row.match_key for row in data.matches}
+        n_precomputed = len(_pre_match_ratings_by_match)
+        all_precomputed = db_match_keys.issubset(_pre_match_ratings_by_match.keys())
+
+        if all_precomputed:
+            print(
+                f"Match predictions {year}: {len(data.matches)} match(es) — "
+                f"all precomputed during EPA, no TBA/simulation",
+                flush=True,
+            )
+            matches_by_event = {}
+        else:
+            missing = len(db_match_keys - _pre_match_ratings_by_match.keys())
+            matches_by_event = _matches_by_event_for_predictions(year, data)
+            if not matches_by_event and missing:
+                print(
+                    f"Match predictions {year}: no TBA payloads for "
+                    f"{missing} match(es) still missing snapshots",
+                    flush=True,
+                )
+            for ek, matches in matches_by_event.items():
+                if ek not in match_cache:
+                    match_cache[ek] = matches
+            if not matches_by_event and missing:
+                return
+            print(
+                f"Match predictions {year}: {len(data.matches)} match(es), "
+                f"{n_precomputed} precomputed snapshot(s), "
+                f"{missing} match(es) still need walk-forward",
+                flush=True,
+            )
+
         ace_params = AceParams.from_env()
-        n_events = len(matches_by_event)
-        print(
-            f"Match predictions {year}: walk-forward ACE for {n_events} event(s), "
-            f"{len(data.matches)} match(es) in DB...",
-            flush=True,
-        )
         predictions = predict_all_matches_walk_forward(
             data,
             matches_by_event,
             config,
             ace_params,
             finalize_pre_match_rating,
+            precomputed_ratings=_pre_match_ratings_by_match,
+            initial_priors=_carry_priors_snapshot if _ACE_CARRY_PRIOR else None,
         )
     else:
         predictions = predict_all_matches_db(data, config)
@@ -2482,6 +2523,21 @@ def precompute_season_event_epas(year: int) -> None:
     priors: Dict[str, Tuple[float, float, float]] = {}
     computed = 0
     total = len(event_keys)
+    pred_config = PredictionConfig.from_env()
+    use_pre_match = pred_config.rating_scope == "pre_match"
+    sim_kwargs = dict(
+        year=int(year),
+        method=_ACE_METHOD,
+        k_base=_ACE_K_BASE,
+        shrink=_ACE_SHRINK,
+        spike_damp=_ACE_SPIKE_DAMP,
+        prior_means=priors if _ACE_CARRY_PRIOR else None,
+        seed_priors=_ACE_CARRY_PRIOR,
+        k_up=_ACE_K_UP,
+        k_down=_ACE_K_DOWN,
+        partner_cap=_ACE_PARTNER_CAP,
+    )
+
     for i, ek in enumerate(event_keys, 1):
         matches = match_cache.get(ek) or []
         if not matches:
@@ -2510,19 +2566,25 @@ def precompute_season_event_epas(year: int) -> None:
                             )
                 continue
 
-        states = simulate_event(
-            matches,
-            int(year),
-            method=_ACE_METHOD,
-            k_base=_ACE_K_BASE,
-            shrink=_ACE_SHRINK,
-            spike_damp=_ACE_SPIKE_DAMP,
-            prior_means=priors if _ACE_CARRY_PRIOR else None,
-            seed_priors=_ACE_CARRY_PRIOR,
-            k_up=_ACE_K_UP,
-            k_down=_ACE_K_DOWN,
-            partner_cap=_ACE_PARTNER_CAP,
-        )
+        if use_pre_match:
+            states, snapshots = simulate_event_pre_match_snapshots(matches, **sim_kwargs)
+            rating_field = pred_config.rating_field
+            for match_key, team_states in snapshots.items():
+                row: Dict[int, float] = {}
+                for team_key, st in team_states.items():
+                    digits = "".join(ch for ch in str(team_key) if ch.isdigit())
+                    tn = int(digits) if digits else 0
+                    if tn <= 0:
+                        continue
+                    if not st.initialized and st.match_count <= 0:
+                        continue
+                    row[tn] = finalize_pre_match_rating(
+                        st, tn, int(year), rating_field
+                    )
+                if row:
+                    _pre_match_ratings_by_match[match_key] = row
+        else:
+            states = simulate_event(matches, **sim_kwargs)
         out: Dict[str, dict] = {}
         for key, st in states.items():
             digits = "".join(ch for ch in str(key) if ch.isdigit())
@@ -2546,11 +2608,21 @@ def precompute_season_event_epas(year: int) -> None:
         if i == 1 or i % 25 == 0 or i == total:
             print(f"  event EPA precompute {i}/{total} ({ek})", flush=True)
 
+    if _ACE_CARRY_PRIOR:
+        _carry_priors_snapshot.clear()
+        _carry_priors_snapshot.update(priors)
+
     print(
         f"Precomputed event EPA for {computed} event(s) "
         f"(method={_ACE_METHOD}, shrink={_ACE_SHRINK}, k={_ACE_K_BASE}, "
         f"k_up={_ACE_K_UP}, k_down={_ACE_K_DOWN}, partner_cap={_ACE_PARTNER_CAP}, "
-        f"spike_damp={_ACE_SPIKE_DAMP}, carry_prior={int(_ACE_CARRY_PRIOR)})",
+        f"spike_damp={_ACE_SPIKE_DAMP}, carry_prior={int(_ACE_CARRY_PRIOR)}"
+        + (
+            f", pre_match_snapshots={len(_pre_match_ratings_by_match)}"
+            if use_pre_match
+            else ""
+        )
+        + ")",
         flush=True,
     )
 

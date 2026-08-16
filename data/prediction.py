@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Literal, Optional, Tuple
 
-from ace_attribution import Method, TeamPhaseState, simulate_event_pre_match_snapshots
+from ace_attribution import Method, TeamPhaseState, simulate_event, simulate_event_pre_match_snapshots
 
 RatingField = Literal["ace", "raw"]
 RatingScope = Literal[
@@ -469,16 +469,22 @@ def build_pre_match_ratings_by_match(
     ace_params: AceParams,
     finalize_rating: Callable[[TeamPhaseState, int, int, str], float],
     rating_field: RatingField,
+    precomputed: Optional[Dict[str, Dict[int, float]]] = None,
+    initial_priors: Optional[Dict[str, Tuple[float, float, float]]] = None,
 ) -> Dict[str, Dict[int, float]]:
     """Walk-forward ACE snapshots keyed by match_key then team_number."""
-    priors: Dict[str, Tuple[float, float, float]] = {}
-    ratings_by_match: Dict[str, Dict[int, float]] = {}
+    if precomputed and not matches_by_event:
+        return dict(precomputed)
+
+    priors: Dict[str, Tuple[float, float, float]] = dict(initial_priors or {})
+    ratings_by_match: Dict[str, Dict[int, float]] = dict(precomputed or {})
 
     event_keys = sorted(
         matches_by_event.keys(),
         key=lambda ek: event_order.get(ek, ("", ek)),
     )
     total = len(event_keys)
+    to_simulate = 0
 
     sim_kwargs = dict(
         year=year,
@@ -497,9 +503,20 @@ def build_pre_match_ratings_by_match(
         matches = matches_by_event.get(event_key) or []
         if not matches:
             continue
-        if i == 1 or i % 25 == 0 or i == total:
+        match_keys = {m.get("key") for m in matches if m.get("key")}
+        fully_cached = bool(match_keys) and all(mk in ratings_by_match for mk in match_keys)
+
+        if fully_cached:
+            if ace_params.carry_prior and initial_priors is None:
+                states = simulate_event(matches, **sim_kwargs)
+                _update_carry_priors(priors, states, ace_params.prior_blend)
+                sim_kwargs["prior_means"] = priors
+            continue
+
+        to_simulate += 1
+        if to_simulate == 1 or to_simulate % 10 == 0:
             print(
-                f"  walk-forward ACE {i}/{total} ({event_key})",
+                f"  walk-forward ACE {to_simulate} remaining ({event_key}, event {i}/{total})",
                 flush=True,
             )
         final_states, snapshots = simulate_event_pre_match_snapshots(matches, **sim_kwargs)
@@ -516,6 +533,7 @@ def build_pre_match_ratings_by_match(
                 )
         if ace_params.carry_prior:
             _update_carry_priors(priors, final_states, ace_params.prior_blend)
+            sim_kwargs["prior_means"] = priors
 
     return ratings_by_match
 
@@ -564,10 +582,18 @@ def predict_all_matches_walk_forward(
     config: PredictionConfig,
     ace_params: AceParams,
     finalize_rating: Callable[[TeamPhaseState, int, int, str], float],
+    precomputed_ratings: Optional[Dict[str, Dict[int, float]]] = None,
+    initial_priors: Optional[Dict[str, Tuple[float, float, float]]] = None,
 ) -> List[MatchPrediction]:
     """Predict every match using walk-forward pre-match ACE snapshots."""
     strengths = compute_walk_forward_strengths(
-        data, matches_by_event, config, ace_params, finalize_rating
+        data,
+        matches_by_event,
+        config,
+        ace_params,
+        finalize_rating,
+        precomputed_ratings=precomputed_ratings,
+        initial_priors=initial_priors,
     )
     return predictions_from_strengths(data, strengths, config)
 
@@ -578,16 +604,25 @@ def compute_walk_forward_strengths(
     config: PredictionConfig,
     ace_params: AceParams,
     finalize_rating: Callable[[TeamPhaseState, int, int, str], float],
+    precomputed_ratings: Optional[Dict[str, Dict[int, float]]] = None,
+    initial_priors: Optional[Dict[str, Tuple[float, float, float]]] = None,
 ) -> Dict[str, Tuple[float, float]]:
     """Pre-match alliance strengths per match_key (reusable for prob tuning)."""
-    ratings_by_match = build_pre_match_ratings_by_match(
-        data.year,
-        matches_by_event,
-        data.event_order,
-        ace_params,
-        finalize_rating,
-        config.rating_field,
-    )
+    pre = dict(precomputed_ratings or {})
+    db_keys = {row.match_key for row in data.matches}
+    if db_keys.issubset(pre.keys()):
+        ratings_by_match = pre
+    else:
+        ratings_by_match = build_pre_match_ratings_by_match(
+            data.year,
+            matches_by_event,
+            data.event_order,
+            ace_params,
+            finalize_rating,
+            config.rating_field,
+            precomputed=precomputed_ratings,
+            initial_priors=initial_priors,
+        )
     strengths: Dict[str, Tuple[float, float]] = {}
     for row in data.matches:
         team_ratings = ratings_by_match.get(row.match_key, {})
