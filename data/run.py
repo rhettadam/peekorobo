@@ -340,7 +340,7 @@ def get_pg_connection():
 # ---------------------------------------------------------------------------
 # Connection pooling for the hot per-team / per-event helpers.
 #
-# The team loop fans out across a 10-worker ThreadPoolExecutor and each hot
+# The team loop fans out across a ThreadPoolExecutor (_PIPELINE_WORKERS) and each hot
 # helper previously opened + committed + closed a brand-new Postgres connection
 # on every call (~5*E + 4 fresh connections per team, across thousands of teams
 # every 6h). That connection churn is the dominant cost and a Heroku
@@ -354,13 +354,23 @@ def get_pg_connection():
 # ---------------------------------------------------------------------------
 
 # Worker threads must not exceed the pool size or every concurrent DB read gets
-# "connection pool exhausted". Heroku roles are ~20 conn; 1 lock + pool + insert ≈ 8.
+# "connection pool exhausted". Heroku roles are ~20 conn; 1 lock + pool ≈ 7.
+# Team EPA writes run inside worker threads (not on the main result loop) so all
+# pool borrowers are workers and can match maxconn one-for-one.
 _DB_POOL_MAXCONN = int(os.environ.get("PG_POOL_MAXCONN", "6"))
 _PIPELINE_WORKERS = int(
     os.environ.get("PIPELINE_WORKERS", str(min(10, max(1, _DB_POOL_MAXCONN))))
 )
+if _PIPELINE_WORKERS > _DB_POOL_MAXCONN:
+    print(
+        f"[db] PIPELINE_WORKERS={_PIPELINE_WORKERS} exceeds PG_POOL_MAXCONN="
+        f"{_DB_POOL_MAXCONN}; clamping workers to {_DB_POOL_MAXCONN}",
+        flush=True,
+    )
+    _PIPELINE_WORKERS = _DB_POOL_MAXCONN
 _db_pool = None
 _db_pool_lock = threading.Lock()
+_db_pool_slots = threading.Semaphore(max(1, _DB_POOL_MAXCONN))
 
 
 def _connect_kwargs_from_database_url():
@@ -420,10 +430,43 @@ def _get_db_pool():
     return _db_pool
 
 
+def _return_pooled_connection(pool, conn, *, broken: bool) -> None:
+    """Return or drop a pooled connection; never swallow putconn bookkeeping errors."""
+    if conn is None:
+        return
+    if broken:
+        try:
+            pool.putconn(conn, close=True)
+        except Exception as e:
+            print(f"[db] putconn(close=True) failed: {e}", flush=True)
+            try:
+                if not conn.closed:
+                    conn.close()
+            except Exception:
+                pass
+        return
+    try:
+        conn.rollback()
+    except Exception:
+        pass
+    try:
+        pool.putconn(conn)
+    except Exception as e:
+        print(f"[db] putconn failed: {e}", flush=True)
+        try:
+            if not conn.closed:
+                conn.close()
+        except Exception:
+            pass
+
+
 @contextmanager
 def _pooled_connection():
     """
     Borrow a connection from the pool and guarantee it is returned exactly once.
+
+    A semaphore caps concurrent borrowers at PG_POOL_MAXCONN so threads queue
+    instead of racing ThreadedConnectionPool.getconn() and getting PoolError.
 
     On success any lingering (read) transaction is rolled back so we never hand
     an "idle in transaction" connection back to the pool; writers commit
@@ -434,28 +477,24 @@ def _pooled_connection():
     cooperates with the @retry decorators on the read helpers.
     """
     pool = _get_db_pool()
-    conn = pool.getconn()
+    acquire_timeout = float(os.environ.get("PG_POOL_ACQUIRE_TIMEOUT", "120"))
+    if not _db_pool_slots.acquire(timeout=acquire_timeout):
+        raise TimeoutError(
+            f"timed out after {acquire_timeout}s waiting for a DB pool slot "
+            f"(maxconn={_DB_POOL_MAXCONN})"
+        )
+    conn = None
     broken = False
     try:
+        conn = pool.getconn()
         yield conn
     except Exception:
         broken = True
         raise
     finally:
-        if broken:
-            try:
-                pool.putconn(conn, close=True)
-            except Exception:
-                pass
-        else:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-            try:
-                pool.putconn(conn)
-            except Exception:
-                pass
+        if conn is not None:
+            _return_pooled_connection(pool, conn, broken=broken)
+        _db_pool_slots.release()
 
 
 def _close_db_pool():
@@ -1899,8 +1938,6 @@ def _fetch_and_store_team_data_impl(
     if shutdown_event.is_set():
         print("Shutdown requested, stopping team data processing...")
         return
-        
-    print(f"\nProcessing year {year} teams...")
 
     # Preload this season's event start dates once (after create_event_db has
     # written the events table) so per-event chronological weighting/sorting are
@@ -1912,6 +1949,12 @@ def _fetch_and_store_team_data_impl(
     # One chronological simulation pass over match_cache (applies K/shrink/spike
     # and optional cross-event priors before per-team aggregation).
     precompute_season_event_epas(year)
+
+    # Event + precompute phases share the pool; recycle it before thousands of
+    # team tasks so a leaked checkout cannot poison the hot loop.
+    _close_db_pool()
+
+    print(f"\nProcessing year {year} teams...")
 
     if active_only and not sample_mode:
         print(f"Total active teams to process: {len(all_teams)}")
@@ -1947,8 +1990,11 @@ def _fetch_and_store_team_data_impl(
         # Check if EPA data has changed
         if not data_has_changed(existing_epa, new_epa_data, "team_epa"):
             return {"team_number": team_number, "updated": False, "reason": "No changes"}
-        
-        return {"team_number": team_number, "updated": True, "data": new_epa_data}
+
+        # Write in the worker so the main result loop never borrows a 7th pool slot
+        # while up to _PIPELINE_WORKERS tasks are still in flight.
+        insert_team_epa(new_epa_data, year)
+        return {"team_number": team_number, "updated": True}
 
     updated_count = 0
     skipped_count = 0
@@ -1959,34 +2005,39 @@ def _fetch_and_store_team_data_impl(
         executor = ThreadPoolExecutor(max_workers=_PIPELINE_WORKERS)
         active_executors.append(executor)
         
-        futures = [executor.submit(fetch_and_compare_team, team) for team in all_teams]
-        
-        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Analyzing team changes"):
+        future_to_team = {
+            executor.submit(fetch_and_compare_team, team): team.get("team_number")
+            for team in all_teams
+        }
+
+        for future in tqdm(
+            concurrent.futures.as_completed(future_to_team),
+            total=len(future_to_team),
+            desc="Analyzing team changes",
+        ):
             if shutdown_event.is_set():
                 print("Shutdown requested, stopping team analysis...")
                 break
-                
+
+            team_number = future_to_team.get(future)
+            team_info = f"Team {team_number}" if team_number is not None else "Unknown team"
+
             try:
                 result = future.result()
                 if result is None:
-                    failed_teams.append("Unknown team (result was None)")
+                    failed_teams.append(f"{team_info} (result was None)")
                 elif result["updated"]:
-                    # Insert updated team EPA data
-                    insert_team_epa(result["data"], year)
                     updated_count += 1
                 else:
                     skipped_count += 1
-                    
+
                 if (updated_count + skipped_count) % 100 == 0:
-                    print(f"Processed {updated_count + skipped_count} teams (updated: {updated_count}, skipped: {skipped_count})...")
-                    
+                    print(
+                        f"Processed {updated_count + skipped_count} teams "
+                        f"(updated: {updated_count}, skipped: {skipped_count})..."
+                    )
+
             except Exception as e:
-                team_info = "Unknown team"
-                try:
-                    if hasattr(future, '_args') and future._args:
-                        team_info = f"Team {future._args[0].get('team_number', 'Unknown')}"
-                except Exception:
-                    pass  # Keep team_info as "Unknown team"
                 failed_teams.append(f"{team_info}: {str(e)}")
                 print(f"Failed to process {team_info}: {e}")
                 continue
