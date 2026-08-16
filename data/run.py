@@ -353,14 +353,12 @@ def get_pg_connection():
 # keep receiving a fresh, self-owned raw connection that they close themselves.
 # ---------------------------------------------------------------------------
 
-# Bounded to the 10 worker threads + a little headroom (the main thread writes
-# results via insert_team_epa while workers read → ~11 concurrent borrowers max).
-# Kept small to respect Heroku's connection limit. minconn == maxconn on purpose:
-# psycopg2's pool only KEEPS up to minconn idle connections on putconn and closes
-# any beyond it, so a smaller minconn would re-introduce per-call churn under the
-# 10-thread fan-out. Equal min/max means returned connections are always retained
-# and reused, with a hard cap of maxconn total open at once.
-_DB_POOL_MAXCONN = int(os.environ.get("PG_POOL_MAXCONN", "4"))
+# Worker threads must not exceed the pool size or every concurrent DB read gets
+# "connection pool exhausted". Heroku roles are ~20 conn; 1 lock + pool + insert ≈ 8.
+_DB_POOL_MAXCONN = int(os.environ.get("PG_POOL_MAXCONN", "6"))
+_PIPELINE_WORKERS = int(
+    os.environ.get("PIPELINE_WORKERS", str(min(10, max(1, _DB_POOL_MAXCONN))))
+)
 _db_pool = None
 _db_pool_lock = threading.Lock()
 
@@ -1652,7 +1650,7 @@ def create_event_db(year, only_event_keys=None):
     all_results = []
     executor = None
     try:
-        executor = ThreadPoolExecutor(max_workers=10)
+        executor = ThreadPoolExecutor(max_workers=_PIPELINE_WORKERS)
         active_executors.append(executor)
         
         futures = [executor.submit(fetch_and_compare, ev) for ev in events_to_process]
@@ -1958,7 +1956,7 @@ def _fetch_and_store_team_data_impl(
     executor = None
     
     try:
-        executor = ThreadPoolExecutor(max_workers=10)
+        executor = ThreadPoolExecutor(max_workers=_PIPELINE_WORKERS)
         active_executors.append(executor)
         
         futures = [executor.submit(fetch_and_compare_team, team) for team in all_teams]
@@ -3091,6 +3089,10 @@ if __name__ == "__main__":
             f"k_up={_ACE_K_UP}, k_down={_ACE_K_DOWN}, partner_cap={_ACE_PARTNER_CAP}, "
             f"spike_damp={_ACE_SPIKE_DAMP}, carry_prior={int(_ACE_CARRY_PRIOR)}, "
             f"prior_blend={_ACE_PRIOR_BLEND}, confidence_ceiling={CONFIDENCE_CEILING}",
+            flush=True,
+        )
+        print(
+            f"DB pool: maxconn={_DB_POOL_MAXCONN}, pipeline_workers={_PIPELINE_WORKERS}",
             flush=True,
         )
 
