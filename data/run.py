@@ -22,11 +22,32 @@ import traceback
 from yearmodels import *
 from active_events import get_active_event_keys
 from ace_attribution import Method, simulate_event, TeamPhaseState
-from prediction import PredictionConfig, load_prediction_data_from_db, predict_all_matches_db
+from prediction import (
+    AceParams,
+    PredictionConfig,
+    apply_match_predictions_to_db,
+    load_prediction_data_from_db,
+    predict_all_matches_db,
+    predict_all_matches_walk_forward,
+)
 
 start_time = time.time()
 
-load_dotenv()
+# Load root .env and data/.env.local before module-level ACE_* reads.
+_data_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(os.path.dirname(_data_dir), ".env"))
+_env_local = os.path.join(_data_dir, ".env.local")
+load_dotenv(_env_local, override=True)
+if os.path.isfile(_env_local):
+    with open(_env_local, encoding="utf-8") as _ef:
+        for _line in _ef:
+            _line = _line.strip()
+            if not _line or _line.startswith("#") or "=" not in _line:
+                continue
+            _k, _v = _line.split("=", 1)
+            _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
+            if _k:
+                os.environ[_k] = _v
 
 # Verbose per-team EPA trace logs; off in production to reduce log I/O and noise.
 _EPA_DEBUG = os.environ.get("EPA_DEBUG", "").lower() in ("1", "true", "yes")
@@ -37,24 +58,21 @@ _ACE_METHOD: Method = os.environ.get("ACE_METHOD", "residual_shrink").strip().lo
 if _ACE_METHOD not in ("residual", "equal_split", "residual_shrink"):
     _ACE_METHOD = "residual_shrink"
 
-# Blend toward equal share when using residual_shrink (0 = pure residual).
-_ACE_SHRINK = float(os.environ.get("ACE_SHRINK", "0.05"))
+# Production defaults match .github/workflows/pipeline.yml (data/tune_results.json pooled).
+_ACE_SHRINK = float(os.environ.get("ACE_SHRINK", "0.1"))
 
 # EMA learning rate and spike dampening (1.0 = no damp).
-_ACE_K_BASE = float(os.environ.get("ACE_K_BASE", "0.4"))
-_ACE_SPIKE_DAMP = float(os.environ.get("ACE_SPIKE_DAMP", "1.0"))
-# Asymmetric EMA multipliers (1.0 = symmetric). Kept for experiments; production
-# defaults stay symmetric after partner-cap became the elite-lift lever.
-_ACE_K_UP = float(os.environ.get("ACE_K_UP", "1.0"))
-_ACE_K_DOWN = float(os.environ.get("ACE_K_DOWN", "1.0"))
+_ACE_K_BASE = float(os.environ.get("ACE_K_BASE", "0.3"))
+_ACE_SPIKE_DAMP = float(os.environ.get("ACE_SPIKE_DAMP", "0.75"))
+_ACE_K_UP = float(os.environ.get("ACE_K_UP", "0.9"))
+_ACE_K_DOWN = float(os.environ.get("ACE_K_DOWN", "0.9"))
 
-# Cap each partner's credited RAW at alpha * (S/n) when forming residual obs.
-# 0 disables. Local #3 experiment uses 1.25; prod Neon unchanged until explicit allow.
-_ACE_PARTNER_CAP = float(os.environ.get("ACE_PARTNER_CAP", "1.25"))
+# Cap each partner's credited RAW at alpha * (S/n) when forming residual obs (0 disables).
+_ACE_PARTNER_CAP = float(os.environ.get("ACE_PARTNER_CAP", "1.5"))
 
 # Cross-event RAW prior: seed each event from season-to-date phase estimates.
 _ACE_CARRY_PRIOR = os.environ.get("ACE_CARRY_PRIOR", "1").strip().lower() in ("1", "true", "yes")
-_ACE_PRIOR_BLEND = float(os.environ.get("ACE_PRIOR_BLEND", "1.0"))
+_ACE_PRIOR_BLEND = float(os.environ.get("ACE_PRIOR_BLEND", "0.75"))
 
 # Logistic scale on normalized ACE margin (pooled 2024-2026 tune: 6.4).
 
@@ -122,7 +140,7 @@ CONFIDENCE_WEIGHTS = {
 # Component-weighted sum is typically ~0.55–0.93. Divide by this ceiling so
 # elite sums (~0.88+) map to ~1.0, strong teams (~0.79) land near ~0.90, and a
 # mid-pack sum (~0.54) lands near ~0.60. No nonlinear high/low cut.
-CONFIDENCE_CEILING = float(os.environ.get("ACE_CONFIDENCE_CEILING", "0.88"))
+CONFIDENCE_CEILING = float(os.environ.get("ACE_CONFIDENCE_CEILING", "0.95"))
 
 # Confidence "event_boost" from number of distinct played events in the season (not chronological).
 EVENT_BOOSTS = {
@@ -339,7 +357,7 @@ def get_pg_connection():
 # any beyond it, so a smaller minconn would re-introduce per-call churn under the
 # 10-thread fan-out. Equal min/max means returned connections are always retained
 # and reused, with a hard cap of maxconn total open at once.
-_DB_POOL_MAXCONN = int(os.environ.get("PG_POOL_MAXCONN", "12"))
+_DB_POOL_MAXCONN = int(os.environ.get("PG_POOL_MAXCONN", "4"))
 _db_pool = None
 _db_pool_lock = threading.Lock()
 
@@ -2131,12 +2149,60 @@ def tba_team_key_is_surrogate(team_key) -> bool:
     return i > 0 and i < len(tok)
 
 
+def fetch_tba_matches_by_event(event_keys: List[str], *, max_workers: int = 10) -> Dict[str, List[dict]]:
+    """Fetch TBA match payloads (with score_breakdown) for walk-forward predictions."""
+    if not event_keys:
+        return {}
+
+    def _fetch_one(event_key: str) -> Tuple[str, List[dict]]:
+        matches = tba_get(f"event/{event_key}/matches")
+        return event_key, matches if isinstance(matches, list) else []
+
+    out: Dict[str, List[dict]] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_fetch_one, ek): ek for ek in event_keys}
+        for future in as_completed(futures):
+            if shutdown_event.is_set():
+                break
+            try:
+                event_key, matches = future.result()
+                out[event_key] = matches
+            except Exception as e:
+                ek = futures[future]
+                print(f"Error fetching TBA matches for {ek}: {e}", flush=True)
+    return out
+
+
+def _matches_by_event_for_predictions(year: int, data) -> Dict[str, List[dict]]:
+    """Resolve TBA match payloads for pre_match scope (cache first, else fetch)."""
+    event_keys = sorted(data.event_order.keys())
+    if match_cache:
+        cached = {ek: match_cache[ek] for ek in event_keys if ek in match_cache and match_cache[ek]}
+        if cached:
+            missing = [ek for ek in event_keys if ek not in cached]
+            if missing:
+                print(
+                    f"Match predictions {year}: fetching TBA matches for "
+                    f"{len(missing)} event(s) not in match_cache",
+                    flush=True,
+                )
+                cached.update(fetch_tba_matches_by_event(missing))
+            return cached
+
+    print(
+        f"Match predictions {year}: match_cache empty — fetching TBA matches "
+        f"for {len(event_keys)} event(s)",
+        flush=True,
+    )
+    return fetch_tba_matches_by_event(event_keys)
+
+
 def calculate_and_store_match_predictions(year: int):
     """
-    DB-only predictions from stored season / event_perf RAW and ACE ratings.
+    Compute match win probabilities and predicted scores.
 
-    Writes ``red_win_prob``, ``blue_win_prob``, and predicted scores to
-    ``event_matches``. Does not call TBA or replay score breakdowns.
+    Legacy scopes read stored ``team_epas`` only. ``pre_match`` replays ACE
+    simulation with TBA match payloads for point-in-time ratings.
     """
     if shutdown_event.is_set():
         return
@@ -2154,78 +2220,45 @@ def calculate_and_store_match_predictions(year: int):
         print(f"Match predictions {year}: no matches in DB", flush=True)
         return
 
-    predictions = predict_all_matches_db(data, config)
-    pred_by_key = {p.match_key: p for p in predictions}
-
-    conn = get_pg_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            """
-            SELECT match_key, red_win_prob, blue_win_prob,
-                   red_predicted_score, blue_predicted_score
-            FROM event_matches
-            WHERE LEFT(event_key, 4) = %s
-            """,
-            (str(year),),
-        )
-        existing = {row[0]: row[1:] for row in cur.fetchall()}
-
-        updates = []
-        skipped_missing = 0
-        skipped_unchanged = 0
-        skipped_bad = 0
-
-        for match_key, pred in pred_by_key.items():
-            if match_key not in existing:
-                skipped_missing += 1
-                continue
-            ex_pr, ex_pb, ex_rs, ex_bs = existing[match_key]
-            if not math.isfinite(pred.p_red) or not math.isfinite(pred.p_blue):
-                skipped_bad += 1
-                continue
-            if (
-                _probs_unchanged(pred.p_red, pred.p_blue, ex_pr, ex_pb)
-                and ex_rs is not None
-                and ex_bs is not None
-                and abs(float(ex_rs) - pred.red_predicted_score) < 1e-6
-                and abs(float(ex_bs) - pred.blue_predicted_score) < 1e-6
-            ):
-                skipped_unchanged += 1
-                continue
-            updates.append(
-                (
-                    pred.p_red,
-                    pred.p_blue,
-                    pred.red_predicted_score,
-                    pred.blue_predicted_score,
-                    match_key,
-                )
-            )
-
-        if updates:
-            cur.executemany(
-                """
-                UPDATE event_matches
-                SET red_win_prob = COALESCE(%s::double precision, red_win_prob),
-                    blue_win_prob = COALESCE(%s::double precision, blue_win_prob),
-                    red_predicted_score = COALESCE(%s::double precision, red_predicted_score),
-                    blue_predicted_score = COALESCE(%s::double precision, blue_predicted_score)
-                WHERE match_key = %s
-                """,
-                updates,
-            )
-        conn.commit()
+    if config.rating_scope == "pre_match":
+        matches_by_event = _matches_by_event_for_predictions(year, data)
+        if not matches_by_event:
+            print(f"Match predictions {year}: no TBA match data available", flush=True)
+            return
+        for ek, matches in matches_by_event.items():
+            if ek not in match_cache:
+                match_cache[ek] = matches
+        preload_confidence_lookups_from_match_cache(year)
+        ace_params = AceParams.from_env()
+        n_events = len(matches_by_event)
         print(
-            f"Match predictions {year}: wrote {len(updates)} of {len(pred_by_key)} computed "
-            f"(scope={config.rating_scope} field={config.rating_field} agg={config.aggregation}) — "
-            f"skipped: {skipped_unchanged} unchanged, {skipped_missing} not in DB, "
-            f"{skipped_bad} non-finite",
+            f"Match predictions {year}: walk-forward ACE for {n_events} event(s), "
+            f"{len(data.matches)} match(es) in DB...",
             flush=True,
         )
+        predictions = predict_all_matches_walk_forward(
+            data,
+            matches_by_event,
+            config,
+            ace_params,
+            finalize_pre_match_rating,
+        )
+    else:
+        predictions = predict_all_matches_db(data, config)
+
+    conn = get_pg_connection()
+    try:
+        stats = apply_match_predictions_to_db(conn, year, predictions)
     finally:
-        cur.close()
         conn.close()
+
+    print(
+        f"Match predictions {year}: wrote {stats['written']} of {stats['computed']} computed "
+        f"(scope={config.rating_scope} field={config.rating_field} agg={config.aggregation}) — "
+        f"skipped: {stats['skipped_unchanged']} unchanged, {stats['skipped_missing']} not in DB, "
+        f"{stats['skipped_bad']} non-finite",
+        flush=True,
+    )
 
 def _empty_event_epa() -> Dict:
     return {
@@ -2306,6 +2339,32 @@ def _finalize_state_to_event_epa(
         "losses": st.losses,
         "ties": st.ties,
     }
+
+
+def finalize_pre_match_rating(
+    st: TeamPhaseState, team_number: int, year: int, rating_field: str = "ace"
+) -> float:
+    """Convert partial walk-forward state to a pre-match rating value.
+
+    Unlike ``_finalize_state_to_event_epa``, allows carry-prior seeds
+    (``initialized`` with ``match_count == 0``) so first-match predictions
+    can use cross-event priors without future within-event results.
+    """
+    if not st.initialized and st.match_count <= 0:
+        return 0.0
+
+    consistency = _consistency_from_contributions(st.contributions)
+    dominance = min(1.0, statistics.mean(st.dominance_scores)) if st.dominance_scores else 0.0
+    played_event_keys = get_team_played_events(team_number, int(year))
+    total_events = len(played_event_keys)
+    event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])
+    raw_confidence, confidence, _record_alignment = calculate_confidence(
+        consistency, dominance, event_boost, team_number, st.wins, st.losses, int(year)
+    )
+    overall = max(0.0, st.raw)
+    if rating_field == "raw":
+        return round(overall, 2)
+    return round(overall * confidence, 2)
 
 
 def preload_confidence_lookups_from_match_cache(year: int) -> None:
@@ -2951,22 +3010,17 @@ def main():
 
 if __name__ == "__main__":
     try:
-        # Prefer data/.env.local over Neon when present (local ACE experiments).
-        _env_local = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.local")
-        if os.path.isfile(_env_local):
-            with open(_env_local, encoding="utf-8") as _ef:
-                for _line in _ef:
-                    _line = _line.strip()
-                    if not _line or _line.startswith("#") or "=" not in _line:
-                        continue
-                    _k, _v = _line.split("=", 1)
-                    _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
-                    if _k:
-                        os.environ[_k] = _v
         from db_target import assert_safe_db_target, describe_db_target
 
         assert_safe_db_target("run.py")
         print(f"DB target: {describe_db_target()}", flush=True)
+        print(
+            f"ACE config: method={_ACE_METHOD}, shrink={_ACE_SHRINK}, k={_ACE_K_BASE}, "
+            f"k_up={_ACE_K_UP}, k_down={_ACE_K_DOWN}, partner_cap={_ACE_PARTNER_CAP}, "
+            f"spike_damp={_ACE_SPIKE_DAMP}, carry_prior={int(_ACE_CARRY_PRIOR)}, "
+            f"prior_blend={_ACE_PRIOR_BLEND}, confidence_ceiling={CONFIDENCE_CEILING}",
+            flush=True,
+        )
 
         positional = [a for a in sys.argv[1:] if not a.startswith("--")]
         flags = {a for a in sys.argv[1:] if a.startswith("--")}

@@ -36,21 +36,23 @@ env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   CLOUDFLARE_PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
-  # Locked ACE production knobs (must match data/run.py defaults).
+  # Tuned on 2024–2026 walk-forward pre_match (see data/tune_results.json).
   ACE_METHOD: residual_shrink
-  ACE_SHRINK: "0.05"
-  ACE_K_BASE: "0.4"
-  ACE_K_UP: "1.0"
-  ACE_K_DOWN: "1.0"
-  ACE_PARTNER_CAP: "1.25"
-  ACE_SPIKE_DAMP: "1.0"
+  ACE_SHRINK: "0.1"
+  ACE_K_BASE: "0.3"
+  ACE_K_UP: "0.9"
+  ACE_K_DOWN: "0.9"
+  ACE_PARTNER_CAP: "1.5"
+  ACE_SPIKE_DAMP: "0.75"
   ACE_CARRY_PRIOR: "1"
-  ACE_PRIOR_BLEND: "1.0"
-  ACE_WIN_PROB_SCALE: "6.4"
-  PRED_RATING_FIELD: "ace"
-  PRED_RATING_SCOPE: "event"
-  PRED_AGGREGATION: "sum"
-  ACE_CONFIDENCE_CEILING: "0.88"
+  ACE_PRIOR_BLEND: "0.75"
+  ACE_WIN_PROB_SCALE: "8.0"
+  ACE_CONFIDENCE_CEILING: "0.95"
+  PRED_RATING_FIELD: ace
+  PRED_RATING_SCOPE: pre_match
+  PRED_AGGREGATION: sum
+  PRED_PROB_MIN: "0.05"
+  PRED_PROB_MAX: "0.95"
   # Intentional: Actions writes to Neon. Local recomputes still need this unset
   # (or use data/.env.local) so day-to-day work cannot hammer prod.
   ACE_ALLOW_PROD_WRITE: "1"

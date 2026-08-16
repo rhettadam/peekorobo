@@ -1,0 +1,79 @@
+{
+  "metric": "brier",
+  "mode": "standard",
+  "years": [
+    2024,
+    2025,
+    2026
+  ],
+  "baseline": {
+    "knobs": {
+      "win_scale_base": 6.4,
+      "prob_min": 0.02,
+      "prob_max": 0.98,
+      "rating_field": "ace",
+      "aggregation": "sum",
+      "method": "residual_shrink",
+      "k_base": 0.4,
+      "shrink": 0.05,
+      "spike_damp": 1.0,
+      "k_up": 1.0,
+      "k_down": 1.0,
+      "partner_cap": 1.25,
+      "carry_prior": true,
+      "prior_blend": 1.0,
+      "confidence_ceiling": 0.88
+    },
+    "summary": {
+      "correct": 48225,
+      "total": 65551,
+      "pct": 73.5686717212552,
+      "brier": 0.1782436923402012,
+      "favorite_correct": 48225,
+      "favorite_total": 65543,
+      "favorite_win_pct": 73.57765131287857
+    }
+  },
+  "pooled": {
+    "knobs": {
+      "win_scale_base": 8.0,
+      "prob_min": 0.05,
+      "prob_max": 0.95,
+      "rating_field": "ace",
+      "aggregation": "sum",
+      "method": "residual_shrink",
+      "k_base": 0.3,
+      "shrink": 0.1,
+      "spike_damp": 0.75,
+      "k_up": 0.9,
+      "k_down": 0.9,
+      "partner_cap": 1.5,
+      "carry_prior": true,
+      "prior_blend": 0.75,
+      "confidence_ceiling": 0.95
+    },
+    "summary": {
+      "correct": 49465,
+      "total": 65551,
+      "pct": 75.46032859910603,
+      "brier": 0.16728028963139044,
+      "favorite_win_pct": 75.46493355912551
+    },
+    "env": [
+      "ACE_WIN_PROB_SCALE=8.0",
+      "PRED_RATING_FIELD=ace",
+      "PRED_RATING_SCOPE=pre_match",
+      "PRED_AGGREGATION=sum",
+      "ACE_METHOD=residual_shrink",
+      "ACE_K_BASE=0.3",
+      "ACE_SHRINK=0.1",
+      "ACE_SPIKE_DAMP=0.75",
+      "ACE_K_UP=0.9",
+      "ACE_K_DOWN=0.9",
+      "ACE_PARTNER_CAP=1.5",
+      "ACE_CARRY_PRIOR=1",
+      "ACE_PRIOR_BLEND=0.75",
+      "ACE_CONFIDENCE_CEILING=0.95"
+    ]
+  }
+}

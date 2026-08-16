@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, List, Literal, Optional, Tuple
 
 from phase_totals import phase_totals
@@ -342,6 +342,25 @@ def apply_match_updates(
             st.dominance_scores.append(norm_margin)
 
 
+def _match_sort_key(match: dict) -> Tuple:
+    """Deterministic match order: time, then comp/set/number/key."""
+    return (
+        match.get("time") or 0,
+        match.get("comp_level") or "qm",
+        match.get("match_number") or 0,
+        match.get("set_number") or 0,
+        match.get("key") or "",
+    )
+
+
+def _copy_team_phase_state(st: TeamPhaseState) -> TeamPhaseState:
+    return replace(
+        st,
+        contributions=list(st.contributions),
+        dominance_scores=list(st.dominance_scores),
+    )
+
+
 def simulate_event(
     matches: List[dict],
     year: int,
@@ -359,7 +378,7 @@ def simulate_event(
     states: Dict[str, TeamPhaseState] = {}
     if seed_priors:
         seed_states_from_priors(states, prior_means)
-    ordered = sorted(matches, key=lambda m: m.get("time") or 0)
+    ordered = sorted(matches, key=_match_sort_key)
     for match in ordered:
         if not _played(match):
             continue
@@ -377,3 +396,57 @@ def simulate_event(
             partner_cap=partner_cap,
         )
     return states
+
+
+def simulate_event_pre_match_snapshots(
+    matches: List[dict],
+    year: int,
+    method: Method = "residual_shrink",
+    k_base: float = 0.4,
+    shrink: float = 0.05,
+    prior_means: Optional[Dict[str, Tuple[float, float, float]]] = None,
+    spike_damp: float = 0.5,
+    seed_priors: bool = True,
+    k_up: float = 1.0,
+    k_down: float = 1.0,
+    partner_cap: float = 0.0,
+) -> Tuple[Dict[str, TeamPhaseState], Dict[str, Dict[str, TeamPhaseState]]]:
+    """Walk an event and capture each team's state before every match.
+
+    Returns final states and ``match_key -> team_key -> pre-match TeamPhaseState``.
+    Unplayed matches receive snapshots reflecting all prior played matches only.
+    """
+    states: Dict[str, TeamPhaseState] = {}
+    snapshots: Dict[str, Dict[str, TeamPhaseState]] = {}
+    if seed_priors:
+        seed_states_from_priors(states, prior_means)
+
+    ordered = sorted(matches, key=_match_sort_key)
+    for match in ordered:
+        match_key = match.get("key") or ""
+        if not match_key:
+            continue
+
+        team_snapshots: Dict[str, TeamPhaseState] = {}
+        for color in ("red", "blue"):
+            for key in match["alliances"][color].get("team_keys") or []:
+                st = states.get(key) or TeamPhaseState()
+                team_snapshots[key] = _copy_team_phase_state(st)
+        snapshots[match_key] = team_snapshots
+
+        if _played(match):
+            apply_match_updates(
+                states,
+                match,
+                year,
+                method,
+                k_base,
+                shrink,
+                prior_means,
+                spike_damp=spike_damp,
+                k_up=k_up,
+                k_down=k_down,
+                partner_cap=partner_cap,
+            )
+
+    return states, snapshots

@@ -1,7 +1,7 @@
-"""DB-only match prediction from stored RAW/ACE ratings.
+"""Match prediction from stored RAW/ACE ratings and walk-forward pre-match ACE.
 
-Predictions combine team ratings already persisted in ``team_epas`` (season and
-``event_perf`` JSON). No TBA calls at prediction time.
+Legacy scopes read ``team_epas`` only (DB-only). ``pre_match`` replays ACE
+simulation with TBA match payloads (score breakdown) for point-in-time ratings.
 """
 
 from __future__ import annotations
@@ -10,7 +10,9 @@ import json
 import math
 import os
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Callable, Dict, List, Literal, Optional, Tuple
+
+from ace_attribution import Method, TeamPhaseState, simulate_event_pre_match_snapshots
 
 RatingField = Literal["ace", "raw"]
 RatingScope = Literal[
@@ -19,29 +21,63 @@ RatingScope = Literal[
     "prior_event_or_prior_year",
     "season",
     "prior_year",
+    "pre_match",
 ]
 Aggregation = Literal["sum", "mean"]
+
+
+@dataclass
+class AceParams:
+    method: Method = "residual_shrink"
+    k_base: float = 0.3
+    shrink: float = 0.1
+    spike_damp: float = 0.75
+    k_up: float = 0.9
+    k_down: float = 0.9
+    partner_cap: float = 1.5
+    carry_prior: bool = True
+    prior_blend: float = 0.75
+
+    @classmethod
+    def from_env(cls) -> "AceParams":
+        method = os.environ.get("ACE_METHOD", "residual_shrink").strip().lower()
+        if method not in ("residual", "equal_split", "residual_shrink", "baseline_current"):
+            method = "residual_shrink"
+        return cls(
+            method=method,  # type: ignore[arg-type]
+            k_base=float(os.environ.get("ACE_K_BASE", "0.3")),
+            shrink=float(os.environ.get("ACE_SHRINK", "0.1")),
+            spike_damp=float(os.environ.get("ACE_SPIKE_DAMP", "0.75")),
+            k_up=float(os.environ.get("ACE_K_UP", "0.9")),
+            k_down=float(os.environ.get("ACE_K_DOWN", "0.9")),
+            partner_cap=float(os.environ.get("ACE_PARTNER_CAP", "1.5")),
+            carry_prior=os.environ.get("ACE_CARRY_PRIOR", "1").strip().lower()
+            in ("1", "true", "yes"),
+            prior_blend=float(os.environ.get("ACE_PRIOR_BLEND", "0.75")),
+        )
 
 
 @dataclass
 class PredictionConfig:
     """Production prediction parameters."""
 
-    win_scale_base: float = 6.4
-    prob_min: float = 0.02
-    prob_max: float = 0.98
+    win_scale_base: float = 8.0
+    prob_min: float = 0.05
+    prob_max: float = 0.95
     rating_field: RatingField = "ace"
-    rating_scope: RatingScope = "event"
+    rating_scope: RatingScope = "pre_match"
     aggregation: Aggregation = "sum"
 
     @classmethod
     def from_env(cls) -> "PredictionConfig":
         return cls(
-            win_scale_base=float(os.environ.get("ACE_WIN_PROB_SCALE", "6.4")),
+            win_scale_base=float(os.environ.get("ACE_WIN_PROB_SCALE", "8.0")),
+            prob_min=float(os.environ.get("PRED_PROB_MIN", "0.05")),
+            prob_max=float(os.environ.get("PRED_PROB_MAX", "0.95")),
             rating_field=_normalize_rating_field(
                 os.environ.get("PRED_RATING_FIELD", "ace")
             ),
-            rating_scope=os.environ.get("PRED_RATING_SCOPE", "event").strip().lower(),  # type: ignore[arg-type]
+            rating_scope=os.environ.get("PRED_RATING_SCOPE", "pre_match").strip().lower(),  # type: ignore[arg-type]
             aggregation=os.environ.get("PRED_AGGREGATION", "sum").strip().lower(),  # type: ignore[arg-type]
         )
 
@@ -109,6 +145,104 @@ def is_played(row: MatchRow) -> bool:
     if row.red_score > 0 or row.blue_score > 0:
         return True
     return row.winning_alliance in ("red", "blue")
+
+
+@dataclass
+class PredictionAccuracySummary:
+    correct: int = 0
+    total: int = 0
+    pct: Optional[float] = None
+    brier: Optional[float] = None
+    favorite_correct: int = 0
+    favorite_total: int = 0
+    favorite_win_pct: Optional[float] = None
+
+    def label(self) -> str:
+        pct_s = f"{self.pct:.1f}%" if self.pct is not None else "n/a"
+        brier_s = f"{self.brier:.4f}" if self.brier is not None else "n/a"
+        fav_s = (
+            f"{self.favorite_win_pct:.1f}% ({self.favorite_correct}/{self.favorite_total})"
+            if self.favorite_win_pct is not None
+            else "n/a"
+        )
+        return (
+            f"{self.correct}/{self.total} ({pct_s}), "
+            f"Brier {brier_s}, favorite {fav_s}"
+        )
+
+
+def compute_prediction_accuracy_summary(
+    matches: List[MatchRow],
+    prob_by_match_key: Optional[Dict[str, float]] = None,
+) -> PredictionAccuracySummary:
+    """Accuracy stats mirroring insights_overview / frontend predictionAccuracy."""
+    correct = 0
+    total = 0
+    brier_sum = 0.0
+    favorite_correct = 0
+    favorite_total = 0
+
+    for row in matches:
+        if not is_played(row):
+            continue
+        if prob_by_match_key is not None:
+            p_red = prob_by_match_key.get(row.match_key)
+        else:
+            p_red = row.red_win_prob
+        if p_red is None:
+            continue
+
+        winning = row.winning_alliance or ""
+        actual_tie = winning not in ("red", "blue")
+        pred_tie = p_red == 0.5
+        if actual_tie and not pred_tie:
+            continue
+
+        if winning == "red":
+            red_outcome = 1.0
+        elif winning == "blue":
+            red_outcome = 0.0
+        else:
+            red_outcome = 0.5
+
+        is_correct = False
+        if winning == "red" and p_red > 0.5:
+            is_correct = True
+        elif winning == "blue" and p_red < 0.5:
+            is_correct = True
+        elif actual_tie and pred_tie:
+            is_correct = True
+
+        total += 1
+        if is_correct:
+            correct += 1
+        brier_sum += (p_red - red_outcome) ** 2
+
+        if p_red > 0.5:
+            favorite = "red"
+        elif p_red < 0.5:
+            favorite = "blue"
+        else:
+            favorite = "toss"
+        if favorite != "toss":
+            favorite_total += 1
+            if favorite == winning:
+                favorite_correct += 1
+
+    pct = (100.0 * correct / total) if total else None
+    brier = (brier_sum / total) if total else None
+    favorite_win_pct = (
+        (100.0 * favorite_correct / favorite_total) if favorite_total else None
+    )
+    return PredictionAccuracySummary(
+        correct=correct,
+        total=total,
+        pct=pct,
+        brier=brier,
+        favorite_correct=favorite_correct,
+        favorite_total=favorite_total,
+        favorite_win_pct=favorite_win_pct,
+    )
 
 
 def _parse_event_perf(raw_val) -> Dict[str, Dict[str, float]]:
@@ -295,6 +429,278 @@ def load_prediction_data_from_db(conn, year: int, *, limit_events: Optional[int]
         prior_season=prior_season,
         matches=matches,
     )
+
+
+def team_number_from_tba_key(team_key: str) -> int:
+    tok = str(team_key or "").strip()
+    if tok.lower().startswith("frc"):
+        tok = tok[3:]
+    digits = "".join(ch for ch in tok if ch.isdigit())
+    return int(digits) if digits else 0
+
+
+def _update_carry_priors(
+    priors: Dict[str, Tuple[float, float, float]],
+    final_states: Dict[str, TeamPhaseState],
+    prior_blend: float,
+) -> None:
+    for key, st in final_states.items():
+        if not st.initialized:
+            continue
+        new = (st.auto, st.teleop, st.endgame)
+        if new == (0.0, 0.0, 0.0):
+            continue
+        old = priors.get(key)
+        if not old or prior_blend >= 1.0:
+            priors[key] = new
+        else:
+            b = prior_blend
+            priors[key] = (
+                (1.0 - b) * old[0] + b * new[0],
+                (1.0 - b) * old[1] + b * new[1],
+                (1.0 - b) * old[2] + b * new[2],
+            )
+
+
+def build_pre_match_ratings_by_match(
+    year: int,
+    matches_by_event: Dict[str, List[dict]],
+    event_order: Dict[str, Tuple[str, str]],
+    ace_params: AceParams,
+    finalize_rating: Callable[[TeamPhaseState, int, int, str], float],
+    rating_field: RatingField,
+) -> Dict[str, Dict[int, float]]:
+    """Walk-forward ACE snapshots keyed by match_key then team_number."""
+    priors: Dict[str, Tuple[float, float, float]] = {}
+    ratings_by_match: Dict[str, Dict[int, float]] = {}
+
+    event_keys = sorted(
+        matches_by_event.keys(),
+        key=lambda ek: event_order.get(ek, ("", ek)),
+    )
+    total = len(event_keys)
+
+    sim_kwargs = dict(
+        year=year,
+        method=ace_params.method,
+        k_base=ace_params.k_base,
+        shrink=ace_params.shrink,
+        spike_damp=ace_params.spike_damp,
+        k_up=ace_params.k_up,
+        k_down=ace_params.k_down,
+        partner_cap=ace_params.partner_cap,
+        prior_means=priors if ace_params.carry_prior else None,
+        seed_priors=ace_params.carry_prior,
+    )
+
+    for i, event_key in enumerate(event_keys, start=1):
+        matches = matches_by_event.get(event_key) or []
+        if not matches:
+            continue
+        if i == 1 or i % 25 == 0 or i == total:
+            print(
+                f"  walk-forward ACE {i}/{total} ({event_key})",
+                flush=True,
+            )
+        final_states, snapshots = simulate_event_pre_match_snapshots(matches, **sim_kwargs)
+        for match_key, team_states in snapshots.items():
+            ratings_by_match[match_key] = {}
+            for team_key, st in team_states.items():
+                tn = team_number_from_tba_key(team_key)
+                if tn <= 0:
+                    continue
+                if not st.initialized and st.match_count <= 0:
+                    continue
+                ratings_by_match[match_key][tn] = finalize_rating(
+                    st, tn, year, rating_field
+                )
+        if ace_params.carry_prior:
+            _update_carry_priors(priors, final_states, ace_params.prior_blend)
+
+    return ratings_by_match
+
+
+def _fallback_prior_event_rating(
+    data: DbPredictionData,
+    team_number: int,
+    event_key: str,
+    config: PredictionConfig,
+) -> float:
+    fallback = PredictionConfig(
+        win_scale_base=config.win_scale_base,
+        prob_min=config.prob_min,
+        prob_max=config.prob_max,
+        rating_field=config.rating_field,
+        rating_scope="prior_event_or_prior_year",
+        aggregation=config.aggregation,
+    )
+    return team_rating_value(data, team_number, event_key, fallback)
+
+
+def alliance_strength_pre_match(
+    data: DbPredictionData,
+    team_numbers: List[int],
+    event_key: str,
+    config: PredictionConfig,
+    ratings_by_team: Dict[int, float],
+) -> float:
+    ratings: List[float] = []
+    for tn in team_numbers:
+        if tn in ratings_by_team:
+            val = ratings_by_team[tn]
+        else:
+            val = _fallback_prior_event_rating(data, tn, event_key, config)
+        ratings.append(float(val or 0.0))
+    if not ratings:
+        return 0.0
+    if config.aggregation == "mean":
+        return sum(ratings) / len(ratings)
+    return sum(ratings)
+
+
+def predict_all_matches_walk_forward(
+    data: DbPredictionData,
+    matches_by_event: Dict[str, List[dict]],
+    config: PredictionConfig,
+    ace_params: AceParams,
+    finalize_rating: Callable[[TeamPhaseState, int, int, str], float],
+) -> List[MatchPrediction]:
+    """Predict every match using walk-forward pre-match ACE snapshots."""
+    strengths = compute_walk_forward_strengths(
+        data, matches_by_event, config, ace_params, finalize_rating
+    )
+    return predictions_from_strengths(data, strengths, config)
+
+
+def compute_walk_forward_strengths(
+    data: DbPredictionData,
+    matches_by_event: Dict[str, List[dict]],
+    config: PredictionConfig,
+    ace_params: AceParams,
+    finalize_rating: Callable[[TeamPhaseState, int, int, str], float],
+) -> Dict[str, Tuple[float, float]]:
+    """Pre-match alliance strengths per match_key (reusable for prob tuning)."""
+    ratings_by_match = build_pre_match_ratings_by_match(
+        data.year,
+        matches_by_event,
+        data.event_order,
+        ace_params,
+        finalize_rating,
+        config.rating_field,
+    )
+    strengths: Dict[str, Tuple[float, float]] = {}
+    for row in data.matches:
+        team_ratings = ratings_by_match.get(row.match_key, {})
+        red_strength = alliance_strength_pre_match(
+            data, row.red_teams, row.event_key, config, team_ratings
+        )
+        blue_strength = alliance_strength_pre_match(
+            data, row.blue_teams, row.event_key, config, team_ratings
+        )
+        strengths[row.match_key] = (red_strength, blue_strength)
+    return strengths
+
+
+def predictions_from_strengths(
+    data: DbPredictionData,
+    strengths: Dict[str, Tuple[float, float]],
+    config: PredictionConfig,
+) -> List[MatchPrediction]:
+    """Map cached alliance strengths to win probabilities."""
+    predictions: List[MatchPrediction] = []
+    for row in data.matches:
+        red_strength, blue_strength = strengths.get(row.match_key, (0.0, 0.0))
+        p_red, p_blue = predict_win_probability(red_strength, blue_strength, config)
+        predictions.append(
+            MatchPrediction(
+                match_key=row.match_key,
+                p_red=p_red,
+                p_blue=p_blue,
+                red_predicted_score=red_strength,
+                blue_predicted_score=blue_strength,
+            )
+        )
+    return predictions
+
+
+def _probs_unchanged(
+    p_red: float, p_blue: float, ex_pr, ex_pb, tol: float = 1e-4
+) -> bool:
+    if ex_pr is None or ex_pb is None:
+        return False
+    return abs(float(ex_pr) - p_red) < tol and abs(float(ex_pb) - p_blue) < tol
+
+
+def apply_match_predictions_to_db(conn, year: int, predictions: List[MatchPrediction]) -> Dict[str, int]:
+    """Bulk-update event_matches with computed predictions. Returns skip/write counts."""
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT match_key, red_win_prob, blue_win_prob,
+                   red_predicted_score, blue_predicted_score
+            FROM event_matches
+            WHERE LEFT(event_key, 4) = %s
+            """,
+            (str(year),),
+        )
+        existing = {row[0]: row[1:] for row in cur.fetchall()}
+
+        updates = []
+        skipped_missing = 0
+        skipped_unchanged = 0
+        skipped_bad = 0
+        pred_by_key = {p.match_key: p for p in predictions}
+
+        for match_key, pred in pred_by_key.items():
+            if match_key not in existing:
+                skipped_missing += 1
+                continue
+            ex_pr, ex_pb, ex_rs, ex_bs = existing[match_key]
+            if not math.isfinite(pred.p_red) or not math.isfinite(pred.p_blue):
+                skipped_bad += 1
+                continue
+            if (
+                _probs_unchanged(pred.p_red, pred.p_blue, ex_pr, ex_pb)
+                and ex_rs is not None
+                and ex_bs is not None
+                and abs(float(ex_rs) - pred.red_predicted_score) < 1e-6
+                and abs(float(ex_bs) - pred.blue_predicted_score) < 1e-6
+            ):
+                skipped_unchanged += 1
+                continue
+            updates.append(
+                (
+                    pred.p_red,
+                    pred.p_blue,
+                    pred.red_predicted_score,
+                    pred.blue_predicted_score,
+                    match_key,
+                )
+            )
+
+        if updates:
+            cur.executemany(
+                """
+                UPDATE event_matches
+                SET red_win_prob = COALESCE(%s::double precision, red_win_prob),
+                    blue_win_prob = COALESCE(%s::double precision, blue_win_prob),
+                    red_predicted_score = COALESCE(%s::double precision, red_predicted_score),
+                    blue_predicted_score = COALESCE(%s::double precision, blue_predicted_score)
+                WHERE match_key = %s
+                """,
+                updates,
+            )
+        conn.commit()
+        return {
+            "written": len(updates),
+            "computed": len(pred_by_key),
+            "skipped_unchanged": skipped_unchanged,
+            "skipped_missing": skipped_missing,
+            "skipped_bad": skipped_bad,
+        }
+    finally:
+        cur.close()
 
 
 def _parse_team_csv(team_csv) -> List[int]:

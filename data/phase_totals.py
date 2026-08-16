@@ -2,15 +2,18 @@
 
 Residual attribution uses these as S in obs_i = S - r_j - r_k.
 
-Design rule for every year: prefer TBA official totals so
-``auto + teleop + endgame_alliance == totalPoints`` (≈ match score).
+Design rule: ACE phases measure robot skill only. Match score still uses
+``totalPoints`` (including ``foulPoints`` / ``adjustPoints``) for W/L, but those
+extras are excluded from auto/teleop/endgame observations.
 
-Teleop is reconstructed as ``totalPoints - auto - endgame_alliance``, which
-folds fouls/adjust/bonus fields that live outside auto/endgame.
+Teleop is ``totalPoints - auto - endgame - foulPoints - adjustPoints``.
 
 2026 note: hub ``endgamePoints`` is endgame *fuel* and stays in the teleop
 bucket (same as the locked 2015–2026 recompute). Only per-robot tower climbs
 count toward the endgame phase.
+
+2024 note: park/on-stage come from ``endGameRobot{i}``; trap, spotlight, and
+harmony are alliance-wide and scaled onto robots proportionally.
 """
 
 from __future__ import annotations
@@ -50,6 +53,13 @@ def _tba_total(b: dict) -> float:
     return _tba_auto(b) + tele + foul
 
 
+def _ace_excluded_extras(b: dict) -> float:
+    """Match-score adjustments that are not robot skill (opponent fouls, refs, DQ)."""
+    return _f(b.get("foulPoints", b.get("foul_points"))) + _f(
+        b.get("adjustPoints", b.get("adjust_points"))
+    )
+
+
 # ---- Per-robot endgame maps -------------------------------------------------
 
 def robot_endgame_2026(b: dict, index: int) -> float:
@@ -59,6 +69,20 @@ def robot_endgame_2026(b: dict, index: int) -> float:
 
 def robot_endgame_2025(b: dict, index: int) -> float:
     return float(yearmodels.endgame_2025(b, index) or 0.0)
+
+
+def robot_endgame_2024(b: dict, index: int) -> float:
+    """Park/on-stage from ``endGameRobot{i}``. Trap/spotlight/harmony are alliance-wide."""
+    status = b.get(f"endGameRobot{index}", "None")
+    return float(
+        {
+            "Parked": 1.0,
+            "StageLeft": 3.0,
+            "StageRight": 3.0,
+            "CenterStage": 3.0,
+            "None": 0.0,
+        }.get(status, 0.0)
+    )
 
 
 def robot_endgame_2019(b: dict, index: int) -> float:
@@ -115,6 +139,9 @@ def _per_robot_ends(year: int, b: dict, team_count: int) -> Optional[List[float]
         return [robot_endgame_2026(b, i) for i in range(1, n + 1)]
     if y == 2025:
         return [robot_endgame_2025(b, i) for i in range(1, n + 1)]
+    if y == 2024:
+        ends = [robot_endgame_2024(b, i) for i in range(1, n + 1)]
+        return _scale_ends_to_official(ends, alliance_endgame_2024(b), n)
     if y == 2019:
         ends = [robot_endgame_2019(b, i) for i in range(1, n + 1)]
         official = _f(b.get("habClimbPoints"))
@@ -194,22 +221,23 @@ def phase_totals(
     """Return (auto_S, teleop_S, endgame_obs_or_S, endgame_is_per_robot)."""
     auto_s = max(0.0, alliance_auto(year, breakdown, team_count))
     total = max(0.0, _tba_total(breakdown))
+    extras = _ace_excluded_extras(breakdown)
     ends = _per_robot_ends(year, breakdown, team_count)
     if ends is not None:
-        # Floor per-robot endgame; keep alliance endgame <= remaining points.
+        # Floor per-robot endgame; keep alliance endgame <= skill points after auto.
         ends = [max(0.0, float(x)) for x in ends]
         end_alliance = sum(ends)
-        remaining = max(0.0, total - auto_s)
+        remaining = max(0.0, total - auto_s - extras)
         if end_alliance > remaining and end_alliance > 0:
             scale = remaining / end_alliance
             ends = [x * scale for x in ends]
             end_alliance = sum(ends)
-        teleop_s = max(0.0, total - auto_s - end_alliance)
+        teleop_s = max(0.0, total - auto_s - end_alliance - extras)
         idx = min(max(robot_index, 1), len(ends)) - 1
         return auto_s, teleop_s, float(ends[idx]), True
     end_s = max(0.0, _shared_endgame(year, breakdown))
-    remaining = max(0.0, total - auto_s)
+    remaining = max(0.0, total - auto_s - extras)
     if end_s > remaining:
         end_s = remaining
-    teleop_s = max(0.0, total - auto_s - end_s)
+    teleop_s = max(0.0, total - auto_s - end_s - extras)
     return auto_s, teleop_s, float(end_s), False

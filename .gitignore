@@ -13,6 +13,7 @@ peekorobo-api/.venv/
 
 # Local ACE bake-off / recompute scratch
 data/tmp_eval/
+data/.tune_cache/
 
 # Pytest
 .pytest_cache/
