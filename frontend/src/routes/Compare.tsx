@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
   Card,
   Group,
-  MultiSelect,
   SegmentedControl,
   Select,
   SimpleGrid,
@@ -24,13 +24,19 @@ import { useEvents, useSearchIndex } from "../api/queries";
 import { TeamName } from "../components/TeamName";
 import { TeamAvatar } from "../components/TeamAvatar";
 import { StatPill } from "../components/StatPill";
-import type { EventData, EventPerfEntry, TeamMatchRatingsResponse, TeamPerfInfo, TeamPerfResponse } from "../types/api";
+import type {
+  EventData,
+  EventPerfEntry,
+  TeamMatchRating,
+  TeamMatchRatingsResponse,
+  TeamPerfInfo,
+  TeamPerfResponse,
+} from "../types/api";
 import { availableYears, CURRENT_YEAR } from "../lib/constants";
 import { METRIC_STYLES, type MetricKey } from "../lib/metrics";
 import { contrastText } from "../lib/epa";
-import { eventWeekLabel, recordString } from "../lib/format";
+import { eventWeekLabel, formatNumber, recordString } from "../lib/format";
 
-// Team trace palette from the production Dash compare chart.
 const TEAM_COLORS = [
   "#FFDD00",
   "#29B6F6",
@@ -42,21 +48,10 @@ const TEAM_COLORS = [
   "#8D6E63",
 ];
 const MAX_TEAMS = 8;
-
-const METRIC_OPTIONS: Array<{ value: MetricKey; label: string }> = [
-  { value: "ace", label: "ACE" },
-  { value: "raw", label: "RAW" },
-  { value: "auto", label: "Auto" },
-  { value: "teleop", label: "Teleop" },
-  { value: "endgame", label: "Endgame" },
-  { value: "confidence", label: "Confidence" },
-];
-
 const SUMMARY_METRICS: MetricKey[] = ["ace", "raw", "auto", "teleop", "endgame", "confidence"];
-
 const RANK_PILL = "#455a64";
+const COMP_LEVEL_ORDER: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
 
-// Field on a season/event perf object for a given metric key.
 function metricValue(
   perf: TeamPerfInfo | EventPerfEntry | undefined,
   metric: MetricKey,
@@ -80,10 +75,7 @@ function metricValue(
   }
 }
 
-function matchMetricValue(
-  match: { a?: number | null; t?: number | null; e?: number | null; r?: number | null; c?: number | null; ace?: number | null } | undefined,
-  metric: MetricKey,
-): number | null {
+function matchMetricValue(match: TeamMatchRating | undefined, metric: MetricKey): number | null {
   if (!match) return null;
   switch (metric) {
     case "ace":
@@ -118,10 +110,58 @@ function sortEventKeysChronologically(keys: string[], metaByKey: Map<string, Eve
   });
 }
 
+function matchSortKey(m: TeamMatchRating): number {
+  return (COMP_LEVEL_ORDER[m.comp_level] ?? 9) * 1_000_000 + (m.set_number ?? 0) * 1000 + m.match_number;
+}
+
+function sortMatchesChronologically(
+  matches: TeamMatchRating[],
+  metaByKey: Map<string, EventData>,
+): TeamMatchRating[] {
+  return [...matches].sort((a, b) => {
+    const da = metaByKey.get(a.event_key)?.event_data.start_date ?? a.event_key;
+    const db = metaByKey.get(b.event_key)?.event_data.start_date ?? b.event_key;
+    const cmp = da.localeCompare(db);
+    if (cmp !== 0) return cmp;
+    if (a.event_key !== b.event_key) return a.event_key.localeCompare(b.event_key);
+    return matchSortKey(a) - matchSortKey(b);
+  });
+}
+
 function chartEventLabel(eventKey: string, year: number, meta?: EventData): string {
   const suffix = eventKey.replace(String(year), "").toUpperCase();
   const week = eventWeekLabel(meta?.week);
   return week ? `${week} · ${suffix}` : suffix;
+}
+
+function shortMatchLabel(m: Pick<TeamMatchRating, "comp_level" | "set_number" | "match_number">): string {
+  const c = (m.comp_level || "qm").toLowerCase();
+  if (c === "qm") return `QM${m.match_number}`;
+  return `${c.toUpperCase()}${m.set_number}-${m.match_number}`;
+}
+
+function teamSeriesKey(tn: number): string {
+  return `t${tn}`;
+}
+
+function teamMetricKey(tn: number, metric: MetricKey): string {
+  return `t${tn}__${metric}`;
+}
+
+interface CompareChartRow {
+  x: string;
+  title: string;
+  subtitle?: string;
+  [key: string]: string | number | null | undefined;
+}
+
+function packTeamMetrics(
+  row: CompareChartRow,
+  tn: number,
+  values: Record<MetricKey, number | null>,
+) {
+  row[teamSeriesKey(tn)] = values.ace;
+  for (const m of SUMMARY_METRICS) row[teamMetricKey(tn, m)] = values[m];
 }
 
 function RankPill({ label, rank, count }: { label: string; rank?: number | null; count?: number | null }) {
@@ -134,6 +174,70 @@ function RankPill({ label, rank, count }: { label: string; rank?: number | null;
       {label}: {rank}
       {count ? ` / ${count}` : ""}
     </Badge>
+  );
+}
+
+function CompareTooltip({
+  payload,
+  teams,
+}: {
+  payload?: Array<{ payload?: CompareChartRow }>;
+  teams: number[];
+}) {
+  const row = payload?.[0]?.payload;
+  if (!row) return null;
+  const present = teams.filter((tn) => {
+    const v = row[teamSeriesKey(tn)];
+    return v !== null && v !== undefined;
+  });
+  if (!present.length) return null;
+
+  return (
+    <Card withBorder radius="md" padding="sm" shadow="md" style={{ minWidth: 220, maxWidth: 320 }}>
+      <Text fw={700} size="sm" lineClamp={2}>
+        {row.title}
+      </Text>
+      {row.subtitle ? (
+        <Text size="xs" c="dimmed" mb={4}>
+          {row.subtitle}
+        </Text>
+      ) : null}
+      <Stack gap="xs" mt={6}>
+        {present.map((tn) => {
+          const color = TEAM_COLORS[teams.indexOf(tn) % TEAM_COLORS.length];
+          const conf = row[teamMetricKey(tn, "confidence")];
+          return (
+            <Stack key={tn} gap={2}>
+              <Group gap={6} wrap="nowrap">
+                <Box
+                  style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }}
+                />
+                <Text size="xs" fw={700}>
+                  {tn}
+                </Text>
+              </Group>
+              {SUMMARY_METRICS.map((m) => {
+                const raw = row[teamMetricKey(tn, m)];
+                const value =
+                  m === "confidence" && typeof raw === "number"
+                    ? `${Math.round(raw * 100)}%`
+                    : formatNumber(typeof raw === "number" ? raw : null);
+                return (
+                  <Group key={m} justify="space-between" gap="lg" wrap="nowrap" pl={14}>
+                    <Text size="xs" c="dimmed">
+                      {METRIC_STYLES[m].label}
+                    </Text>
+                    <Text size="xs" fw={600}>
+                      {value}
+                    </Text>
+                  </Group>
+                );
+              })}
+            </Stack>
+          );
+        })}
+      </Stack>
+    </Card>
   );
 }
 
@@ -154,7 +258,6 @@ export function Compare() {
   const year = Number(searchParams.get("year")) || CURRENT_YEAR;
   const [rangeMode, setRangeMode] = useState<"single" | "all">("single");
   const [grain, setGrain] = useState<"event" | "match">("match");
-  const [metrics, setMetrics] = useState<MetricKey[]>(["ace"]);
 
   useEffect(() => {
     document.title = "Compare Teams - Peekorobo";
@@ -188,7 +291,7 @@ export function Compare() {
       queryKey: ["team-match-ratings", tn, year],
       queryFn: () => apiGet<TeamMatchRatingsResponse>(`/team/${tn}/match_ratings/${year}`),
       staleTime: 5 * 60 * 1000,
-      enabled: rangeMode === "single" && grain === "match" && tn > 0,
+      enabled: rangeMode === "single" && tn > 0,
     })),
   });
 
@@ -199,7 +302,7 @@ export function Compare() {
   }, [teams, results]);
 
   const matchesByTeam = useMemo(() => {
-    const map = new Map<number, TeamMatchRatingsResponse["matches"]>();
+    const map = new Map<number, TeamMatchRating[]>();
     teams.forEach((tn, i) => map.set(tn, matchRatingQueries[i]?.data?.matches ?? []));
     return map;
   }, [teams, matchRatingQueries]);
@@ -217,25 +320,12 @@ export function Compare() {
     return map;
   }, [yearEventsQuery.data]);
 
-  const activeMetrics = metrics.length ? metrics : (["ace"] as MetricKey[]);
-
-  // Build chart rows + series depending on range mode.
-  const { chartData, series, xKey, sortedEventKeys } = useMemo(() => {
-    const seriesList: Array<{ name: string; color: string; key: string }> = [];
-    let ci = 0;
-    for (let ti = 0; ti < teams.length; ti++) {
-      for (const m of activeMetrics) {
-        seriesList.push({
-          name:
-            activeMetrics.length > 1
-              ? `${teams[ti]} ${METRIC_STYLES[m].label}`
-              : String(teams[ti]),
-          color: TEAM_COLORS[ci % TEAM_COLORS.length],
-          key: `${teams[ti]}__${m}`,
-        });
-        ci++;
-      }
-    }
+  const { chartData, series, xTicks, sortedEventKeys } = useMemo(() => {
+    const seriesList = teams.map((tn, i) => ({
+      name: teamSeriesKey(tn),
+      label: String(tn),
+      color: TEAM_COLORS[i % TEAM_COLORS.length],
+    }));
 
     if (rangeMode === "all") {
       const yearSet = new Set<number>();
@@ -245,57 +335,122 @@ export function Compare() {
         }
       }
       const years = [...yearSet].sort((a, b) => a - b);
-      const rows = years.map((y) => {
-        const row: Record<string, number | string | null> = { x: String(y) };
+      const rows: CompareChartRow[] = years.map((y) => {
+        const row: CompareChartRow = { x: String(y), title: String(y) };
         for (const tn of teams) {
-          const p = perfByTeam.get(tn)?.team_perfs.find((x) => x.year === y);
-          for (const m of activeMetrics) row[`${tn}__${m}`] = metricValue(p, m);
+          const p = perfByTeam.get(tn)?.team_perfs.find((item) => item.year === y);
+          packTeamMetrics(row, tn, {
+            ace: metricValue(p, "ace"),
+            raw: metricValue(p, "raw"),
+            auto: metricValue(p, "auto"),
+            teleop: metricValue(p, "teleop"),
+            endgame: metricValue(p, "endgame"),
+            confidence: metricValue(p, "confidence"),
+          });
         }
         return row;
       });
-      return { chartData: rows, series: seriesList, xKey: "x", sortedEventKeys: [] as string[] };
+      return { chartData: rows, series: seriesList, xTicks: years.map(String), sortedEventKeys: [] as string[] };
     }
 
     if (effectiveGrain === "match") {
-      const maxN = Math.max(0, ...teams.map((tn) => matchesByTeam.get(tn)?.length ?? 0));
-      const rows = Array.from({ length: maxN }, (_, i) => {
-        const row: Record<string, number | string | null> = { x: String(i + 1) };
-        for (const tn of teams) {
-          const match = matchesByTeam.get(tn)?.[i];
-          for (const m of activeMetrics) row[`${tn}__${m}`] = matchMetricValue(match, m);
+      const byKey = new Map<string, TeamMatchRating>();
+      for (const tn of teams) {
+        for (const m of matchesByTeam.get(tn) ?? []) {
+          if (m.match_key && !byKey.has(m.match_key)) byKey.set(m.match_key, m);
         }
-        return row;
-      });
-      return { chartData: rows, series: seriesList, xKey: "x", sortedEventKeys: [] as string[] };
+      }
+      const timeline = sortMatchesChronologically([...byKey.values()], eventMetaByKey);
+      const ratingsAt = new Map<number, Map<string, TeamMatchRating>>();
+      for (const tn of teams) {
+        const map = new Map<string, TeamMatchRating>();
+        for (const m of matchesByTeam.get(tn) ?? []) map.set(m.match_key, m);
+        ratingsAt.set(tn, map);
+      }
+
+      const rows: CompareChartRow[] = [];
+      const ticks: string[] = [];
+      for (let i = 0; i < timeline.length; i++) {
+        const m = timeline[i];
+        const meta = eventMetaByKey.get(m.event_key);
+        const eventName = meta?.event_data.name ?? m.event_key.replace(String(year), "").toUpperCase();
+        const firstOfEvent = i === 0 || timeline[i - 1].event_key !== m.event_key;
+        const row: CompareChartRow = {
+          x: m.match_key,
+          title: `${eventName} · ${shortMatchLabel(m)}`,
+          subtitle: [eventWeekLabel(meta?.week), m.event_key.replace(String(year), "").toUpperCase()]
+            .filter(Boolean)
+            .join(" · "),
+        };
+        for (const tn of teams) {
+          const match = ratingsAt.get(tn)?.get(m.match_key);
+          packTeamMetrics(row, tn, {
+            ace: matchMetricValue(match, "ace"),
+            raw: matchMetricValue(match, "raw"),
+            auto: matchMetricValue(match, "auto"),
+            teleop: matchMetricValue(match, "teleop"),
+            endgame: matchMetricValue(match, "endgame"),
+            confidence: matchMetricValue(match, "confidence"),
+          });
+        }
+        rows.push(row);
+        ticks.push(firstOfEvent ? m.event_key.replace(String(year), "").toUpperCase() : "");
+      }
+      return { chartData: rows, series: seriesList, xTicks: ticks, sortedEventKeys: [] as string[] };
     }
 
-    // single-season by event: x-axis = union of event keys for the selected year.
     const eventKeys = new Set<string>();
     for (const tn of teams) {
-      const p = perfByTeam.get(tn)?.team_perfs.find((x) => x.year === year);
+      const p = perfByTeam.get(tn)?.team_perfs.find((item) => item.year === year);
       for (const ep of p?.event_perf ?? []) if (ep.event_key) eventKeys.add(ep.event_key);
     }
     const keys = sortEventKeysChronologically([...eventKeys], eventMetaByKey);
-    const rows = keys.map((ek) => {
+    const rows: CompareChartRow[] = keys.map((ek) => {
       const meta = eventMetaByKey.get(ek);
-      const row: Record<string, number | string | null> = { x: chartEventLabel(ek, year, meta) };
+      const label = chartEventLabel(ek, year, meta);
+      const row: CompareChartRow = {
+        x: ek,
+        title: meta?.event_data.name ?? label,
+        subtitle: label,
+      };
       for (const tn of teams) {
-        const p = perfByTeam.get(tn)?.team_perfs.find((x) => x.year === year);
+        const p = perfByTeam.get(tn)?.team_perfs.find((item) => item.year === year);
         const ep = p?.event_perf?.find((e) => e.event_key === ek);
-        for (const m of activeMetrics) row[`${tn}__${m}`] = metricValue(ep, m);
+        packTeamMetrics(row, tn, {
+          ace: metricValue(ep, "ace"),
+          raw: metricValue(ep, "raw"),
+          auto: metricValue(ep, "auto"),
+          teleop: metricValue(ep, "teleop"),
+          endgame: metricValue(ep, "endgame"),
+          confidence: metricValue(ep, "confidence"),
+        });
       }
       return row;
     });
-    return { chartData: rows, series: seriesList, xKey: "x", sortedEventKeys: keys };
-  }, [teams, perfByTeam, matchesByTeam, rangeMode, effectiveGrain, year, activeMetrics, eventMetaByKey]);
+    return {
+      chartData: rows,
+      series: seriesList,
+      xTicks: keys.map((ek) => chartEventLabel(ek, year, eventMetaByKey.get(ek))),
+      sortedEventKeys: keys,
+    };
+  }, [teams, perfByTeam, matchesByTeam, rangeMode, effectiveGrain, year, eventMetaByKey]);
 
-  const chartSeries = series.map((s) => ({ name: s.key, label: s.name, color: s.color }));
+  const tickByX = useMemo(() => {
+    const map = new Map<string, string>();
+    chartData.forEach((row, i) => map.set(row.x, xTicks[i] ?? row.x));
+    return map;
+  }, [chartData, xTicks]);
+
+  const axisTicks = useMemo(
+    () => chartData.filter((row) => (tickByX.get(row.x) ?? "") !== "").map((row) => row.x),
+    [chartData, tickByX],
+  );
 
   return (
     <Stack gap="md" py="md">
       <Title order={1}>Compare</Title>
       <Text c="dimmed" size="sm">
-        Metrics by match or event (one season), or by year (all seasons). Add 2–8 teams.
+        ACE over time. Hover a point for auto, teleop, endgame, RAW, and confidence.
       </Text>
 
       <Group align="flex-end" gap="sm" wrap="wrap">
@@ -320,14 +475,6 @@ export function Compare() {
         >
           Add
         </Button>
-        <MultiSelect
-          label="Metrics"
-          data={METRIC_OPTIONS}
-          value={activeMetrics}
-          onChange={(v) => setMetrics((v.length ? v : ["ace"]) as MetricKey[])}
-          w={280}
-          clearable={false}
-        />
         <Stack gap={4}>
           <Text size="sm" fw={500}>
             Range
@@ -398,28 +545,43 @@ export function Compare() {
           ))}
         </Group>
       ) : (
-        <Text c="dimmed">Add teams by number to compare their metrics.</Text>
+        <Text c="dimmed">Add teams by number to compare their ACE.</Text>
       )}
 
       {teams.length > 0 && chartData.length > 0 ? (
         <Card withBorder padding="md" radius="md">
           <Text fw={600} mb="sm">
             {rangeMode === "all"
-              ? `${activeMetrics.map((m) => METRIC_STYLES[m].label).join(", ")} by season`
+              ? `ACE by season`
               : effectiveGrain === "match"
-                ? `${activeMetrics.map((m) => METRIC_STYLES[m].label).join(", ")} by match (season match #) — ${year}`
-                : `${activeMetrics.map((m) => METRIC_STYLES[m].label).join(", ")} by event — ${year}`}
+                ? `ACE by match — ${year}`
+                : `ACE by event — ${year}`}
           </Text>
           <LineChart
             h={360}
             data={chartData}
-            dataKey={xKey}
-            series={chartSeries}
+            dataKey="x"
+            series={series}
             curveType="monotone"
             withDots
             connectNulls
             withLegend
             gridAxis="xy"
+            yAxisLabel="ACE"
+            xAxisProps={{
+              ticks: axisTicks,
+              interval: 0,
+              minTickGap: 8,
+              tickFormatter: (v: string) => tickByX.get(String(v)) ?? "",
+            }}
+            tooltipProps={{
+              content: ({ payload }) => (
+                <CompareTooltip
+                  payload={payload as Array<{ payload?: CompareChartRow }>}
+                  teams={teams}
+                />
+              ),
+            }}
           />
         </Card>
       ) : null}
@@ -455,16 +617,12 @@ export function Compare() {
                         </Text>
                       </Table.Td>
                       {teams.map((tn) => {
-                        const p = perfByTeam.get(tn)?.team_perfs.find((x) => x.year === year);
+                        const p = perfByTeam.get(tn)?.team_perfs.find((item) => item.year === year);
                         const ep = p?.event_perf?.find((e) => e.event_key === ek);
                         return (
                           <Table.Td key={tn}>
                             {ep ? (
-                              <Group gap={4}>
-                                {activeMetrics.map((m) => (
-                                  <StatPill key={m} metric={m} value={metricValue(ep, m)} size="sm" />
-                                ))}
-                              </Group>
+                              <StatPill metric="ace" value={metricValue(ep, "ace")} size="sm" />
                             ) : (
                               <Text size="sm" c="dimmed">
                                 —
@@ -489,7 +647,7 @@ export function Compare() {
           </Text>
           <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
             {teams.map((tn) => {
-              const p = perfByTeam.get(tn)?.team_perfs.find((x) => x.year === year);
+              const p = perfByTeam.get(tn)?.team_perfs.find((item) => item.year === year);
               return (
                 <Stack key={tn} gap={8}>
                   <Group gap="sm" wrap="nowrap">
