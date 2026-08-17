@@ -13,6 +13,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Literal, Optional, Tuple
 
+from psycopg2.extras import execute_values
+
 from ace_attribution import Method, TeamPhaseState, simulate_event, simulate_event_pre_match_snapshots
 
 RatingField = Literal["ace", "raw"]
@@ -732,16 +734,38 @@ def apply_match_predictions_to_db(conn, year: int, predictions: List[MatchPredic
             )
 
         if updates:
-            cur.executemany(
+            n_updates = len(updates)
+            page_size = max(500, min(5000, n_updates))
+            print(
+                f"Match predictions {year}: bulk-updating {n_updates} changed row(s) "
+                f"(page_size={page_size})...",
+                flush=True,
+            )
+            t0 = time.perf_counter()
+            execute_values(
+                cur,
                 """
-                UPDATE event_matches
-                SET red_win_prob = COALESCE(%s::double precision, red_win_prob),
-                    blue_win_prob = COALESCE(%s::double precision, blue_win_prob),
-                    red_predicted_score = COALESCE(%s::double precision, red_predicted_score),
-                    blue_predicted_score = COALESCE(%s::double precision, blue_predicted_score)
-                WHERE match_key = %s
+                UPDATE event_matches AS em
+                SET red_win_prob = v.red_win_prob::double precision,
+                    blue_win_prob = v.blue_win_prob::double precision,
+                    red_predicted_score = v.red_predicted_score::double precision,
+                    blue_predicted_score = v.blue_predicted_score::double precision
+                FROM (VALUES %s) AS v(
+                    red_win_prob,
+                    blue_win_prob,
+                    red_predicted_score,
+                    blue_predicted_score,
+                    match_key
+                )
+                WHERE em.match_key = v.match_key
                 """,
                 updates,
+                template="(%s, %s, %s, %s, %s)",
+                page_size=page_size,
+            )
+            print(
+                f"Match predictions {year}: bulk update finished ({time.perf_counter() - t0:.1f}s)",
+                flush=True,
             )
         conn.commit()
         return {

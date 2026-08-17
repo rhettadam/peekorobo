@@ -2342,7 +2342,7 @@ def calculate_and_store_match_predictions(year: int):
         predictions = predict_all_matches_db(data, config)
 
     print(
-        f"Match predictions {year}: writing {len(predictions)} prediction(s) to DB...",
+        f"Match predictions {year}: applying {len(predictions)} computed prediction(s)...",
         flush=True,
     )
     conn = get_pg_connection()
