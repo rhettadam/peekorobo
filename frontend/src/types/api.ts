@@ -130,6 +130,17 @@ export interface MatchResponse {
   blue_win_prob?: number | null;
   red_predicted_score?: number | null;
   blue_predicted_score?: number | null;
+  /** Compact pre-match team payloads: a=auto, t=teleop, e=endgame, r=raw, c=confidence */
+  pre_match_teams?: Record<string, PreMatchTeamCompact> | null;
+}
+
+export interface PreMatchTeamCompact {
+  a: number;
+  t: number;
+  e: number;
+  r: number;
+  c: number;
+  ace: number;
 }
 
 export interface EventMatchResponse {

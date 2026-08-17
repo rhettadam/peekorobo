@@ -40,7 +40,7 @@ from prediction import (
     predictions_from_strengths,
 )
 from run import (
-    finalize_pre_match_rating,
+    finalize_pre_match_team,
     get_pg_connection,
     match_cache,
     preload_confidence_lookups_from_match_cache,
@@ -345,12 +345,12 @@ def evaluate_knobs(
         if strength_cache is not None:
             strengths = strength_cache.get(f"{bundle.year}:{cache_key}")
         if strengths is None:
-            strengths = compute_walk_forward_strengths(
+            strengths, _ = compute_walk_forward_strengths(
                 bundle.data,
                 bundle.matches_by_event,
                 pred_config,
                 ace_params,
-                finalize_pre_match_rating,
+                finalize_pre_match_team,
             )
             if strength_cache is not None:
                 strength_cache[f"{bundle.year}:{cache_key}"] = strengths

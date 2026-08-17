@@ -140,17 +140,21 @@ def update_awards_for_year(year, active_only=False):
 
 
 if __name__ == "__main__":
+    from years_cli import parse_years
+
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     active_only = "--active-only" in sys.argv[1:]
-    if len(args) != 1:
-        print("Usage: python run_awards.py <year> [--active-only]")
+    if not args:
+        print("Usage: python run_awards.py <year[,year,...]> [--active-only]")
+        print("Example: python run_awards.py 2024,2025,2026")
         print("Example: python run_awards.py 2026 --active-only")
         sys.exit(1)
 
     try:
-        year = int(args[0])
+        years = parse_years(*args)
     except ValueError:
-        print("Year must be an integer.")
+        print("Year must be an integer or comma-separated list (e.g. 2024,2025,2026).")
         sys.exit(1)
 
-    update_awards_for_year(year, active_only=active_only)
+    for year in years:
+        update_awards_for_year(year, active_only=active_only)

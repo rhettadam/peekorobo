@@ -1,4 +1,4 @@
-import type { EventPerfEntry, MatchResponse, TeamPerfInfo } from "../types/api";
+import type { EventPerfEntry, MatchResponse, PreMatchTeamCompact, TeamPerfInfo } from "../types/api";
 
 export type PreMatchRatingSource =
   | "in_event"
@@ -12,7 +12,18 @@ export interface PreMatchTeamRating {
   rating?: number | null;
 }
 
+export interface PreMatchTeamDisplay {
+  source: PreMatchRatingSource;
+  ace: number | null;
+  auto: number | null;
+  teleop: number | null;
+  endgame: number | null;
+  raw: number | null;
+  confidence: number | null;
+}
+
 export type PreMatchTeamRatings = Record<string, PreMatchTeamRating>;
+export type PreMatchTeamDisplays = Record<string, PreMatchTeamDisplay>;
 
 export const PRE_MATCH_SOURCE_LABELS: Record<PreMatchRatingSource, string> = {
   in_event: "In-event walk-forward",
@@ -163,4 +174,54 @@ export function teamPreMatchRating(
 ): PreMatchTeamRating | null {
   if (!ratings) return null;
   return ratings[String(teamNumber)] ?? null;
+}
+
+function compactToDisplay(compact: PreMatchTeamCompact): Omit<PreMatchTeamDisplay, "source"> {
+  return {
+    ace: compact.ace,
+    auto: compact.a,
+    teleop: compact.t,
+    endgame: compact.e,
+    raw: compact.r,
+    confidence: compact.c,
+  };
+}
+
+export function mergePreMatchDisplays(
+  stored: Record<string, PreMatchTeamCompact> | null | undefined,
+  sources: PreMatchTeamRatings | null,
+  teams: number[],
+): PreMatchTeamDisplays | null {
+  if (!sources && !stored) return null;
+  const out: PreMatchTeamDisplays = {};
+  for (const team of teams) {
+    const key = String(team);
+    const source = sources?.[key]?.source ?? "unrated";
+    const compact = stored?.[key];
+    if (compact) {
+      out[key] = { source, ...compactToDisplay(compact) };
+    } else {
+      out[key] = {
+        source,
+        ace: sources?.[key]?.rating ?? null,
+        auto: null,
+        teleop: null,
+        endgame: null,
+        raw: null,
+        confidence: null,
+      };
+    }
+  }
+  return out;
+}
+
+export function formatPreMatchComponents(entry: PreMatchTeamDisplay): string {
+  const parts = [
+    entry.auto != null ? `Auto ${entry.auto.toFixed(1)}` : null,
+    entry.teleop != null ? `Teleop ${entry.teleop.toFixed(1)}` : null,
+    entry.endgame != null ? `Endgame ${entry.endgame.toFixed(1)}` : null,
+    entry.raw != null ? `RAW ${entry.raw.toFixed(1)}` : null,
+    entry.confidence != null ? `Conf ${entry.confidence.toFixed(2)}` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : PRE_MATCH_SOURCE_HINTS[entry.source];
 }

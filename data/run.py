@@ -27,6 +27,7 @@ from prediction import (
     PredictionConfig,
     apply_match_predictions_to_db,
     load_prediction_data_from_db,
+    pack_pre_match_team,
     predict_all_matches_db,
     predict_all_matches_walk_forward,
 )
@@ -122,7 +123,7 @@ def _release_pipeline_lock(conn) -> None:
 # Global match cache to avoid redundant API calls
 match_cache = {}
 # match_key -> team_number -> pre-match rating (filled during EPA precompute).
-_pre_match_ratings_by_match: Dict[str, Dict[int, float]] = {}
+_pre_match_ratings_by_match: Dict[str, Dict[int, dict]] = {}
 # Team phase priors after EPA precompute (for tail walk-forward without replay).
 _carry_priors_snapshot: Dict[str, Tuple[float, float, float]] = {}
 _event_epa_cache: Dict[str, Dict[str, dict]] = {}
@@ -2155,7 +2156,8 @@ def _ensure_prediction_score_columns() -> None:
             """
             ALTER TABLE event_matches
             ADD COLUMN IF NOT EXISTS red_predicted_score DOUBLE PRECISION,
-            ADD COLUMN IF NOT EXISTS blue_predicted_score DOUBLE PRECISION
+            ADD COLUMN IF NOT EXISTS blue_predicted_score DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS pre_match_teams JSONB
             """
         )
         conn.commit()
@@ -2334,7 +2336,7 @@ def calculate_and_store_match_predictions(year: int):
             matches_by_event,
             config,
             ace_params,
-            finalize_pre_match_rating,
+            finalize_pre_match_team,
             precomputed_ratings=_pre_match_ratings_by_match,
             initial_priors=_carry_priors_snapshot if _ACE_CARRY_PRIOR else None,
         )
@@ -2440,30 +2442,37 @@ def _finalize_state_to_event_epa(
     }
 
 
-def finalize_pre_match_rating(
-    st: TeamPhaseState, team_number: int, year: int, rating_field: str = "ace"
-) -> float:
-    """Convert partial walk-forward state to a pre-match rating value.
-
-    Unlike ``_finalize_state_to_event_epa``, allows carry-prior seeds
-    (``initialized`` with ``match_count == 0``) so first-match predictions
-    can use cross-event priors without future within-event results.
-    """
+def finalize_pre_match_team(
+    st: TeamPhaseState, team_number: int, year: int
+) -> dict:
+    """Compact pre-match components for one team (walk-forward snapshot)."""
     if not st.initialized and st.match_count <= 0:
-        return 0.0
+        return pack_pre_match_team(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
     consistency = _consistency_from_contributions(st.contributions)
     dominance = min(1.0, statistics.mean(st.dominance_scores)) if st.dominance_scores else 0.0
     played_event_keys = get_team_played_events(team_number, int(year))
     total_events = len(played_event_keys)
     event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])
-    raw_confidence, confidence, _record_alignment = calculate_confidence(
+    _raw_confidence, confidence, _record_alignment = calculate_confidence(
         consistency, dominance, event_boost, team_number, st.wins, st.losses, int(year)
     )
+    auto = max(0.0, st.auto)
+    teleop = max(0.0, st.teleop)
+    endgame = max(0.0, st.endgame)
     overall = max(0.0, st.raw)
+    ace = overall * confidence
+    return pack_pre_match_team(auto, teleop, endgame, overall, confidence, ace)
+
+
+def finalize_pre_match_rating(
+    st: TeamPhaseState, team_number: int, year: int, rating_field: str = "ace"
+) -> float:
+    """Scalar pre-match rating (ACE or RAW) for tuning helpers."""
+    payload = finalize_pre_match_team(st, team_number, year)
     if rating_field == "raw":
-        return round(overall, 2)
-    return round(overall * confidence, 2)
+        return float(payload.get("r") or 0.0)
+    return float(payload.get("ace") or 0.0)
 
 
 def preload_confidence_lookups_from_match_cache(year: int) -> None:
@@ -2626,9 +2635,8 @@ def precompute_season_event_epas(year: int) -> None:
 
         if use_pre_match:
             states, snapshots = simulate_event_pre_match_snapshots(matches, **sim_kwargs)
-            rating_field = pred_config.rating_field
             for match_key, team_states in snapshots.items():
-                row: Dict[int, float] = {}
+                row: Dict[int, dict] = {}
                 for team_key, st in team_states.items():
                     digits = "".join(ch for ch in str(team_key) if ch.isdigit())
                     tn = int(digits) if digits else 0
@@ -2636,9 +2644,7 @@ def precompute_season_event_epas(year: int) -> None:
                         continue
                     if not st.initialized and st.match_count <= 0:
                         continue
-                    row[tn] = finalize_pre_match_rating(
-                        st, tn, int(year), rating_field
-                    )
+                    row[tn] = finalize_pre_match_team(st, tn, int(year))
                 if row:
                     _pre_match_ratings_by_match[match_key] = row
         else:
@@ -3156,6 +3162,8 @@ if __name__ == "__main__":
             flush=True,
         )
 
+        from years_cli import parse_years
+
         positional = [a for a in sys.argv[1:] if not a.startswith("--")]
         flags = {a for a in sys.argv[1:] if a.startswith("--")}
         ranks_only = "--ranks-only" in flags
@@ -3174,20 +3182,20 @@ if __name__ == "__main__":
                 sample_fraction = 0.1
         if positional:
             try:
-                year = int(positional[0])
+                years = parse_years(*positional)
             except ValueError:
-                print("Year must be an integer.")
+                print("Year must be an integer or comma-separated list (e.g. 2024,2025,2026).")
                 sys.exit(1)
-            if ranks_only:
-                compute_and_store_team_epa_ranks(year)
-                restart_heroku_app()
-            elif predictions_only:
-                calculate_and_store_match_predictions(year)
-                restart_heroku_app()
-            else:
-                fetch_and_store_team_data(
-                    year, active_only=active_only, sample_fraction=sample_fraction
-                )
+            for year in years:
+                if ranks_only:
+                    compute_and_store_team_epa_ranks(year)
+                elif predictions_only:
+                    calculate_and_store_match_predictions(year)
+                else:
+                    fetch_and_store_team_data(
+                        year, active_only=active_only, sample_fraction=sample_fraction
+                    )
+            restart_heroku_app()
         else:
             main()
     except KeyboardInterrupt:

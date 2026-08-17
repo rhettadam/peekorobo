@@ -27,11 +27,12 @@ import { predictedMatchScores } from "../lib/prediction";
 import type { EventPerfInfo, MatchResponse, TeamPerfInfo, TeamPerfResponse } from "../types/api";
 import {
   computePreMatchTeamSources,
+  formatPreMatchComponents,
+  mergePreMatchDisplays,
   PRE_MATCH_SOURCE_COLORS,
   PRE_MATCH_SOURCE_HINTS,
   PRE_MATCH_SOURCE_LABELS,
-  teamPreMatchRating,
-  type PreMatchTeamRatings,
+  type PreMatchTeamDisplays,
 } from "../lib/predictionSource";
 
 const COMP_LEVEL_ORDER: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
@@ -174,7 +175,7 @@ function AlliancePreMatchInputs({
   teams: number[];
   color: "red" | "blue";
   year?: number;
-  ratings: PreMatchTeamRatings | null;
+  ratings: PreMatchTeamDisplays | null;
 }) {
   const accent = color === "red" ? "var(--mantine-color-red-6)" : "var(--mantine-color-blue-6)";
   return (
@@ -184,16 +185,18 @@ function AlliancePreMatchInputs({
       </Text>
       <Stack gap="sm">
         {teams.map((team) => {
-          const entry = teamPreMatchRating(ratings, team);
+          const entry = ratings?.[String(team)];
           return (
             <Group key={team} justify="space-between" wrap="nowrap" gap="xs">
               <TeamName teamNumber={team} year={year} />
               {entry ? (
                 <Group gap="xs" wrap="nowrap">
-                  {entry.rating != null ? (
-                    <Text size="sm" fw={700}>
-                      {formatNumber(entry.rating, 1)}
-                    </Text>
+                  {entry.ace != null ? (
+                    <Tooltip label={formatPreMatchComponents(entry)} withArrow multiline w={300}>
+                      <Text size="sm" fw={700} style={{ cursor: "help" }}>
+                        {formatNumber(entry.ace, 1)}
+                      </Text>
+                    </Tooltip>
                   ) : null}
                   <Tooltip label={PRE_MATCH_SOURCE_HINTS[entry.source]} withArrow multiline w={280}>
                     <Badge
@@ -307,7 +310,7 @@ export function Match() {
     return map;
   }, [matchTeams, teamPerfQueries, year]);
 
-  const preMatchRatings = useMemo(() => {
+  const preMatchSources = useMemo(() => {
     if (!match || !year) return null;
     return computePreMatchTeamSources({
       match,
@@ -328,6 +331,15 @@ export function Match() {
     teamSeasonPerf,
     teamPriorSeasonPerf,
   ]);
+
+  const preMatchRatings = useMemo(() => {
+    if (!match) return null;
+    return mergePreMatchDisplays(
+      match.pre_match_teams,
+      preMatchSources,
+      [...match.red_teams, ...match.blue_teams],
+    );
+  }, [match, preMatchSources]);
 
   const perfByTeam = useMemo(() => {
     const map = new Map<number, EventPerfInfo>();
@@ -473,8 +485,8 @@ export function Match() {
         <>
           <Title order={3}>Pre-match model inputs</Title>
           <Text size="sm" c="dimmed" mb="xs">
-            Inferred from this team&apos;s match history — no pipeline rerun needed. Hover a badge
-            for details.
+            Walk-forward ACE stored on this match (hover ACE for phase breakdown). Source badges
+            are inferred from match history.
           </Text>
           <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
             <AlliancePreMatchInputs

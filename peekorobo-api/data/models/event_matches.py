@@ -1,6 +1,6 @@
-from typing import Optional, List
+from typing import Optional, List, Dict
 from sqlalchemy import Text, INT, select, or_
-from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION
+from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from data.db import Base
 from query.event_matches import EventMatchesRequest, EventMatchResponse, MatchResponse
@@ -46,6 +46,7 @@ class EventMatch(Base):
     blue_win_prob: Mapped[Optional[float]] = mapped_column(DOUBLE_PRECISION)
     red_predicted_score: Mapped[Optional[float]] = mapped_column(DOUBLE_PRECISION)
     blue_predicted_score: Mapped[Optional[float]] = mapped_column(DOUBLE_PRECISION)
+    pre_match_teams: Mapped[Optional[dict]] = mapped_column(JSONB)
 
 
 def get_event_matches(db: Session, event_key: str, query: EventMatchesRequest) -> EventMatchResponse:
@@ -78,6 +79,7 @@ def get_event_matches(db: Session, event_key: str, query: EventMatchesRequest) -
             blue_win_prob=r.blue_win_prob,
             red_predicted_score=r.red_predicted_score,
             blue_predicted_score=r.blue_predicted_score,
+            pre_match_teams=r.pre_match_teams,
         )
         for r in rows
     ]

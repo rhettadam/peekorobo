@@ -10,6 +10,7 @@ the main cost/latency win for the leaderboard and insights pages.
 Usage:
     python data/generate_leaderboards.py            # current + a few recent years
     python data/generate_leaderboards.py 2025       # a single year
+    python data/generate_leaderboards.py 2024,2025,2026
     python data/generate_leaderboards.py all        # every year present in team_epas
 """
 
@@ -21,6 +22,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 from db_connection import DatabaseConnection
+from years_cli import parse_years
 
 load_dotenv()
 
@@ -80,7 +82,7 @@ def get_years(cur, requested):
         cur.execute("SELECT DISTINCT year FROM team_epas ORDER BY year")
         return [row[0] for row in cur.fetchall()]
     if requested is not None:
-        return [int(requested)]
+        return parse_years(requested)
     # Default: current year and the previous four seasons.
     current_year = int(os.getenv("CURRENT_YEAR", datetime.now(timezone.utc).year))
     return list(range(current_year, current_year - 5, -1))

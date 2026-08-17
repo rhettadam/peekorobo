@@ -132,6 +132,105 @@ class MatchPrediction:
     p_blue: float
     red_predicted_score: float
     blue_predicted_score: float
+    pre_match_teams: Optional[Dict[str, Dict[str, float]]] = None
+
+
+# Compact JSON keys stored in event_matches.pre_match_teams (per team: a,t,e,r,c,ace).
+PRE_MATCH_TEAM_KEYS = ("a", "t", "e", "r", "c", "ace")
+
+
+def pack_pre_match_team(
+    auto: float,
+    teleop: float,
+    endgame: float,
+    raw: float,
+    confidence: float,
+    ace: float,
+) -> Dict[str, float]:
+    return {
+        "a": round(auto, 2),
+        "t": round(teleop, 2),
+        "e": round(endgame, 2),
+        "r": round(raw, 2),
+        "c": round(confidence, 2),
+        "ace": round(ace, 2),
+    }
+
+
+def empty_pre_match_team() -> Dict[str, float]:
+    return pack_pre_match_team(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+
+def rating_from_pre_match_team(
+    payload: Dict[str, float], rating_field: RatingField
+) -> float:
+    if rating_field == "raw":
+        return float(payload.get("r") or 0.0)
+    return float(payload.get("ace") or 0.0)
+
+
+def _compact_from_perf(perf: Dict[str, float]) -> Dict[str, float]:
+    auto = float(perf.get("auto_raw") or 0.0)
+    teleop = float(perf.get("teleop_raw") or 0.0)
+    endgame = float(perf.get("endgame_raw") or 0.0)
+    raw = float(perf.get("raw") or (auto + teleop + endgame))
+    conf = float(perf.get("confidence") or 0.0)
+    ace = float(perf.get("ace") or (raw * conf))
+    return pack_pre_match_team(auto, teleop, endgame, raw, conf, ace)
+
+
+def _compact_from_season(td: Optional[TeamSeasonData]) -> Dict[str, float]:
+    if not td:
+        return empty_pre_match_team()
+    raw = float(td.raw or 0.0)
+    conf = float(td.confidence or 0.0)
+    ace = float(td.ace or (raw * conf))
+    return pack_pre_match_team(0.0, 0.0, 0.0, raw, conf, ace)
+
+
+def fallback_pre_match_team(
+    data: DbPredictionData,
+    team_number: int,
+    event_key: str,
+) -> Dict[str, float]:
+    """Prior-event or prior-season components when walk-forward snapshot is missing."""
+    team = data.season.get(team_number)
+    prior = data.prior_season.get(team_number)
+    if team:
+        pek = _prior_event_key(data, team, event_key)
+        if pek and pek in team.event_perf:
+            return _compact_from_perf(team.event_perf[pek])
+    if prior:
+        return _compact_from_season(prior)
+    return empty_pre_match_team()
+
+
+def resolve_pre_match_teams_for_match(
+    data: DbPredictionData,
+    row: MatchRow,
+    snapshots: Dict[int, Dict[str, float]],
+) -> Dict[str, Dict[str, float]]:
+    out: Dict[str, Dict[str, float]] = {}
+    for tn in row.red_teams + row.blue_teams:
+        if tn in snapshots:
+            out[str(tn)] = snapshots[tn]
+        else:
+            out[str(tn)] = fallback_pre_match_team(data, tn, row.event_key)
+    return out
+
+
+def _pre_match_teams_json(teams: Optional[Dict[str, Dict[str, float]]]) -> Optional[str]:
+    if not teams:
+        return None
+    return json.dumps(teams, sort_keys=True, separators=(",", ":"))
+
+
+def _normalize_jsonb(val) -> Optional[str]:
+    if val is None:
+        return None
+    if isinstance(val, str):
+        return val
+    return json.dumps(val, sort_keys=True, separators=(",", ":"))
 
 
 def _normalize_rating_field(value: str) -> RatingField:
@@ -470,17 +569,16 @@ def build_pre_match_ratings_by_match(
     matches_by_event: Dict[str, List[dict]],
     event_order: Dict[str, Tuple[str, str]],
     ace_params: AceParams,
-    finalize_rating: Callable[[TeamPhaseState, int, int, str], float],
-    rating_field: RatingField,
-    precomputed: Optional[Dict[str, Dict[int, float]]] = None,
+    finalize_team: Callable[[TeamPhaseState, int, int], Dict[str, float]],
+    precomputed: Optional[Dict[str, Dict[int, Dict[str, float]]]] = None,
     initial_priors: Optional[Dict[str, Tuple[float, float, float]]] = None,
-) -> Dict[str, Dict[int, float]]:
-    """Walk-forward ACE snapshots keyed by match_key then team_number."""
+) -> Dict[str, Dict[int, Dict[str, float]]]:
+    """Walk-forward pre-match team payloads keyed by match_key then team_number."""
     if precomputed and not matches_by_event:
         return dict(precomputed)
 
     priors: Dict[str, Tuple[float, float, float]] = dict(initial_priors or {})
-    ratings_by_match: Dict[str, Dict[int, float]] = dict(precomputed or {})
+    ratings_by_match: Dict[str, Dict[int, Dict[str, float]]] = dict(precomputed or {})
 
     event_keys = sorted(
         matches_by_event.keys(),
@@ -536,9 +634,7 @@ def build_pre_match_ratings_by_match(
                     continue
                 if not st.initialized and st.match_count <= 0:
                     continue
-                ratings_by_match[match_key][tn] = finalize_rating(
-                    st, tn, year, rating_field
-                )
+                ratings_by_match[match_key][tn] = finalize_team(st, tn, year)
         if ace_params.carry_prior:
             _update_carry_priors(priors, final_states, ace_params.prior_blend)
             sim_kwargs["prior_means"] = priors
@@ -558,39 +654,21 @@ def build_pre_match_ratings_by_match(
     return ratings_by_match
 
 
-def _fallback_prior_event_rating(
-    data: DbPredictionData,
-    team_number: int,
-    event_key: str,
-    config: PredictionConfig,
-) -> float:
-    fallback = PredictionConfig(
-        win_scale_base=config.win_scale_base,
-        prob_min=config.prob_min,
-        prob_max=config.prob_max,
-        rating_field=config.rating_field,
-        rating_scope="prior_event_or_prior_year",
-        aggregation=config.aggregation,
-    )
-    rating = team_rating_value(
-        data, team_number, event_key, fallback
-    )
-    return rating
-
-
 def alliance_strength_pre_match(
     data: DbPredictionData,
     team_numbers: List[int],
     event_key: str,
     config: PredictionConfig,
-    ratings_by_team: Dict[int, float],
+    teams_by_number: Dict[int, Dict[str, float]],
 ) -> float:
     ratings: List[float] = []
     for tn in team_numbers:
-        if tn in ratings_by_team:
-            val = ratings_by_team[tn]
+        if tn in teams_by_number:
+            val = rating_from_pre_match_team(teams_by_number[tn], config.rating_field)
         else:
-            val = _fallback_prior_event_rating(data, tn, event_key, config)
+            val = rating_from_pre_match_team(
+                fallback_pre_match_team(data, tn, event_key), config.rating_field
+            )
         ratings.append(float(val or 0.0))
     if not ratings:
         return 0.0
@@ -604,21 +682,29 @@ def predict_all_matches_walk_forward(
     matches_by_event: Dict[str, List[dict]],
     config: PredictionConfig,
     ace_params: AceParams,
-    finalize_rating: Callable[[TeamPhaseState, int, int, str], float],
-    precomputed_ratings: Optional[Dict[str, Dict[int, float]]] = None,
+    finalize_team: Callable[[TeamPhaseState, int, int], Dict[str, float]],
+    precomputed_ratings: Optional[Dict[str, Dict[int, Dict[str, float]]]] = None,
     initial_priors: Optional[Dict[str, Tuple[float, float, float]]] = None,
 ) -> List[MatchPrediction]:
     """Predict every match using walk-forward pre-match ACE snapshots."""
-    strengths = compute_walk_forward_strengths(
+    strengths, teams_by_match = compute_walk_forward_strengths(
         data,
         matches_by_event,
         config,
         ace_params,
-        finalize_rating,
+        finalize_team,
         precomputed_ratings=precomputed_ratings,
         initial_priors=initial_priors,
     )
-    return predictions_from_strengths(data, strengths, config)
+    pre_match_by_key: Dict[str, Dict[str, Dict[str, float]]] = {}
+    for row in data.matches:
+        snap = teams_by_match.get(row.match_key, {})
+        pre_match_by_key[row.match_key] = resolve_pre_match_teams_for_match(
+            data, row, snap
+        )
+    return predictions_from_strengths(
+        data, strengths, config, pre_match_by_key=pre_match_by_key
+    )
 
 
 def compute_walk_forward_strengths(
@@ -626,43 +712,43 @@ def compute_walk_forward_strengths(
     matches_by_event: Dict[str, List[dict]],
     config: PredictionConfig,
     ace_params: AceParams,
-    finalize_rating: Callable[[TeamPhaseState, int, int, str], float],
-    precomputed_ratings: Optional[Dict[str, Dict[int, float]]] = None,
+    finalize_team: Callable[[TeamPhaseState, int, int], Dict[str, float]],
+    precomputed_ratings: Optional[Dict[str, Dict[int, Dict[str, float]]]] = None,
     initial_priors: Optional[Dict[str, Tuple[float, float, float]]] = None,
-) -> Dict[str, Tuple[float, float]]:
-    """Pre-match alliance strengths keyed by match_key."""
+) -> Tuple[Dict[str, Tuple[float, float]], Dict[str, Dict[int, Dict[str, float]]]]:
+    """Pre-match alliance strengths and per-team snapshot payloads."""
     pre = dict(precomputed_ratings or {})
     db_keys = {row.match_key for row in data.matches}
     if db_keys.issubset(pre.keys()):
-        ratings_by_match = pre
+        teams_by_match = pre
     else:
-        ratings_by_match = build_pre_match_ratings_by_match(
+        teams_by_match = build_pre_match_ratings_by_match(
             data.year,
             matches_by_event,
             data.event_order,
             ace_params,
-            finalize_rating,
-            config.rating_field,
+            finalize_team,
             precomputed=precomputed_ratings,
             initial_priors=initial_priors,
         )
     strengths: Dict[str, Tuple[float, float]] = {}
     for row in data.matches:
-        team_ratings = ratings_by_match.get(row.match_key, {})
+        snap = teams_by_match.get(row.match_key, {})
         red_strength = alliance_strength_pre_match(
-            data, row.red_teams, row.event_key, config, team_ratings
+            data, row.red_teams, row.event_key, config, snap
         )
         blue_strength = alliance_strength_pre_match(
-            data, row.blue_teams, row.event_key, config, team_ratings
+            data, row.blue_teams, row.event_key, config, snap
         )
         strengths[row.match_key] = (red_strength, blue_strength)
-    return strengths
+    return strengths, teams_by_match
 
 
 def predictions_from_strengths(
     data: DbPredictionData,
     strengths: Dict[str, Tuple[float, float]],
     config: PredictionConfig,
+    pre_match_by_key: Optional[Dict[str, Dict[str, Dict[str, float]]]] = None,
 ) -> List[MatchPrediction]:
     """Map cached alliance strengths to win probabilities."""
     predictions: List[MatchPrediction] = []
@@ -676,6 +762,7 @@ def predictions_from_strengths(
                 p_blue=p_blue,
                 red_predicted_score=red_strength,
                 blue_predicted_score=blue_strength,
+                pre_match_teams=(pre_match_by_key or {}).get(row.match_key),
             )
         )
     return predictions
@@ -696,7 +783,7 @@ def apply_match_predictions_to_db(conn, year: int, predictions: List[MatchPredic
         cur.execute(
             """
             SELECT match_key, red_win_prob, blue_win_prob,
-                   red_predicted_score, blue_predicted_score
+                   red_predicted_score, blue_predicted_score, pre_match_teams
             FROM event_matches
             WHERE LEFT(event_key, 4) = %s
             """,
@@ -714,7 +801,9 @@ def apply_match_predictions_to_db(conn, year: int, predictions: List[MatchPredic
             if match_key not in existing:
                 skipped_missing += 1
                 continue
-            ex_pr, ex_pb, ex_rs, ex_bs = existing[match_key]
+            ex_pr, ex_pb, ex_rs, ex_bs, ex_teams = existing[match_key]
+            teams_json = _pre_match_teams_json(pred.pre_match_teams)
+            ex_teams_json = _normalize_jsonb(ex_teams)
             if not math.isfinite(pred.p_red) or not math.isfinite(pred.p_blue):
                 skipped_bad += 1
                 continue
@@ -724,6 +813,7 @@ def apply_match_predictions_to_db(conn, year: int, predictions: List[MatchPredic
                 and ex_bs is not None
                 and abs(float(ex_rs) - pred.red_predicted_score) < 1e-6
                 and abs(float(ex_bs) - pred.blue_predicted_score) < 1e-6
+                and teams_json == ex_teams_json
             ):
                 skipped_unchanged += 1
                 continue
@@ -733,6 +823,7 @@ def apply_match_predictions_to_db(conn, year: int, predictions: List[MatchPredic
                     pred.p_blue,
                     pred.red_predicted_score,
                     pred.blue_predicted_score,
+                    teams_json,
                     match_key,
                 )
             )
@@ -753,18 +844,20 @@ def apply_match_predictions_to_db(conn, year: int, predictions: List[MatchPredic
                 SET red_win_prob = v.red_win_prob::double precision,
                     blue_win_prob = v.blue_win_prob::double precision,
                     red_predicted_score = v.red_predicted_score::double precision,
-                    blue_predicted_score = v.blue_predicted_score::double precision
+                    blue_predicted_score = v.blue_predicted_score::double precision,
+                    pre_match_teams = v.pre_match_teams::jsonb
                 FROM (VALUES %s) AS v(
                     red_win_prob,
                     blue_win_prob,
                     red_predicted_score,
                     blue_predicted_score,
+                    pre_match_teams,
                     match_key
                 )
                 WHERE em.match_key = v.match_key
                 """,
                 updates,
-                template="(%s, %s, %s, %s, %s)",
+                template="(%s, %s, %s, %s, %s::jsonb, %s)",
                 page_size=page_size,
             )
             print(

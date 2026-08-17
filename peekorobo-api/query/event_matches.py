@@ -1,5 +1,13 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
+
+class PreMatchTeamCompact(BaseModel):
+    a: float
+    t: float
+    e: float
+    r: float
+    c: float
+    ace: float
 
 class EventMatchesRequest(BaseModel):
     match_key : Optional[str] = None
@@ -21,6 +29,7 @@ class MatchResponse(BaseModel):
     blue_win_prob : Optional[float] = None
     red_predicted_score : Optional[float] = None
     blue_predicted_score : Optional[float] = None
+    pre_match_teams : Optional[Dict[str, PreMatchTeamCompact]] = None
 
 class EventMatchResponse(BaseModel):
     event_key : str

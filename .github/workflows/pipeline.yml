@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       year:
-        description: "Season year (defaults to the current year)"
+        description: "Season year(s), comma-separated (e.g. 2026 or 2024,2025,2026). Defaults to the current year."
         required: false
       mode:
         description: "full or live"
@@ -72,7 +72,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
-      - name: Resolve season year
+      - name: Resolve season year(s)
         run: echo "YEAR=${{ github.event.inputs.year || '' }}" >> "$GITHUB_ENV"
       - name: Default year to current
         if: env.YEAR == ''
@@ -91,7 +91,8 @@ jobs:
       github.event.schedule == '0 7 * 5-12 *' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode != 'live')
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    # Multi-year manual runs (e.g. 2024,2025,2026) can take several hours.
+    timeout-minutes: 480
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -99,7 +100,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
-      - name: Resolve season year
+      - name: Resolve season year(s)
         run: echo "YEAR=${{ github.event.inputs.year || '' }}" >> "$GITHUB_ENV"
       - name: Default year to current
         if: env.YEAR == ''
