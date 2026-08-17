@@ -26,18 +26,18 @@ export type PreMatchTeamRatings = Record<string, PreMatchTeamRating>;
 export type PreMatchTeamDisplays = Record<string, PreMatchTeamDisplay>;
 
 export const PRE_MATCH_SOURCE_LABELS: Record<PreMatchRatingSource, string> = {
-  in_event: "In-event walk-forward",
-  carry_prior: "Carried from prior event",
-  prior_event: "Earlier event this season",
-  prior_season: "Prior season ACE",
-  unrated: "No rating history",
+  in_event: "In-event",
+  carry_prior: "Prior event",
+  prior_event: "Prior event",
+  prior_season: "Prior season",
+  unrated: "Unrated",
 };
 
 export const PRE_MATCH_SOURCE_HINTS: Record<PreMatchRatingSource, string> = {
-  in_event: "This team already played earlier matches at this event before this one.",
-  carry_prior: "First match at this event; model seeds from the team's most recent prior event this season.",
-  prior_event: "First match at this event; rating comes from an earlier event this season.",
-  prior_season: "First event of the season for this team; model uses prior-year ACE.",
+  in_event: "Walk-forward ACE after this team's earlier matches at this event.",
+  carry_prior: "Seeded from the team's most recent prior event this season.",
+  prior_event: "From an earlier event this season (no in-event history yet).",
+  prior_season: "Prior-year season ACE — typical for a team's first match of the season.",
   unrated: "No prior matches or ACE history were found for this team.",
 };
 
@@ -99,18 +99,18 @@ function priorEventsThisSeason(
   return prior.sort((a, b) => eventStart(a, eventsByKey).localeCompare(eventStart(b, eventsByKey)));
 }
 
-function latestPriorEventAce(
+function latestPriorEventEntry(
   priorEventKeys: string[],
   seasonPerf: TeamPerfInfo | undefined,
-): number | null {
+): EventPerfEntry | null {
   if (!seasonPerf?.event_perf?.length || !priorEventKeys.length) return null;
   const byKey = new Map<string, EventPerfEntry>();
   for (const ep of seasonPerf.event_perf as EventPerfEntry[]) {
     if (ep.event_key) byKey.set(ep.event_key, ep);
   }
   for (let i = priorEventKeys.length - 1; i >= 0; i--) {
-    const ace = byKey.get(priorEventKeys[i])?.ace;
-    if (typeof ace === "number" && Number.isFinite(ace)) return ace;
+    const ep = byKey.get(priorEventKeys[i]);
+    if (ep && typeof ep.ace === "number" && Number.isFinite(ep.ace)) return ep;
   }
   return null;
 }
@@ -143,10 +143,10 @@ function inferPreMatchSource(
   );
 
   if (priorEvents.length > 0) {
-    const ace = latestPriorEventAce(priorEvents, seasonPerf);
+    const ep = latestPriorEventEntry(priorEvents, seasonPerf);
     return {
       source: "carry_prior",
-      rating: ace,
+      rating: typeof ep?.ace === "number" ? ep.ace : null,
     };
   }
 
@@ -187,10 +187,53 @@ function compactToDisplay(compact: PreMatchTeamCompact): Omit<PreMatchTeamDispla
   };
 }
 
+function fromSeasonPerf(perf: TeamPerfInfo | undefined): Omit<PreMatchTeamDisplay, "source"> | null {
+  if (!perf) return null;
+  const ace = typeof perf.ace === "number" ? perf.ace : null;
+  if (ace === null) return null;
+  return {
+    ace,
+    auto: typeof perf.auto_raw === "number" ? perf.auto_raw : null,
+    teleop: typeof perf.teleop_raw === "number" ? perf.teleop_raw : null,
+    endgame: typeof perf.endgame_raw === "number" ? perf.endgame_raw : null,
+    raw: typeof perf.raw === "number" ? perf.raw : null,
+    confidence: typeof perf.confidence === "number" ? perf.confidence : null,
+  };
+}
+
+function fromEventPerf(ep: EventPerfEntry | null): Omit<PreMatchTeamDisplay, "source"> | null {
+  if (!ep || typeof ep.ace !== "number") return null;
+  return {
+    ace: ep.ace,
+    auto: typeof ep.auto_raw === "number" ? ep.auto_raw : null,
+    teleop: typeof ep.teleop_raw === "number" ? ep.teleop_raw : null,
+    endgame: typeof ep.endgame_raw === "number" ? ep.endgame_raw : null,
+    raw: typeof ep.raw === "number" ? ep.raw : null,
+    confidence: typeof ep.confidence === "number" ? ep.confidence : null,
+  };
+}
+
+function phasesMissing(d: Omit<PreMatchTeamDisplay, "source">): boolean {
+  const a = d.auto ?? 0;
+  const t = d.teleop ?? 0;
+  const e = d.endgame ?? 0;
+  return a === 0 && t === 0 && e === 0;
+}
+
+export interface PreMatchEnrichment {
+  teamSeasonPerf: Map<number, TeamPerfInfo>;
+  teamPriorSeasonPerf: Map<number, TeamPerfInfo>;
+  eventKey: string;
+  eventStartDate: string | null;
+  eventsByKey: Map<string, { start_date: string }>;
+}
+
+/** Prefer stored walk-forward payloads; fill missing phases from season/event history. */
 export function mergePreMatchDisplays(
   stored: Record<string, PreMatchTeamCompact> | null | undefined,
   sources: PreMatchTeamRatings | null,
   teams: number[],
+  enrichment?: PreMatchEnrichment,
 ): PreMatchTeamDisplays | null {
   if (!sources && !stored) return null;
   const out: PreMatchTeamDisplays = {};
@@ -198,9 +241,46 @@ export function mergePreMatchDisplays(
     const key = String(team);
     const source = sources?.[key]?.source ?? "unrated";
     const compact = stored?.[key];
-    if (compact) {
-      out[key] = { source, ...compactToDisplay(compact) };
-    } else {
+    let base: Omit<PreMatchTeamDisplay, "source"> | null = compact
+      ? compactToDisplay(compact)
+      : null;
+
+    if ((!base || phasesMissing(base)) && enrichment) {
+      if (source === "prior_season") {
+        const filled = fromSeasonPerf(enrichment.teamPriorSeasonPerf.get(team));
+        if (filled) {
+          base = base
+            ? {
+                ...filled,
+                ace: base.ace ?? filled.ace,
+                raw: base.raw ?? filled.raw,
+                confidence: base.confidence ?? filled.confidence,
+              }
+            : filled;
+        }
+      } else if (source === "carry_prior" || source === "prior_event") {
+        const season = enrichment.teamSeasonPerf.get(team);
+        const priorKeys = priorEventsThisSeason(
+          enrichment.eventKey,
+          enrichment.eventStartDate,
+          enrichment.eventsByKey,
+          season,
+        );
+        const filled = fromEventPerf(latestPriorEventEntry(priorKeys, season));
+        if (filled) {
+          base = base
+            ? {
+                ...filled,
+                ace: base.ace ?? filled.ace,
+                raw: base.raw ?? filled.raw,
+                confidence: base.confidence ?? filled.confidence,
+              }
+            : filled;
+        }
+      }
+    }
+
+    if (!base) {
       out[key] = {
         source,
         ace: sources?.[key]?.rating ?? null,
@@ -210,18 +290,62 @@ export function mergePreMatchDisplays(
         raw: null,
         confidence: null,
       };
+    } else {
+      out[key] = { source, ...base };
     }
   }
   return out;
 }
 
-export function formatPreMatchComponents(entry: PreMatchTeamDisplay): string {
-  const parts = [
-    entry.auto != null ? `Auto ${entry.auto.toFixed(1)}` : null,
-    entry.teleop != null ? `Teleop ${entry.teleop.toFixed(1)}` : null,
-    entry.endgame != null ? `Endgame ${entry.endgame.toFixed(1)}` : null,
-    entry.raw != null ? `RAW ${entry.raw.toFixed(1)}` : null,
-    entry.confidence != null ? `Conf ${entry.confidence.toFixed(2)}` : null,
-  ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : PRE_MATCH_SOURCE_HINTS[entry.source];
+export function sumPreMatchField(
+  ratings: PreMatchTeamDisplays | null,
+  teams: number[],
+  field: keyof Omit<PreMatchTeamDisplay, "source">,
+): number | null {
+  if (!ratings) return null;
+  let sum = 0;
+  let known = 0;
+  for (const team of teams) {
+    const v = ratings[String(team)]?.[field];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      sum += v;
+      known += 1;
+    }
+  }
+  return known > 0 ? sum : null;
+}
+
+export function meanPreMatchField(
+  ratings: PreMatchTeamDisplays | null,
+  teams: number[],
+  field: keyof Omit<PreMatchTeamDisplay, "source">,
+): number | null {
+  if (!ratings) return null;
+  let sum = 0;
+  let known = 0;
+  for (const team of teams) {
+    const v = ratings[String(team)]?.[field];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      sum += v;
+      known += 1;
+    }
+  }
+  return known > 0 ? sum / known : null;
+}
+
+/** Collect numeric values across matches' stored pre_match_teams for percentile coloring. */
+export function collectEventPreMatchValues(
+  matches: MatchResponse[],
+  field: "a" | "t" | "e" | "r" | "c" | "ace",
+): Array<number | null> {
+  const out: Array<number | null> = [];
+  for (const m of matches) {
+    const teams = m.pre_match_teams;
+    if (!teams) continue;
+    for (const entry of Object.values(teams)) {
+      const v = entry?.[field];
+      out.push(typeof v === "number" && Number.isFinite(v) ? v : null);
+    }
+  }
+  return out;
 }

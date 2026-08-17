@@ -6,6 +6,7 @@ import {
   Badge,
   Card,
   Group,
+  Progress,
   SimpleGrid,
   Stack,
   Table,
@@ -16,7 +17,7 @@ import {
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import { Link, useParams } from "react-router-dom";
 import { apiGet } from "../api/client";
-import { useEvent, useEventMatches, useEventPerfs, useEvents } from "../api/queries";
+import { useEvent, useEventMatches, useEvents } from "../api/queries";
 import { ErrorState, LoadingState, EmptyState } from "../components/StateWrappers";
 import { TeamName } from "../components/TeamName";
 import { MetricCell, ConfidenceCell } from "../components/MetricCell";
@@ -24,25 +25,20 @@ import { AceLegend } from "../components/AceLegend";
 import { computePercentiles, median, type PercentileThresholds } from "../lib/epa";
 import { formatNumber, yearFromEventKey } from "../lib/format";
 import { predictedMatchScores } from "../lib/prediction";
-import type { EventPerfInfo, MatchResponse, TeamPerfInfo, TeamPerfResponse } from "../types/api";
+import type { TeamPerfInfo, TeamPerfResponse } from "../types/api";
 import {
+  collectEventPreMatchValues,
+  compareMatchesChronologically,
   computePreMatchTeamSources,
-  formatPreMatchComponents,
+  meanPreMatchField,
   mergePreMatchDisplays,
   PRE_MATCH_SOURCE_COLORS,
   PRE_MATCH_SOURCE_HINTS,
   PRE_MATCH_SOURCE_LABELS,
+  sumPreMatchField,
+  type PreMatchTeamDisplay,
   type PreMatchTeamDisplays,
 } from "../lib/predictionSource";
-
-const COMP_LEVEL_ORDER: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
-
-function matchSort(a: MatchResponse, b: MatchResponse): number {
-  const lvl = (COMP_LEVEL_ORDER[a.comp_level] ?? 9) - (COMP_LEVEL_ORDER[b.comp_level] ?? 9);
-  if (lvl !== 0) return lvl;
-  if (a.set_number !== b.set_number) return a.set_number - b.set_number;
-  return a.match_number - b.match_number;
-}
 
 function matchLabel(comp: string, set: number, num: number): string {
   const c = comp.toUpperCase();
@@ -57,170 +53,22 @@ interface Thresholds {
   ace: PercentileThresholds;
 }
 
-const PHASES: Array<{ label: string; field: keyof EventPerfInfo; thr: keyof Thresholds }> = [
-  { label: "Auto", field: "auto_raw", thr: "auto" },
-  { label: "Teleop", field: "teleop_raw", thr: "teleop" },
-  { label: "Endgame", field: "endgame_raw", thr: "endgame" },
-  { label: "RAW", field: "raw", thr: "raw" },
+type MetricKey = "auto" | "teleop" | "endgame" | "raw" | "confidence" | "ace";
+
+const METRIC_ROWS: Array<{
+  label: string;
+  field: MetricKey;
+  thr?: keyof Thresholds;
+  decimals: number;
+  bold?: boolean;
+}> = [
+  { label: "Auto", field: "auto", thr: "auto", decimals: 1 },
+  { label: "Teleop", field: "teleop", thr: "teleop", decimals: 1 },
+  { label: "Endgame", field: "endgame", thr: "endgame", decimals: 1 },
+  { label: "RAW", field: "raw", thr: "raw", decimals: 1 },
+  { label: "Confidence", field: "confidence", decimals: 2 },
+  { label: "ACE", field: "ace", thr: "ace", decimals: 1, bold: true },
 ];
-
-function sumField(perfs: (EventPerfInfo | undefined)[], field: keyof EventPerfInfo): number {
-  return perfs.reduce((s, p) => s + (typeof p?.[field] === "number" ? (p[field] as number) : 0), 0);
-}
-
-function AllianceBreakdown({
-  teams,
-  color,
-  year,
-  perfByTeam,
-  thresholds,
-  confMedian,
-  actualScore,
-}: {
-  teams: number[];
-  color: "red" | "blue";
-  year?: number;
-  perfByTeam: Map<number, EventPerfInfo>;
-  thresholds: Thresholds;
-  confMedian: number | null;
-  actualScore: number;
-}) {
-  const perfs = teams.map((t) => perfByTeam.get(t));
-  const accent = color === "red" ? "var(--mantine-color-red-6)" : "var(--mantine-color-blue-6)";
-  return (
-    <Card withBorder padding={0} radius="md">
-      <Table>
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th style={{ color: accent }}>Phase</Table.Th>
-            {teams.map((t) => (
-              <Table.Th key={t} ta="center">
-                <TeamName teamNumber={t} year={year} numberOnly />
-              </Table.Th>
-            ))}
-            <Table.Th ta="center">Alliance</Table.Th>
-            <Table.Th ta="center">Match</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {PHASES.map((phase) => (
-            <Table.Tr key={phase.label}>
-              <Table.Td fw={600}>{phase.label}</Table.Td>
-              {perfs.map((p, i) => (
-                <Table.Td key={teams[i]} ta="center">
-                  <MetricCell
-                    value={(p?.[phase.field] as number | null | undefined) ?? null}
-                    thresholds={thresholds[phase.thr]}
-                  />
-                </Table.Td>
-              ))}
-              <Table.Td ta="center" fw={700}>
-                {formatNumber(sumField(perfs, phase.field), 1)}
-              </Table.Td>
-              <Table.Td ta="center" c="dimmed">
-                –
-              </Table.Td>
-            </Table.Tr>
-          ))}
-          <Table.Tr>
-            <Table.Td fw={600}>Confidence</Table.Td>
-            {perfs.map((p, i) => (
-              <Table.Td key={teams[i]} ta="center">
-                <ConfidenceCell value={p?.confidence ?? null} median={confMedian} />
-              </Table.Td>
-            ))}
-            <Table.Td ta="center" fw={700}>
-              {(() => {
-                const vals = perfs
-                  .map((p) => p?.confidence)
-                  .filter((v): v is number => typeof v === "number");
-                return formatNumber(
-                  vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null,
-                  2,
-                );
-              })()}
-            </Table.Td>
-            <Table.Td ta="center" c="dimmed">
-              –
-            </Table.Td>
-          </Table.Tr>
-          <Table.Tr style={{ borderTop: `2px solid ${accent}` }}>
-            <Table.Td fw={800} style={{ color: accent }}>
-              ACE
-            </Table.Td>
-            {perfs.map((p, i) => (
-              <Table.Td key={teams[i]} ta="center">
-                <MetricCell value={p?.ace ?? null} thresholds={thresholds.ace} />
-              </Table.Td>
-            ))}
-            <Table.Td ta="center" fw={800}>
-              {formatNumber(sumField(perfs, "ace"), 1)}
-            </Table.Td>
-            <Table.Td ta="center" fw={800} style={{ color: accent }}>
-              {actualScore}
-            </Table.Td>
-          </Table.Tr>
-        </Table.Tbody>
-      </Table>
-    </Card>
-  );
-}
-
-function AlliancePreMatchInputs({
-  teams,
-  color,
-  year,
-  ratings,
-}: {
-  teams: number[];
-  color: "red" | "blue";
-  year?: number;
-  ratings: PreMatchTeamDisplays | null;
-}) {
-  const accent = color === "red" ? "var(--mantine-color-red-6)" : "var(--mantine-color-blue-6)";
-  return (
-    <Card withBorder padding="md" radius="md">
-      <Text fw={700} mb="sm" style={{ color: accent }}>
-        {color === "red" ? "Red" : "Blue"} alliance
-      </Text>
-      <Stack gap="sm">
-        {teams.map((team) => {
-          const entry = ratings?.[String(team)];
-          return (
-            <Group key={team} justify="space-between" wrap="nowrap" gap="xs">
-              <TeamName teamNumber={team} year={year} />
-              {entry ? (
-                <Group gap="xs" wrap="nowrap">
-                  {entry.ace != null ? (
-                    <Tooltip label={formatPreMatchComponents(entry)} withArrow multiline w={300}>
-                      <Text size="sm" fw={700} style={{ cursor: "help" }}>
-                        {formatNumber(entry.ace, 1)}
-                      </Text>
-                    </Tooltip>
-                  ) : null}
-                  <Tooltip label={PRE_MATCH_SOURCE_HINTS[entry.source]} withArrow multiline w={280}>
-                    <Badge
-                      size="sm"
-                      variant="light"
-                      color={PRE_MATCH_SOURCE_COLORS[entry.source]}
-                      style={{ cursor: "help" }}
-                    >
-                      {PRE_MATCH_SOURCE_LABELS[entry.source]}
-                    </Badge>
-                  </Tooltip>
-                </Group>
-              ) : (
-                <Text size="sm" c="dimmed">
-                  —
-                </Text>
-              )}
-            </Group>
-          );
-        })}
-      </Stack>
-    </Card>
-  );
-}
 
 function ScoreStat({
   label,
@@ -250,16 +98,150 @@ function ScoreStat({
   );
 }
 
+function AllianceAceBreakdown({
+  teams,
+  color,
+  year,
+  ratings,
+  thresholds,
+  confMedian,
+  actualScore,
+  played,
+}: {
+  teams: number[];
+  color: "red" | "blue";
+  year?: number;
+  ratings: PreMatchTeamDisplays | null;
+  thresholds: Thresholds;
+  confMedian: number | null;
+  actualScore: number;
+  played: boolean;
+}) {
+  const accent = color === "red" ? "var(--mantine-color-red-6)" : "var(--mantine-color-blue-6)";
+  const entries = teams.map((t) => ratings?.[String(t)] ?? null);
+
+  return (
+    <Card withBorder padding={0} radius="md">
+      <Table>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th style={{ color: accent, width: 110 }}>
+              {color === "red" ? "Red" : "Blue"}
+            </Table.Th>
+            {teams.map((t) => {
+              const entry = ratings?.[String(t)];
+              return (
+                <Table.Th key={t} ta="center">
+                  <Stack gap={4} align="center">
+                    <TeamName teamNumber={t} year={year} numberOnly />
+                    {entry ? (
+                      <Tooltip
+                        label={PRE_MATCH_SOURCE_HINTS[entry.source]}
+                        withArrow
+                        multiline
+                        w={260}
+                      >
+                        <Badge
+                          size="xs"
+                          variant="light"
+                          color={PRE_MATCH_SOURCE_COLORS[entry.source]}
+                          style={{ cursor: "help" }}
+                        >
+                          {PRE_MATCH_SOURCE_LABELS[entry.source]}
+                        </Badge>
+                      </Tooltip>
+                    ) : null}
+                  </Stack>
+                </Table.Th>
+              );
+            })}
+            <Table.Th ta="center">Alliance</Table.Th>
+            <Table.Th ta="center">Match</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {METRIC_ROWS.map((row) => {
+            const isAce = row.field === "ace";
+            const allianceVal =
+              row.field === "confidence"
+                ? meanPreMatchField(ratings, teams, "confidence")
+                : sumPreMatchField(ratings, teams, row.field);
+
+            return (
+              <Table.Tr
+                key={row.label}
+                style={isAce ? { borderTop: `2px solid ${accent}` } : undefined}
+              >
+                <Table.Td fw={isAce ? 800 : 600} style={isAce ? { color: accent } : undefined}>
+                  {row.label}
+                </Table.Td>
+                {entries.map((entry, i) => (
+                  <Table.Td key={teams[i]} ta="center">
+                    <MetricValue
+                      entry={entry}
+                      field={row.field}
+                      thresholds={thresholds}
+                      thr={row.thr}
+                      confMedian={confMedian}
+                      decimals={row.decimals}
+                    />
+                  </Table.Td>
+                ))}
+                <Table.Td ta="center" fw={isAce ? 800 : 700}>
+                  {row.field === "confidence" ? (
+                    <ConfidenceCell value={allianceVal} median={confMedian} />
+                  ) : row.thr ? (
+                    <MetricCell value={allianceVal} thresholds={thresholds[row.thr]} decimals={row.decimals} />
+                  ) : (
+                    formatNumber(allianceVal, row.decimals)
+                  )}
+                </Table.Td>
+                <Table.Td ta="center" fw={isAce ? 800 : undefined} style={isAce ? { color: accent } : undefined}>
+                  {isAce ? (played ? actualScore : "—") : <Text c="dimmed">–</Text>}
+                </Table.Td>
+              </Table.Tr>
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+    </Card>
+  );
+}
+
+function MetricValue({
+  entry,
+  field,
+  thresholds,
+  thr,
+  confMedian,
+  decimals,
+}: {
+  entry: PreMatchTeamDisplay | null;
+  field: MetricKey;
+  thresholds: Thresholds;
+  thr?: keyof Thresholds;
+  confMedian: number | null;
+  decimals: number;
+}) {
+  const value = entry?.[field] ?? null;
+  if (field === "confidence") {
+    return <ConfidenceCell value={value} median={confMedian} />;
+  }
+  if (thr) {
+    return <MetricCell value={value} thresholds={thresholds[thr]} decimals={decimals} />;
+  }
+  return <>{formatNumber(value, decimals)}</>;
+}
+
 export function Match() {
   const { eventKey = "", matchKey = "" } = useParams();
   const year = yearFromEventKey(eventKey) ?? undefined;
   const eventQuery = useEvent(eventKey);
   const matchesQuery = useEventMatches(eventKey);
-  const perfsQuery = useEventPerfs(eventKey);
   const yearEventsQuery = useEvents(year ?? 0);
 
   const sortedMatches = useMemo(
-    () => [...(matchesQuery.data?.matches ?? [])].sort(matchSort),
+    () => [...(matchesQuery.data?.matches ?? [])].sort(compareMatchesChronologically),
     [matchesQuery.data],
   );
   const idx = sortedMatches.findIndex((m) => m.match_key === matchKey);
@@ -338,35 +320,52 @@ export function Match() {
       match.pre_match_teams,
       preMatchSources,
       [...match.red_teams, ...match.blue_teams],
+      {
+        teamSeasonPerf,
+        teamPriorSeasonPerf,
+        eventKey,
+        eventStartDate: eventQuery.data?.event_data.start_date ?? null,
+        eventsByKey,
+      },
     );
-  }, [match, preMatchSources]);
-
-  const perfByTeam = useMemo(() => {
-    const map = new Map<number, EventPerfInfo>();
-    for (const p of perfsQuery.data?.perfs ?? []) map.set(p.team_number, p);
-    return map;
-  }, [perfsQuery.data]);
-
-  const aceByTeam = useMemo(() => {
-    const map = new Map<number, number | null | undefined>();
-    for (const p of perfsQuery.data?.perfs ?? []) map.set(p.team_number, p.ace);
-    return map;
-  }, [perfsQuery.data]);
+  }, [
+    match,
+    preMatchSources,
+    teamSeasonPerf,
+    teamPriorSeasonPerf,
+    eventKey,
+    eventQuery.data,
+    eventsByKey,
+  ]);
 
   const thresholds: Thresholds = useMemo(() => {
-    const perfs = perfsQuery.data?.perfs ?? [];
-    return {
-      auto: computePercentiles(perfs.map((p) => p.auto_raw)),
-      teleop: computePercentiles(perfs.map((p) => p.teleop_raw)),
-      endgame: computePercentiles(perfs.map((p) => p.endgame_raw)),
-      raw: computePercentiles(perfs.map((p) => p.raw)),
-      ace: computePercentiles(perfs.map((p) => p.ace)),
+    const fromEvent = (field: "a" | "t" | "e" | "r" | "ace") =>
+      collectEventPreMatchValues(sortedMatches, field);
+    // Fall back to this match's six teams when the event hasn't been backfilled yet.
+    const fromMatch = (field: MetricKey): Array<number | null> => {
+      if (!preMatchRatings) return [];
+      return matchTeams.map((t) => preMatchRatings[String(t)]?.[field] ?? null);
     };
-  }, [perfsQuery.data]);
-  const confMedian = useMemo(
-    () => median((perfsQuery.data?.perfs ?? []).map((p) => p.confidence)),
-    [perfsQuery.data],
-  );
+    const auto = fromEvent("a");
+    const teleop = fromEvent("t");
+    const endgame = fromEvent("e");
+    const raw = fromEvent("r");
+    const ace = fromEvent("ace");
+    return {
+      auto: computePercentiles(auto.some((v) => v != null) ? auto : fromMatch("auto")),
+      teleop: computePercentiles(teleop.some((v) => v != null) ? teleop : fromMatch("teleop")),
+      endgame: computePercentiles(endgame.some((v) => v != null) ? endgame : fromMatch("endgame")),
+      raw: computePercentiles(raw.some((v) => v != null) ? raw : fromMatch("raw")),
+      ace: computePercentiles(ace.some((v) => v != null) ? ace : fromMatch("ace")),
+    };
+  }, [sortedMatches, preMatchRatings, matchTeams]);
+
+  const confMedian = useMemo(() => {
+    const fromEvent = collectEventPreMatchValues(sortedMatches, "c");
+    if (fromEvent.some((v) => v != null)) return median(fromEvent);
+    if (!preMatchRatings) return null;
+    return median(matchTeams.map((t) => preMatchRatings[String(t)]?.confidence ?? null));
+  }, [sortedMatches, preMatchRatings, matchTeams]);
 
   useEffect(() => {
     document.title = `${matchKey} - Peekorobo`;
@@ -384,9 +383,10 @@ export function Match() {
   const winProb =
     redProb !== null && blueProb !== null ? Math.round(Math.max(redProb, blueProb) * 100) : null;
 
-  const modelStrength = predictedMatchScores(match, aceByTeam);
-  const modelRed = modelStrength?.red ?? null;
-  const modelBlue = modelStrength?.blue ?? null;
+  const modelStrength = predictedMatchScores(match, undefined);
+  const modelRed = modelStrength?.red ?? sumPreMatchField(preMatchRatings, match.red_teams, "ace");
+  const modelBlue =
+    modelStrength?.blue ?? sumPreMatchField(preMatchRatings, match.blue_teams, "ace");
   const modelWinner =
     modelRed !== null && modelBlue !== null
       ? modelRed === modelBlue
@@ -397,6 +397,14 @@ export function Match() {
       : null;
 
   const actualWinner = redWin ? "RED" : blueWin ? "BLUE" : played ? "TIE" : null;
+  const modelCorrect =
+    played &&
+    modelWinner &&
+    actualWinner &&
+    actualWinner !== "TIE" &&
+    modelWinner !== "Tie"
+      ? modelWinner === actualWinner
+      : null;
 
   return (
     <Stack gap="lg" py="md">
@@ -423,6 +431,16 @@ export function Match() {
             </Title>
             {redWin ? <Badge color="red">Red win</Badge> : null}
             {blueWin ? <Badge color="blue">Blue win</Badge> : null}
+            {modelCorrect === true ? (
+              <Badge color="teal" variant="light">
+                Model correct
+              </Badge>
+            ) : null}
+            {modelCorrect === false ? (
+              <Badge color="gray" variant="light">
+                Model miss
+              </Badge>
+            ) : null}
           </Group>
           <Anchor component={Link} to={`/event/${eventKey}`} size="sm" ta="center">
             {year ? `${year} ` : ""}
@@ -448,18 +466,18 @@ export function Match() {
 
       <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
         <ScoreStat
-          label="Pre-match strength"
+          label="Pre-match ACE"
           value={
             modelRed !== null && modelBlue !== null
-              ? `${Math.round(modelRed)} - ${Math.round(modelBlue)}`
+              ? `${Math.round(modelRed)} – ${Math.round(modelBlue)}`
               : "—"
           }
-          sub={modelWinner ? `Model favors: ${modelWinner}` : "No model data"}
+          sub={modelWinner ? `Favors ${modelWinner}` : "No model data"}
           subColor={modelWinner === "RED" ? "red" : modelWinner === "BLUE" ? "blue" : "dimmed"}
         />
         <ScoreStat
           label="Actual score"
-          value={played ? `${match.red_score} - ${match.blue_score}` : "— / —"}
+          value={played ? `${match.red_score} – ${match.blue_score}` : "— / —"}
           sub={actualWinner ? `Winner: ${actualWinner}` : "Not played"}
           subColor={actualWinner === "RED" ? "red" : actualWinner === "BLUE" ? "blue" : "dimmed"}
         />
@@ -467,67 +485,71 @@ export function Match() {
           label="Win probability"
           value={winProb !== null ? `${winProb}%` : "—"}
           sub={
-            winProb !== null
-              ? `${(redProb ?? 0) >= (blueProb ?? 0) ? "RED" : "BLUE"} favored`
+            redProb !== null && blueProb !== null
+              ? `Red ${(redProb * 100).toFixed(0)}% · Blue ${(blueProb * 100).toFixed(0)}%`
               : undefined
           }
           subColor={(redProb ?? 0) >= (blueProb ?? 0) ? "red" : "blue"}
         />
       </SimpleGrid>
 
-      <Text size="sm" c="dimmed">
-        Pre-match strength and win % use the walk-forward model stored on this match (sum of
-        pre-match ACE ratings, not predicted game points). Phase tables below show each team&apos;s
-        ACE at this event after all of their matches here — not a point-in-time pre-match forecast.
-      </Text>
-
-      {preMatchRatings ? (
-        <>
-          <Title order={3}>Pre-match model inputs</Title>
-          <Text size="sm" c="dimmed" mb="xs">
-            Walk-forward ACE stored on this match (hover ACE for phase breakdown). Source badges
-            are inferred from match history.
-          </Text>
-          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-            <AlliancePreMatchInputs
-              teams={match.red_teams}
-              color="red"
-              year={year}
-              ratings={preMatchRatings}
-            />
-            <AlliancePreMatchInputs
-              teams={match.blue_teams}
-              color="blue"
-              year={year}
-              ratings={preMatchRatings}
-            />
-          </SimpleGrid>
-        </>
+      {redProb !== null && blueProb !== null ? (
+        <Card withBorder padding="md" radius="md">
+          <Group justify="space-between" mb={6}>
+            <Text size="sm" fw={700} c="red">
+              Red {(redProb * 100).toFixed(1)}%
+            </Text>
+            <Text size="sm" fw={700} c="blue">
+              Blue {(blueProb * 100).toFixed(1)}%
+            </Text>
+          </Group>
+          <Progress.Root size={14} radius="xl">
+            <Progress.Section value={redProb * 100} color="red" />
+            <Progress.Section value={blueProb * 100} color="blue" />
+          </Progress.Root>
+        </Card>
       ) : null}
 
-      <AceLegend />
+      <Group justify="space-between" align="flex-end" wrap="wrap">
+        <div>
+          <Title order={3}>Pre-match ACE breakdown</Title>
+          <Text size="sm" c="dimmed" maw={720}>
+            Point-in-time ratings used for this prediction — auto / teleop / endgame → RAW ×
+            confidence = ACE. Badges show where each team&apos;s rating came from.
+          </Text>
+        </div>
+        <AceLegend />
+      </Group>
 
-      <Title order={3}>Event ACE breakdown</Title>
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-        <AllianceBreakdown
-          teams={match.red_teams}
-          color="red"
-          year={year}
-          perfByTeam={perfByTeam}
-          thresholds={thresholds}
-          confMedian={confMedian}
-          actualScore={match.red_score}
-        />
-        <AllianceBreakdown
-          teams={match.blue_teams}
-          color="blue"
-          year={year}
-          perfByTeam={perfByTeam}
-          thresholds={thresholds}
-          confMedian={confMedian}
-          actualScore={match.blue_score}
-        />
-      </SimpleGrid>
+      {preMatchRatings ? (
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+          <AllianceAceBreakdown
+            teams={match.red_teams}
+            color="red"
+            year={year}
+            ratings={preMatchRatings}
+            thresholds={thresholds}
+            confMedian={confMedian}
+            actualScore={match.red_score}
+            played={played}
+          />
+          <AllianceAceBreakdown
+            teams={match.blue_teams}
+            color="blue"
+            year={year}
+            ratings={preMatchRatings}
+            thresholds={thresholds}
+            confMedian={confMedian}
+            actualScore={match.blue_score}
+            played={played}
+          />
+        </SimpleGrid>
+      ) : (
+        <EmptyState>
+          Pre-match ACE components are not available for this match yet. Re-run the pipeline after
+          deploying the pre_match_teams column.
+        </EmptyState>
+      )}
 
       <Card withBorder padding="md" radius="md">
         <Text fw={600} mb="xs">
