@@ -15,7 +15,13 @@ from typing import Callable, Dict, List, Literal, Optional, Tuple
 
 from psycopg2.extras import execute_values
 
-from ace_attribution import Method, TeamPhaseState, simulate_event, simulate_event_pre_match_snapshots
+from ace_attribution import (
+    Method,
+    TeamPhaseState,
+    merge_carry_prior,
+    simulate_event,
+    simulate_event_pre_match_snapshots,
+)
 
 RatingField = Literal["ace", "raw"]
 RatingScope = Literal[
@@ -113,6 +119,9 @@ class TeamSeasonData:
     ace: float = 0.0
     raw: float = 0.0
     confidence: float = 0.0
+    auto_raw: float = 0.0
+    teleop_raw: float = 0.0
+    endgame_raw: float = 0.0
     event_perf: Dict[str, Dict[str, float]] = field(default_factory=dict)
 
 
@@ -182,10 +191,13 @@ def _compact_from_perf(perf: Dict[str, float]) -> Dict[str, float]:
 def _compact_from_season(td: Optional[TeamSeasonData]) -> Dict[str, float]:
     if not td:
         return empty_pre_match_team()
-    raw = float(td.raw or 0.0)
+    auto = float(td.auto_raw or 0.0)
+    teleop = float(td.teleop_raw or 0.0)
+    endgame = float(td.endgame_raw or 0.0)
+    raw = float(td.raw or (auto + teleop + endgame))
     conf = float(td.confidence or 0.0)
     ace = float(td.ace or (raw * conf))
-    return pack_pre_match_team(0.0, 0.0, 0.0, raw, conf, ace)
+    return pack_pre_match_team(auto, teleop, endgame, raw, conf, ace)
 
 
 def fallback_pre_match_team(
@@ -430,18 +442,31 @@ def load_prediction_data_from_db(conn, year: int, *, limit_events: Optional[int]
     def _load_season(y: int) -> Dict[int, TeamSeasonData]:
         cur.execute(
             """
-            SELECT team_number, ace, confidence, raw, event_perf
+            SELECT team_number, ace, confidence, raw,
+                   auto_raw, teleop_raw, endgame_raw, event_perf
             FROM team_epas
             WHERE year = %s
             """,
             (y,),
         )
         result: Dict[int, TeamSeasonData] = {}
-        for team_number, ace, confidence, raw, event_perf_raw in cur.fetchall():
+        for (
+            team_number,
+            ace,
+            confidence,
+            raw,
+            auto_raw,
+            teleop_raw,
+            endgame_raw,
+            event_perf_raw,
+        ) in cur.fetchall():
             result[int(team_number)] = TeamSeasonData(
                 ace=float(ace or 0.0),
                 raw=float(raw or 0.0),
                 confidence=float(confidence or 0.0),
+                auto_raw=float(auto_raw or 0.0),
+                teleop_raw=float(teleop_raw or 0.0),
+                endgame_raw=float(endgame_raw or 0.0),
                 event_perf=_parse_event_perf(event_perf_raw),
             )
         return result
@@ -541,27 +566,37 @@ def team_number_from_tba_key(team_key: str) -> int:
     return int(digits) if digits else 0
 
 
+def _prior_with_confidence(
+    st: TeamPhaseState,
+    finalize_team: Callable[[TeamPhaseState, int, int], Dict[str, float]],
+    year: int,
+    team_key: str,
+) -> Optional[Tuple[float, ...]]:
+    new = (st.auto, st.teleop, st.endgame)
+    if new == (0.0, 0.0, 0.0):
+        return None
+    tn = team_number_from_tba_key(team_key)
+    payload = finalize_team(st, tn, year) if tn > 0 else None
+    conf = payload.get("c") if payload else None
+    if conf is None:
+        return new
+    return (*new, float(conf))
+
+
 def _update_carry_priors(
-    priors: Dict[str, Tuple[float, float, float]],
+    priors: Dict[str, Tuple[float, ...]],
     final_states: Dict[str, TeamPhaseState],
     prior_blend: float,
+    finalize_team: Callable[[TeamPhaseState, int, int], Dict[str, float]],
+    year: int,
 ) -> None:
     for key, st in final_states.items():
-        if not st.initialized:
+        if not st.initialized or st.match_count <= 0:
             continue
-        new = (st.auto, st.teleop, st.endgame)
-        if new == (0.0, 0.0, 0.0):
+        new = _prior_with_confidence(st, finalize_team, year, key)
+        if new is None:
             continue
-        old = priors.get(key)
-        if not old or prior_blend >= 1.0:
-            priors[key] = new
-        else:
-            b = prior_blend
-            priors[key] = (
-                (1.0 - b) * old[0] + b * new[0],
-                (1.0 - b) * old[1] + b * new[1],
-                (1.0 - b) * old[2] + b * new[2],
-            )
+        priors[key] = merge_carry_prior(priors.get(key), new, prior_blend)
 
 
 def build_pre_match_ratings_by_match(
@@ -571,13 +606,13 @@ def build_pre_match_ratings_by_match(
     ace_params: AceParams,
     finalize_team: Callable[[TeamPhaseState, int, int], Dict[str, float]],
     precomputed: Optional[Dict[str, Dict[int, Dict[str, float]]]] = None,
-    initial_priors: Optional[Dict[str, Tuple[float, float, float]]] = None,
+    initial_priors: Optional[Dict[str, Tuple[float, ...]]] = None,
 ) -> Dict[str, Dict[int, Dict[str, float]]]:
     """Walk-forward pre-match team payloads keyed by match_key then team_number."""
     if precomputed and not matches_by_event:
         return dict(precomputed)
 
-    priors: Dict[str, Tuple[float, float, float]] = dict(initial_priors or {})
+    priors: Dict[str, Tuple[float, ...]] = dict(initial_priors or {})
     ratings_by_match: Dict[str, Dict[int, Dict[str, float]]] = dict(precomputed or {})
 
     event_keys = sorted(
@@ -610,7 +645,9 @@ def build_pre_match_ratings_by_match(
         if fully_cached:
             if ace_params.carry_prior and initial_priors is None:
                 states = simulate_event(matches, **sim_kwargs)
-                _update_carry_priors(priors, states, ace_params.prior_blend)
+                _update_carry_priors(
+                    priors, states, ace_params.prior_blend, finalize_team, year
+                )
                 sim_kwargs["prior_means"] = priors
             continue
 
@@ -636,7 +673,9 @@ def build_pre_match_ratings_by_match(
                     continue
                 ratings_by_match[match_key][tn] = finalize_team(st, tn, year)
         if ace_params.carry_prior:
-            _update_carry_priors(priors, final_states, ace_params.prior_blend)
+            _update_carry_priors(
+                priors, final_states, ace_params.prior_blend, finalize_team, year
+            )
             sim_kwargs["prior_means"] = priors
         elapsed = time.perf_counter() - t0
         print(
@@ -684,7 +723,7 @@ def predict_all_matches_walk_forward(
     ace_params: AceParams,
     finalize_team: Callable[[TeamPhaseState, int, int], Dict[str, float]],
     precomputed_ratings: Optional[Dict[str, Dict[int, Dict[str, float]]]] = None,
-    initial_priors: Optional[Dict[str, Tuple[float, float, float]]] = None,
+    initial_priors: Optional[Dict[str, Tuple[float, ...]]] = None,
 ) -> List[MatchPrediction]:
     """Predict every match using walk-forward pre-match ACE snapshots."""
     strengths, teams_by_match = compute_walk_forward_strengths(
@@ -714,7 +753,7 @@ def compute_walk_forward_strengths(
     ace_params: AceParams,
     finalize_team: Callable[[TeamPhaseState, int, int], Dict[str, float]],
     precomputed_ratings: Optional[Dict[str, Dict[int, Dict[str, float]]]] = None,
-    initial_priors: Optional[Dict[str, Tuple[float, float, float]]] = None,
+    initial_priors: Optional[Dict[str, Tuple[float, ...]]] = None,
 ) -> Tuple[Dict[str, Tuple[float, float]], Dict[str, Dict[int, Dict[str, float]]]]:
     """Pre-match alliance strengths and per-team snapshot payloads."""
     pre = dict(precomputed_ratings or {})

@@ -27,6 +27,8 @@ class TeamPhaseState:
     losses: int = 0
     ties: int = 0
     initialized: bool = False
+    # Previous-event confidence; used for pre-match ACE until this event has a played match.
+    carried_confidence: Optional[float] = None
 
     @property
     def raw(self) -> float:
@@ -150,25 +152,54 @@ def ema_update(
 
 def seed_states_from_priors(
     states: Dict[str, TeamPhaseState],
-    prior_means: Optional[Dict[str, Tuple[float, float, float]]],
+    prior_means: Optional[Dict[str, Tuple[float, ...]]],
 ) -> None:
     """Seed RAW from cross-event priors so the event does not cold-start at 0."""
     if not prior_means:
         return
     for key, phases in prior_means.items():
-        if not phases:
+        if not phases or len(phases) < 3:
             continue
-        auto, teleop, endgame = phases
+        auto, teleop, endgame = float(phases[0]), float(phases[1]), float(phases[2])
         if auto == 0 and teleop == 0 and endgame == 0:
             continue
         st = states.get(key) or TeamPhaseState()
         if st.initialized:
             continue
-        st.auto = max(0.0, float(auto))
-        st.teleop = max(0.0, float(teleop))
-        st.endgame = max(0.0, float(endgame))
+        st.auto = max(0.0, auto)
+        st.teleop = max(0.0, teleop)
+        st.endgame = max(0.0, endgame)
+        if len(phases) > 3 and phases[3] is not None:
+            st.carried_confidence = max(0.0, min(1.0, float(phases[3])))
         st.initialized = True
         states[key] = st
+
+
+def merge_carry_prior(
+    old: Optional[Tuple[float, ...]],
+    new: Tuple[float, ...],
+    prior_blend: float,
+) -> Tuple[float, ...]:
+    """Blend cross-event RAW priors; keep optional 4th-slot confidence."""
+    if not old or prior_blend >= 1.0:
+        return new
+    b = prior_blend
+    blended = (
+        (1.0 - b) * old[0] + b * new[0],
+        (1.0 - b) * old[1] + b * new[1],
+        (1.0 - b) * old[2] + b * new[2],
+    )
+    new_c = float(new[3]) if len(new) > 3 and new[3] is not None else None
+    old_c = float(old[3]) if len(old) > 3 and old[3] is not None else None
+    if new_c is None and old_c is None:
+        return blended
+    if old_c is None:
+        conf = new_c
+    elif new_c is None:
+        conf = old_c
+    else:
+        conf = (1.0 - b) * old_c + b * new_c
+    return (*blended, conf)
 
 
 def apply_match_updates(
@@ -178,7 +209,7 @@ def apply_match_updates(
     method: Method,
     k_base: float = 0.4,
     shrink: float = 0.05,
-    prior_means: Optional[Dict[str, Tuple[float, float, float]]] = None,
+    prior_means: Optional[Dict[str, Tuple[float, ...]]] = None,
     spike_damp: float = 0.5,
     k_up: float = 1.0,
     k_down: float = 1.0,
@@ -367,7 +398,7 @@ def simulate_event(
     method: Method = "residual_shrink",
     k_base: float = 0.4,
     shrink: float = 0.05,
-    prior_means: Optional[Dict[str, Tuple[float, float, float]]] = None,
+    prior_means: Optional[Dict[str, Tuple[float, ...]]] = None,
     spike_damp: float = 0.5,
     seed_priors: bool = True,
     k_up: float = 1.0,
@@ -404,7 +435,7 @@ def simulate_event_pre_match_snapshots(
     method: Method = "residual_shrink",
     k_base: float = 0.4,
     shrink: float = 0.05,
-    prior_means: Optional[Dict[str, Tuple[float, float, float]]] = None,
+    prior_means: Optional[Dict[str, Tuple[float, ...]]] = None,
     spike_damp: float = 0.5,
     seed_priors: bool = True,
     k_up: float = 1.0,

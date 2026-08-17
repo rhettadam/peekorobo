@@ -81,6 +81,15 @@ function eventStart(
   return eventsByKey.get(eventKey)?.start_date ?? eventKey;
 }
 
+/** Match backend event_order: (start_date, event_key), including same-day ties. */
+function eventOrderKey(
+  eventKey: string,
+  eventsByKey: Map<string, { start_date: string }>,
+  startDate?: string | null,
+): string {
+  return `${startDate || eventStart(eventKey, eventsByKey)}\t${eventKey}`;
+}
+
 function priorEventsThisSeason(
   eventKey: string,
   eventStartDate: string | null,
@@ -89,14 +98,15 @@ function priorEventsThisSeason(
 ): string[] {
   const entries = (seasonPerf?.event_perf ?? []) as EventPerfEntry[];
   const prior: string[] = [];
-  const currentStart = eventStartDate ?? eventStart(eventKey, eventsByKey);
+  const currentKey = eventOrderKey(eventKey, eventsByKey, eventStartDate);
   for (const ep of entries) {
     const ek = ep.event_key;
     if (!ek || ek === eventKey) continue;
-    const otherStart = eventStart(ek, eventsByKey);
-    if (otherStart < currentStart) prior.push(ek);
+    if (eventOrderKey(ek, eventsByKey) < currentKey) prior.push(ek);
   }
-  return prior.sort((a, b) => eventStart(a, eventsByKey).localeCompare(eventStart(b, eventsByKey)));
+  return prior.sort((a, b) =>
+    eventOrderKey(a, eventsByKey).localeCompare(eventOrderKey(b, eventsByKey)),
+  );
 }
 
 function latestPriorEventEntry(
@@ -213,11 +223,75 @@ function fromEventPerf(ep: EventPerfEntry | null): Omit<PreMatchTeamDisplay, "so
   };
 }
 
+function numOrZero(v: number | null | undefined): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+function isZeroDisplay(d: Omit<PreMatchTeamDisplay, "source">): boolean {
+  return (
+    numOrZero(d.auto) === 0 &&
+    numOrZero(d.teleop) === 0 &&
+    numOrZero(d.endgame) === 0 &&
+    numOrZero(d.raw) === 0 &&
+    numOrZero(d.confidence) === 0 &&
+    numOrZero(d.ace) === 0
+  );
+}
+
 function phasesMissing(d: Omit<PreMatchTeamDisplay, "source">): boolean {
-  const a = d.auto ?? 0;
-  const t = d.teleop ?? 0;
-  const e = d.endgame ?? 0;
-  return a === 0 && t === 0 && e === 0;
+  return numOrZero(d.auto) === 0 && numOrZero(d.teleop) === 0 && numOrZero(d.endgame) === 0;
+}
+
+const UNRATED_DISPLAY: Omit<PreMatchTeamDisplay, "source"> = {
+  ace: 0,
+  auto: 0,
+  teleop: 0,
+  endgame: 0,
+  raw: 0,
+  confidence: 0,
+};
+
+function fillFromSource(
+  source: PreMatchRatingSource,
+  team: number,
+  enrichment: PreMatchEnrichment,
+): Omit<PreMatchTeamDisplay, "source"> | null {
+  if (source === "prior_season") {
+    return fromSeasonPerf(enrichment.teamPriorSeasonPerf.get(team));
+  }
+  if (source === "carry_prior" || source === "prior_event") {
+    const season = enrichment.teamSeasonPerf.get(team);
+    const priorKeys = priorEventsThisSeason(
+      enrichment.eventKey,
+      enrichment.eventStartDate,
+      enrichment.eventsByKey,
+      season,
+    );
+    return fromEventPerf(latestPriorEventEntry(priorKeys, season));
+  }
+  return null;
+}
+
+function resolveSource(
+  inferred: PreMatchRatingSource,
+  stored: Omit<PreMatchTeamDisplay, "source"> | null,
+  team: number,
+  enrichment?: PreMatchEnrichment,
+): PreMatchRatingSource {
+  if (stored && isZeroDisplay(stored)) return "unrated";
+  if (inferred !== "unrated") return inferred;
+  if (!stored) return "unrated";
+  if (!enrichment) return "in_event";
+  const season = enrichment.teamSeasonPerf.get(team);
+  const priorKeys = priorEventsThisSeason(
+    enrichment.eventKey,
+    enrichment.eventStartDate,
+    enrichment.eventsByKey,
+    season,
+  );
+  if (priorKeys.length > 0) return "carry_prior";
+  if (enrichment.teamPriorSeasonPerf.has(team)) return "prior_season";
+  return "in_event";
 }
 
 export interface PreMatchEnrichment {
@@ -228,7 +302,7 @@ export interface PreMatchEnrichment {
   eventsByKey: Map<string, { start_date: string }>;
 }
 
-/** Prefer stored walk-forward payloads; fill missing phases from season/event history. */
+/** Prefer stored walk-forward payloads. Never mix ACE from one source with phases from another. */
 export function mergePreMatchDisplays(
   stored: Record<string, PreMatchTeamCompact> | null | undefined,
   sources: PreMatchTeamRatings | null,
@@ -239,60 +313,27 @@ export function mergePreMatchDisplays(
   const out: PreMatchTeamDisplays = {};
   for (const team of teams) {
     const key = String(team);
-    const source = sources?.[key]?.source ?? "unrated";
     const compact = stored?.[key];
-    let base: Omit<PreMatchTeamDisplay, "source"> | null = compact
-      ? compactToDisplay(compact)
-      : null;
+    const storedDisplay = compact ? compactToDisplay(compact) : null;
+    const source = resolveSource(
+      sources?.[key]?.source ?? "unrated",
+      storedDisplay,
+      team,
+      enrichment,
+    );
 
+    if (source === "unrated") {
+      out[key] = { source, ...UNRATED_DISPLAY };
+      continue;
+    }
+
+    let base = storedDisplay && !isZeroDisplay(storedDisplay) ? storedDisplay : null;
     if ((!base || phasesMissing(base)) && enrichment) {
-      if (source === "prior_season") {
-        const filled = fromSeasonPerf(enrichment.teamPriorSeasonPerf.get(team));
-        if (filled) {
-          base = base
-            ? {
-                ...filled,
-                ace: base.ace ?? filled.ace,
-                raw: base.raw ?? filled.raw,
-                confidence: base.confidence ?? filled.confidence,
-              }
-            : filled;
-        }
-      } else if (source === "carry_prior" || source === "prior_event") {
-        const season = enrichment.teamSeasonPerf.get(team);
-        const priorKeys = priorEventsThisSeason(
-          enrichment.eventKey,
-          enrichment.eventStartDate,
-          enrichment.eventsByKey,
-          season,
-        );
-        const filled = fromEventPerf(latestPriorEventEntry(priorKeys, season));
-        if (filled) {
-          base = base
-            ? {
-                ...filled,
-                ace: base.ace ?? filled.ace,
-                raw: base.raw ?? filled.raw,
-                confidence: base.confidence ?? filled.confidence,
-              }
-            : filled;
-        }
-      }
+      const filled = fillFromSource(source, team, enrichment);
+      if (filled) base = filled;
     }
 
-    if (!base) {
-      out[key] = {
-        source,
-        ace: sources?.[key]?.rating ?? null,
-        auto: null,
-        teleop: null,
-        endgame: null,
-        raw: null,
-        confidence: null,
-      };
-    } else {
-      out[key] = { source, ...base };
-    }
+    out[key] = base ? { source, ...base } : { source, ...UNRATED_DISPLAY };
   }
   return out;
 }

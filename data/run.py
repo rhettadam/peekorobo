@@ -21,7 +21,13 @@ import traceback
 
 from yearmodels import *
 from active_events import get_active_event_keys
-from ace_attribution import Method, simulate_event, simulate_event_pre_match_snapshots, TeamPhaseState
+from ace_attribution import (
+    Method,
+    TeamPhaseState,
+    merge_carry_prior,
+    simulate_event,
+    simulate_event_pre_match_snapshots,
+)
 from prediction import (
     AceParams,
     PredictionConfig,
@@ -125,7 +131,7 @@ match_cache = {}
 # match_key -> team_number -> pre-match rating (filled during EPA precompute).
 _pre_match_ratings_by_match: Dict[str, Dict[int, dict]] = {}
 # Team phase priors after EPA precompute (for tail walk-forward without replay).
-_carry_priors_snapshot: Dict[str, Tuple[float, float, float]] = {}
+_carry_priors_snapshot: Dict[str, Tuple[float, ...]] = {}
 _event_epa_cache: Dict[str, Dict[str, dict]] = {}
 _event_epa_lock = threading.Lock()
 
@@ -2449,18 +2455,21 @@ def finalize_pre_match_team(
     if not st.initialized and st.match_count <= 0:
         return pack_pre_match_team(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
-    consistency = _consistency_from_contributions(st.contributions)
-    dominance = min(1.0, statistics.mean(st.dominance_scores)) if st.dominance_scores else 0.0
-    played_event_keys = get_team_played_events(team_number, int(year))
-    total_events = len(played_event_keys)
-    event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])
-    _raw_confidence, confidence, _record_alignment = calculate_confidence(
-        consistency, dominance, event_boost, team_number, st.wins, st.losses, int(year)
-    )
     auto = max(0.0, st.auto)
     teleop = max(0.0, st.teleop)
     endgame = max(0.0, st.endgame)
     overall = max(0.0, st.raw)
+    if st.match_count <= 0 and st.carried_confidence is not None:
+        confidence = max(0.0, min(1.0, float(st.carried_confidence)))
+    else:
+        consistency = _consistency_from_contributions(st.contributions)
+        dominance = min(1.0, statistics.mean(st.dominance_scores)) if st.dominance_scores else 0.0
+        played_event_keys = get_team_played_events(team_number, int(year))
+        total_events = len(played_event_keys)
+        event_boost = EVENT_BOOSTS.get(min(total_events, 3), EVENT_BOOSTS[3])
+        _raw_confidence, confidence, _record_alignment = calculate_confidence(
+            consistency, dominance, event_boost, team_number, st.wins, st.losses, int(year)
+        )
     ace = overall * confidence
     return pack_pre_match_team(auto, teleop, endgame, overall, confidence, ace)
 
@@ -2567,6 +2576,25 @@ def _get_or_compute_event_epa_map(matches: List[Dict], year: int, method: Method
     return out
 
 
+def _carry_prior_from_phases(
+    auto: float, teleop: float, endgame: float, confidence: Optional[float]
+) -> Optional[Tuple[float, ...]]:
+    if auto == 0.0 and teleop == 0.0 and endgame == 0.0:
+        return None
+    if confidence is None:
+        return (auto, teleop, endgame)
+    return (auto, teleop, endgame, float(confidence))
+
+
+def _carry_prior_from_epa(epa: dict) -> Optional[Tuple[float, ...]]:
+    return _carry_prior_from_phases(
+        float(epa.get("auto_raw") or 0.0),
+        float(epa.get("teleop_raw") or 0.0),
+        float(epa.get("endgame_raw") or 0.0),
+        epa.get("confidence"),
+    )
+
+
 def precompute_season_event_epas(year: int) -> None:
     """Simulate every cached event in chronological order (optional RAW prior carry).
 
@@ -2587,7 +2615,7 @@ def precompute_season_event_epas(year: int) -> None:
         return str(sd) if sd else ""
 
     event_keys = sorted(match_cache.keys(), key=lambda ek: (_start(ek), ek))
-    priors: Dict[str, Tuple[float, float, float]] = {}
+    priors: Dict[str, Tuple[float, ...]] = {}
     computed = 0
     total = len(event_keys)
     pred_config = PredictionConfig.from_env()
@@ -2614,23 +2642,12 @@ def precompute_season_event_epas(year: int) -> None:
             if cache_key in _event_epa_cache:
                 if _ACE_CARRY_PRIOR:
                     for key, epa in _event_epa_cache[cache_key].items():
-                        new = (
-                            float(epa.get("auto_raw") or 0.0),
-                            float(epa.get("teleop_raw") or 0.0),
-                            float(epa.get("endgame_raw") or 0.0),
-                        )
-                        if new == (0.0, 0.0, 0.0):
+                        new = _carry_prior_from_epa(epa)
+                        if new is None:
                             continue
-                        old = priors.get(key)
-                        if not old or _ACE_PRIOR_BLEND >= 1.0:
-                            priors[key] = new
-                        else:
-                            b = _ACE_PRIOR_BLEND
-                            priors[key] = (
-                                (1.0 - b) * old[0] + b * new[0],
-                                (1.0 - b) * old[1] + b * new[1],
-                                (1.0 - b) * old[2] + b * new[2],
-                            )
+                        priors[key] = merge_carry_prior(
+                            priors.get(key), new, _ACE_PRIOR_BLEND
+                        )
                 continue
 
         if use_pre_match:
@@ -2654,17 +2671,13 @@ def precompute_season_event_epas(year: int) -> None:
             digits = "".join(ch for ch in str(key) if ch.isdigit())
             tn = int(digits) if digits else 0
             out[key] = _finalize_state_to_event_epa(st, key, tn, int(year))
-            if _ACE_CARRY_PRIOR and st.initialized:
-                new = (st.auto, st.teleop, st.endgame)
-                old = priors.get(key)
-                if not old or _ACE_PRIOR_BLEND >= 1.0:
-                    priors[key] = new
-                else:
-                    b = _ACE_PRIOR_BLEND
-                    priors[key] = (
-                        (1.0 - b) * old[0] + b * new[0],
-                        (1.0 - b) * old[1] + b * new[1],
-                        (1.0 - b) * old[2] + b * new[2],
+            if _ACE_CARRY_PRIOR and st.initialized and st.match_count > 0:
+                new = _carry_prior_from_phases(
+                    st.auto, st.teleop, st.endgame, out[key].get("confidence")
+                )
+                if new is not None:
+                    priors[key] = merge_carry_prior(
+                        priors.get(key), new, _ACE_PRIOR_BLEND
                     )
         with _event_epa_lock:
             _event_epa_cache[cache_key] = out
