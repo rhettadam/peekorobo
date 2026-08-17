@@ -9,6 +9,7 @@ class MapTeam(BaseModel):
     city: Optional[str] = None
     state_prov: Optional[str] = None
     country: Optional[str] = None
+    district_key: Optional[str] = None
     lat: float
     lng: float
 
@@ -24,6 +25,7 @@ class MapEvent(BaseModel):
     city: Optional[str] = None
     state_prov: Optional[str] = None
     country: Optional[str] = None
+    district_key: Optional[str] = None
     lat: float
     lng: float
     event_type: Optional[str] = None

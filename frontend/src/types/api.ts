@@ -311,6 +311,7 @@ export interface MapTeam {
   city: string | null;
   state_prov: string | null;
   country: string | null;
+  district_key?: string | null;
   lat: number;
   lng: number;
 }
@@ -326,6 +327,7 @@ export interface MapEvent {
   city: string | null;
   state_prov: string | null;
   country: string | null;
+  district_key?: string | null;
   lat: number;
   lng: number;
   event_type: string | null;

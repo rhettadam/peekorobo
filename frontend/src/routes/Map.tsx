@@ -7,7 +7,7 @@ import type { GeoJSONSource, SkySpecification } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import { useMapEvents, useMapTeams } from "../api/queries";
 import { ErrorState } from "../components/StateWrappers";
-import { MapControls, type LayerState, type Projection } from "../components/map/MapControls";
+import { MapControls, filterMapEvents, filterMapTeams, EMPTY_MAP_FILTERS, type LayerState, type MapFilters, type Projection } from "../components/map/MapControls";
 import { MapSearch, type MapSearchResult } from "../components/map/MapSearch";
 import { CURRENT_YEAR } from "../lib/constants";
 import type { MapEvent, MapTeam } from "../types/api";
@@ -95,13 +95,19 @@ export function Map() {
 
   const [projection, setProjection] = useState<Projection>("mercator");
   const [layers, setLayers] = useState<LayerState>(INITIAL_LAYERS);
+  const [filters, setFilters] = useState<MapFilters>(() => ({
+    ...EMPTY_MAP_FILTERS,
+    eventTypes: new Set(),
+  }));
   const [mapReady, setMapReady] = useState(false);
 
   const teamsQuery = useMapTeams();
   const eventsQuery = useMapEvents(CURRENT_YEAR);
 
-  const teams = useMemo(() => teamsQuery.data?.teams ?? [], [teamsQuery.data]);
-  const events = useMemo(() => eventsQuery.data?.events ?? [], [eventsQuery.data]);
+  const allTeams = useMemo(() => teamsQuery.data?.teams ?? [], [teamsQuery.data]);
+  const allEvents = useMemo(() => eventsQuery.data?.events ?? [], [eventsQuery.data]);
+  const teams = useMemo(() => filterMapTeams(allTeams, filters), [allTeams, filters]);
+  const events = useMemo(() => filterMapEvents(allEvents, filters), [allEvents, filters]);
   const teamsGeo = useMemo(() => teamsToGeoJSON(teams) as FeatureCollection, [teams]);
   const eventsGeo = useMemo(() => eventsToGeoJSON(events) as FeatureCollection, [events]);
 
@@ -549,14 +555,14 @@ export function Map() {
     if (focusAppliedRef.current === focusTeamParam) return;
     const num = Number(focusTeamParam);
     if (!Number.isFinite(num) || num <= 0) return;
-    const t = teams.find((x) => x.team_number === num);
+    const t = allTeams.find((x) => x.team_number === num);
     if (!t) return;
     focusAppliedRef.current = focusTeamParam;
     const id = window.setTimeout(() => {
       handleSearchSelect({ type: "team", team: t });
     }, 120);
     return () => window.clearTimeout(id);
-  }, [mapReady, isLoading, focusTeamParam, teams, handleSearchSelect]);
+  }, [mapReady, isLoading, focusTeamParam, allTeams, handleSearchSelect]);
 
   return (
     <Box
@@ -582,8 +588,12 @@ export function Map() {
             onProjectionChange={setProjection}
             layers={layers}
             onLayerChange={handleLayerChange}
-            teamCount={teams.length}
-            eventCount={events.length}
+            filters={filters}
+            onFiltersChange={setFilters}
+            teams={allTeams}
+            events={allEvents}
+            filteredTeamCount={teams.length}
+            filteredEventCount={events.length}
           />
           <MapSearch
             teams={teams}

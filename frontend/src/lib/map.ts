@@ -19,25 +19,36 @@ const EVENT_COLORS = {
   regional: "#3b82f6", // blue
   district: "#22c55e", // green
   championship: "#f59e0b", // gold/orange
-  offseason: "#9ca3af", // gray
+  offseason: "#e879f9", // bright fuchsia — visible on dark basemap
+  preseason: "#a78bfa", // violet
   other: "#ef4444", // red
 } as const;
 
-export function eventTypeColor(eventType?: string | null): string {
-  const t = (eventType ?? "").toLowerCase();
-  if (t.includes("regional")) return EVENT_COLORS.regional;
-  if (t.includes("district")) return EVENT_COLORS.district;
-  if (t.includes("championship")) return EVENT_COLORS.championship;
-  if (t.includes("offseason") || t.includes("off-season")) return EVENT_COLORS.offseason;
-  return EVENT_COLORS.other;
+export function eventTypeBucket(
+  eventType?: string | null,
+): keyof typeof EVENT_COLORS {
+  const t = (eventType ?? "").toLowerCase().trim();
+  if (t === "99" || t.includes("offseason") || t.includes("off-season")) return "offseason";
+  if (t === "100" || t.includes("preseason") || t.includes("pre-season")) return "preseason";
+  if (t.includes("championship") || t === "3" || t === "4" || t === "5" || t === "6") {
+    return "championship";
+  }
+  if (t.includes("district") || t === "1" || t === "2") return "district";
+  if (t.includes("regional") || t === "0") return "regional";
+  return "other";
 }
 
-export const EVENT_LEGEND: Array<{ label: string; color: string }> = [
-  { label: "Regional", color: EVENT_COLORS.regional },
-  { label: "District", color: EVENT_COLORS.district },
-  { label: "Championship", color: EVENT_COLORS.championship },
-  { label: "Offseason", color: EVENT_COLORS.offseason },
-  { label: "Other", color: EVENT_COLORS.other },
+export function eventTypeColor(eventType?: string | null): string {
+  return EVENT_COLORS[eventTypeBucket(eventType)];
+}
+
+export const EVENT_LEGEND: Array<{ label: string; color: string; bucket: keyof typeof EVENT_COLORS }> = [
+  { label: "Regional", color: EVENT_COLORS.regional, bucket: "regional" },
+  { label: "District", color: EVENT_COLORS.district, bucket: "district" },
+  { label: "Championship", color: EVENT_COLORS.championship, bucket: "championship" },
+  { label: "Offseason", color: EVENT_COLORS.offseason, bucket: "offseason" },
+  { label: "Preseason", color: EVENT_COLORS.preseason, bucket: "preseason" },
+  { label: "Other", color: EVENT_COLORS.other, bucket: "other" },
 ];
 
 // FRC district colors (keyed by the `district` property injected into the

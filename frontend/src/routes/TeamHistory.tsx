@@ -27,10 +27,12 @@ import { ErrorState, LoadingState } from "../components/StateWrappers";
 import { TeamAvatar } from "../components/TeamAvatar";
 import { BlueBanners, BlueBannerTile, toBlueBannerItems } from "../components/BlueBanners";
 import { TeamProfileMeta } from "../components/TeamProfileMeta";
+import { FavoriteWithCount } from "../components/FavoriteWithCount";
 import { RecordCell } from "../components/RecordCell";
 import { DataTable, type Column } from "../components/DataTable";
 import { contrastText } from "../lib/epa";
-import { formatNumber, locationString, yearFromEventKey } from "../lib/format";
+import { formatNumber, locationString, normalizeDistrictKey, yearFromEventKey } from "../lib/format";
+import { BRAND } from "../lib/assets";
 import type { TeamPerfInfo } from "../types/api";
 
 interface SeasonRankRow {
@@ -118,6 +120,19 @@ export function TeamHistory() {
   const leftBanners = useMemo(() => bannerItems.filter((_, i) => i % 2 === 0), [bannerItems]);
   const rightBanners = useMemo(() => bannerItems.filter((_, i) => i % 2 === 1), [bannerItems]);
   const notables = notablesQuery.data?.notables ?? [];
+
+  const champYears = useMemo(() => {
+    const years = new Set<number>();
+    for (const a of awards) {
+      const name = (a.award_name || "").toLowerCase();
+      const yr = yearFromEventKey(a.event_key ?? "");
+      const isDivision = name.includes("division") || name.includes("subdivision");
+      if (!isDivision && (name === "championship winner" || name === "championship winners")) {
+        if (yr) years.add(yr);
+      }
+    }
+    return [...years].sort((a, b) => a - b);
+  }, [awards]);
 
   useEffect(() => {
     document.title = info?.nickname
@@ -250,6 +265,8 @@ export function TeamHistory() {
       ? `linear-gradient(135deg, ${primary}, ${secondary})`
       : "linear-gradient(135deg, #3a3a3a, #1a1a1a)";
   const headerText = primary ? contrastText(primary) : "#ffffff";
+  const district = normalizeDistrictKey(info?.district_key ?? null);
+  const hasWorldChampsNotable = notables.some((n) => n.category === "notables_world_champions");
 
   return (
     <div className="peeko-history-layout">
@@ -260,9 +277,50 @@ export function TeamHistory() {
       </aside>
 
       <Stack gap="lg" py="md" style={{ minWidth: 0 }}>
-      <Card radius="lg" p="lg" style={{ background: gradient, color: headerText, border: "none" }}>
-        <Group justify="space-between" align="center" wrap="nowrap">
-          <Stack gap={6} style={{ minWidth: 0 }}>
+      <Card
+        radius="lg"
+        p="lg"
+        style={{
+          position: "relative",
+          background: [
+            "linear-gradient(115deg, transparent 38%, rgba(255,255,255,0.10) 47%, transparent 56%)",
+            "radial-gradient(circle at 90% 8%, rgba(255,255,255,0.22), transparent 46%)",
+            "radial-gradient(rgba(255,255,255,0.10) 1.5px, transparent 1.6px)",
+            "linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)",
+            "linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)",
+            gradient,
+          ].join(", "),
+          backgroundSize: "100% 100%, 100% 100%, 52px 52px, 26px 26px, 26px 26px, 100% 100%",
+          color: headerText,
+          border: "none",
+          overflow: "hidden",
+        }}
+      >
+        <Box style={{ position: "absolute", top: 12, right: 12, zIndex: 2 }}>
+          <FavoriteWithCount itemType="team" itemKey={teamNumber} size={22} />
+        </Box>
+        <Text
+          aria-hidden
+          style={{
+            position: "absolute",
+            right: -8,
+            top: "50%",
+            transform: "translateY(-50%)",
+            fontSize: 200,
+            fontWeight: 900,
+            lineHeight: 1,
+            letterSpacing: -8,
+            color: headerText,
+            opacity: 0.08,
+            pointerEvents: "none",
+            userSelect: "none",
+            zIndex: 0,
+          }}
+        >
+          {teamNumber}
+        </Text>
+        <Group justify="space-between" align="center" wrap="nowrap" gap="md" style={{ position: "relative", zIndex: 1 }}>
+          <Stack gap={8} style={{ minWidth: 0, flex: 1 }}>
             <Button
               component={Link}
               to={`/team/${teamNumber}`}
@@ -282,15 +340,54 @@ export function TeamHistory() {
               headerText={headerText}
               location={
                 info
-                  ? locationString(info.city, info.state_prov, info.country) || undefined
+                  ? locationString(info.city, info.state_prov, info.country) || "Unknown location"
                   : undefined
               }
+              district={district}
+              website={info?.website}
               teamNumber={teamNumber}
               notables={notables}
+              champYears={champYears}
+              showWorldChampHonor={!hasWorldChampsNotable && champYears.length > 0}
             />
+            <Group gap="xs" mt={4}>
+              <Anchor
+                href={`https://www.thebluealliance.com/team/${teamNumber}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="View on The Blue Alliance"
+              >
+                <img src={BRAND.tba} alt="The Blue Alliance" height={22} style={{ display: "block", borderRadius: 4 }} />
+              </Anchor>
+              <Anchor
+                href={`https://frc-events.firstinspires.org/team/${teamNumber}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="View on FRC Events"
+              >
+                <img src={BRAND.frc} alt="FRC Events" height={22} style={{ display: "block", borderRadius: 4 }} />
+              </Anchor>
+            </Group>
           </Stack>
-          <Box visibleFrom="sm" style={{ flexShrink: 0 }}>
-            <TeamAvatar teamNumber={teamNumber} size={110} radius={14} upscale />
+          <Box
+            visibleFrom="sm"
+            mr={40}
+            style={{
+              flexShrink: 0,
+              alignSelf: "center",
+              background: "rgba(0,0,0,0.55)",
+              backdropFilter: "blur(14px) saturate(140%)",
+              WebkitBackdropFilter: "blur(14px) saturate(140%)",
+              border: "1px solid rgba(255,255,255,0.14)",
+              borderRadius: 22,
+              padding: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 8px 28px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.2)",
+            }}
+          >
+            <TeamAvatar teamNumber={teamNumber} size={150} radius={14} upscale />
           </Box>
         </Group>
       </Card>

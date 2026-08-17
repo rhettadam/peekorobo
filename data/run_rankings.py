@@ -47,6 +47,8 @@ def fetch_rankings_for_event(event_key, year):
 
     result = []
     for r in ranks.get("rankings", []):
+        if not isinstance(r, dict):
+            continue
         team_key = r.get("team_key", "frc0")
         # Skip TBA surrogate entries (frc254B, frc498E, ...); keep real team numbers only.
         if tba_team_key_is_surrogate(team_key):
@@ -59,7 +61,11 @@ def fetch_rankings_for_event(event_key, year):
             qual_avg = r.get("qual_average")
             result.append((event_key, t_num, r.get("rank"), qual_avg, None, None, r.get("dq")))
         else:
-            record = r.get("record", {})
+            # TBA sometimes sends "record": null even when the key is present;
+            # .get("record", {}) only defaults when the key is missing.
+            record = r.get("record") or {}
+            if not isinstance(record, dict):
+                record = {}
             result.append((
                 event_key, t_num, r.get("rank"),
                 record.get("wins"), record.get("losses"), record.get("ties"),
