@@ -21,9 +21,11 @@ import type {
   EventResponse,
   EventTeamsResponse,
   FrcGamesResponse,
+  H2HResponse,
   InsightsOverviewResponse,
   MapEventsResponse,
   MapTeamsResponse,
+  PredictorMatchesResponse,
   TeamAwardsResponse,
   TeamData,
   TeamEventsResponse,
@@ -324,5 +326,60 @@ export function useLeaderboardPreview(
       });
       return res.team_perfs;
     },
+  });
+}
+
+// ---- Games ----
+export function useH2H(
+  teamA: number,
+  teamB: number,
+  year?: number | null,
+  options: { enabled?: boolean } = {},
+): UseQueryResult<H2HResponse> {
+  return useQuery({
+    queryKey: ["games-h2h", teamA, teamB, year ?? "all"],
+    enabled:
+      (options.enabled ?? true) &&
+      Number.isFinite(teamA) &&
+      Number.isFinite(teamB) &&
+      teamA > 0 &&
+      teamB > 0 &&
+      teamA !== teamB,
+    staleTime: FIVE_MIN,
+    queryFn: () =>
+      apiGet<H2HResponse>("/games/h2h", {
+        team_a: teamA,
+        team_b: teamB,
+        year: year ?? undefined,
+      }),
+  });
+}
+
+export interface PredictorFilters {
+  event_key?: string;
+  week?: number;
+  limit?: number;
+  seed?: number;
+  playoffs_only?: boolean;
+}
+
+export function usePredictorMatches(
+  year: number,
+  filters: PredictorFilters = {},
+  options: { enabled?: boolean } = {},
+): UseQueryResult<PredictorMatchesResponse> {
+  return useQuery({
+    queryKey: ["games-predictor", year, filters],
+    enabled: Number.isFinite(year) && (options.enabled ?? true),
+    staleTime: FIVE_MIN,
+    queryFn: () =>
+      apiGet<PredictorMatchesResponse>("/games/predictor", {
+        year,
+        event_key: filters.event_key,
+        week: filters.week,
+        limit: filters.limit ?? 12,
+        seed: filters.seed,
+        playoffs_only: filters.playoffs_only ? true : undefined,
+      }),
   });
 }

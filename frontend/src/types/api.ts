@@ -510,3 +510,113 @@ export interface TeamNotablesResponse {
   team_number: number;
   notables: TeamNotable[];
 }
+
+// ---- Games (/games/h2h, /games/predictor) ----
+export interface H2HTeamInfo {
+  team_number: number;
+  nickname: string;
+  city?: string;
+  state_prov?: string;
+  country?: string;
+  district_key?: string | null;
+  team_colors?: Record<string, unknown> | null;
+  ace?: number | null;
+  raw?: number | null;
+  wins?: number | null;
+  losses?: number | null;
+  ties?: number | null;
+  rank_global?: number | null;
+}
+
+export interface H2HMatch {
+  match_key: string;
+  event_key: string;
+  event_name?: string | null;
+  year: number;
+  week?: number | null;
+  comp_level: string;
+  match_number: number;
+  set_number: number;
+  red_teams: number[];
+  blue_teams: number[];
+  red_score: number;
+  blue_score: number;
+  winning_alliance: string;
+  relation: "together" | "against" | string;
+  a_alliance: "red" | "blue" | string;
+  b_alliance: "red" | "blue" | string;
+  youtube_key?: string | null;
+  red_win_prob?: number | null;
+  blue_win_prob?: number | null;
+}
+
+export interface H2HTogetherStats {
+  matches: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  win_pct?: number | null;
+  avg_score?: number | null;
+  avg_opp_score?: number | null;
+  avg_margin?: number | null;
+}
+
+export interface H2HAgainstStats {
+  matches: number;
+  a_wins: number;
+  b_wins: number;
+  ties: number;
+  a_win_pct?: number | null;
+  avg_a_score?: number | null;
+  avg_b_score?: number | null;
+  avg_margin?: number | null;
+}
+
+export interface H2HYearSlice {
+  year: number;
+  together: number;
+  against: number;
+  together_wins: number;
+  a_wins: number;
+  b_wins: number;
+}
+
+export interface H2HResponse {
+  team_a: H2HTeamInfo;
+  team_b: H2HTeamInfo;
+  year?: number | null;
+  events_shared: number;
+  together: H2HTogetherStats;
+  against: H2HAgainstStats;
+  by_year: H2HYearSlice[];
+  matches: H2HMatch[];
+}
+
+export interface PredictorMatch {
+  match_key: string;
+  event_key: string;
+  event_name: string;
+  year: number;
+  week?: number | null;
+  event_type?: string | null;
+  comp_level: string;
+  match_number: number;
+  set_number: number;
+  red_teams: number[];
+  blue_teams: number[];
+  red_score: number;
+  blue_score: number;
+  winning_alliance: string;
+  red_win_prob?: number | null;
+  blue_win_prob?: number | null;
+  red_predicted_score?: number | null;
+  blue_predicted_score?: number | null;
+}
+
+export interface PredictorMatchesResponse {
+  year: number;
+  event_key?: string | null;
+  event_name?: string | null;
+  nicknames: Record<string, string>;
+  matches: PredictorMatch[];
+}

@@ -70,6 +70,19 @@ export function normalizeDistrictKey(key?: string | null): string | null {
   return s.toUpperCase();
 }
 
+/** Short TBA-style match label: QM12, QF1-2, SF2-1, F1-1. */
+export function shortMatchLabel(
+  compLevel?: string | null,
+  setNumber?: number | null,
+  matchNumber?: number | null,
+): string {
+  const c = (compLevel || "qm").toLowerCase();
+  const num = matchNumber ?? 0;
+  const set = setNumber ?? 0;
+  if (c === "qm") return `QM${num}`;
+  return `${c.toUpperCase()}${set}-${num}`;
+}
+
 /** The season year encoded at the front of an event key, e.g. '2024cmp' -> 2024. */
 export function yearFromEventKey(eventKey: string): number | null {
   const m = /^(\d{4})/.exec(eventKey);

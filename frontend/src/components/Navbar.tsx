@@ -22,7 +22,7 @@ import {
   IconSun,
   IconUser,
 } from "@tabler/icons-react";
-import { NavLink, Link, useNavigate } from "react-router-dom";
+import { NavLink, Link, useLocation, useNavigate } from "react-router-dom";
 import { SearchBar } from "./SearchBar";
 import { BRAND, userAvatar } from "../lib/assets";
 import { API_BASE } from "../api/client";
@@ -36,7 +36,14 @@ const LINKS = [
 ];
 
 // Secondary items tucked into a "Misc" dropdown to keep the top row short.
-const MOBILE_LINKS = [...LINKS, { to: "/compare", label: "Compare" }];
+const MOBILE_LINKS = [
+  ...LINKS,
+  { to: "/compare", label: "Compare" },
+  { to: "/games", label: "Games" },
+  { to: "/games/higher-lower", label: "Higher or Lower" },
+  { to: "/games/duel", label: "Duel" },
+  { to: "/games/predictor", label: "Match Predictor" },
+];
 
 const API_DOCS_URL = `${API_BASE}/docs`;
 
@@ -214,6 +221,10 @@ interface NavbarProps {
 }
 
 export function Navbar({ mobileOpened, onToggleMobile, onNavigate }: NavbarProps) {
+  const location = useLocation();
+  const miscActive =
+    location.pathname.startsWith("/compare") || location.pathname.startsWith("/games");
+
   return (
     <div style={{ height: "100%" }}>
       <Group h="100%" px="md" justify="space-between" wrap="nowrap">
@@ -252,21 +263,23 @@ export function Navbar({ mobileOpened, onToggleMobile, onNavigate }: NavbarProps
                 {link.label}
               </NavLink>
             ))}
-            <Menu shadow="md" width={180} position="bottom-start" trigger="hover" openDelay={0} closeDelay={120}>
+            <Menu shadow="md" width={210} position="bottom-start" trigger="hover" openDelay={0} closeDelay={120}>
               <Menu.Target>
                 <UnstyledButton
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 4,
-                    fontWeight: 500,
-                    color: NAV_TEXT,
+                    fontWeight: miscActive ? 700 : 500,
+                    color: miscActive ? NAV_HOVER : NAV_TEXT,
                     padding: "6px 10px",
                     borderRadius: 6,
                     whiteSpace: "nowrap",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = NAV_HOVER)}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = NAV_TEXT)}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = miscActive ? NAV_HOVER : NAV_TEXT;
+                  }}
                 >
                   Misc
                   <IconChevronDown size={14} />
@@ -276,6 +289,21 @@ export function Navbar({ mobileOpened, onToggleMobile, onNavigate }: NavbarProps
                 <Menu.Item component={NavLink} to="/compare" onClick={onNavigate}>
                   Compare
                 </Menu.Item>
+                <Menu.Divider />
+                <Menu.Label>Games</Menu.Label>
+                <Menu.Item component={NavLink} to="/games" onClick={onNavigate}>
+                  All games
+                </Menu.Item>
+                <Menu.Item component={NavLink} to="/games/higher-lower" onClick={onNavigate}>
+                  Higher or Lower
+                </Menu.Item>
+                <Menu.Item component={NavLink} to="/games/duel" onClick={onNavigate}>
+                  Duel
+                </Menu.Item>
+                <Menu.Item component={NavLink} to="/games/predictor" onClick={onNavigate}>
+                  Match Predictor
+                </Menu.Item>
+                <Menu.Divider />
                 <Menu.Item
                   component="a"
                   href={API_DOCS_URL}

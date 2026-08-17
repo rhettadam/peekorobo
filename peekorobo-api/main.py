@@ -29,6 +29,7 @@ from query.event_insights import EventInsightsResponse
 from query.insights_overview import InsightsOverviewResponse
 from query.map import MapTeamsResponse, MapEventsResponse
 from query.search_index import SearchIndexResponse
+from query.games import H2HResponse, PredictorMatchesResponse, PredictorQuery
 from data.db import SessionLocal
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -49,6 +50,7 @@ import data.models.event_insights as event_insights
 import data.models.insights_overview as insights_overview
 import data.models.map as map_data
 import data.models.search_index as search_index
+import data.models.games as games
 import data.models.users as users_model
 import data.models.favorites as favorites_model
 import security
@@ -351,6 +353,7 @@ _BOT_BLOCK_PREFIXES = (
     "/insights",
     "/team_perfs",
     "/frc_games",
+    "/games",
     "/favorites/item",
     "/favorites/counts",
 )
@@ -605,6 +608,41 @@ async def get_event_perfs(event_key: Annotated[str, Path(title="Event key (e.g. 
 @app.get("/frc_games", dependencies=[Depends(read_access)], tags=["Events"])
 async def get_frc_games(db: Session = Depends(get_db)) -> FrcGamesResponse:
     return frc_games.get_frc_games(db)
+
+@app.get("/games/h2h", dependencies=[Depends(read_access)], tags=["Games"])
+async def get_games_h2h(
+    team_a: Annotated[int, Query(gt=0, title="First team number")],
+    team_b: Annotated[int, Query(gt=0, title="Second team number")],
+    year: Annotated[Optional[int], Query(title="Limit to this season")] = None,
+    db: Session = Depends(get_db),
+) -> H2HResponse:
+    """Head-to-head history: matches together (partners) and against (opponents)."""
+    if team_a == team_b:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pick two different teams")
+    return games.get_h2h(db, team_a, team_b, year)
+
+@app.get("/games/predictor", dependencies=[Depends(read_access)], tags=["Games"])
+async def get_games_predictor(
+    year: Annotated[int, Query(title="Season year")],
+    event_key: Annotated[Optional[str], Query(title="Play this event only")] = None,
+    week: Annotated[Optional[int], Query(title="0-based event week")] = None,
+    limit: Annotated[int, Query(ge=1, le=80, title="Random mix size")] = 12,
+    seed: Annotated[Optional[int], Query(title="RNG seed for a shareable mix")] = None,
+    playoffs_only: Annotated[bool, Query(title="Eliminations only")] = False,
+    db: Session = Depends(get_db),
+) -> PredictorMatchesResponse:
+    """Played matches with stored model predictions, for the Match Predictor game."""
+    return games.get_predictor_matches(
+        db,
+        PredictorQuery(
+            year=year,
+            event_key=event_key,
+            week=week,
+            limit=limit,
+            seed=seed,
+            playoffs_only=playoffs_only,
+        ),
+    )
 
 @app.get("/search/index", dependencies=[Depends(read_access)], tags=["Search"])
 async def get_search_index(response: Response, db: Session = Depends(get_db)) -> SearchIndexResponse:

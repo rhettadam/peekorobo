@@ -9,6 +9,10 @@ import { TeamsLeaderboard } from "./routes/TeamsLeaderboard";
 import { Events } from "./routes/Events";
 import { Map } from "./routes/Map";
 import { Compare } from "./routes/Compare";
+import { Games } from "./routes/Games";
+import { HigherLower } from "./routes/HigherLower";
+import { Duel } from "./routes/Duel";
+import { MatchPredictor } from "./routes/MatchPredictor";
 import { Insights, InsightsSeason } from "./routes/Insights";
 import { Login } from "./routes/Login";
 import { Register } from "./routes/Register";
@@ -30,6 +34,10 @@ export function App() {
         <Route path="map" element={<Map />} />
         <Route path="match/:eventKey/:matchKey" element={<Match />} />
         <Route path="compare" element={<Compare />} />
+        <Route path="games" element={<Games />} />
+        <Route path="games/higher-lower" element={<HigherLower />} />
+        <Route path="games/duel" element={<Duel />} />
+        <Route path="games/predictor" element={<MatchPredictor />} />
         <Route path="insights" element={<Insights />} />
         <Route path="insights/:year" element={<InsightsSeason />} />
         <Route path="login" element={<Login />} />
