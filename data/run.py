@@ -2147,7 +2147,7 @@ def calculate_confidence(consistency: float, dominance: float, event_boost: floa
     return raw_confidence, capped_confidence, record_alignment
 
 def _ensure_prediction_score_columns() -> None:
-    """Add predicted score columns if missing (idempotent)."""
+    """Add prediction columns if missing (idempotent)."""
     conn = get_pg_connection()
     cur = conn.cursor()
     try:

@@ -528,7 +528,8 @@ def build_pre_match_ratings_by_match(
         t0 = time.perf_counter()
         final_states, snapshots = simulate_event_pre_match_snapshots(matches, **sim_kwargs)
         for match_key, team_states in snapshots.items():
-            ratings_by_match[match_key] = {}
+            if match_key not in ratings_by_match:
+                ratings_by_match[match_key] = {}
             for team_key, st in team_states.items():
                 tn = team_number_from_tba_key(team_key)
                 if tn <= 0:
@@ -571,7 +572,10 @@ def _fallback_prior_event_rating(
         rating_scope="prior_event_or_prior_year",
         aggregation=config.aggregation,
     )
-    return team_rating_value(data, team_number, event_key, fallback)
+    rating = team_rating_value(
+        data, team_number, event_key, fallback
+    )
+    return rating
 
 
 def alliance_strength_pre_match(
@@ -626,7 +630,7 @@ def compute_walk_forward_strengths(
     precomputed_ratings: Optional[Dict[str, Dict[int, float]]] = None,
     initial_priors: Optional[Dict[str, Tuple[float, float, float]]] = None,
 ) -> Dict[str, Tuple[float, float]]:
-    """Pre-match alliance strengths per match_key (reusable for prob tuning)."""
+    """Pre-match alliance strengths keyed by match_key."""
     pre = dict(precomputed_ratings or {})
     db_keys = {row.match_key for row in data.matches}
     if db_keys.issubset(pre.keys()):

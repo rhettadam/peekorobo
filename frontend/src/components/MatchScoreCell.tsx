@@ -36,7 +36,7 @@ export function MatchActualScoreCell({ match }: { match: MatchResponse }) {
   );
 }
 
-/** Predicted alliance scores = sum of event ACE. */
+/** Predicted alliance scores = sum of pre-match ACE (DB), else event ACE sum. */
 export function MatchPredScoreCell({
   match,
   aceByTeam,
@@ -55,7 +55,12 @@ export function MatchPredScoreCell({
   const redWin = pred.red > pred.blue;
   const blueWin = pred.blue > pred.red;
   return (
-    <Text span size="sm" title="Predicted score (event ACE sum)" style={{ whiteSpace: "nowrap" }}>
+    <Text
+      span
+      size="sm"
+      title="Pre-match alliance strength (sum of ACE ratings, not game points)"
+      style={{ whiteSpace: "nowrap" }}
+    >
       <Text fw={redWin ? 700 : 400} c={redWin ? "red" : undefined} span>
         {Math.round(pred.red)}
       </Text>
