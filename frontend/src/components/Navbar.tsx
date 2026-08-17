@@ -22,6 +22,7 @@ import {
   IconSun,
   IconUser,
 } from "@tabler/icons-react";
+import { useState, forwardRef, type CSSProperties, type ReactNode } from "react";
 import { NavLink, Link, useLocation, useNavigate } from "react-router-dom";
 import { SearchBar } from "./SearchBar";
 import { BRAND, userAvatar } from "../lib/assets";
@@ -35,19 +36,94 @@ const LINKS = [
   { to: "/insights", label: "Insights" },
 ];
 
-// Secondary items tucked into a "Misc" dropdown to keep the top row short.
-const MOBILE_LINKS = [
-  ...LINKS,
-  { to: "/compare", label: "Compare" },
+const GAME_LINKS = [
   { to: "/games/higher-lower", label: "Higher or Lower" },
   { to: "/games/duel", label: "Duel" },
   { to: "/games/predictor", label: "Match Predictor" },
 ];
 
+const MOBILE_LINKS = [...LINKS, { to: "/compare", label: "Compare" }];
+
 const API_DOCS_URL = `${API_BASE}/docs`;
 
 const NAV_TEXT = "#f1f3f5";
 const NAV_HOVER = "#ffdd00";
+
+const mobileLinkStyle: CSSProperties = {
+  textDecoration: "none",
+  color: NAV_TEXT,
+  padding: "6px 0",
+  fontWeight: 500,
+  textAlign: "center",
+};
+
+const NavMenuTrigger = forwardRef<HTMLButtonElement, { label: string; active: boolean }>(
+  function NavMenuTrigger({ label, active, ...others }, ref) {
+    return (
+      <UnstyledButton
+        {...others}
+        ref={ref}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          fontWeight: active ? 700 : 500,
+          color: active ? NAV_HOVER : NAV_TEXT,
+          padding: "6px 10px",
+          borderRadius: 6,
+          whiteSpace: "nowrap",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = NAV_HOVER;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = active ? NAV_HOVER : NAV_TEXT;
+        }}
+      >
+        {label}
+        <IconChevronDown size={14} />
+      </UnstyledButton>
+    );
+  },
+);
+
+function MobileFold({
+  label,
+  active,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  children: ReactNode;
+}) {
+  const [opened, setOpened] = useState(false);
+  return (
+    <Stack gap={4} align="center" w="100%">
+      <UnstyledButton
+        onClick={() => setOpened((o) => !o)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          fontWeight: active || opened ? 700 : 500,
+          color: active || opened ? NAV_HOVER : NAV_TEXT,
+          padding: "6px 0",
+        }}
+      >
+        {label}
+        <IconChevronDown
+          size={14}
+          style={{ transform: opened ? "rotate(180deg)" : undefined, transition: "transform 150ms" }}
+        />
+      </UnstyledButton>
+      <Collapse in={opened}>
+        <Stack gap="xs" align="center">
+          {children}
+        </Stack>
+      </Collapse>
+    </Stack>
+  );
+}
 
 function ColorSchemeToggle({
   visibleFrom,
@@ -101,7 +177,7 @@ function UserMenu({ onNavigate }: { onNavigate: () => void }) {
 
   if (!isAuthenticated || !user) {
     return (
-      <Group gap="xs" wrap="nowrap" visibleFrom="md">
+      <Group gap="xs" wrap="nowrap">
         <Button component={Link} to="/login" variant="default" size="sm" onClick={onNavigate}>
           Login
         </Button>
@@ -113,7 +189,7 @@ function UserMenu({ onNavigate }: { onNavigate: () => void }) {
   }
 
   return (
-    <Menu shadow="md" width={200} position="bottom-end">
+    <Menu shadow="md" width={200} position="bottom-end" trigger="click">
       <Menu.Target>
         <ActionIcon variant="subtle" size="lg" radius="xl" aria-label="Account menu">
           <Avatar src={userAvatar(user.avatar_key)} size={30} radius="xl" alt={user.username}>
@@ -174,33 +250,33 @@ function UserMenu({ onNavigate }: { onNavigate: () => void }) {
 function MobileAuthLinks({ onNavigate }: { onNavigate: () => void }) {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
-  const linkStyle = { textDecoration: "none", color: NAV_TEXT, padding: "6px 0", fontWeight: 500, textAlign: "center" as const };
+  const location = useLocation();
   if (!isAuthenticated || !user) {
     return (
       <>
-        <NavLink to="/login" onClick={onNavigate} style={linkStyle}>
+        <NavLink to="/login" onClick={onNavigate} style={mobileLinkStyle}>
           Login
         </NavLink>
-        <NavLink to="/register" onClick={onNavigate} style={linkStyle}>
+        <NavLink to="/register" onClick={onNavigate} style={mobileLinkStyle}>
           Register
         </NavLink>
       </>
     );
   }
   return (
-    <>
-      <NavLink to="/user" onClick={onNavigate} style={linkStyle}>
+    <MobileFold label="Profile" active={location.pathname.startsWith("/user")}>
+      <NavLink to="/user" onClick={onNavigate} style={mobileLinkStyle}>
         My Profile
       </NavLink>
-      <NavLink to="/user#profile-favorites" onClick={onNavigate} style={linkStyle}>
+      <NavLink to="/user#profile-favorites" onClick={onNavigate} style={mobileLinkStyle}>
         Favorites
       </NavLink>
-      <NavLink to="/user?edit=1" onClick={onNavigate} style={linkStyle}>
+      <NavLink to="/user?edit=1" onClick={onNavigate} style={mobileLinkStyle}>
         Edit Profile
       </NavLink>
       <Text
         component="button"
-        style={{ ...linkStyle, background: "none", border: "none", cursor: "pointer" }}
+        style={{ ...mobileLinkStyle, background: "none", border: "none", cursor: "pointer" }}
         onClick={() => {
           logout();
           onNavigate();
@@ -209,7 +285,7 @@ function MobileAuthLinks({ onNavigate }: { onNavigate: () => void }) {
       >
         Logout
       </Text>
-    </>
+    </MobileFold>
   );
 }
 
@@ -221,8 +297,8 @@ interface NavbarProps {
 
 export function Navbar({ mobileOpened, onToggleMobile, onNavigate }: NavbarProps) {
   const location = useLocation();
-  const miscActive =
-    location.pathname.startsWith("/compare") || location.pathname.startsWith("/games");
+  const gamesActive = location.pathname.startsWith("/games");
+  const miscActive = location.pathname.startsWith("/compare");
 
   return (
     <div style={{ height: "100%" }}>
@@ -262,44 +338,26 @@ export function Navbar({ mobileOpened, onToggleMobile, onNavigate }: NavbarProps
                 {link.label}
               </NavLink>
             ))}
-            <Menu shadow="md" width={210} position="bottom-start" trigger="hover" openDelay={0} closeDelay={120}>
+            <Menu shadow="md" width={210} position="bottom-start" trigger="click">
               <Menu.Target>
-                <UnstyledButton
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    fontWeight: miscActive ? 700 : 500,
-                    color: miscActive ? NAV_HOVER : NAV_TEXT,
-                    padding: "6px 10px",
-                    borderRadius: 6,
-                    whiteSpace: "nowrap",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = NAV_HOVER)}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = miscActive ? NAV_HOVER : NAV_TEXT;
-                  }}
-                >
-                  Misc
-                  <IconChevronDown size={14} />
-                </UnstyledButton>
+                <NavMenuTrigger label="Games" active={gamesActive} />
+              </Menu.Target>
+              <Menu.Dropdown>
+                {GAME_LINKS.map((link) => (
+                  <Menu.Item key={link.to} component={NavLink} to={link.to} onClick={onNavigate}>
+                    {link.label}
+                  </Menu.Item>
+                ))}
+              </Menu.Dropdown>
+            </Menu>
+            <Menu shadow="md" width={210} position="bottom-start" trigger="click">
+              <Menu.Target>
+                <NavMenuTrigger label="Misc" active={miscActive} />
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Item component={NavLink} to="/compare" onClick={onNavigate}>
                   Compare
                 </Menu.Item>
-                <Menu.Divider />
-                <Menu.Label>Games</Menu.Label>
-                <Menu.Item component={NavLink} to="/games/higher-lower" onClick={onNavigate}>
-                  Higher or Lower
-                </Menu.Item>
-                <Menu.Item component={NavLink} to="/games/duel" onClick={onNavigate}>
-                  Duel
-                </Menu.Item>
-                <Menu.Item component={NavLink} to="/games/predictor" onClick={onNavigate}>
-                  Match Predictor
-                </Menu.Item>
-                <Menu.Divider />
                 <Menu.Item
                   component="a"
                   href={API_DOCS_URL}
@@ -319,7 +377,9 @@ export function Navbar({ mobileOpened, onToggleMobile, onNavigate }: NavbarProps
             <SearchBar onNavigate={onNavigate} />
           </div>
           <ColorSchemeToggle visibleFrom="md" />
-          <UserMenu onNavigate={onNavigate} />
+          <Group visibleFrom="md" wrap="nowrap">
+            <UserMenu onNavigate={onNavigate} />
+          </Group>
           <Burger opened={mobileOpened} onClick={onToggleMobile} hiddenFrom="md" size="sm" />
         </Group>
       </Group>
@@ -353,12 +413,28 @@ export function Navbar({ mobileOpened, onToggleMobile, onNavigate }: NavbarProps
               {link.label}
             </NavLink>
           ))}
+          <MobileFold label="Games" active={gamesActive}>
+            {GAME_LINKS.map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                onClick={onNavigate}
+                style={({ isActive }) => ({
+                  ...mobileLinkStyle,
+                  fontWeight: isActive ? 700 : 500,
+                  color: isActive ? NAV_HOVER : NAV_TEXT,
+                })}
+              >
+                {link.label}
+              </NavLink>
+            ))}
+          </MobileFold>
           <a
             href={API_DOCS_URL}
             target="_blank"
             rel="noopener noreferrer"
             onClick={onNavigate}
-            style={{ textDecoration: "none", color: NAV_TEXT, padding: "6px 0", fontWeight: 500, textAlign: "center" }}
+            style={mobileLinkStyle}
           >
             API Docs
           </a>
