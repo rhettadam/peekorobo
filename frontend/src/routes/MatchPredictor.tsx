@@ -423,7 +423,7 @@ export function MatchPredictor() {
               />
             </Group>
             <Text c="dimmed" size="sm" maw={640}>
-              Alliances stay hidden from the model until you lock a pick — no ACE, no win probability, just robots on
+              Alliances stay hidden from the model until you lock a pick: no ACE, no win probability, just robots on
               a field. Season mix spreads matches across events. One event plays that regional in order.
             </Text>
             <Button

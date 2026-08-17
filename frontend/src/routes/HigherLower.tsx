@@ -101,15 +101,23 @@ function TeamPlayCard({
       radius="lg"
       p="lg"
       h="100%"
+      withBorder={false}
+      shadow="md"
       style={{
         background: gradient,
         color: "#fff",
-        border: result === "correct" ? "2px solid #66bb6a" : result === "wrong" ? "2px solid #ef5350" : "1px solid rgba(255,255,255,0.12)",
+        border: "none",
+        boxShadow:
+          result === "correct"
+            ? "0 8px 28px rgba(76, 175, 80, 0.35)"
+            : result === "wrong"
+              ? "0 8px 28px rgba(239, 83, 80, 0.35)"
+              : "0 10px 28px rgba(0, 0, 0, 0.28)",
         overflow: "hidden",
       }}
     >
       <Stack align="center" gap="sm">
-        <TeamAvatar teamNumber={team.teamNumber} size={120} radius={16} bordered upscale />
+        <TeamAvatar teamNumber={team.teamNumber} size={120} radius={16} upscale />
         <Title order={2} ta="center" c="#fff" style={{ wordBreak: "break-word" }}>
           {team.teamNumber}
         </Title>
@@ -333,7 +341,7 @@ export function HigherLower() {
     <Stack gap="md" py="md">
       <GameHero
         title="Higher or Lower"
-        subtitle="The team on the right — higher ACE, or lower? Keep a streak going. Filters work like the Teams page."
+        subtitle="Guess whether the team on the right has a higher or lower ACE. Filters work like the Teams page."
         year={year}
       >
         <Group gap="sm">
@@ -451,7 +459,7 @@ export function HigherLower() {
           {over ? (
             <Card withBorder radius="lg" p="lg">
               <Stack align="center" gap="sm">
-                <Title order={3}>Streak over — {streak}</Title>
+                <Title order={3}>Streak over: {streak}</Title>
                 <Text c="dimmed">
                   {right.nickname || right.teamNumber} had {formatNumber(right.ace, 1)} ACE vs{" "}
                   {formatNumber(left.ace, 1)} for {left.nickname || left.teamNumber}.

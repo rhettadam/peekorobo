@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
-import { Anchor, Box, Group, Stack, Text, Title } from "@mantine/core";
-import { IconChevronLeft } from "@tabler/icons-react";
-import { Link } from "react-router-dom";
+import { Box, Group, Stack, Text, Title } from "@mantine/core";
 import { gameLogo } from "../../lib/assets";
 
 interface GameHeroProps {
@@ -11,16 +9,10 @@ interface GameHeroProps {
   children?: ReactNode;
 }
 
-/** Shared page header for Misc games: back link, season logo, title, trailing controls. */
+/** Shared page header for Misc games: season logo, title, trailing controls. */
 export function GameHero({ title, subtitle, year, children }: GameHeroProps) {
   return (
     <Stack gap={8}>
-      <Anchor component={Link} to="/games" size="sm" c="dimmed" underline="hover">
-        <Group gap={4} wrap="nowrap">
-          <IconChevronLeft size={14} />
-          All games
-        </Group>
-      </Anchor>
       <Group justify="space-between" align="flex-end" wrap="wrap">
         <Group gap="md" wrap="nowrap" align="stretch">
           {year ? (

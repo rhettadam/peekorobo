@@ -39,7 +39,6 @@ const LINKS = [
 const MOBILE_LINKS = [
   ...LINKS,
   { to: "/compare", label: "Compare" },
-  { to: "/games", label: "Games" },
   { to: "/games/higher-lower", label: "Higher or Lower" },
   { to: "/games/duel", label: "Duel" },
   { to: "/games/predictor", label: "Match Predictor" },
@@ -291,9 +290,6 @@ export function Navbar({ mobileOpened, onToggleMobile, onNavigate }: NavbarProps
                 </Menu.Item>
                 <Menu.Divider />
                 <Menu.Label>Games</Menu.Label>
-                <Menu.Item component={NavLink} to="/games" onClick={onNavigate}>
-                  All games
-                </Menu.Item>
                 <Menu.Item component={NavLink} to="/games/higher-lower" onClick={onNavigate}>
                   Higher or Lower
                 </Menu.Item>

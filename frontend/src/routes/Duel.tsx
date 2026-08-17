@@ -28,15 +28,6 @@ import { availableYears, CURRENT_YEAR } from "../lib/constants";
 import { eventWeekLabel, formatNumber, locationString, shortMatchLabel } from "../lib/format";
 import type { H2HMatch, H2HTeamInfo } from "../types/api";
 
-const CLASSICS: Array<[number, number, string]> = [
-  [254, 1678, "Cheesy Poofs vs Citrus"],
-  [1114, 2056, "Simbotics vs OP"],
-  [118, 148, "Robonauts vs Robowranglers"],
-  [33, 67, "Killer Bees vs HOT"],
-  [359, 4414, "Hawaiian Kids vs HighTide"],
-  [1678, 4414, "Citrus vs HighTide"],
-];
-
 function teamGradient(team: H2HTeamInfo, fallback: string) {
   const colors = team.team_colors as { primary?: string; secondary?: string } | null | undefined;
   const p = typeof colors?.primary === "string" ? colors.primary : null;
@@ -314,7 +305,7 @@ export function Duel() {
     <Stack gap="md" py="md">
       <GameHero
         title="Duel"
-        subtitle="How two teams play with each other — and against each other — across every shared event."
+        subtitle="How two teams play with each other and against each other across every shared event."
         year={year ?? undefined}
       />
 
@@ -351,21 +342,6 @@ export function Duel() {
             allowDeselect={false}
             w={150}
           />
-        </Group>
-        <Group gap="xs" mt="sm" wrap="wrap">
-          <Text size="xs" c="dimmed">
-            Classics:
-          </Text>
-          {CLASSICS.map(([a, b, label]) => (
-            <Badge
-              key={`${a}-${b}`}
-              variant="light"
-              style={{ cursor: "pointer", textTransform: "none" }}
-              onClick={() => setParam({ a: String(a), b: String(b) })}
-            >
-              {label}
-            </Badge>
-          ))}
         </Group>
       </Card>
 
