@@ -272,28 +272,6 @@ function fillFromSource(
   return null;
 }
 
-function resolveSource(
-  inferred: PreMatchRatingSource,
-  stored: Omit<PreMatchTeamDisplay, "source"> | null,
-  team: number,
-  enrichment?: PreMatchEnrichment,
-): PreMatchRatingSource {
-  if (stored && isZeroDisplay(stored)) return "unrated";
-  if (inferred !== "unrated") return inferred;
-  if (!stored) return "unrated";
-  if (!enrichment) return "in_event";
-  const season = enrichment.teamSeasonPerf.get(team);
-  const priorKeys = priorEventsThisSeason(
-    enrichment.eventKey,
-    enrichment.eventStartDate,
-    enrichment.eventsByKey,
-    season,
-  );
-  if (priorKeys.length > 0) return "carry_prior";
-  if (enrichment.teamPriorSeasonPerf.has(team)) return "prior_season";
-  return "in_event";
-}
-
 export interface PreMatchEnrichment {
   teamSeasonPerf: Map<number, TeamPerfInfo>;
   teamPriorSeasonPerf: Map<number, TeamPerfInfo>;
@@ -302,7 +280,7 @@ export interface PreMatchEnrichment {
   eventsByKey: Map<string, { start_date: string }>;
 }
 
-/** Prefer stored walk-forward payloads. Never mix ACE from one source with phases from another. */
+/** Walk-forward snapshots for in-event / prior-event. Prior-season and unrated ignore stored junk. */
 export function mergePreMatchDisplays(
   stored: Record<string, PreMatchTeamCompact> | null | undefined,
   sources: PreMatchTeamRatings | null,
@@ -313,27 +291,35 @@ export function mergePreMatchDisplays(
   const out: PreMatchTeamDisplays = {};
   for (const team of teams) {
     const key = String(team);
+    const inferred = sources?.[key]?.source;
     const compact = stored?.[key];
     const storedDisplay = compact ? compactToDisplay(compact) : null;
-    const source = resolveSource(
-      sources?.[key]?.source ?? "unrated",
-      storedDisplay,
-      team,
-      enrichment,
-    );
 
-    if (source === "unrated") {
-      out[key] = { source, ...UNRATED_DISPLAY };
+    if (inferred === "unrated") {
+      out[key] = { source: "unrated", ...UNRATED_DISPLAY };
+      continue;
+    }
+
+    if (inferred === "prior_season") {
+      const filled = enrichment ? fillFromSource("prior_season", team, enrichment) : null;
+      out[key] = filled
+        ? { source: "prior_season", ...filled }
+        : { source: "prior_season", ...(storedDisplay && !isZeroDisplay(storedDisplay) ? storedDisplay : UNRATED_DISPLAY) };
       continue;
     }
 
     let base = storedDisplay && !isZeroDisplay(storedDisplay) ? storedDisplay : null;
-    if ((!base || phasesMissing(base)) && enrichment) {
-      const filled = fillFromSource(source, team, enrichment);
+    if ((!base || phasesMissing(base)) && enrichment && inferred) {
+      const filled = fillFromSource(inferred, team, enrichment);
       if (filled) base = filled;
     }
 
-    out[key] = base ? { source, ...base } : { source, ...UNRATED_DISPLAY };
+    const source: PreMatchRatingSource = inferred ?? (base ? "in_event" : "unrated");
+    if (!base || source === "unrated") {
+      out[key] = { source: "unrated", ...UNRATED_DISPLAY };
+    } else {
+      out[key] = { source, ...base };
+    }
   }
   return out;
 }

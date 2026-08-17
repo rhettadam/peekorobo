@@ -381,6 +381,9 @@ def _parse_event_perf(raw_val) -> Dict[str, Dict[str, float]]:
             "ace": float(entry.get("ace") or 0.0),
             "raw": float(entry.get("raw") or 0.0),
             "confidence": float(entry.get("confidence") or 0.0),
+            "auto_raw": float(entry.get("auto_raw") or 0.0),
+            "teleop_raw": float(entry.get("teleop_raw") or 0.0),
+            "endgame_raw": float(entry.get("endgame_raw") or 0.0),
         }
     return out
 
@@ -556,6 +559,51 @@ def load_prediction_data_from_db(conn, year: int, *, limit_events: Optional[int]
         prior_season=prior_season,
         matches=matches,
     )
+
+
+def carry_priors_from_season(
+    season: Dict[int, TeamSeasonData],
+) -> Dict[str, Tuple[float, ...]]:
+    """Prior-year RAW phases + confidence, keyed by TBA team key (frcXXXX)."""
+    out: Dict[str, Tuple[float, ...]] = {}
+    for tn, td in season.items():
+        auto = float(td.auto_raw or 0.0)
+        teleop = float(td.teleop_raw or 0.0)
+        endgame = float(td.endgame_raw or 0.0)
+        if auto == 0.0 and teleop == 0.0 and endgame == 0.0:
+            continue
+        out[f"frc{int(tn)}"] = (
+            auto,
+            teleop,
+            endgame,
+            float(td.confidence or 0.0),
+        )
+    return out
+
+
+def load_season_carry_priors(conn, year: int) -> Dict[str, Tuple[float, ...]]:
+    """Load team_epas phases for ``year`` as walk-forward seed priors."""
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT team_number, auto_raw, teleop_raw, endgame_raw, confidence
+            FROM team_epas
+            WHERE year = %s
+            """,
+            (year,),
+        )
+        season: Dict[int, TeamSeasonData] = {}
+        for tn, auto, tele, end, conf in cur.fetchall():
+            season[int(tn)] = TeamSeasonData(
+                auto_raw=float(auto or 0.0),
+                teleop_raw=float(tele or 0.0),
+                endgame_raw=float(end or 0.0),
+                confidence=float(conf or 0.0),
+            )
+        return carry_priors_from_season(season)
+    finally:
+        cur.close()
 
 
 def team_number_from_tba_key(team_key: str) -> int:
@@ -758,6 +806,9 @@ def compute_walk_forward_strengths(
     """Pre-match alliance strengths and per-team snapshot payloads."""
     pre = dict(precomputed_ratings or {})
     db_keys = {row.match_key for row in data.matches}
+    seed_priors = dict(initial_priors or {})
+    if not seed_priors:
+        seed_priors = carry_priors_from_season(data.prior_season)
     if db_keys.issubset(pre.keys()):
         teams_by_match = pre
     else:
@@ -768,7 +819,7 @@ def compute_walk_forward_strengths(
             ace_params,
             finalize_team,
             precomputed=precomputed_ratings,
-            initial_priors=initial_priors,
+            initial_priors=seed_priors,
         )
     strengths: Dict[str, Tuple[float, float]] = {}
     for row in data.matches:

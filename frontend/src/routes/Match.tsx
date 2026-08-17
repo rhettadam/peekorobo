@@ -383,10 +383,11 @@ export function Match() {
   const winProb =
     redProb !== null && blueProb !== null ? Math.round(Math.max(redProb, blueProb) * 100) : null;
 
-  const modelStrength = predictedMatchScores(match, undefined);
-  const modelRed = modelStrength?.red ?? sumPreMatchField(preMatchRatings, match.red_teams, "ace");
-  const modelBlue =
-    modelStrength?.blue ?? sumPreMatchField(preMatchRatings, match.blue_teams, "ace");
+  const breakdownRed = sumPreMatchField(preMatchRatings, match.red_teams, "ace");
+  const breakdownBlue = sumPreMatchField(preMatchRatings, match.blue_teams, "ace");
+  const storedPred = predictedMatchScores(match, undefined);
+  const modelRed = breakdownRed ?? storedPred?.red ?? null;
+  const modelBlue = breakdownBlue ?? storedPred?.blue ?? null;
   const modelWinner =
     modelRed !== null && modelBlue !== null
       ? modelRed === modelBlue

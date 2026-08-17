@@ -373,14 +373,18 @@ def apply_match_updates(
             st.dominance_scores.append(norm_margin)
 
 
+_COMP_LEVEL_ORDER = {"qm": 0, "ef": 1, "qf": 2, "sf": 3, "f": 4}
+
+
 def _match_sort_key(match: dict) -> Tuple:
-    """Deterministic match order: time, then comp/set/number/key."""
+    """Same order as the match page: qual → playoff, then set, then match number."""
+    comp = str(match.get("comp_level") or "qm")
     return (
-        match.get("time") or 0,
-        match.get("comp_level") or "qm",
-        match.get("match_number") or 0,
-        match.get("set_number") or 0,
-        match.get("key") or "",
+        _COMP_LEVEL_ORDER.get(comp, 9),
+        int(match.get("set_number") or 0),
+        int(match.get("match_number") or 0),
+        int(match.get("time") or 0),
+        str(match.get("key") or ""),
     )
 
 

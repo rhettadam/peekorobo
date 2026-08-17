@@ -33,6 +33,7 @@ from prediction import (
     PredictionConfig,
     apply_match_predictions_to_db,
     load_prediction_data_from_db,
+    load_season_carry_priors,
     pack_pre_match_team,
     predict_all_matches_db,
     predict_all_matches_walk_forward,
@@ -2616,6 +2617,17 @@ def precompute_season_event_epas(year: int) -> None:
 
     event_keys = sorted(match_cache.keys(), key=lambda ek: (_start(ek), ek))
     priors: Dict[str, Tuple[float, ...]] = {}
+    if _ACE_CARRY_PRIOR:
+        conn = get_pg_connection()
+        try:
+            priors.update(load_season_carry_priors(conn, int(year) - 1))
+        finally:
+            conn.close()
+        if priors:
+            print(
+                f"  seeded {len(priors)} team(s) from {int(year) - 1} season ACE",
+                flush=True,
+            )
     computed = 0
     total = len(event_keys)
     pred_config = PredictionConfig.from_env()
