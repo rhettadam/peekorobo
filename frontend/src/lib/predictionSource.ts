@@ -71,7 +71,6 @@ function eventStart(
 }
 
 function priorEventsThisSeason(
-  team: number,
   eventKey: string,
   eventStartDate: string | null,
   eventsByKey: Map<string, { start_date: string }>,
@@ -126,7 +125,6 @@ function inferPreMatchSource(
 
   const seasonPerf = ctx.teamSeasonPerf.get(team);
   const priorEvents = priorEventsThisSeason(
-    team,
     ctx.eventKey,
     ctx.eventStartDate,
     ctx.eventsByKey,
