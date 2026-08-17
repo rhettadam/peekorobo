@@ -304,6 +304,27 @@ export interface TeamEventsResponse {
   events: string[];
 }
 
+export interface TeamMatchRating {
+  match_key: string;
+  event_key: string;
+  comp_level: string;
+  match_number: number;
+  set_number: number;
+  played: boolean;
+  a?: number | null;
+  t?: number | null;
+  e?: number | null;
+  r?: number | null;
+  c?: number | null;
+  ace?: number | null;
+}
+
+export interface TeamMatchRatingsResponse {
+  team_number: number;
+  year: number;
+  matches: TeamMatchRating[];
+}
+
 // ---- Map (query/map.py) ----
 export interface MapTeam {
   team_number: number;

@@ -25,6 +25,7 @@ import {
   useTeamAwards,
   useTeamEvents,
   useTeamInfo,
+  useTeamMatchRatings,
   useTeamNotables,
   useTeamPerfs,
 } from "../api/queries";
@@ -35,7 +36,7 @@ import { StatPill } from "../components/StatPill";
 import { TeamEventBlock } from "../components/TeamEventBlock";
 import { BlueBanners } from "../components/BlueBanners";
 import { TeamProfileMeta } from "../components/TeamProfileMeta";
-import type { EventData, EventPerfEntry, TeamPerfInfo } from "../types/api";
+import type { EventData, EventPerfEntry, TeamMatchRating, TeamPerfInfo } from "../types/api";
 import { CURRENT_YEAR } from "../lib/constants";
 import { BRAND } from "../lib/assets";
 import { isBlueBanner } from "../lib/banners";
@@ -119,16 +120,23 @@ function shortEventLabel(eventKey: string): string {
   return eventKey.replace(/^\d{4}/, "").toUpperCase();
 }
 
+function shortMatchLabel(m: Pick<TeamMatchRating, "comp_level" | "set_number" | "match_number">): string {
+  const c = (m.comp_level || "qm").toLowerCase();
+  if (c === "qm") return `QM${m.match_number}`;
+  return `${c.toUpperCase()}${m.set_number}-${m.match_number}`;
+}
+
 interface EventTrendRow {
   event: string;
   eventKey?: string;
+  matchKey?: string;
   name?: string;
   week?: string | null;
   Actual: number | null;
   Pred: number | null;
   Auto?: number | null;
-  Teleop?: number | null;
   Endgame?: number | null;
+  Teleop?: number | null;
   raw?: number | null;
   conf?: number | null;
   isPred?: boolean;
@@ -140,7 +148,7 @@ function EventTrendTooltip({ payload }: { payload?: Array<{ payload?: EventTrend
   if (!row) return null;
   const rows: Array<[string, string, string?]> = [];
   if (row.isPred) {
-    rows.push(["Projected ACE", formatNumber(row.Pred), "#2196F3"]);
+    rows.push(["Pre-match ACE", formatNumber(row.Pred), "#2196F3"]);
   } else {
     rows.push(["ACE", formatNumber(row.Actual), "var(--mantine-color-peeko-6)"]);
     if (row.raw != null) rows.push(["RAW", formatNumber(row.raw)]);
@@ -152,7 +160,7 @@ function EventTrendTooltip({ payload }: { payload?: Array<{ payload?: EventTrend
   return (
     <Card withBorder radius="md" padding="sm" shadow="md" style={{ minWidth: 180 }}>
       <Text fw={700} size="sm" lineClamp={2}>
-        {row.isPred ? "Projection" : row.name || row.event}
+        {row.isPred ? row.name || "Upcoming match" : row.name || row.event}
       </Text>
       {!row.isPred && row.week ? (
         <Text size="xs" c="dimmed" mb={4}>
@@ -178,9 +186,9 @@ function EventTrendTooltip({ payload }: { payload?: Array<{ payload?: EventTrend
           </Group>
         ))}
       </Stack>
-      {!row.isPred && row.eventKey ? (
+      {!row.isPred && (row.matchKey || row.eventKey) ? (
         <Text size="xs" c="peeko.5" mt={6}>
-          Click point to open event
+          Click point to open {row.matchKey ? "match" : "event"}
         </Text>
       ) : null}
     </Card>
@@ -193,6 +201,7 @@ export function Team() {
   const teamNumber = Number(params.teamNumber);
   const paramYear = params.year ? Number(params.year) : undefined;
   const [chartMode, setChartMode] = useState<"trend" | "breakdown">("trend");
+  const [chartGrain, setChartGrain] = useState<"match" | "event">("match");
 
   const infoQuery = useTeamInfo(teamNumber);
   const perfsQuery = useTeamPerfs(teamNumber);
@@ -210,6 +219,7 @@ export function Team() {
   const perf = perfsByYear.get(selectedYear);
 
   const eventsQuery = useTeamEvents(teamNumber, selectedYear);
+  const matchRatingsQuery = useTeamMatchRatings(teamNumber, selectedYear);
   const awardsQuery = useTeamAwards(teamNumber, selectedYear);
   const allAwardsQuery = useTeamAwards(teamNumber);
   const notablesQuery = useTeamNotables(teamNumber);
@@ -360,6 +370,55 @@ export function Team() {
     );
     return { rows, hasPred, breakdownRows, hasBreakdown };
   }, [perf, eventMetaByKey]);
+
+  const matchTrend = useMemo(() => {
+    const matches = matchRatingsQuery.data?.matches ?? [];
+    const rows: EventTrendRow[] = [];
+    let lastPlayedIdx = -1;
+    for (const m of matches) {
+      const ace = typeof m.ace === "number" && Number.isFinite(m.ace) ? m.ace : null;
+      if (ace === null) continue;
+      const meta = eventMetaByKey.get(m.event_key);
+      const week = eventWeekLabel(meta?.week);
+      const matchLbl = shortMatchLabel(m);
+      const eventLbl = shortEventLabel(m.event_key);
+      const label = week ? `${week.replace(/^Week\s+/i, "W")} ${matchLbl}` : `${eventLbl} ${matchLbl}`;
+      rows.push({
+        event: label,
+        eventKey: m.event_key,
+        matchKey: m.match_key,
+        name: `${meta?.event_data.name ?? eventLbl} · ${matchLbl}`,
+        week,
+        Actual: m.played ? ace : null,
+        Pred: m.played ? null : ace,
+        Auto: typeof m.a === "number" ? m.a : null,
+        Teleop: typeof m.t === "number" ? m.t : null,
+        Endgame: typeof m.e === "number" ? m.e : null,
+        raw: typeof m.r === "number" ? m.r : null,
+        conf: typeof m.c === "number" ? m.c : null,
+        isPred: !m.played,
+      });
+      if (m.played) lastPlayedIdx = rows.length - 1;
+    }
+    const firstPred = rows.findIndex((r) => r.isPred);
+    if (lastPlayedIdx >= 0 && firstPred > lastPlayedIdx) {
+      rows[lastPlayedIdx] = { ...rows[lastPlayedIdx], Pred: rows[lastPlayedIdx].Actual };
+    }
+    const breakdownRows = rows.filter((r) => !r.isPred);
+    const hasBreakdown = breakdownRows.some(
+      (r) => r.Auto != null || r.Teleop != null || r.Endgame != null,
+    );
+    return {
+      rows,
+      hasPred: rows.some((r) => r.Pred != null && r.isPred),
+      breakdownRows,
+      hasBreakdown,
+    };
+  }, [matchRatingsQuery.data, eventMetaByKey]);
+
+  const hasMatchSeries = matchTrend.rows.length > 0;
+  const grain = hasMatchSeries ? chartGrain : "event";
+  const trend = grain === "match" ? matchTrend : eventTrend;
 
   if (perfsQuery.isLoading) return <LoadingState label={`Loading team ${teamNumber}...`} />;
   if (perfsQuery.error) return <ErrorState error={perfsQuery.error} />;
@@ -601,28 +660,50 @@ export function Team() {
                 <StatPill metric="ace" value={perf.ace} />
               </Group>
 
-              {eventTrend.rows.length > 0 ? (
+              {trend.rows.length > 0 ? (
                 <Card withBorder padding="md" radius="md">
-                  <Group justify="space-between" align="center" mb="sm" wrap="wrap">
-                    <Text fw={600}>
-                      Team {teamNumber} Event Performance in {selectedYear}
-                    </Text>
-                    {eventTrend.hasBreakdown ? (
-                      <SegmentedControl
-                        size="xs"
-                        value={chartMode}
-                        onChange={(v) => setChartMode(v as "trend" | "breakdown")}
-                        data={[
-                          { label: "ACE Trend", value: "trend" },
-                          { label: "Breakdown", value: "breakdown" },
-                        ]}
-                      />
-                    ) : null}
+                  <Group justify="space-between" align="center" mb="xs" wrap="wrap">
+                    <div>
+                      <Text fw={600}>
+                        {grain === "match"
+                          ? `Team ${teamNumber} match ACE in ${selectedYear}`
+                          : `Team ${teamNumber} event ACE in ${selectedYear}`}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        {grain === "match"
+                          ? "Walk-forward ACE entering each match. Upcoming matches use the stored model, not a trend line."
+                          : "End-of-event ACE. Dashed Pred is a damped linear projection of RAW × confidence."}
+                      </Text>
+                    </div>
+                    <Group gap="xs" wrap="wrap">
+                      {hasMatchSeries ? (
+                        <SegmentedControl
+                          size="xs"
+                          value={grain}
+                          onChange={(v) => setChartGrain(v as "match" | "event")}
+                          data={[
+                            { label: "By match", value: "match" },
+                            { label: "By event", value: "event" },
+                          ]}
+                        />
+                      ) : null}
+                      {trend.hasBreakdown ? (
+                        <SegmentedControl
+                          size="xs"
+                          value={chartMode}
+                          onChange={(v) => setChartMode(v as "trend" | "breakdown")}
+                          data={[
+                            { label: "ACE Trend", value: "trend" },
+                            { label: "Breakdown", value: "breakdown" },
+                          ]}
+                        />
+                      ) : null}
+                    </Group>
                   </Group>
-                  {chartMode === "breakdown" && eventTrend.hasBreakdown ? (
+                  {chartMode === "breakdown" && trend.hasBreakdown ? (
                     <AreaChart
                       h={280}
-                      data={eventTrend.breakdownRows}
+                      data={trend.breakdownRows}
                       dataKey="event"
                       type="stacked"
                       series={[
@@ -645,8 +726,12 @@ export function Team() {
                       }}
                       areaChartProps={{
                         onClick: (state: { activePayload?: Array<{ payload?: EventTrendRow }> }) => {
-                          const ek = state?.activePayload?.[0]?.payload?.eventKey;
-                          if (ek) navigate(`/event/${ek}`);
+                          const row = state?.activePayload?.[0]?.payload;
+                          if (row?.matchKey && row.eventKey) {
+                            navigate(`/match/${row.eventKey}/${row.matchKey}`);
+                          } else if (row?.eventKey) {
+                            navigate(`/event/${row.eventKey}`);
+                          }
                         },
                         style: { cursor: "pointer" },
                       }}
@@ -654,11 +739,11 @@ export function Team() {
                   ) : (
                     <AreaChart
                       h={280}
-                      data={eventTrend.rows}
+                      data={trend.rows}
                       dataKey="event"
                       series={[
                         { name: "Actual", color: "peeko.6" },
-                        ...(eventTrend.hasPred
+                        ...(trend.hasPred
                           ? [{ name: "Pred", color: "#2196F3", strokeDasharray: "6 6" }]
                           : []),
                       ]}
@@ -668,7 +753,7 @@ export function Team() {
                       connectNulls={false}
                       gridAxis="xy"
                       yAxisLabel="ACE"
-                      withLegend={eventTrend.hasPred}
+                      withLegend={trend.hasPred}
                       tooltipProps={{
                         content: ({ payload }) => (
                           <EventTrendTooltip
@@ -678,8 +763,12 @@ export function Team() {
                       }}
                       areaChartProps={{
                         onClick: (state: { activePayload?: Array<{ payload?: EventTrendRow }> }) => {
-                          const ek = state?.activePayload?.[0]?.payload?.eventKey;
-                          if (ek) navigate(`/event/${ek}`);
+                          const row = state?.activePayload?.[0]?.payload;
+                          if (row?.matchKey && row.eventKey) {
+                            navigate(`/match/${row.eventKey}/${row.matchKey}`);
+                          } else if (row?.eventKey) {
+                            navigate(`/event/${row.eventKey}`);
+                          }
                         },
                         style: { cursor: "pointer" },
                       }}

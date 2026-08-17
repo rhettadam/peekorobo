@@ -34,3 +34,23 @@ class MatchResponse(BaseModel):
 class EventMatchResponse(BaseModel):
     event_key : str
     matches : List[MatchResponse]
+
+class TeamMatchRating(BaseModel):
+    """One team's compact pre-match snapshot for a single match (no alliance JSON)."""
+    match_key: str
+    event_key: str
+    comp_level: str
+    match_number: int
+    set_number: int
+    played: bool
+    a: Optional[float] = None
+    t: Optional[float] = None
+    e: Optional[float] = None
+    r: Optional[float] = None
+    c: Optional[float] = None
+    ace: Optional[float] = None
+
+class TeamMatchRatingsResponse(BaseModel):
+    team_number: int
+    year: int
+    matches: List[TeamMatchRating]

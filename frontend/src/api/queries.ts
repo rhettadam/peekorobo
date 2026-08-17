@@ -27,6 +27,7 @@ import type {
   TeamAwardsResponse,
   TeamData,
   TeamEventsResponse,
+  TeamMatchRatingsResponse,
   TeamNotablesResponse,
   TeamPerfListResponse,
   TeamPerfResponse,
@@ -111,6 +112,19 @@ export function useTeamEvents(
     enabled: Number.isFinite(teamNumber) && teamNumber > 0,
     staleTime: FIVE_MIN,
     queryFn: () => apiGet<TeamEventsResponse>(path),
+  });
+}
+
+export function useTeamMatchRatings(
+  teamNumber: number,
+  year: number,
+  enabled = true,
+): UseQueryResult<TeamMatchRatingsResponse> {
+  return useQuery({
+    queryKey: ["team-match-ratings", teamNumber, year],
+    enabled: enabled && Number.isFinite(teamNumber) && teamNumber > 0 && Number.isFinite(year),
+    staleTime: FIVE_MIN,
+    queryFn: () => apiGet<TeamMatchRatingsResponse>(`/team/${teamNumber}/match_ratings/${year}`),
   });
 }
 

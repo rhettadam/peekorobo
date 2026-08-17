@@ -24,7 +24,7 @@ import { useEvents, useSearchIndex } from "../api/queries";
 import { TeamName } from "../components/TeamName";
 import { TeamAvatar } from "../components/TeamAvatar";
 import { StatPill } from "../components/StatPill";
-import type { EventData, EventPerfEntry, TeamPerfInfo, TeamPerfResponse } from "../types/api";
+import type { EventData, EventPerfEntry, TeamMatchRatingsResponse, TeamPerfInfo, TeamPerfResponse } from "../types/api";
 import { availableYears, CURRENT_YEAR } from "../lib/constants";
 import { METRIC_STYLES, type MetricKey } from "../lib/metrics";
 import { contrastText } from "../lib/epa";
@@ -80,6 +80,29 @@ function metricValue(
   }
 }
 
+function matchMetricValue(
+  match: { a?: number | null; t?: number | null; e?: number | null; r?: number | null; c?: number | null; ace?: number | null } | undefined,
+  metric: MetricKey,
+): number | null {
+  if (!match) return null;
+  switch (metric) {
+    case "ace":
+      return match.ace ?? null;
+    case "raw":
+      return match.r ?? null;
+    case "confidence":
+      return match.c ?? null;
+    case "auto":
+      return match.a ?? null;
+    case "teleop":
+      return match.t ?? null;
+    case "endgame":
+      return match.e ?? null;
+    default:
+      return null;
+  }
+}
+
 function sortEventKeysChronologically(keys: string[], metaByKey: Map<string, EventData>): string[] {
   return [...keys].sort((a, b) => {
     const metaA = metaByKey.get(a);
@@ -130,6 +153,7 @@ export function Compare() {
 
   const year = Number(searchParams.get("year")) || CURRENT_YEAR;
   const [rangeMode, setRangeMode] = useState<"single" | "all">("single");
+  const [grain, setGrain] = useState<"event" | "match">("match");
   const [metrics, setMetrics] = useState<MetricKey[]>(["ace"]);
 
   useEffect(() => {
@@ -159,11 +183,32 @@ export function Compare() {
     })),
   });
 
+  const matchRatingQueries = useQueries({
+    queries: teams.map((tn) => ({
+      queryKey: ["team-match-ratings", tn, year],
+      queryFn: () => apiGet<TeamMatchRatingsResponse>(`/team/${tn}/match_ratings/${year}`),
+      staleTime: 5 * 60 * 1000,
+      enabled: rangeMode === "single" && grain === "match" && tn > 0,
+    })),
+  });
+
   const perfByTeam = useMemo(() => {
     const map = new Map<number, TeamPerfResponse | undefined>();
     teams.forEach((tn, i) => map.set(tn, results[i]?.data));
     return map;
   }, [teams, results]);
+
+  const matchesByTeam = useMemo(() => {
+    const map = new Map<number, TeamMatchRatingsResponse["matches"]>();
+    teams.forEach((tn, i) => map.set(tn, matchRatingQueries[i]?.data?.matches ?? []));
+    return map;
+  }, [teams, matchRatingQueries]);
+
+  const hasMatchSeries = useMemo(
+    () => teams.some((tn) => (matchesByTeam.get(tn)?.length ?? 0) > 0),
+    [teams, matchesByTeam],
+  );
+  const effectiveGrain = rangeMode === "single" && hasMatchSeries ? grain : "event";
 
   const yearEventsQuery = useEvents(year);
   const eventMetaByKey = useMemo(() => {
@@ -211,7 +256,20 @@ export function Compare() {
       return { chartData: rows, series: seriesList, xKey: "x", sortedEventKeys: [] as string[] };
     }
 
-    // single-season: x-axis = union of event keys for the selected year, in timeline order.
+    if (effectiveGrain === "match") {
+      const maxN = Math.max(0, ...teams.map((tn) => matchesByTeam.get(tn)?.length ?? 0));
+      const rows = Array.from({ length: maxN }, (_, i) => {
+        const row: Record<string, number | string | null> = { x: String(i + 1) };
+        for (const tn of teams) {
+          const match = matchesByTeam.get(tn)?.[i];
+          for (const m of activeMetrics) row[`${tn}__${m}`] = matchMetricValue(match, m);
+        }
+        return row;
+      });
+      return { chartData: rows, series: seriesList, xKey: "x", sortedEventKeys: [] as string[] };
+    }
+
+    // single-season by event: x-axis = union of event keys for the selected year.
     const eventKeys = new Set<string>();
     for (const tn of teams) {
       const p = perfByTeam.get(tn)?.team_perfs.find((x) => x.year === year);
@@ -229,7 +287,7 @@ export function Compare() {
       return row;
     });
     return { chartData: rows, series: seriesList, xKey: "x", sortedEventKeys: keys };
-  }, [teams, perfByTeam, rangeMode, year, activeMetrics, eventMetaByKey]);
+  }, [teams, perfByTeam, matchesByTeam, rangeMode, effectiveGrain, year, activeMetrics, eventMetaByKey]);
 
   const chartSeries = series.map((s) => ({ name: s.key, label: s.name, color: s.color }));
 
@@ -237,7 +295,7 @@ export function Compare() {
     <Stack gap="md" py="md">
       <Title order={1}>Compare</Title>
       <Text c="dimmed" size="sm">
-        Metrics by event (one season) or by year (all seasons). Add 2–8 teams.
+        Metrics by match or event (one season), or by year (all seasons). Add 2–8 teams.
       </Text>
 
       <Group align="flex-end" gap="sm" wrap="wrap">
@@ -283,6 +341,21 @@ export function Compare() {
             ]}
           />
         </Stack>
+        {rangeMode === "single" && hasMatchSeries ? (
+          <Stack gap={4}>
+            <Text size="sm" fw={500}>
+              Grain
+            </Text>
+            <SegmentedControl
+              value={effectiveGrain}
+              onChange={(v) => setGrain(v as "event" | "match")}
+              data={[
+                { value: "match", label: "By match" },
+                { value: "event", label: "By event" },
+              ]}
+            />
+          </Stack>
+        ) : null}
         <Select
           label="Season"
           value={String(year)}
@@ -333,7 +406,9 @@ export function Compare() {
           <Text fw={600} mb="sm">
             {rangeMode === "all"
               ? `${activeMetrics.map((m) => METRIC_STYLES[m].label).join(", ")} by season`
-              : `${activeMetrics.map((m) => METRIC_STYLES[m].label).join(", ")} by event — ${year}`}
+              : effectiveGrain === "match"
+                ? `${activeMetrics.map((m) => METRIC_STYLES[m].label).join(", ")} by match (season match #) — ${year}`
+                : `${activeMetrics.map((m) => METRIC_STYLES[m].label).join(", ")} by event — ${year}`}
           </Text>
           <LineChart
             h={360}

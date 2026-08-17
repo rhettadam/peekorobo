@@ -1,9 +1,16 @@
-from typing import Optional, List, Dict
-from sqlalchemy import Text, INT, select, or_
+from typing import Optional, List, Dict, Any
+from sqlalchemy import Text, INT, select, or_, case, func
 from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from data.db import Base
-from query.event_matches import EventMatchesRequest, EventMatchResponse, MatchResponse
+from data.models.events import Events
+from query.event_matches import (
+    EventMatchesRequest,
+    EventMatchResponse,
+    MatchResponse,
+    TeamMatchRating,
+    TeamMatchRatingsResponse,
+)
 
 
 def _team_in_list(team: int) -> List:
@@ -84,3 +91,93 @@ def get_event_matches(db: Session, event_key: str, query: EventMatchesRequest) -
         for r in rows
     ]
     return EventMatchResponse(event_key=event_key, matches=matches)
+
+
+def _compact_floats(raw: Any) -> Optional[Dict[str, float]]:
+    if isinstance(raw, str):
+        try:
+            import json
+
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(raw, dict):
+        return None
+    out: Dict[str, float] = {}
+    for key in ("a", "t", "e", "r", "c", "ace"):
+        val = raw.get(key)
+        if isinstance(val, (int, float)):
+            out[key] = float(val)
+    return out if "ace" in out else None
+
+
+def get_team_match_ratings(db: Session, team_number: int, year: int) -> TeamMatchRatingsResponse:
+    """Walk-forward ACE components for one team in one season.
+
+    Extracts only this team's compact JSONB object in SQL so the API does not
+    ship six-robot payloads or other matches at the event.
+    """
+    team_key = str(int(team_number))
+    rating_col = EventMatch.pre_match_teams.op("->")(team_key)
+    level_ord = case(
+        (EventMatch.comp_level == "qm", 0),
+        (EventMatch.comp_level == "ef", 1),
+        (EventMatch.comp_level == "qf", 2),
+        (EventMatch.comp_level == "sf", 3),
+        (EventMatch.comp_level == "f", 4),
+        else_=9,
+    )
+    stmt = (
+        select(
+            EventMatch.match_key,
+            EventMatch.event_key,
+            EventMatch.comp_level,
+            EventMatch.match_number,
+            EventMatch.set_number,
+            EventMatch.red_score,
+            EventMatch.blue_score,
+            EventMatch.winning_alliance,
+            rating_col.label("rating"),
+        )
+        .select_from(EventMatch)
+        .outerjoin(Events, Events.event_key == EventMatch.event_key)
+        .where(
+            func.left(EventMatch.event_key, 4) == str(year),
+            or_(*_team_in_list(team_number)),
+            rating_col.is_not(None),
+        )
+        .order_by(
+            Events.start_date.nulls_last(),
+            EventMatch.event_key,
+            level_ord,
+            EventMatch.set_number,
+            EventMatch.match_number,
+        )
+    )
+    matches: List[TeamMatchRating] = []
+    for row in db.execute(stmt).all():
+        compact = _compact_floats(row.rating)
+        if not compact:
+            continue
+        played = (
+            (row.red_score or 0) > 0
+            or (row.blue_score or 0) > 0
+            or (row.winning_alliance or "") in ("red", "blue")
+        )
+        matches.append(
+            TeamMatchRating(
+                match_key=row.match_key or "",
+                event_key=row.event_key or "",
+                comp_level=row.comp_level or "",
+                match_number=row.match_number or 0,
+                set_number=row.set_number or 0,
+                played=played,
+                a=compact.get("a"),
+                t=compact.get("t"),
+                e=compact.get("e"),
+                r=compact.get("r"),
+                c=compact.get("c"),
+                ace=compact.get("ace"),
+            )
+        )
+    return TeamMatchRatingsResponse(team_number=team_number, year=year, matches=matches)

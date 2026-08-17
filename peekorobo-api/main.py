@@ -17,7 +17,7 @@ from query.events import EventQuery, EventResponse
 from query.event_keys import EventKeysResponse
 from query.team_epas import TeamPerfRequest, TeamPerfResponse, TeamPerfListRequest, TeamPerfListResponse
 from query.event_teams import EventTeamsQuery, EventTeamsResponse
-from query.event_matches import EventMatchesRequest, EventMatchResponse
+from query.event_matches import EventMatchesRequest, EventMatchResponse, TeamMatchRatingsResponse
 from query.event_awards import EventAwardsResponse, EventAwardsQuery
 from query.event_rankings import EventRankingsResponse, EventRankingsQuery
 from query.event_perfs import EventPerfsResponse, EventPerfInfo
@@ -545,6 +545,15 @@ async def get_team_events(team_number: Annotated[int, Path(title="Team number")]
 @app.get("/team/{team_number}/events/{year}", dependencies=[Depends(read_access)], tags=["Teams"])
 async def get_team_events_by_year(team_number: Annotated[int, Path(title="Team number")], year: Annotated[int, Path(title="Year")], db: Session = Depends(get_db)) -> TeamEventsResponse:
     return team_events.get_team_events(db, team_number, TeamEventsQuery(year=year))
+
+@app.get("/team/{team_number}/match_ratings/{year}", dependencies=[Depends(read_access)], tags=["Teams"])
+async def get_team_match_ratings(
+    team_number: Annotated[int, Path(title="Team number")],
+    year: Annotated[int, Path(title="Year")],
+    db: Session = Depends(get_db),
+) -> TeamMatchRatingsResponse:
+    """Compact walk-forward ACE (auto/teleop/endgame/raw/conf) for each of a team's matches."""
+    return event_matches.get_team_match_ratings(db, team_number, year)
 
 # Event data routes (nested under /event/{event_key}/...)
 @app.get("/event/{event_key}/teams", dependencies=[Depends(read_access)], tags=["Event Data"])
