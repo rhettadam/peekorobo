@@ -4,7 +4,7 @@
 
 Data-driven scouting and analysis for the [FIRST Robotics Competition](https://www.firstinspires.org/robotics/frc). Peekorobo aggregates The Blue Alliance data, computes **ACE** (Adjusted Contribution Estimate) ratings, and serves teams, events, matches, maps, insights, and more.
 
-**Live:** [peekorobo.pages.dev](https://peekorobo.pages.dev/) · **API:** [peekorobo-api.onrender.com](https://peekorobo-api.onrender.com/docs)
+**Live:** [peekorobo.pages.dev](https://www.peekorobo.com/) · **API:** [peekorobo-api.onrender.com](https://peekorobo-db-bec52087b7e6.herokuapp.com/docs)
 
 ---
 

@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  Flex,
   Group,
   Progress,
   Select,
@@ -455,7 +456,12 @@ export function HigherLower() {
             size="sm"
             radius="xl"
           />
-          <Group align="stretch" wrap="wrap" gap="md" justify="center">
+          <Flex
+            direction={{ base: "column", sm: "row" }}
+            align="stretch"
+            gap="md"
+            justify="center"
+          >
             <Box style={{ flex: "1 1 280px", minWidth: 0 }}>
               <TeamPlayCard team={left} year={year} hideAce={false} />
             </Box>
@@ -481,7 +487,7 @@ export function HigherLower() {
             <Box style={{ flex: "1 1 280px", minWidth: 0 }}>
               <TeamPlayCard team={right} year={year} hideAce={!revealed} />
             </Box>
-          </Group>
+          </Flex>
           {queued ? <PrefetchTeam teamNumber={queued.teamNumber} /> : null}
 
           {over ? (
