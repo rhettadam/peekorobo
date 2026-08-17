@@ -205,7 +205,6 @@ function CompareTooltip({
       <Stack gap="xs" mt={6}>
         {present.map((tn) => {
           const color = TEAM_COLORS[teams.indexOf(tn) % TEAM_COLORS.length];
-          const conf = row[teamMetricKey(tn, "confidence")];
           return (
             <Stack key={tn} gap={2}>
               <Group gap={6} wrap="nowrap">
