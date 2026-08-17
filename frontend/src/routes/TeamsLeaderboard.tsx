@@ -14,7 +14,6 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { ScatterChart } from "@mantine/charts";
 import { IconSearch } from "@tabler/icons-react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -31,6 +30,7 @@ import { MetricCell, ConfidenceCell } from "../components/MetricCell";
 import { AceLegend } from "../components/AceLegend";
 import { RecordCell } from "../components/RecordCell";
 import { DataTable, type Column } from "../components/DataTable";
+import { TeamBubbleChart } from "../components/TeamBubbleChart";
 import { gameLogo, teamAvatar, STOCK_AVATAR } from "../lib/assets";
 import { availableYears, CURRENT_YEAR, isDemoTeam } from "../lib/constants";
 import { computePercentiles, contrastText, median } from "../lib/epa";
@@ -52,60 +52,6 @@ interface Row {
   rankGlobal: number | null;
   favorites: number;
 }
-
-type AxisKey =
-  | "ace"
-  | "raw"
-  | "auto"
-  | "teleop"
-  | "endgame"
-  | "confidence"
-  | "wins"
-  | "losses"
-  | "winRate"
-  | "rank"
-  | "teamNumber";
-
-const AXIS_OPTIONS: Array<{ value: AxisKey; label: string }> = [
-  { value: "ace", label: "ACE" },
-  { value: "raw", label: "RAW" },
-  { value: "auto", label: "Auto" },
-  { value: "teleop", label: "Teleop" },
-  { value: "endgame", label: "Endgame" },
-  { value: "confidence", label: "Confidence" },
-  { value: "wins", label: "Wins" },
-  { value: "losses", label: "Losses" },
-  { value: "winRate", label: "Win Rate" },
-  { value: "rank", label: "Global Rank" },
-  { value: "teamNumber", label: "Team Number" },
-];
-
-// Sequential low-to-high palette for the bubble color bands (worst -> best).
-const BAND_COLORS = ["#c62828", "#ef6c00", "#f9a825", "#9e9d24", "#558b2f", "#1b5e20"];
-
-function axisValue(r: Row, key: AxisKey): number | null {
-  switch (key) {
-    case "teamNumber":
-      return r.teamNumber;
-    case "wins":
-      return r.wins;
-    case "losses":
-      return r.losses;
-    case "rank":
-      return r.rankGlobal;
-    case "winRate": {
-      const w = r.wins ?? 0;
-      const l = r.losses ?? 0;
-      const t = r.ties ?? 0;
-      const total = w + l + t;
-      return total > 0 ? (w / total) * 100 : null;
-    }
-    default:
-      return r[key];
-  }
-}
-
-const AXIS_LABEL = (k: AxisKey) => AXIS_OPTIONS.find((o) => o.value === k)?.label ?? k;
 
 const TILE_BG = { blue: "#0066B3", red: "#ED1C24" } as const;
 
@@ -171,9 +117,6 @@ export function TeamsLeaderboard() {
   const [tab, setTab] = useState<string>("leaderboard");
   const [avatarSize, setAvatarSize] = useState(48);
   const [tileBg, setTileBg] = useState<keyof typeof TILE_BG>("blue");
-  const [xAxis, setXAxis] = useState<AxisKey>("teleop");
-  const [yAxis, setYAxis] = useState<AxisKey>("auto");
-  const [colorBy, setColorBy] = useState<AxisKey>("ace");
   // Location filters live in the URL so a filtered leaderboard is shareable
   // (e.g. /teams?year=2025&country=USA&state=Louisiana or ?district=fim).
   const country = searchParams.get("country") || "All";
@@ -332,83 +275,32 @@ export function TeamsLeaderboard() {
 
   const spotlight = useMemo(() => realRows.slice(0, 3), [realRows]);
 
-  interface BubblePoint {
-    x: number;
-    y: number;
-    teamNumber: number;
-    c: number;
-    [key: string]: number;
-  }
-
-  // Color-banded bubble chart: points are grouped into 6 equal-count buckets by
-  // the "Color by" metric, each band a distinct color, so clusters and outliers
-  // read at a glance. Matched (searched) teams are highlighted on top.
-  const { bubbleSeries, refLines } = useMemo(() => {
+  const bubbleHighlight = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    const toPoint = (r: Row): BubblePoint | null => {
-      const x = axisValue(r, xAxis);
-      const y = axisValue(r, yAxis);
-      if (x === null || y === null) return null;
-      return { x, y, teamNumber: r.teamNumber, c: axisValue(r, colorBy) ?? NaN };
-    };
-    const pts = realRows
-      .map(toPoint)
-      .filter((p): p is BubblePoint => p !== null);
-
-    // Quantile cut points (5 cuts -> 6 bands) over the color metric.
-    const cvals = pts
-      .map((p) => p.c)
-      .filter((v) => !Number.isNaN(v))
-      .sort((a, b) => a - b);
-    const quantile = (frac: number) => {
-      if (cvals.length === 0) return 0;
-      const idx = Math.min(cvals.length - 1, Math.max(0, Math.round(frac * (cvals.length - 1))));
-      return cvals[idx];
-    };
-    const cuts = [1, 2, 3, 4, 5].map((k) => quantile(k / 6));
-    const bandOf = (v: number) => {
-      if (Number.isNaN(v)) return 0;
-      let b = 0;
-      for (const cut of cuts) if (v >= cut) b += 1;
-      return Math.min(b, BAND_COLORS.length - 1);
-    };
-    const bandLabel = (b: number) => {
-      const lo = b === 0 ? -Infinity : cuts[b - 1];
-      return b === 0
-        ? `${AXIS_LABEL(colorBy)} < ${formatNumber(cuts[0], 1)}`
-        : `\u2265 ${formatNumber(lo, 1)}`;
-    };
-
-    const bands: Array<{ name: string; color: string; data: BubblePoint[] }> = BAND_COLORS.map(
-      (color, b) => ({ name: bandLabel(b), color, data: [] }),
-    );
-    const matched: BubblePoint[] = [];
-    for (const p of pts) {
-      if (q && matchesFilter({ teamNumber: p.teamNumber } as Row, q)) {
-        matched.push(p);
-      }
-      bands[bandOf(p.c)].data.push(p);
-    }
-    const series = bands.filter((s) => s.data.length > 0);
-    if (matched.length > 0) {
-      series.push({ name: "Search match", color: "#ffdd00", data: matched });
-    }
-
-    // Median reference lines create readable quadrants.
-    const medianOf = (vals: number[]) => {
-      if (!vals.length) return null;
-      const s = [...vals].sort((a, b) => a - b);
-      return s[Math.floor(s.length / 2)];
-    };
-    const mx = medianOf(pts.map((p) => p.x));
-    const my = medianOf(pts.map((p) => p.y));
-    const lines: Array<{ x?: number; y?: number; label: string; color: string }> = [];
-    if (mx !== null) lines.push({ x: mx, label: `median ${AXIS_LABEL(xAxis)}`, color: "gray.5" });
-    if (my !== null) lines.push({ y: my, label: `median ${AXIS_LABEL(yAxis)}`, color: "gray.5" });
-
-    return { bubbleSeries: series, refLines: lines };
+    if (!q) return [];
+    return realRows.filter((r) => matchesFilter(r, q)).map((r) => r.teamNumber);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [realRows, xAxis, yAxis, colorBy, filter, index]);
+  }, [realRows, filter, index]);
+
+  const bubbleTeams = useMemo(
+    () =>
+      realRows.map((r) => ({
+        teamNumber: r.teamNumber,
+        nickname: nicknameOf(r.teamNumber),
+        ace: r.ace,
+        raw: r.raw,
+        auto: r.auto,
+        teleop: r.teleop,
+        endgame: r.endgame,
+        confidence: r.confidence,
+        wins: r.wins,
+        losses: r.losses,
+        ties: r.ties,
+        rank: r.rankGlobal,
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [realRows, index],
+  );
 
   const leaderboardColumns = useMemo<Column<Row>[]>(
     () => [
@@ -742,75 +634,15 @@ export function TeamsLeaderboard() {
         </Tabs.Panel>
 
         <Tabs.Panel value="bubble" pt="md">
-          <Stack gap="md">
-            <Group gap="sm" align="flex-end" wrap="wrap">
-              <Select
-                label="X axis"
-                data={AXIS_OPTIONS}
-                value={xAxis}
-                onChange={(v) => v && setXAxis(v as AxisKey)}
-                allowDeselect={false}
-                w={150}
-              />
-              <Select
-                label="Y axis"
-                data={AXIS_OPTIONS}
-                value={yAxis}
-                onChange={(v) => v && setYAxis(v as AxisKey)}
-                allowDeselect={false}
-                w={150}
-              />
-              <Select
-                label="Color by"
-                data={AXIS_OPTIONS}
-                value={colorBy}
-                onChange={(v) => v && setColorBy(v as AxisKey)}
-                allowDeselect={false}
-                w={150}
-              />
-              <Text size="xs" c="dimmed" pb={8}>
-                {realRows.length.toLocaleString()} teams &middot; colored by {AXIS_LABEL(colorBy)}
-              </Text>
-            </Group>
-            <Card withBorder padding="md" radius="md">
-              <ScatterChart
-                h={560}
-                data={bubbleSeries}
-                dataKey={{ x: "x", y: "y" }}
-                xAxisLabel={AXIS_LABEL(xAxis)}
-                yAxisLabel={AXIS_LABEL(yAxis)}
-                withLegend
-                legendProps={{ verticalAlign: "bottom", height: 50 }}
-                referenceLines={refLines}
-                scatterProps={{ isAnimationActive: false }}
-                tooltipProps={{
-                  content: ({ payload }) => {
-                    const p = payload?.[0]?.payload as BubblePoint | undefined;
-                    if (!p) return null;
-                    return (
-                      <Card withBorder padding="xs" radius="md" shadow="sm">
-                        <Group gap={6} wrap="nowrap" mb={4}>
-                          <TeamAvatar teamNumber={p.teamNumber} size={22} radius={4} bordered />
-                          <Text fw={700} size="sm">
-                            {p.teamNumber} | {nicknameOf(p.teamNumber)}
-                          </Text>
-                        </Group>
-                        <Text size="xs">
-                          {AXIS_LABEL(xAxis)}: {formatNumber(p.x, 1)}
-                        </Text>
-                        <Text size="xs">
-                          {AXIS_LABEL(yAxis)}: {formatNumber(p.y, 1)}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {AXIS_LABEL(colorBy)}: {formatNumber(p.c, 1)}
-                        </Text>
-                      </Card>
-                    );
-                  },
-                }}
-              />
-            </Card>
-          </Stack>
+          <TeamBubbleChart
+            teams={bubbleTeams}
+            year={year}
+            nicknameOf={nicknameOf}
+            highlighted={bubbleHighlight}
+            aceThresholds={thresholds.ace}
+            defaultX="auto"
+            defaultY="teleop"
+          />
         </Tabs.Panel>
       </Tabs>
     </Stack>

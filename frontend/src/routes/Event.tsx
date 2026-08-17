@@ -35,6 +35,7 @@ import { EventExternalLinks, WebcastButton } from "../components/WebcastControl"
 import { MetricCell, ConfidenceCell } from "../components/MetricCell";
 import { AceLegend } from "../components/AceLegend";
 import { DataTable, type Column } from "../components/DataTable";
+import { TeamBubbleChart } from "../components/TeamBubbleChart";
 import type {
   EventPerfInfo,
   MatchResponse,
@@ -61,6 +62,7 @@ import {
   locationString,
   yearFromEventKey,
 } from "../lib/format";
+import { CURRENT_YEAR } from "../lib/constants";
 
 const COMP_LEVEL_ORDER: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
 
@@ -529,7 +531,7 @@ export function Event() {
   const nicknameOf = (tn: number) => searchIdx?.teams[String(tn)]?.nickname ?? "";
   // Season EPAs for the whole year (teams tab + "By Season" metrics view).
   const seasonQuery = useLeaderboard(year ?? 0, {}, {
-    enabled: Boolean(year) && (tab === "teams" || (tab === "metrics" && metricsMode === "season")),
+    enabled: Boolean(year) && (tab === "teams" || tab === "bubble" || (tab === "metrics" && metricsMode === "season")),
   });
 
   const event = eventQuery.data;
@@ -716,6 +718,23 @@ export function Event() {
       }))
       .sort((a, b) => (b.event?.ace ?? -Infinity) - (a.event?.ace ?? -Infinity));
   }, [teamsQuery.data, perfsQuery.data, seasonPerfByTeam, searchIdx]);
+
+  const eventBubbleTeams = useMemo(
+    () =>
+      eventTeamRows.map((r) => ({
+        teamNumber: r.team_number,
+        nickname: r.nickname || nicknameOf(r.team_number),
+        ace: r.event?.ace ?? null,
+        raw: r.event?.raw ?? null,
+        auto: r.event?.auto_raw ?? null,
+        teleop: r.event?.teleop_raw ?? null,
+        endgame: r.event?.endgame_raw ?? null,
+        confidence: r.event?.confidence ?? null,
+        rank: aceRankByTeam.get(r.team_number) ?? null,
+        seasonAce: r.season?.ace ?? null,
+      })),
+    [eventTeamRows, aceRankByTeam, searchIdx],
+  );
 
   const sortedPerfs = useMemo(
     () =>
@@ -1145,6 +1164,7 @@ export function Event() {
       <Tabs value={tab} onChange={(val) => setSearchParams(val ? { tab: val } : {})} keepMounted={false}>
         <Tabs.List>
           <Tabs.Tab value="teams">Teams</Tabs.Tab>
+          <Tabs.Tab value="bubble">Bubble</Tabs.Tab>
           <Tabs.Tab value="metrics">Metrics</Tabs.Tab>
           <Tabs.Tab value="matches">Matches</Tabs.Tab>
           <Tabs.Tab value="sos">SoS</Tabs.Tab>
@@ -1174,6 +1194,24 @@ export function Event() {
                 exportFileName={`${eventKey}-teams`}
               />
             </Stack>
+          )}
+        </Tabs.Panel>
+
+        <Tabs.Panel value="bubble" pt="md">
+          {teamsQuery.isLoading || perfsQuery.isLoading ? (
+            <LoadingState />
+          ) : eventBubbleTeams.length === 0 ? (
+            <EmptyState>No event ACE yet to plot.</EmptyState>
+          ) : (
+            <TeamBubbleChart
+              teams={eventBubbleTeams}
+              year={year ?? CURRENT_YEAR}
+              nicknameOf={nicknameOf}
+              aceThresholds={metricThresholds.ace}
+              defaultX="auto"
+              defaultY="teleop"
+              metrics={["ace", "raw", "auto", "teleop", "endgame", "confidence", "rank"]}
+            />
           )}
         </Tabs.Panel>
 
