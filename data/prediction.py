@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Literal, Optional, Tuple
 
@@ -514,11 +515,15 @@ def build_pre_match_ratings_by_match(
             continue
 
         to_simulate += 1
-        if to_simulate == 1 or to_simulate % 10 == 0:
-            print(
-                f"  walk-forward ACE {to_simulate} remaining ({event_key}, event {i}/{total})",
-                flush=True,
-            )
+        n_matches = len(matches)
+        n_missing = sum(1 for mk in match_keys if mk not in ratings_by_match)
+        print(
+            f"  walk-forward ACE simulating {event_key} "
+            f"(event {i}/{total}, #{to_simulate}; "
+            f"{n_matches} match(es), {n_missing} missing snapshot(s))...",
+            flush=True,
+        )
+        t0 = time.perf_counter()
         final_states, snapshots = simulate_event_pre_match_snapshots(matches, **sim_kwargs)
         for match_key, team_states in snapshots.items():
             ratings_by_match[match_key] = {}
@@ -534,6 +539,18 @@ def build_pre_match_ratings_by_match(
         if ace_params.carry_prior:
             _update_carry_priors(priors, final_states, ace_params.prior_blend)
             sim_kwargs["prior_means"] = priors
+        elapsed = time.perf_counter() - t0
+        print(
+            f"  walk-forward ACE done {event_key} ({elapsed:.1f}s)",
+            flush=True,
+        )
+
+    if to_simulate:
+        print(
+            f"  walk-forward ACE complete ({to_simulate} event(s) simulated, "
+            f"{len(ratings_by_match)} match snapshot(s) total)",
+            flush=True,
+        )
 
     return ratings_by_match
 

@@ -2322,6 +2322,11 @@ def calculate_and_store_match_predictions(year: int):
                 f"{missing} match(es) still need walk-forward",
                 flush=True,
             )
+            # TBA fetches during predictions can add events that were not in
+            # match_cache during EPA precompute; warm played-event / experience
+            # caches so finalize_pre_match_rating does not scan event_matches
+            # once per team during the tail walk-forward loop.
+            preload_confidence_lookups_from_match_cache(year)
 
         ace_params = AceParams.from_env()
         predictions = predict_all_matches_walk_forward(
@@ -2336,6 +2341,10 @@ def calculate_and_store_match_predictions(year: int):
     else:
         predictions = predict_all_matches_db(data, config)
 
+    print(
+        f"Match predictions {year}: writing {len(predictions)} prediction(s) to DB...",
+        flush=True,
+    )
     conn = get_pg_connection()
     try:
         stats = apply_match_predictions_to_db(conn, year, predictions)
