@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Badge,
   Box,
@@ -20,9 +20,10 @@ import { TeamAvatar } from "../components/TeamAvatar";
 import { TeamName } from "../components/TeamName";
 import { AceBadge } from "../components/AceBadge";
 import { RecordCell } from "../components/RecordCell";
+import { teamAvatar } from "../lib/assets";
 import { availableYears, CURRENT_YEAR, isDemoTeam } from "../lib/constants";
 import { aceColor, computePercentiles, contrastText } from "../lib/epa";
-import { formatNumber, locationString, ordinal } from "../lib/format";
+import { formatNumber, locationString } from "../lib/format";
 import type { TeamPerfResponse } from "../types/api";
 
 interface PoolTeam {
@@ -30,7 +31,6 @@ interface PoolTeam {
   nickname: string;
   ace: number;
   raw: number | null;
-  rank: number | null;
   wins: number | null;
   losses: number | null;
   ties: number | null;
@@ -68,60 +68,83 @@ function pickFrom(pool: PoolTeam[], exclude: Set<number>): PoolTeam | null {
   return candidates[Math.floor(Math.random() * candidates.length)] ?? null;
 }
 
+function mutedBannerStyle(primary: string | null, secondary: string | null): CSSProperties {
+  const p = primary ?? "#3a3a3a";
+  const s = secondary ?? "#1a1a1a";
+  const fill = `linear-gradient(135deg, color-mix(in srgb, ${p} 48%, #161616), color-mix(in srgb, ${s} 38%, #101010))`;
+  return {
+    position: "relative",
+    background: [
+      "linear-gradient(115deg, transparent 38%, rgba(255,255,255,0.08) 47%, transparent 56%)",
+      "radial-gradient(circle at 90% 8%, rgba(255,255,255,0.16), transparent 46%)",
+      "radial-gradient(rgba(255,255,255,0.10) 1.5px, transparent 1.6px)",
+      "linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)",
+      "linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)",
+      fill,
+    ].join(", "),
+    backgroundSize: "100% 100%, 100% 100%, 52px 52px, 26px 26px, 26px 26px, 100% 100%",
+    color: "#fff",
+    border: "none",
+    overflow: "hidden",
+  };
+}
+
+function PrefetchTeam({ teamNumber }: { teamNumber: number }) {
+  useTeamInfo(teamNumber);
+  return (
+    <img
+      src={teamAvatar(teamNumber)}
+      alt=""
+      width={1}
+      height={1}
+      decoding="async"
+      style={{ position: "absolute", width: 0, height: 0, opacity: 0, pointerEvents: "none" }}
+    />
+  );
+}
+
 function TeamPlayCard({
   team,
   year,
   hideAce,
-  result,
-  side,
 }: {
   team: PoolTeam;
   year: number;
   hideAce: boolean;
-  result?: "correct" | "wrong" | null;
-  side: "left" | "right";
 }) {
   const info = useTeamInfo(team.teamNumber);
   const colors = info.data?.team_colors as { primary?: string; secondary?: string } | null | undefined;
   const primary = typeof colors?.primary === "string" ? colors.primary : null;
   const secondary = typeof colors?.secondary === "string" ? colors.secondary : null;
-  const gradient =
-    primary && secondary
-      ? `linear-gradient(160deg, ${primary}, ${secondary})`
-      : side === "left"
-        ? "linear-gradient(160deg, #3a2a00, #1a1a1a)"
-        : "linear-gradient(160deg, #1a2744, #121212)";
   const loc = locationString(info.data?.city, info.data?.state_prov, info.data?.country);
-  const cls =
-    result === "correct" ? "game-hl-card is-correct" : result === "wrong" ? "game-hl-card is-wrong" : "game-hl-card";
 
   return (
-    <Card
-      className={cls}
-      radius="lg"
-      p="lg"
-      h="100%"
-      withBorder={false}
-      shadow="md"
-      style={{
-        background: gradient,
-        color: "#fff",
-        border: "none",
-        boxShadow:
-          result === "correct"
-            ? "0 8px 28px rgba(76, 175, 80, 0.35)"
-            : result === "wrong"
-              ? "0 8px 28px rgba(239, 83, 80, 0.35)"
-              : "0 10px 28px rgba(0, 0, 0, 0.28)",
-        overflow: "hidden",
-      }}
-    >
-      <Stack align="center" gap="sm">
+    <Card className="game-hl-card" radius="lg" p="lg" h="100%" withBorder={false} shadow="md" style={mutedBannerStyle(primary, secondary)}>
+      <Text
+        aria-hidden
+        style={{
+          position: "absolute",
+          right: -6,
+          top: "50%",
+          transform: "translateY(-50%)",
+          fontSize: 140,
+          fontWeight: 900,
+          lineHeight: 1,
+          letterSpacing: -6,
+          color: "#fff",
+          opacity: 0.07,
+          pointerEvents: "none",
+          userSelect: "none",
+        }}
+      >
+        {team.teamNumber}
+      </Text>
+      <Stack align="center" gap="sm" style={{ position: "relative" }}>
         <TeamAvatar teamNumber={team.teamNumber} size={120} radius={16} upscale />
-        <Title order={2} ta="center" c="#fff" style={{ wordBreak: "break-word" }}>
+        <Title order={2} ta="center" c="#fff" style={{ wordBreak: "break-word", textShadow: "0 1px 2px rgba(0,0,0,0.55)" }}>
           {team.teamNumber}
         </Title>
-        <Text fw={700} ta="center" lineClamp={2} c="#fff">
+        <Text fw={700} ta="center" lineClamp={2} c="#fff" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.55)" }}>
           {team.nickname || "Unknown"}
         </Text>
         {loc ? (
@@ -129,14 +152,7 @@ function TeamPlayCard({
             {loc}
           </Text>
         ) : null}
-        <Group gap="xs" justify="center">
-          {team.rank ? (
-            <Badge variant="filled" color="dark" style={{ textTransform: "none" }}>
-              {ordinal(team.rank)} ACE
-            </Badge>
-          ) : null}
-          <RecordCell wins={team.wins} losses={team.losses} ties={team.ties} />
-        </Group>
+        <RecordCell wins={team.wins} losses={team.losses} ties={team.ties} />
         <Stack gap={2} align="center" mt="xs">
           <Text size="xs" tt="uppercase" fw={800} style={{ letterSpacing: 1, color: "rgba(255,255,255,0.7)" }}>
             Season ACE
@@ -144,8 +160,9 @@ function TeamPlayCard({
           <Text
             fw={900}
             lh={1}
+            c="#fff"
             className={hideAce ? "game-ace-hidden" : undefined}
-            style={{ fontSize: 56, fontVariantNumeric: "tabular-nums" }}
+            style={{ fontSize: 56, fontVariantNumeric: "tabular-nums", textShadow: "0 1px 2px rgba(0,0,0,0.55)" }}
           >
             {hideAce ? "??.?" : formatNumber(team.ace, 1)}
           </Text>
@@ -184,9 +201,10 @@ export function HigherLower() {
   const [locked, setLocked] = useState(false);
   const [streak, setStreak] = useState(0);
   const [over, setOver] = useState(false);
-  const [lastResult, setLastResult] = useState<"correct" | "wrong" | null>(null);
   const [history, setHistory] = useState<RoundRec[]>([]);
   const [recent, setRecent] = useState<number[]>([]);
+  const [queued, setQueued] = useState<PoolTeam | null>(null);
+  const advanceTimer = useRef<number | null>(null);
 
   const setParam = (updates: Record<string, string | null>) => {
     setSearchParams(
@@ -222,7 +240,6 @@ export function HigherLower() {
         nickname: index?.teams[String(tp.team_number)]?.nickname ?? "",
         ace,
         raw: p?.raw ?? null,
-        rank: p?.rank_global ?? null,
         wins: p?.wins ?? null,
         losses: p?.losses ?? null,
         ties: p?.ties ?? null,
@@ -234,6 +251,10 @@ export function HigherLower() {
   const thresholds = useMemo(() => computePercentiles(pool.map((t) => t.ace)), [pool]);
 
   const resetBoard = useCallback(() => {
+    if (advanceTimer.current != null) {
+      window.clearTimeout(advanceTimer.current);
+      advanceTimer.current = null;
+    }
     setPlaying(false);
     setLeft(null);
     setRight(null);
@@ -241,9 +262,9 @@ export function HigherLower() {
     setLocked(false);
     setStreak(0);
     setOver(false);
-    setLastResult(null);
     setHistory([]);
     setRecent([]);
+    setQueued(null);
   }, []);
 
   useEffect(() => {
@@ -271,7 +292,7 @@ export function HigherLower() {
     setStreak(0);
     setHistory([]);
     setRevealed(false);
-    setLastResult(null);
+    setQueued(null);
     setRecent([a.teamNumber, rightTeam.teamNumber]);
   };
 
@@ -280,9 +301,10 @@ export function HigherLower() {
     setLocked(true);
     const higher = right.ace > left.ace;
     const lower = right.ace < left.ace;
-    const correct = (dir === "higher" && (higher || right.ace === left.ace)) || (dir === "lower" && (lower || right.ace === left.ace));
+    const correct =
+      (dir === "higher" && (higher || right.ace === left.ace)) ||
+      (dir === "lower" && (lower || right.ace === left.ace));
     setRevealed(true);
-    setLastResult(correct ? "correct" : "wrong");
     setHistory((h) => [...h, { left, right, guess: dir, correct }]);
     const nextStreak = correct ? streak + 1 : streak;
     if (correct) {
@@ -292,30 +314,41 @@ export function HigherLower() {
         writeBest(nextStreak);
       }
     }
-    window.setTimeout(() => {
-      if (!correct) {
-        setOver(true);
-        setLocked(false);
-        return;
-      }
+
+    let nxt: PoolTeam | null = null;
+    if (correct) {
       const exclude = new Set([...recent.slice(-10), right.teamNumber]);
-      let nxt = pickFrom(pool, exclude);
+      nxt = pickFrom(pool, exclude);
       if (nxt && nxt.ace === right.ace) {
         nxt = pickFrom(pool, new Set([...exclude, nxt.teamNumber])) ?? nxt;
       }
-      if (!nxt) {
+      setQueued(nxt);
+    }
+
+    if (advanceTimer.current != null) window.clearTimeout(advanceTimer.current);
+    const moving = right;
+    advanceTimer.current = window.setTimeout(() => {
+      advanceTimer.current = null;
+      if (!correct || !nxt) {
         setOver(true);
         setLocked(false);
+        setQueued(null);
         return;
       }
-      setLeft(right);
+      setLeft(moving);
       setRight(nxt);
       setRecent((r) => [...r, nxt.teamNumber].slice(-16));
+      setQueued(null);
       setRevealed(false);
-      setLastResult(null);
       setLocked(false);
     }, 1150);
   };
+
+  useEffect(() => {
+    return () => {
+      if (advanceTimer.current != null) window.clearTimeout(advanceTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!playing || over || locked) return;
@@ -424,7 +457,7 @@ export function HigherLower() {
           />
           <Group align="stretch" wrap="wrap" gap="md" justify="center">
             <Box style={{ flex: "1 1 280px", minWidth: 0 }}>
-              <TeamPlayCard team={left} year={year} hideAce={false} side="left" />
+              <TeamPlayCard team={left} year={year} hideAce={false} />
             </Box>
             <Box
               className="game-vs-badge"
@@ -446,15 +479,10 @@ export function HigherLower() {
               VS
             </Box>
             <Box style={{ flex: "1 1 280px", minWidth: 0 }}>
-              <TeamPlayCard
-                team={right}
-                year={year}
-                hideAce={!revealed}
-                result={lastResult}
-                side="right"
-              />
+              <TeamPlayCard team={right} year={year} hideAce={!revealed} />
             </Box>
           </Group>
+          {queued ? <PrefetchTeam teamNumber={queued.teamNumber} /> : null}
 
           {over ? (
             <Card withBorder radius="lg" p="lg">

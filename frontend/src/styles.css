@@ -427,31 +427,13 @@ a {
 }
 
 /* ---- Misc games ---- */
-@keyframes game-pop {
-  0% { transform: scale(0.92); opacity: 0; }
-  70% { transform: scale(1.04); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-@keyframes game-shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-8px); }
-  40% { transform: translateX(8px); }
-  60% { transform: translateX(-5px); }
-  80% { transform: translateX(5px); }
-}
 @keyframes game-pulse-gold {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 221, 0, 0.45); }
   50% { box-shadow: 0 0 0 10px rgba(255, 221, 0, 0); }
 }
 
 .game-hl-card {
-  transition: transform 280ms ease, box-shadow 280ms ease, filter 280ms ease;
-}
-.game-hl-card.is-correct {
-  animation: game-pop 420ms ease;
-}
-.game-hl-card.is-wrong {
-  animation: game-shake 420ms ease;
+  transition: box-shadow 200ms ease;
 }
 .game-vs-badge {
   animation: game-pulse-gold 2.4s ease-in-out infinite;

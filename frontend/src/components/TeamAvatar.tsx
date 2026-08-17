@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { STOCK_AVATAR, teamAvatar } from "../lib/assets";
 
 interface TeamAvatarProps {
@@ -28,17 +28,20 @@ export function TeamAvatar({
   bordered = false,
   upscale = false,
 }: TeamAvatarProps) {
-  const [errored, setErrored] = useState(false);
-  const src = errored ? STOCK_AVATAR : teamAvatar(teamNumber);
+  const filterId = useId().replace(/:/g, "");
+  const [failedKey, setFailedKey] = useState<string | null>(null);
+  const key = String(teamNumber);
+  const src = failedKey === key ? STOCK_AVATAR : teamAvatar(teamNumber);
   return (
     <>
       {upscale ? (
         // A mild 3x3 sharpen kernel (sums to 1 so brightness is preserved).
         // preserveAlpha avoids dark halos around transparent avatar edges.
+        // Unique ids so two hero avatars on one page do not clobber each other.
         <svg width={0} height={0} style={{ position: "absolute" }} aria-hidden focusable="false">
           <defs>
             <filter
-              id="peeko-avatar-sharpen"
+              id={filterId}
               x="-10%"
               y="-10%"
               width="120%"
@@ -59,8 +62,8 @@ export function TeamAvatar({
         alt={`Team ${teamNumber} avatar`}
         width={size}
         height={size}
-        loading="lazy"
-        onError={() => setErrored(true)}
+        loading={upscale ? "eager" : "lazy"}
+        onError={() => setFailedKey(key)}
         style={{
           width: size,
           height: size,
@@ -70,9 +73,7 @@ export function TeamAvatar({
           border: bordered ? "1px solid var(--mantine-color-default-border)" : undefined,
           flexShrink: 0,
           imageRendering: upscale ? "auto" : undefined,
-          filter: upscale
-            ? "url(#peeko-avatar-sharpen) contrast(1.06) saturate(1.08)"
-            : undefined,
+          filter: upscale ? `url(#${filterId}) contrast(1.06) saturate(1.08)` : undefined,
         }}
       />
     </>
