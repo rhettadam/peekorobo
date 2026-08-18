@@ -15,6 +15,12 @@ peekorobo-api/.venv/
 data/tmp_eval/
 data/.tune_cache/
 
+# Mapbox geocode cache (query -> lat/lng)
+data/geo/geo_cache.json
+data/geo/geo_cache.json.tmp
+data/geo/mapbox_geo_cache.json
+data/geo/mapbox_geo_cache.json.tmp
+
 # Pytest
 .pytest_cache/
 **/.pytest_cache/

@@ -21,11 +21,11 @@ import {
   eventStackRowHTML,
   eventTypeColor,
   eventsToGeoJSON,
+  eventClearanceRadiusDeg,
   spreadByCoords,
   stackPopupHTML,
   stackRadiusForZoom,
   teamPopupHTML,
-  teamStackRowHTML,
   teamToPopupProps,
   teamsToGeoJSON,
   type EventFeatureProps,
@@ -101,7 +101,7 @@ export function Map() {
   }));
   const [mapReady, setMapReady] = useState(false);
 
-  const teamsQuery = useMapTeams();
+  const teamsQuery = useMapTeams(CURRENT_YEAR);
   const eventsQuery = useMapEvents(CURRENT_YEAR);
 
   const allTeams = useMemo(() => teamsQuery.data?.teams ?? [], [teamsQuery.data]);
@@ -119,7 +119,7 @@ export function Map() {
     const map = mapRef.current;
     if (!map) return;
     popupRef.current?.remove();
-    popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "300px", offset: 12 })
+    popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "320px", offset: 12 })
       .setLngLat(coords)
       .setHTML(html)
       .addTo(map);
@@ -262,7 +262,7 @@ export function Map() {
   // Viewport-culled team avatar markers. Only teams within the current bounds
   // (plus a buffer) get a live DOM marker; markers are pooled by team number and
   // removed when they scroll out of view, keeping the live count bounded.
-  // Co-located teams are fanned out in a small ring so avatars aren't buried.
+  // Co-located teams fan out so each avatar is clickable with its own tooltip.
   const updateTeamMarkers = useCallback(() => {
     const map = mapRef.current;
     if (!map || !styleReadyRef.current) return;
@@ -293,11 +293,22 @@ export function Map() {
         if (desired.length >= MAX_TEAM_MARKERS) break;
       }
     }
+    const eventKeys = new Set<string>();
+    if (layersRef.current.events) {
+      for (const e of eventsListRef.current) {
+        if (typeof e.lat === "number" && typeof e.lng === "number") {
+          eventKeys.add(coordKey(e.lat, e.lng));
+        }
+      }
+    }
+
     const spread = spreadByCoords(
       desired,
       (t) => ({ lat: t.lat, lng: t.lng }),
       stackRadiusForZoom(map.getZoom(), b.getCenter().lat),
       (t) => t.team_number,
+      eventKeys,
+      eventClearanceRadiusDeg(map.getZoom(), b.getCenter().lat, size),
     );
     const byNumber = new globalThis.Map(spread.map((s) => [s.item.team_number, s] as const));
     const desiredKeys = new Set(byNumber.keys());
@@ -333,21 +344,12 @@ export function Map() {
       });
       img.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        const key = coordKey(placed.trueLat, placed.trueLng);
-        const neighbors = teamsListRef.current.filter(
-          (x) => coordKey(x.lat, x.lng) === key,
+        const marker = markersRef.current.get(t.team_number);
+        const ll = marker?.getLngLat();
+        openPopup(
+          ll ? [ll.lng, ll.lat] : [placed.lng, placed.lat],
+          teamPopupHTML(teamToPopupProps(t)),
         );
-        if (neighbors.length <= 1) {
-          openPopup([placed.lng, placed.lat], teamPopupHTML(teamToPopupProps(t)));
-        } else {
-          openPopup(
-            [placed.trueLng, placed.trueLat],
-            stackPopupHTML(
-              "teams here",
-              neighbors.map((n) => teamStackRowHTML(teamToPopupProps(n))),
-            ),
-          );
-        }
       });
       const marker = new maplibregl.Marker({ element: img, anchor: "center" })
         .setLngLat([placed.lng, placed.lat])

@@ -75,6 +75,9 @@ export interface TeamFeatureProps {
   team_number: number;
   nickname: string;
   location: string;
+  postal_code: string;
+  lat: number;
+  lng: number;
 }
 
 export interface EventFeatureProps {
@@ -98,6 +101,9 @@ export function teamToPopupProps(t: MapTeam): TeamFeatureProps {
     team_number: t.team_number,
     nickname: t.nickname ?? "",
     location: locationString(t.city ?? "", t.state_prov ?? "", t.country ?? ""),
+    postal_code: (t.postal_code ?? "").trim(),
+    lat: t.lat,
+    lng: t.lng,
   };
 }
 
@@ -129,8 +135,7 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 /**
  * Organic offset (lngΔ, latΔ) for co-located markers.
- * Uses a golden-angle spiral with light jitter so piles look like a natural
- * scatter instead of a rigid circle. `radiusDeg` from `stackRadiusForZoom`.
+ * Tight sunflower packing — barely off the shared point.
  */
 export function stackOffset(
   index: number,
@@ -139,34 +144,39 @@ export function stackOffset(
   seed = index,
 ): [number, number] {
   if (count <= 1 || radiusDeg <= 0) return [0, 0];
-  const angle = index * GOLDEN_ANGLE + (hash01(seed) - 0.5) * 0.55;
-  // Fill a soft disk (sqrt → even area density), with gentle radial noise.
-  const t = (index + 0.35) / count;
-  const radial = Math.sqrt(t) * (0.78 + hash01(seed + 17) * 0.5);
-  const r = radiusDeg * radial * (0.95 + 0.12 * Math.sqrt(count));
+  const angle = index * GOLDEN_ANGLE + (hash01(seed) - 0.5) * 0.12;
+  const t = (index + 0.5) / count;
+  const r = radiusDeg * Math.sqrt(t);
   return [Math.cos(angle) * r, Math.sin(angle) * r];
 }
 
+/** ~1.1km. Locked so piles don't collapse as you zoom in; they only open. */
+const STACK_RADIUS_DEG = 0.01;
+
 /**
- * Geographic radius for stack spread.
- * Kept mostly constant so zooming in *opens* the pile on screen instead of
- * keeping markers in a forever-tight knot.
+ * Geographic radius for stack spread. Constant in degrees: zoomed out the
+ * pile reads as one point, and further zoom-in separates markers on screen
+ * instead of pulling them back together.
  */
-export function stackRadiusForZoom(zoom: number, _lat = 39): number {
-  const z = Number.isFinite(zoom) ? zoom : 4;
-  // ~0.006° ≈ 650m — readable fan that grows larger on screen as you zoom in.
-  // Tiny nudge past ~z10 so deep zooms feel even more opened up.
-  const base = 0.006;
-  const deep = Math.max(0, z - 10) * 0.0005;
-  return Math.min(0.018, base + deep);
+export function stackRadiusForZoom(_zoom?: number, _lat?: number): number {
+  return STACK_RADIUS_DEG;
 }
 
-/** Display positions for items that share lat/lng (true coords unchanged on the object). */
+/** Tiny extra radius so avatars don't sit on an event pin. */
+export function eventClearanceRadiusDeg(_zoom?: number, _lat?: number, _avatarPx?: number): number {
+  return STACK_RADIUS_DEG * 1.15;
+}
+
+/** Display positions for items that share lat/lng (true coords unchanged on the object).
+ *  `reservedKeys` keeps those coord cells empty (event venues stay visible).
+ */
 export function spreadByCoords<T>(
   items: T[],
   getLatLng: (item: T) => { lat: number; lng: number } | null,
   radiusDeg = stackRadiusForZoom(6),
   getSeed?: (item: T) => number | string,
+  reservedKeys?: Set<string>,
+  reservedRadiusDeg?: number,
 ): Array<{ item: T; lat: number; lng: number; trueLat: number; trueLng: number; stackSize: number }> {
   const groups = new Map<string, T[]>();
   for (const item of items) {
@@ -185,7 +195,7 @@ export function spreadByCoords<T>(
     trueLng: number;
     stackSize: number;
   }> = [];
-  for (const group of groups.values()) {
+  for (const [key, group] of groups) {
     // Stable order so seeds/indexes don't reshuffle when the viewport changes.
     const sorted = [...group].sort((a, b) => {
       const sa = getSeed?.(a);
@@ -195,12 +205,16 @@ export function spreadByCoords<T>(
       return na - nb;
     });
     const n = sorted.length;
+    const reserved = reservedKeys?.has(key) ?? false;
+    const r = reserved ? Math.max(radiusDeg, reservedRadiusDeg ?? radiusDeg) : radiusDeg;
+    const slotCount = reserved ? n + 1 : n;
     sorted.forEach((item, i) => {
       const ll = getLatLng(item)!;
       const raw = getSeed?.(item);
       const seed =
         typeof raw === "number" ? raw : raw != null ? hashString(String(raw)) : i;
-      const [dlng, dlat] = stackOffset(i, n, radiusDeg, seed);
+      const index = reserved ? i + 1 : i;
+      const [dlng, dlat] = stackOffset(index, slotCount, r, seed);
       out.push({
         item,
         lat: ll.lat + dlat,
@@ -226,6 +240,9 @@ export function teamsToGeoJSON(teams: MapTeam[]): FeatureCollection<Point, TeamF
         team_number: t.team_number,
         nickname: t.nickname ?? "",
         location: locationString(t.city ?? "", t.state_prov ?? "", t.country ?? ""),
+        postal_code: (t.postal_code ?? "").trim(),
+        lat: t.lat,
+        lng: t.lng,
       },
     });
   }
@@ -281,11 +298,20 @@ export function teamPopupHTML(p: TeamFeatureProps): string {
   const num = p.team_number;
   const title = p.nickname ? `${num} | ${escapeHtml(p.nickname)}` : `Team ${num}`;
   const loc = p.location ? `<div class="peeko-popup-sub">${escapeHtml(p.location)}</div>` : "";
+  const zip = p.postal_code
+    ? `<div class="peeko-popup-sub">${escapeHtml(p.postal_code)}</div>`
+    : "";
+  const coords =
+    Number.isFinite(p.lat) && Number.isFinite(p.lng)
+      ? `<div class="peeko-popup-sub peeko-popup-coords">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</div>`
+      : "";
   return `
     <div class="peeko-popup">
       <div class="peeko-popup-badge">Team</div>
       <div class="peeko-popup-title">${title}</div>
       ${loc}
+      ${zip}
+      ${coords}
       <a class="peeko-popup-link" data-spa-href="/team/${num}" href="/team/${num}">View team →</a>
     </div>`;
 }

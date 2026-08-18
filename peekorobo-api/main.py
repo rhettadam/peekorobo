@@ -650,9 +650,14 @@ async def get_search_index(response: Response, db: Session = Depends(get_db)) ->
     return search_index.get_search_index(db)
 
 @app.get("/map/teams", dependencies=[Depends(read_access)], tags=["Map"])
-async def get_map_teams(response: Response, db: Session = Depends(get_db)) -> MapTeamsResponse:
+async def get_map_teams(
+    response: Response,
+    year: Annotated[Optional[int], Query(title="Season year")] = None,
+    db: Session = Depends(get_db),
+) -> MapTeamsResponse:
     response.headers["Cache-Control"] = MAP_CACHE_CONTROL_VALUE
-    return map_data.get_map_teams(db)
+    resolved_year = year if year is not None else datetime.now().year
+    return map_data.get_map_teams(db, resolved_year)
 
 @app.get("/map/events", dependencies=[Depends(read_access)], tags=["Map"])
 async def get_map_events(response: Response, year: Annotated[Optional[int], Query(title="Season year")] = None, db: Session = Depends(get_db)) -> MapEventsResponse:

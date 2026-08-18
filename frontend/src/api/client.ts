@@ -66,11 +66,18 @@ async function parseError(res: Response): Promise<never> {
   throw new ApiError(res.status, detail || `Request failed (${res.status})`);
 }
 
-export async function apiGet<T>(path: string, params?: QueryParams): Promise<T> {
+export async function apiGet<T>(
+  path: string,
+  params?: QueryParams,
+  opts?: { cache?: RequestCache },
+): Promise<T> {
   const url = `${API_BASE}${path}${buildQuery(params)}`;
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Accept: "application/json", ...authHeaders() } });
+    res = await fetch(url, {
+      cache: opts?.cache ?? "default",
+      headers: { Accept: "application/json", ...authHeaders() },
+    });
   } catch (err) {
     throw new ApiError(0, `Network error contacting the API: ${(err as Error).message}`);
   }

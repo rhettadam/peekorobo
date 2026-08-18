@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from data.models.teams import Teams
 from data.models.events import Events
+from data.models.event_teams import EventTeams
 from query.map import MapTeam, MapTeamsResponse, MapEvent, MapEventsResponse
 
 
@@ -19,7 +20,8 @@ def _loc_key(city, state, country) -> Optional[str]:
     return "|".join(parts)
 
 
-def get_map_teams(db: Session) -> MapTeamsResponse:
+def get_map_teams(db: Session, year: int) -> MapTeamsResponse:
+    year_prefix = str(year)
     stmt = (
         select(
             Teams.team_number,
@@ -28,10 +30,20 @@ def get_map_teams(db: Session) -> MapTeamsResponse:
             Teams.state_prov,
             Teams.country,
             Teams.district_key,
+            Teams.postal_code,
             Teams.lat,
             Teams.lng,
         )
-        .where(Teams.lat.is_not(None), Teams.lng.is_not(None))
+        .where(
+            Teams.lat.is_not(None),
+            Teams.lng.is_not(None),
+            select(EventTeams.team_number)
+            .where(
+                EventTeams.team_number == Teams.team_number,
+                func.left(EventTeams.event_key, 4) == year_prefix,
+            )
+            .exists(),
+        )
         .order_by(Teams.team_number)
     )
     rows = db.execute(stmt).all()
@@ -43,12 +55,13 @@ def get_map_teams(db: Session) -> MapTeamsResponse:
             state_prov=r[3],
             country=r[4],
             district_key=r[5],
-            lat=r[6],
-            lng=r[7],
+            postal_code=r[6],
+            lat=r[7],
+            lng=r[8],
         )
         for r in rows
     ]
-    return MapTeamsResponse(count=len(teams), teams=teams)
+    return MapTeamsResponse(year=year, count=len(teams), teams=teams)
 
 
 def get_map_events(db: Session, year: int) -> MapEventsResponse:

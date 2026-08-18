@@ -10,11 +10,13 @@ class MapTeam(BaseModel):
     state_prov: Optional[str] = None
     country: Optional[str] = None
     district_key: Optional[str] = None
+    postal_code: Optional[str] = None
     lat: float
     lng: float
 
 
 class MapTeamsResponse(BaseModel):
+    year: int
     count: int
     teams: List[MapTeam]
 

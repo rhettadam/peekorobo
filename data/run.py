@@ -383,9 +383,9 @@ _db_pool_slots = threading.Semaphore(max(1, _DB_POOL_MAXCONN))
 
 def _connect_kwargs_from_database_url():
     """Shared DSN kwargs for get_pg_connection / the ThreadedConnectionPool."""
-    url = os.environ.get("DATABASE_URL")
+    url = os.environ.get("DATABASE_URL") or os.environ.get("DB_URL")
     if url is None:
-        raise Exception("DATABASE_URL not set in environment.")
+        raise Exception("DATABASE_URL (or DB_URL) not set in environment.")
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
     result = urlparse(url)
@@ -634,20 +634,41 @@ def upsert_district(cur, district_key, district_abbrev, district_name):
     except Exception:
         pass  # districts table may not exist yet
 
+_location_columns_ready = False
+
+
+def ensure_location_columns(conn) -> None:
+    """postal_code (and lat/lng) used by Mapbox geocoding; TBA already sends postal_code."""
+    global _location_columns_ready
+    if _location_columns_ready:
+        return
+    cur = conn.cursor()
+    for table in ("teams", "events"):
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION")
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION")
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS postal_code TEXT")
+    cur.execute("ALTER TABLE event_teams DROP COLUMN IF EXISTS postal_code")
+    conn.commit()
+    cur.close()
+    _location_columns_ready = True
+
+
 def upsert_team_profile(result):
     # Insert or update a team's general profile data
     with _pooled_connection() as conn:
+        ensure_location_columns(conn)
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO teams (team_number, nickname, city, state_prov, country, website)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO teams (team_number, nickname, city, state_prov, country, website, postal_code)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (team_number) DO UPDATE SET
                 nickname = EXCLUDED.nickname,
                 city = EXCLUDED.city,
                 state_prov = EXCLUDED.state_prov,
                 country = EXCLUDED.country,
-                website = EXCLUDED.website
+                website = EXCLUDED.website,
+                postal_code = COALESCE(NULLIF(EXCLUDED.postal_code, ''), teams.postal_code)
             """,
             (
                 result.get("team_number"),
@@ -656,6 +677,7 @@ def upsert_team_profile(result):
                 result.get("state_prov"),
                 result.get("country"),
                 result.get("website"),
+                result.get("postal_code"),
             ),
         )
         conn.commit()
@@ -1120,6 +1142,7 @@ def get_team_played_events(team_number, year):
 def get_teams_for_year(year):
     # Return a list of all teams that played in a given year, using teams table for profile data
     conn = get_pg_connection()
+    ensure_location_columns(conn)
     cur = conn.cursor()
     cur.execute(
         """
@@ -1129,7 +1152,8 @@ def get_teams_for_year(year):
             COALESCE(t.city, et.city),
             COALESCE(t.state_prov, et.state_prov),
             COALESCE(t.country, et.country),
-            t.website
+            t.website,
+            t.postal_code
         FROM event_teams et
         LEFT JOIN teams t ON et.team_number = t.team_number
         WHERE LEFT(et.event_key, 4) = %s
@@ -1146,6 +1170,7 @@ def get_teams_for_year(year):
                 "state_prov": row[3],
                 "country": row[4],
                 "website": row[5] if row[5] else "N/A",
+                "postal_code": row[6],
                 "key": f"frc{row[0]}",
             }
         )
@@ -1299,20 +1324,33 @@ def get_active_scope(year, buffer_days=2):
 def get_existing_event_data(event_key):
     # Get existing event data from database for comparison
     with _pooled_connection() as conn:
+        ensure_location_columns(conn)
         cur = conn.cursor()
 
         # Get event (including webcast info)
         cur.execute("""
             SELECT name, start_date, end_date, event_type,
                    district_key, district_abbrev, district_name,
-                   city, state_prov, country, website, webcast_type, webcast_channel, week
+                   city, state_prov, country, website, webcast_type, webcast_channel, week,
+                   postal_code
             FROM events WHERE event_key = %s
         """, (event_key,))
         event_row = cur.fetchone()
 
         # Get teams - ensure we always return a dict, even if empty
-        cur.execute("SELECT team_number, nickname, city, state_prov, country FROM event_teams WHERE event_key = %s", (event_key,))
-        teams = {row[0]: {"nickname": row[1], "city": row[2], "state_prov": row[3], "country": row[4]} for row in cur.fetchall()}
+        cur.execute(
+            "SELECT team_number, nickname, city, state_prov, country FROM event_teams WHERE event_key = %s",
+            (event_key,),
+        )
+        teams = {
+            row[0]: {
+                "nickname": row[1],
+                "city": row[2],
+                "state_prov": row[3],
+                "country": row[4],
+            }
+            for row in cur.fetchall()
+        }
         if not teams:
             teams = {}  # Ensure it's always a dict, not None
 
@@ -1402,7 +1440,8 @@ def data_has_changed(existing, new_data, data_type):
             existing_event[10] != new_event[11] or  # website
             existing_event[11] != new_event[12] or # webcast_type
             existing_event[12] != new_event[13] or  # webcast_channel
-            existing_event[13] != new_event[14]    # week
+            existing_event[13] != new_event[14] or  # week
+            (existing_event[14] if len(existing_event) > 14 else None) != new_event[17]  # postal_code
         )
     
     elif data_type == "teams":
@@ -1540,6 +1579,9 @@ def create_event_db(year, only_event_keys=None):
     # skipped. When None, every event of the season is processed (full-run behavior, unchanged).
     print(f"\nevents database update for {year}...")
 
+    with _pooled_connection() as conn:
+        ensure_location_columns(conn)
+
     only_set = set(only_event_keys) if only_event_keys is not None else None
     if only_set is not None:
         print(f"  active-only: restricting to {len(only_set)} event(s) attended by active teams")
@@ -1618,7 +1660,8 @@ def create_event_db(year, only_event_keys=None):
                 (event.get("webcasts", [{}]) or [{}])[0].get("type"),
                 (event.get("webcasts", [{}]) or [{}])[0].get("channel"),
                 event_week,
-                event.get("lat"), event.get("lng")
+                event.get("lat"), event.get("lng"),
+                event.get("postal_code"),
             ),
             "teams": [], "matches": []
         }
@@ -1637,7 +1680,8 @@ def create_event_db(year, only_event_keys=None):
                         t.get("nickname"),
                         t.get("city"),
                         t.get("state_prov"),
-                        t.get("country")
+                        t.get("country"),
+                        t.get("postal_code"),
                     ))
         except Exception as e:
             print(f"Error processing teams for event {key}: {e}")
@@ -1746,15 +1790,17 @@ def create_event_db(year, only_event_keys=None):
 def insert_event_data(results, year):
     # Insert only the changed data into PostgreSQL
     conn = get_pg_connection()
+    ensure_location_columns(conn)
     cur = conn.cursor()
     
     for result in tqdm(results, desc="Updating changed data"):
         if not result["has_changes"]:
             continue
-            
+
         data = result["data"]
         updates = result["updates_needed"]
-        
+        valid_teams = [team for team in (data.get("teams") or []) if team[1] is not None]
+
         # Update event if needed
         if updates["event"]:
             ev = data["event"]
@@ -1764,9 +1810,9 @@ def insert_event_data(results, year):
                     event_key, name, start_date, end_date, event_type,
                     district_key, district_abbrev, district_name,
                     city, state_prov, country, website, webcast_type, webcast_channel, week,
-                    lat, lng
+                    lat, lng, postal_code
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (event_key) DO UPDATE SET
                     name = EXCLUDED.name,
                     start_date = EXCLUDED.start_date,
@@ -1782,23 +1828,29 @@ def insert_event_data(results, year):
                     webcast_type = EXCLUDED.webcast_type,
                     webcast_channel = EXCLUDED.webcast_channel,
                     week = EXCLUDED.week,
-                    lat = EXCLUDED.lat,
-                    lng = EXCLUDED.lng
+                    lat = COALESCE(EXCLUDED.lat, events.lat),
+                    lng = COALESCE(EXCLUDED.lng, events.lng),
+                    postal_code = COALESCE(NULLIF(EXCLUDED.postal_code, ''), events.postal_code)
             """, data["event"])
         
-        # Update teams if needed
-        if updates["teams"] and data["teams"]:
-            # Filter out teams with null team_number before inserting
-            valid_teams = [team for team in data["teams"] if team[1] is not None]
+        # Update event_teams if the roster/profile snapshot changed
+        if updates["teams"]:
             if not valid_teams:
                 print(f"WARNING: No valid teams (with team_number) for event {data['event'][0]}")
             else:
-                # Delete existing teams for this event and reinsert
                 cur.execute("DELETE FROM event_teams WHERE event_key = %s", (data["event"][0],))
                 cur.executemany("""
                     INSERT INTO event_teams (event_key, team_number, nickname, city, state_prov, country)
                     VALUES (%s, %s, %s, %s, %s, %s)
-                """, valid_teams)
+                """, [team[:6] for team in valid_teams])
+                cur.executemany(
+                    """
+                    UPDATE teams
+                    SET postal_code = COALESCE(NULLIF(%s, ''), postal_code)
+                    WHERE team_number = %s
+                    """,
+                    [(team[6], team[1]) for team in valid_teams if len(team) > 6],
+                )
         
         # Update matches if needed
         if updates["matches"] and data["matches"]:
@@ -3130,6 +3182,7 @@ def fetch_team_components(team, year):
         "city": team.get("city"),
         "state_prov": team.get("state_prov"),
         "country": team.get("country"),
+        "postal_code": team.get("postal_code"),
         "website": team.get("website"),
         "raw": overall_epa_data.get("raw", 0),
         "confidence": overall_epa_data.get("confidence", 0),

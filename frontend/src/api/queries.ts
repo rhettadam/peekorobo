@@ -4,6 +4,7 @@
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { apiGet, type QueryParams } from "./client";
+import { CURRENT_YEAR } from "../lib/constants";
 import {
   loadFilterOptions,
   loadSearchIndex,
@@ -238,12 +239,14 @@ export function useEventPerfs(eventKey: string): UseQueryResult<EventPerfsRespon
 }
 
 // ---- Map: located teams and events for the interactive map ----
-export function useMapTeams(): UseQueryResult<MapTeamsResponse> {
+export function useMapTeams(year: number = CURRENT_YEAR): UseQueryResult<MapTeamsResponse> {
   return useQuery({
-    queryKey: ["map-teams"],
-    staleTime: 24 * 60 * 60 * 1000,
-    gcTime: 24 * 60 * 60 * 1000,
-    queryFn: () => apiGet<MapTeamsResponse>("/map/teams"),
+    queryKey: ["map-teams", "season", year],
+    enabled: Number.isFinite(year),
+    staleTime: FIVE_MIN,
+    gcTime: FIVE_MIN,
+    queryFn: () =>
+      apiGet<MapTeamsResponse>("/map/teams", { year }, { cache: "no-store" }),
   });
 }
 

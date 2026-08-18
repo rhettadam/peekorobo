@@ -43,6 +43,7 @@ class Events(Base):
     week : Mapped[Optional[int]] = mapped_column(INT)
     lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     lng: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    postal_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 def _opt_str(s: str | None) -> str | None:
     t = (s or "").strip()

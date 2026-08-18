@@ -80,7 +80,7 @@ export function ProfileFavoriteInsights({
   }, [events]);
 
   const { data: index } = useSearchIndex();
-  const mapTeams = useMapTeams();
+  const mapTeams = useMapTeams(CURRENT_YEAR);
 
   const teamPerfQueries = useQueries({
     queries: teams.map((team) => ({

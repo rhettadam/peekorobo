@@ -56,7 +56,7 @@ export function ProfileDiscover({ user }: ProfileDiscoverProps) {
 
   const { data: favorites } = useFavorites();
   const { data: index } = useSearchIndex();
-  const mapTeams = useMapTeams();
+  const mapTeams = useMapTeams(CURRENT_YEAR);
   const mapEvents = useMapEvents(CURRENT_YEAR);
   const leaderboard = useLeaderboardPreview(CURRENT_YEAR, 30);
 

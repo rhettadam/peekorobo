@@ -333,11 +333,13 @@ export interface MapTeam {
   state_prov: string | null;
   country: string | null;
   district_key?: string | null;
+  postal_code?: string | null;
   lat: number;
   lng: number;
 }
 
 export interface MapTeamsResponse {
+  year: number;
   count: number;
   teams: MapTeam[];
 }

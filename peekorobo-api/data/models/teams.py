@@ -31,8 +31,7 @@ class Teams(Base):
     team_colors: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
     lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     lng: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    lng: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    postal_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 def to_team_response(input : Teams) -> TeamData:
     tc = input.team_colors
