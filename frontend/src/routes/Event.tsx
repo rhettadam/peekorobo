@@ -27,13 +27,17 @@ import {
   useSearchIndex,
 } from "../api/queries";
 import { ErrorState, LoadingState, EmptyState } from "../components/StateWrappers";
-import { AceBadge } from "../components/AceBadge";
 import { TeamName } from "../components/TeamName";
 import { TeamAvatar } from "../components/TeamAvatar";
 import { FavoriteWithCount } from "../components/FavoriteWithCount";
 import { EventExternalLinks, WebcastButton } from "../components/WebcastControl";
 import { MetricCell, ConfidenceCell } from "../components/MetricCell";
 import { AceLegend } from "../components/AceLegend";
+import {
+  MetricTrajectoryCell,
+  TRAJECTORY_CHART_WIDTH,
+  type TrajectoryView,
+} from "../components/MetricTrajectoryCell";
 import { DataTable, type Column } from "../components/DataTable";
 import { TeamBubbleChart } from "../components/TeamBubbleChart";
 import type {
@@ -43,7 +47,15 @@ import type {
 } from "../types/api";
 import { gameLogo } from "../lib/assets";
 import { gameLogoBannerStyle, useGameLogoColors } from "../lib/gameLogoColors";
-import { computePercentiles, median } from "../lib/epa";
+import { computePercentiles, median, type PercentileThresholds } from "../lib/epa";
+import {
+  buildAllTeamTrajectories,
+  preMatchFieldForMetric,
+  type MatchExtremum,
+  type TeamTrajectory,
+} from "../lib/eventTrajectory";
+import { collectEventPreMatchValues } from "../lib/predictionSource";
+import { METRIC_STYLES, type MetricKey } from "../lib/metrics";
 import {
   isPlayed,
   matchInsights,
@@ -511,13 +523,45 @@ function AwardCard({
   );
 }
 
+function MatchExtremumCell({
+  extremum,
+  eventKey,
+  thresholds,
+  decimals = 1,
+}: {
+  extremum: MatchExtremum | null | undefined;
+  eventKey: string;
+  thresholds: PercentileThresholds;
+  decimals?: number;
+}) {
+  if (!extremum) {
+    return (
+      <Text size="xs" c="dimmed">
+        —
+      </Text>
+    );
+  }
+  return (
+    <Stack gap={2} align="flex-start">
+      <Anchor component={Link} to={`/match/${eventKey}/${extremum.matchKey}`} size="xs" fw={600}>
+        {extremum.label}
+        {!extremum.played ? " *" : ""}
+      </Anchor>
+      <MetricCell value={extremum.value} thresholds={thresholds} decimals={decimals} />
+    </Stack>
+  );
+}
+
 export function Event() {
   const { eventKey = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get("tab") ?? "teams";
 
   const year = yearFromEventKey(eventKey);
-  const [metricsMode, setMetricsMode] = useState<"event" | "season">("event");
+  const [metricsMode, setMetricsMode] = useState<"event" | "match" | "season">("event");
+  const [bubbleMode, setBubbleMode] = useState<"event" | "season">("event");
+  const [trajectoryMetric, setTrajectoryMetric] = useState<MetricKey>("ace");
+  const [trajectoryView, setTrajectoryView] = useState<TrajectoryView>("both");
   const logoColors = useGameLogoColors(year);
   const bannerStyle = gameLogoBannerStyle(logoColors);
 
@@ -529,9 +573,13 @@ export function Event() {
   const awardsQuery = useEventAwards(eventKey);
   const { data: searchIdx } = useSearchIndex();
   const nicknameOf = (tn: number) => searchIdx?.teams[String(tn)]?.nickname ?? "";
-  // Season EPAs for the whole year (teams tab + "By Season" metrics view).
+  // Season EPAs for the whole year (teams tab, metrics by-season/event-delta, etc.).
   const seasonQuery = useLeaderboard(year ?? 0, {}, {
-    enabled: Boolean(year) && (tab === "teams" || tab === "bubble" || (tab === "metrics" && metricsMode === "season")),
+    enabled:
+      Boolean(year) &&
+      (tab === "teams" ||
+        tab === "bubble" ||
+        (tab === "metrics" && (metricsMode === "season" || metricsMode === "event"))),
   });
 
   const event = eventQuery.data;
@@ -570,22 +618,35 @@ export function Event() {
     [seasonQuery.data],
   );
 
+  const seasonRankByTeam = useMemo(() => {
+    const map = new Map<number, { rank: number | null; count: number | null }>();
+    for (const r of seasonQuery.data ?? []) {
+      const p = r.team_perfs[0];
+      if (!p) continue;
+      map.set(r.team_number, {
+        rank: p.rank_global ?? null,
+        count: p.count_global ?? null,
+      });
+    }
+    return map;
+  }, [seasonQuery.data]);
+
   useEffect(() => {
     document.title = event ? `${event.event_data.name} - Peekorobo` : `${eventKey} - Peekorobo`;
   }, [event, eventKey]);
 
-  const perfByTeam = useMemo(() => {
-    const map = new Map<number, number | null>();
-    for (const p of perfsQuery.data?.perfs ?? []) map.set(p.team_number, p.ace);
+  const perfFullByTeam = useMemo(() => {
+    const map = new Map<number, EventPerfInfo>();
+    for (const p of perfsQuery.data?.perfs ?? []) map.set(p.team_number, p);
     return map;
   }, [perfsQuery.data]);
 
-  const aceThresholds = useMemo(
-    () => computePercentiles((perfsQuery.data?.perfs ?? []).map((p) => p.ace)),
-    [perfsQuery.data],
-  );
+  const perfByTeam = useMemo(() => {
+    const map = new Map<number, number | null>();
+    for (const [tn, p] of perfFullByTeam) map.set(tn, p.ace);
+    return map;
+  }, [perfFullByTeam]);
 
-  // Rank of each team within this event by event ACE (descending, nulls excluded).
   const aceRankByTeam = useMemo(() => {
     const ranked = (perfsQuery.data?.perfs ?? [])
       .filter((p) => p.ace !== null && p.ace !== undefined)
@@ -641,6 +702,7 @@ export function Event() {
         if (!hardest || prob < hardest.prob) hardest = { prob, key: m.match_key };
         if (!easiest || prob > easiest.prob) easiest = { prob, key: m.match_key };
       }
+      const perf = perfFullByTeam.get(tn);
       const sos = winProbs.length ? winProbs.reduce((a, b) => a + b, 0) / winProbs.length : null;
       return {
         teamNumber: tn,
@@ -650,10 +712,16 @@ export function Event() {
         hardest,
         easiest,
         count: tms.length,
+        raw: perf?.raw ?? null,
+        confidence: perf?.confidence ?? null,
+        ace: perf?.ace ?? null,
+        auto_raw: perf?.auto_raw ?? null,
+        teleop_raw: perf?.teleop_raw ?? null,
+        endgame_raw: perf?.endgame_raw ?? null,
       };
     });
     return rows.filter((r) => r.sos !== null).sort((a, b) => (b.sos ?? 0) - (a.sos ?? 0));
-  }, [matchesQuery.data, teamsQuery.data, perfsQuery.data, perfByTeam]);
+  }, [matchesQuery.data, teamsQuery.data, perfsQuery.data, perfByTeam, perfFullByTeam]);
 
   const sortedMatches = useMemo(() => {
     const matches = [...(matchesQuery.data?.matches ?? [])];
@@ -706,8 +774,7 @@ export function Event() {
             state_prov: "",
             country: "",
           }));
-    return source
-      .map((t) => ({
+    return source.map((t) => ({
         team_number: t.team_number,
         nickname: t.nickname || nicknameOf(t.team_number),
         city: t.city,
@@ -715,25 +782,30 @@ export function Event() {
         country: t.country,
         event: perfMap.get(t.team_number) ?? null,
         season: seasonPerfByTeam.get(t.team_number) ?? null,
-      }))
-      .sort((a, b) => (b.event?.ace ?? -Infinity) - (a.event?.ace ?? -Infinity));
+      }));
   }, [teamsQuery.data, perfsQuery.data, seasonPerfByTeam, searchIdx]);
 
-  const eventBubbleTeams = useMemo(
+  const bubbleTeams = useMemo(
     () =>
-      eventTeamRows.map((r) => ({
-        teamNumber: r.team_number,
-        nickname: r.nickname || nicknameOf(r.team_number),
-        ace: r.event?.ace ?? null,
-        raw: r.event?.raw ?? null,
-        auto: r.event?.auto_raw ?? null,
-        teleop: r.event?.teleop_raw ?? null,
-        endgame: r.event?.endgame_raw ?? null,
-        confidence: r.event?.confidence ?? null,
-        rank: aceRankByTeam.get(r.team_number) ?? null,
-        seasonAce: r.season?.ace ?? null,
-      })),
-    [eventTeamRows, aceRankByTeam, searchIdx],
+      eventTeamRows.map((r) => {
+        const src = bubbleMode === "season" ? r.season : r.event;
+        return {
+          teamNumber: r.team_number,
+          nickname: r.nickname || nicknameOf(r.team_number),
+          ace: src?.ace ?? null,
+          raw: src?.raw ?? null,
+          auto: src?.auto_raw ?? null,
+          teleop: src?.teleop_raw ?? null,
+          endgame: src?.endgame_raw ?? null,
+          confidence: src?.confidence ?? null,
+          rank:
+            bubbleMode === "season"
+              ? seasonRankByTeam.get(r.team_number)?.rank ?? null
+              : aceRankByTeam.get(r.team_number) ?? null,
+          seasonAce: r.season?.ace ?? null,
+        };
+      }),
+    [eventTeamRows, bubbleMode, aceRankByTeam, seasonRankByTeam, searchIdx],
   );
 
   const sortedPerfs = useMemo(
@@ -747,7 +819,7 @@ export function Event() {
   // Metric rows for the active mode. By-season maps each event team to its
   // full-season EPA; by-event uses the event-specific perfs.
   const metricRows = useMemo<EventPerfInfo[]>(() => {
-    if (metricsMode === "event") return sortedPerfs;
+    if (metricsMode === "event" || metricsMode === "match") return sortedPerfs;
     const teamNums =
       (teamsQuery.data?.teams ?? []).map((t) => t.team_number) ||
       sortedPerfs.map((p) => p.team_number);
@@ -760,8 +832,61 @@ export function Event() {
   const activeThresholds = metricsMode === "season" ? seasonThresholds : metricThresholds;
   const activeConfMedian = metricsMode === "season" ? seasonConfMedian : confMedian;
 
+  const trajectoryThresholds = useMemo(() => {
+    const matches = matchesQuery.data?.matches ?? [];
+    const field = preMatchFieldForMetric(trajectoryMetric);
+    return computePercentiles(collectEventPreMatchValues(matches, field));
+  }, [matchesQuery.data, trajectoryMetric]);
+
+  const trajectoryByTeam = useMemo(() => {
+    if (metricsMode !== "match") return new Map<number, TeamTrajectory>();
+    const matches = matchesQuery.data?.matches ?? [];
+    const teamNums = metricRows.map((r) => r.team_number);
+    return buildAllTeamTrajectories(teamNums, matches, trajectoryMetric);
+  }, [matchesQuery.data, metricRows, trajectoryMetric, metricsMode]);
+
   const metricColumns = useMemo<Column<EventPerfInfo>[]>(
-    () => [
+    () => {
+      const globalRankCol: Column<EventPerfInfo> = {
+        key: "globalRank",
+        header: "Global Rank",
+        width: 110,
+        align: "right",
+        sortValue: (r) => seasonRankByTeam.get(r.team_number)?.rank ?? null,
+        render: (r) => {
+          const meta = seasonRankByTeam.get(r.team_number);
+          if (meta?.rank == null) return "—";
+          return meta.count
+            ? `${meta.rank.toLocaleString()} / ${meta.count.toLocaleString()}`
+            : meta.rank.toLocaleString();
+        },
+      };
+
+      const aceDeltaCol: Column<EventPerfInfo> = {
+        key: "aceDelta",
+        header: "ACE Δ",
+        width: 80,
+        align: "right",
+        sortValue: (r) => {
+          const seasonAce = seasonPerfByTeam.get(r.team_number)?.ace;
+          if (r.ace == null || seasonAce == null) return null;
+          return r.ace - seasonAce;
+        },
+        render: (r) => {
+          const seasonAce = seasonPerfByTeam.get(r.team_number)?.ace;
+          if (r.ace == null || seasonAce == null) return "—";
+          const d = r.ace - seasonAce;
+          const prefix = d > 0 ? "+" : "";
+          return (
+            <Text size="sm" fw={600} c={d > 0 ? "teal" : d < 0 ? "red" : undefined}>
+              {prefix}
+              {formatNumber(d, 1)}
+            </Text>
+          );
+        },
+      };
+
+      return [
       {
         key: "rank",
         header: "#",
@@ -787,6 +912,7 @@ export function Event() {
           </Group>
         ),
       },
+      ...(metricsMode === "season" ? [globalRankCol] : []),
       {
         key: "raw",
         header: "RAW",
@@ -803,11 +929,12 @@ export function Event() {
       },
       {
         key: "ace",
-        header: "ACE",
-        width: 80,
+        header: metricsMode === "season" ? "Season ACE" : "Event ACE",
+        width: 90,
         sortValue: (r) => r.ace,
         render: (r) => <MetricCell value={r.ace} thresholds={activeThresholds.ace} />,
       },
+      ...(metricsMode === "event" ? [aceDeltaCol] : []),
       {
         key: "auto",
         header: "Auto",
@@ -829,9 +956,169 @@ export function Event() {
         sortValue: (r) => r.endgame_raw,
         render: (r) => <MetricCell value={r.endgame_raw} thresholds={activeThresholds.endgame} />,
       },
+    ];
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeThresholds, activeConfMedian, year, searchIdx, metricsMode, seasonRankByTeam, seasonPerfByTeam],
+  );
+
+  const matchMetricColumns = useMemo<Column<EventPerfInfo>[]>(
+    () => [
+      {
+        key: "rank",
+        header: "#",
+        width: 44,
+        render: (_r, i) => i + 1,
+      },
+      {
+        key: "team",
+        header: "Team",
+        width: 200,
+        sortValue: (r) => nicknameOf(r.team_number).toLowerCase(),
+        exportValue: (r) => `${r.team_number} ${nicknameOf(r.team_number)}`,
+        render: (r) => (
+          <Group gap="xs" wrap="nowrap">
+            <TeamAvatar teamNumber={r.team_number} size={24} radius={6} bordered />
+            <Stack gap={0}>
+              <TeamName teamNumber={r.team_number} numberOnly year={year ?? undefined} />
+              <TeamName teamNumber={r.team_number} withNumber={false} year={year ?? undefined} />
+            </Stack>
+          </Group>
+        ),
+      },
+      {
+        key: "trajectory",
+        header: "Trajectory",
+        sortValue: (r) => trajectoryByTeam.get(r.team_number)?.delta ?? null,
+        exportValue: null,
+        render: (r) => {
+          const traj = trajectoryByTeam.get(r.team_number);
+          if (!traj || traj.points.length === 0) {
+            return (
+              <Text size="xs" c="dimmed">
+                —
+              </Text>
+            );
+          }
+          return (
+            <MetricTrajectoryCell
+              trajectory={traj}
+              metric={trajectoryMetric}
+              thresholds={trajectoryThresholds}
+              view={trajectoryView}
+              cellId={r.team_number}
+              width={TRAJECTORY_CHART_WIDTH}
+            />
+          );
+        },
+      },
+      {
+        key: "best",
+        header: "Best match",
+        width: 118,
+        sortValue: (r) => trajectoryByTeam.get(r.team_number)?.best?.value ?? null,
+        exportValue: (r) => {
+          const b = trajectoryByTeam.get(r.team_number)?.best;
+          return b ? `${b.label} ${b.value}` : null;
+        },
+        render: (r) => (
+          <MatchExtremumCell
+            extremum={trajectoryByTeam.get(r.team_number)?.best}
+            eventKey={eventKey}
+            thresholds={trajectoryThresholds}
+            decimals={trajectoryMetric === "confidence" ? 2 : 1}
+          />
+        ),
+      },
+      {
+        key: "worst",
+        header: "Worst match",
+        width: 118,
+        sortValue: (r) => trajectoryByTeam.get(r.team_number)?.worst?.value ?? null,
+        exportValue: (r) => {
+          const w = trajectoryByTeam.get(r.team_number)?.worst;
+          return w ? `${w.label} ${w.value}` : null;
+        },
+        render: (r) => (
+          <MatchExtremumCell
+            extremum={trajectoryByTeam.get(r.team_number)?.worst}
+            eventKey={eventKey}
+            thresholds={trajectoryThresholds}
+            decimals={trajectoryMetric === "confidence" ? 2 : 1}
+          />
+        ),
+      },
+      {
+        key: "range",
+        header: "Range",
+        width: 72,
+        align: "right",
+        sortValue: (r) => {
+          const t = trajectoryByTeam.get(r.team_number);
+          if (!t?.best || !t?.worst) return null;
+          return t.best.value - t.worst.value;
+        },
+        render: (r) => {
+          const t = trajectoryByTeam.get(r.team_number);
+          if (!t?.best || !t?.worst) return "—";
+          return formatNumber(t.best.value - t.worst.value, trajectoryMetric === "confidence" ? 2 : 1);
+        },
+      },
+      {
+        key: "delta",
+        header: "Δ",
+        width: 64,
+        align: "right",
+        sortValue: (r) => trajectoryByTeam.get(r.team_number)?.delta ?? null,
+        render: (r) => {
+          const d = trajectoryByTeam.get(r.team_number)?.delta;
+          if (d === null || d === undefined) return "—";
+          const prefix = d > 0 ? "+" : "";
+          return (
+            <Text size="sm" fw={600} c={d > 0 ? "teal" : d < 0 ? "red" : undefined}>
+              {prefix}
+              {formatNumber(d, trajectoryMetric === "confidence" ? 2 : 1)}
+            </Text>
+          );
+        },
+      },
+      {
+        key: "momentum",
+        header: "Mom",
+        width: 64,
+        align: "right",
+        sortValue: (r) => trajectoryByTeam.get(r.team_number)?.momentum ?? null,
+        render: (r) => {
+          const m = trajectoryByTeam.get(r.team_number)?.momentum;
+          if (m === null || m === undefined) return "—";
+          const prefix = m > 0 ? "+" : "";
+          return (
+            <Text size="sm" c={m > 0 ? "teal" : m < 0 ? "red" : "dimmed"}>
+              {prefix}
+              {formatNumber(m, trajectoryMetric === "confidence" ? 2 : 1)}
+            </Text>
+          );
+        },
+      },
+      {
+        key: "ace",
+        header: "Event ACE",
+        width: 90,
+        sortValue: (r) => r.ace,
+        render: (r) => <MetricCell value={r.ace} thresholds={metricThresholds.ace} />,
+      },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeThresholds, activeConfMedian, year, searchIdx],
+    [
+      trajectoryByTeam,
+      trajectoryMetric,
+      trajectoryThresholds,
+      trajectoryView,
+      metricThresholds.ace,
+      year,
+      searchIdx,
+      eventKey,
+    ],
   );
 
   const eventTeamColumns = useMemo<Column<EventTeamRow>[]>(
@@ -842,6 +1129,13 @@ export function Event() {
         width: 50,
         sortValue: (r) => aceRankByTeam.get(r.team_number) ?? null,
         render: (r) => aceRankByTeam.get(r.team_number) ?? "–",
+      },
+      {
+        key: "num",
+        header: "#",
+        width: 80,
+        sortValue: (r) => r.team_number,
+        render: (r) => <TeamName teamNumber={r.team_number} numberOnly year={year ?? undefined} />,
       },
       {
         key: "team",
@@ -867,13 +1161,18 @@ export function Event() {
         render: (r) => locationString(r.city, r.state_prov, r.country),
       },
       {
-        key: "eventAce",
-        header: "Event ACE",
-        width: 100,
-        sortValue: (r) => r.event?.ace ?? null,
-        render: (r) => (
-          <MetricCell value={r.event?.ace ?? null} thresholds={metricThresholds.ace} />
-        ),
+        key: "raw",
+        header: "RAW",
+        width: 80,
+        sortValue: (r) => r.event?.raw ?? null,
+        render: (r) => formatNumber(r.event?.raw),
+      },
+      {
+        key: "confidence",
+        header: "Confidence",
+        width: 110,
+        sortValue: (r) => r.event?.confidence ?? null,
+        render: (r) => <ConfidenceCell value={r.event?.confidence ?? null} median={confMedian} />,
       },
       {
         key: "seasonAce",
@@ -910,13 +1209,6 @@ export function Event() {
         render: (r) => (
           <MetricCell value={r.event?.endgame_raw ?? null} thresholds={metricThresholds.endgame} />
         ),
-      },
-      {
-        key: "confidence",
-        header: "Confidence",
-        width: 110,
-        sortValue: (r) => r.event?.confidence ?? null,
-        render: (r) => <ConfidenceCell value={r.event?.confidence ?? null} median={confMedian} />,
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -957,13 +1249,70 @@ export function Event() {
       { key: "ties", header: "T", width: 55, align: "center", sortValue: (r) => r.ties, render: (r) => r.ties },
       { key: "dq", header: "DQ", width: 55, align: "center", sortValue: (r) => r.dq, render: (r) => r.dq },
       {
-        key: "ace",
-        header: "ACE",
-        width: 100,
-        align: "center",
-        sortValue: (r) => perfByTeam.get(r.team_number) ?? null,
+        key: "raw",
+        header: "RAW",
+        width: 80,
+        sortValue: (r) => perfFullByTeam.get(r.team_number)?.raw ?? null,
+        render: (r) => formatNumber(perfFullByTeam.get(r.team_number)?.raw),
+      },
+      {
+        key: "confidence",
+        header: "Confidence",
+        width: 110,
+        sortValue: (r) => perfFullByTeam.get(r.team_number)?.confidence ?? null,
         render: (r) => (
-          <AceBadge value={perfByTeam.get(r.team_number) ?? null} thresholds={aceThresholds} />
+          <ConfidenceCell
+            value={perfFullByTeam.get(r.team_number)?.confidence}
+            median={confMedian}
+          />
+        ),
+      },
+      {
+        key: "ace",
+        header: "Event ACE",
+        width: 90,
+        sortValue: (r) => perfFullByTeam.get(r.team_number)?.ace ?? null,
+        render: (r) => (
+          <MetricCell
+            value={perfFullByTeam.get(r.team_number)?.ace ?? null}
+            thresholds={metricThresholds.ace}
+          />
+        ),
+      },
+      {
+        key: "auto",
+        header: "Auto",
+        width: 80,
+        sortValue: (r) => perfFullByTeam.get(r.team_number)?.auto_raw ?? null,
+        render: (r) => (
+          <MetricCell
+            value={perfFullByTeam.get(r.team_number)?.auto_raw ?? null}
+            thresholds={metricThresholds.auto}
+          />
+        ),
+      },
+      {
+        key: "teleop",
+        header: "Teleop",
+        width: 80,
+        sortValue: (r) => perfFullByTeam.get(r.team_number)?.teleop_raw ?? null,
+        render: (r) => (
+          <MetricCell
+            value={perfFullByTeam.get(r.team_number)?.teleop_raw ?? null}
+            thresholds={metricThresholds.teleop}
+          />
+        ),
+      },
+      {
+        key: "endgame",
+        header: "Endgame",
+        width: 90,
+        sortValue: (r) => perfFullByTeam.get(r.team_number)?.endgame_raw ?? null,
+        render: (r) => (
+          <MetricCell
+            value={perfFullByTeam.get(r.team_number)?.endgame_raw ?? null}
+            thresholds={metricThresholds.endgame}
+          />
         ),
       },
       {
@@ -979,7 +1328,7 @@ export function Event() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [perfByTeam, aceThresholds, aceRankByTeam, year, searchIdx],
+    [perfFullByTeam, metricThresholds, confMedian, aceRankByTeam, year, searchIdx],
   );
 
   type SosRow = (typeof sosRows)[number];
@@ -1005,6 +1354,48 @@ export function Event() {
         ),
       },
       { key: "sos", header: "SoS", width: 80, sortValue: (r) => r.sos, render: (r) => formatNumber(r.sos, 2) },
+      {
+        key: "raw",
+        header: "RAW",
+        width: 80,
+        sortValue: (r) => r.raw,
+        render: (r) => formatNumber(r.raw),
+      },
+      {
+        key: "confidence",
+        header: "Confidence",
+        width: 110,
+        sortValue: (r) => r.confidence,
+        render: (r) => <ConfidenceCell value={r.confidence} median={confMedian} />,
+      },
+      {
+        key: "ace",
+        header: "Event ACE",
+        width: 90,
+        sortValue: (r) => r.ace,
+        render: (r) => <MetricCell value={r.ace} thresholds={metricThresholds.ace} />,
+      },
+      {
+        key: "auto",
+        header: "Auto",
+        width: 80,
+        sortValue: (r) => r.auto_raw,
+        render: (r) => <MetricCell value={r.auto_raw} thresholds={metricThresholds.auto} />,
+      },
+      {
+        key: "teleop",
+        header: "Teleop",
+        width: 80,
+        sortValue: (r) => r.teleop_raw,
+        render: (r) => <MetricCell value={r.teleop_raw} thresholds={metricThresholds.teleop} />,
+      },
+      {
+        key: "endgame",
+        header: "Endgame",
+        width: 90,
+        sortValue: (r) => r.endgame_raw,
+        render: (r) => <MetricCell value={r.endgame_raw} thresholds={metricThresholds.endgame} />,
+      },
       { key: "opp", header: "Avg Opp ACE", width: 120, sortValue: (r) => r.avgOpp, render: (r) => formatNumber(r.avgOpp, 1) },
       {
         key: "partner",
@@ -1044,7 +1435,7 @@ export function Event() {
       { key: "count", header: "Matches", width: 90, align: "center", sortValue: (r) => r.count, render: (r) => r.count },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [eventKey, year, searchIdx],
+    [eventKey, year, searchIdx, metricThresholds, confMedian],
   );
 
   // Group awards by name, de-duplicating repeated (award, team) rows that the
@@ -1164,8 +1555,8 @@ export function Event() {
       <Tabs value={tab} onChange={(val) => setSearchParams(val ? { tab: val } : {})} keepMounted={false}>
         <Tabs.List>
           <Tabs.Tab value="teams">Teams</Tabs.Tab>
-          <Tabs.Tab value="bubble">Bubble</Tabs.Tab>
           <Tabs.Tab value="metrics">Metrics</Tabs.Tab>
+          <Tabs.Tab value="bubble">Bubble</Tabs.Tab>
           <Tabs.Tab value="matches">Matches</Tabs.Tab>
           <Tabs.Tab value="sos">SoS</Tabs.Tab>
           <Tabs.Tab value="rankings">Rankings</Tabs.Tab>
@@ -1173,23 +1564,23 @@ export function Event() {
         </Tabs.List>
 
         <Tabs.Panel value="teams" pt="md">
-          {teamsQuery.isLoading || perfsQuery.isLoading ? (
+          {teamsQuery.isLoading || perfsQuery.isLoading || seasonQuery.isLoading ? (
             <LoadingState />
           ) : eventTeamRows.length === 0 ? (
             <EmptyState>No teams listed for this event yet.</EmptyState>
           ) : (
             <Stack gap="sm">
               <Text size="sm" c="dimmed">
-                Sorted by event ACE. Component columns are from this event; season ACE is the
-                team&apos;s full-year total.
+                Event component metrics and season ACE. Sorted by season ACE by default.
               </Text>
               <AceLegend />
               <DataTable
                 data={eventTeamRows}
                 columns={eventTeamColumns}
                 getRowKey={(t) => t.team_number}
-                initialSort={{ key: "eventAce", dir: "desc" }}
-                minWidth={980}
+                initialSort={{ key: "seasonAce", dir: "desc" }}
+                minWidth={1080}
+                stickyHeader
                 defaultPageSize={50}
                 exportFileName={`${eventKey}-teams`}
               />
@@ -1197,42 +1588,53 @@ export function Event() {
           )}
         </Tabs.Panel>
 
-        <Tabs.Panel value="bubble" pt="md">
-          {teamsQuery.isLoading || perfsQuery.isLoading ? (
-            <LoadingState />
-          ) : eventBubbleTeams.length === 0 ? (
-            <EmptyState>No event ACE yet to plot.</EmptyState>
-          ) : (
-            <TeamBubbleChart
-              teams={eventBubbleTeams}
-              year={year ?? CURRENT_YEAR}
-              nicknameOf={nicknameOf}
-              aceThresholds={metricThresholds.ace}
-              defaultX="auto"
-              defaultY="teleop"
-              metrics={["ace", "raw", "auto", "teleop", "endgame", "confidence", "rank"]}
-            />
-          )}
-        </Tabs.Panel>
-
         <Tabs.Panel value="metrics" pt="md">
           <Stack gap="sm">
             <Group justify="space-between" align="center" wrap="wrap">
-              <SegmentedControl
-                value={metricsMode}
-                onChange={(v) => setMetricsMode(v as "event" | "season")}
-                data={[
-                  { label: "By Event", value: "event" },
-                  { label: "By Season", value: "season" },
-                ]}
-              />
+              <Group gap="sm" wrap="wrap">
+                <SegmentedControl
+                  value={metricsMode}
+                  onChange={(v) => setMetricsMode(v as "event" | "match" | "season")}
+                  data={[
+                    { label: "By Event", value: "event" },
+                    { label: "By Match", value: "match" },
+                    { label: "By Season", value: "season" },
+                  ]}
+                />
+                {metricsMode === "match" && (
+                  <>
+                    <SegmentedControl
+                      value={trajectoryMetric}
+                      onChange={(v) => setTrajectoryMetric(v as MetricKey)}
+                      data={(
+                        ["ace", "auto", "teleop", "endgame", "raw", "confidence"] as MetricKey[]
+                      ).map((k) => ({ label: METRIC_STYLES[k].label, value: k }))}
+                    />
+                    <SegmentedControl
+                      value={trajectoryView}
+                      onChange={(v) => setTrajectoryView(v as TrajectoryView)}
+                      data={[
+                        { label: "Both", value: "both" },
+                        { label: "Sparkline", value: "sparkline" },
+                        { label: "Heat strip", value: "heat" },
+                      ]}
+                    />
+                  </>
+                )}
+              </Group>
               <Text size="xs" c="dimmed">
                 {metricsMode === "event"
-                  ? "ACE earned at this event only."
-                  : `Full ${year ?? ""} season ACE for these teams.`}
+                  ? "Event ACE and ACE Δ vs full-season ACE (positive = outperformed season average)."
+                  : metricsMode === "match"
+                    ? "Walk-forward rating at each match. Sort Trajectory or Δ to find momentum."
+                    : `Full ${year ?? ""} season ACE for these teams.`}
               </Text>
             </Group>
-            {(metricsMode === "event" ? perfsQuery.isLoading : seasonQuery.isLoading) ? (
+            {(metricsMode === "season"
+              ? seasonQuery.isLoading
+              : perfsQuery.isLoading ||
+                (metricsMode === "event" && seasonQuery.isLoading) ||
+                (metricsMode === "match" && matchesQuery.isLoading)) ? (
               <LoadingState />
             ) : metricRows.length === 0 ? (
               <EmptyState>No ACE metrics available for this event yet.</EmptyState>
@@ -1241,17 +1643,66 @@ export function Event() {
                 <AceLegend />
                 <DataTable
                   data={metricRows}
-                  columns={metricColumns}
+                  columns={metricsMode === "match" ? matchMetricColumns : metricColumns}
                   getRowKey={(r) => r.team_number}
-                  initialSort={{ key: "ace", dir: "desc" }}
-                  minWidth={720}
+                  initialSort={{
+                    key: metricsMode === "match" ? "trajectory" : "ace",
+                    dir: "desc",
+                  }}
+                  minWidth={
+                    metricsMode === "match" ? 1200 : metricsMode === "season" ? 820 : 800
+                  }
                   stickyHeader
                   defaultPageSize={25}
-                  exportFileName={`${eventKey}-metrics`}
+                  exportFileName={`${eventKey}-metrics-${metricsMode}`}
                 />
               </>
             )}
           </Stack>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="bubble" pt="md">
+          {teamsQuery.isLoading ||
+          perfsQuery.isLoading ||
+          (bubbleMode === "season" && seasonQuery.isLoading) ? (
+            <LoadingState />
+          ) : bubbleTeams.filter((t) => t.ace != null).length === 0 ? (
+            <EmptyState>
+              {bubbleMode === "season"
+                ? "No season ACE yet to plot for these teams."
+                : "No event ACE yet to plot."}
+            </EmptyState>
+          ) : (
+            <Stack gap="sm">
+              <Group justify="space-between" align="center" wrap="wrap">
+                <SegmentedControl
+                  value={bubbleMode}
+                  onChange={(v) => setBubbleMode(v as "event" | "season")}
+                  data={[
+                    { label: "By Event", value: "event" },
+                    { label: "By Season", value: "season" },
+                  ]}
+                />
+                <Text size="xs" c="dimmed">
+                  {bubbleMode === "event"
+                    ? "Metrics earned at this event. Rank is event ACE rank."
+                    : `Full ${year ?? ""} season metrics. Rank is global rank.`}
+                </Text>
+              </Group>
+              <TeamBubbleChart
+                teams={bubbleTeams}
+                year={year ?? CURRENT_YEAR}
+                nicknameOf={nicknameOf}
+                aceThresholds={
+                  bubbleMode === "season" ? seasonThresholds.ace : metricThresholds.ace
+                }
+                defaultX="auto"
+                defaultY="teleop"
+                metrics={["ace", "raw", "auto", "teleop", "endgame", "confidence", "rank"]}
+                rankLabel={bubbleMode === "season" ? "Global rank" : "ACE rank"}
+              />
+            </Stack>
+          )}
         </Tabs.Panel>
 
           <Tabs.Panel value="sos" pt="md">
@@ -1268,12 +1719,13 @@ export function Event() {
                   SoS = mean predicted win probability for a team's alliance across its
                   qualification matches. Higher = an easier draw.
                 </Text>
+                <AceLegend />
                 <DataTable
                   data={sosRows}
                   columns={sosColumns}
                   getRowKey={(r) => r.teamNumber}
                   initialSort={{ key: "sos", dir: "desc" }}
-                  minWidth={760}
+                  minWidth={1180}
                   stickyHeader
                   defaultPageSize={50}
                   exportFileName={`${eventKey}-strength-of-schedule`}
@@ -1338,7 +1790,7 @@ export function Event() {
 
         <Tabs.Panel value="rankings" pt="md">
           <Stack gap="lg">
-            {rankingsQuery.isLoading ? (
+            {rankingsQuery.isLoading || perfsQuery.isLoading ? (
               <LoadingState />
             ) : sortedRankings.length === 0 ? (
               playoffMatches.length > 0 ? null : (
@@ -1347,12 +1799,14 @@ export function Event() {
             ) : (
               <Stack gap="xs">
                 <Text fw={700}>Qualification Rankings</Text>
+                <AceLegend />
                 <DataTable
                   data={sortedRankings}
                   columns={rankingColumns}
                   getRowKey={(r) => r.team_number}
                   initialSort={{ key: "rank", dir: "asc" }}
-                  minWidth={560}
+                  minWidth={1080}
+                  stickyHeader
                   defaultPageSize={50}
                   exportFileName={`${eventKey}-rankings`}
                 />

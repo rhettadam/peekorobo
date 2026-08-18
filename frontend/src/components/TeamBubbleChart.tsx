@@ -149,6 +149,8 @@ interface TeamBubbleChartProps {
   metrics?: BubbleMetricKey[];
   height?: number;
   aceThresholds?: PercentileThresholds;
+  /** Override axis label for the rank metric (e.g. "Global rank" vs "ACE rank"). */
+  rankLabel?: string;
 }
 
 export function TeamBubbleChart({
@@ -161,6 +163,7 @@ export function TeamBubbleChart({
   metrics,
   height = 560,
   aceThresholds,
+  rankLabel,
 }: TeamBubbleChartProps) {
   const navigate = useNavigate();
   const scheme = useComputedColorScheme("dark", { getInitialValueInEffect: true });
@@ -173,6 +176,9 @@ export function TeamBubbleChart({
     available.includes(defaultY) ? defaultY : available[1] ?? available[0],
   );
   const [sizeMode, setSizeMode] = useState<"uniform" | "confidence">("uniform");
+
+  const labelFor = (k: BubbleMetricKey) =>
+    k === "rank" && rankLabel ? rankLabel : METRIC_LABEL[k];
 
   const highlightSet = useMemo(() => new Set(highlighted ?? []), [highlighted]);
   const nick = (n: number) => nicknameOf?.(n) ?? teams.find((t) => t.teamNumber === n)?.nickname ?? "";
@@ -189,8 +195,12 @@ export function TeamBubbleChart({
   );
 
   const axisOptions = useMemo(
-    () => available.map((k) => ({ value: k, label: METRIC_LABEL[k] })),
-    [available],
+    () =>
+      available.map((k) => ({
+        value: k,
+        label: k === "rank" && rankLabel ? rankLabel : METRIC_LABEL[k],
+      })),
+    [available, rankLabel],
   );
 
   const presets = useMemo(
@@ -322,7 +332,7 @@ export function TeamBubbleChart({
       <Card withBorder padding="md" radius="md">
         {points.length === 0 ? (
           <Text size="sm" c="dimmed" ta="center" py="xl">
-            No teams with both {METRIC_LABEL[xAxis]} and {METRIC_LABEL[yAxis]}.
+            No teams with both {labelFor(xAxis)} and {labelFor(yAxis)}.
           </Text>
         ) : (
           <ResponsiveContainer width="100%" height={height}>
@@ -339,13 +349,13 @@ export function TeamBubbleChart({
               <XAxis
                 type="number"
                 dataKey="x"
-                name={METRIC_LABEL[xAxis]}
+                name={labelFor(xAxis)}
                 reversed={xAxis === "rank"}
                 tick={{ fill: tick, fontSize: 12 }}
                 tickLine={false}
                 axisLine={{ stroke: grid }}
                 label={{
-                  value: METRIC_LABEL[xAxis],
+                  value: labelFor(xAxis),
                   position: "insideBottom",
                   offset: -16,
                   fill: tick,
@@ -355,14 +365,14 @@ export function TeamBubbleChart({
               <YAxis
                 type="number"
                 dataKey="y"
-                name={METRIC_LABEL[yAxis]}
+                name={labelFor(yAxis)}
                 reversed={yAxis === "rank"}
                 tick={{ fill: tick, fontSize: 12 }}
                 tickLine={false}
                 axisLine={{ stroke: grid }}
                 width={58}
                 label={{
-                  value: METRIC_LABEL[yAxis],
+                  value: labelFor(yAxis),
                   angle: -90,
                   position: "insideLeft",
                   fill: tick,
@@ -418,9 +428,9 @@ export function TeamBubbleChart({
                         ) : null}
                       </Group>
                       <Text size="xs">
-                        {METRIC_LABEL[xAxis]} {formatNumber(p.x, decimalsFor(xAxis))}
+                        {labelFor(xAxis)} {formatNumber(p.x, decimalsFor(xAxis))}
                         {" · "}
-                        {METRIC_LABEL[yAxis]} {formatNumber(p.y, decimalsFor(yAxis))}
+                        {labelFor(yAxis)} {formatNumber(p.y, decimalsFor(yAxis))}
                       </Text>
                       <Text size="xs" c="dimmed">
                         Auto {formatNumber(t.auto)} · Teleop {formatNumber(t.teleop)} · Endgame{" "}

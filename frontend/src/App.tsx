@@ -12,7 +12,7 @@ import { Compare } from "./routes/Compare";
 import { HigherLower } from "./routes/HigherLower";
 import { Duel } from "./routes/Duel";
 import { MatchPredictor } from "./routes/MatchPredictor";
-import { Insights, InsightsSeason } from "./routes/Insights";
+import { Insights } from "./routes/Insights";
 import { Login } from "./routes/Login";
 import { Register } from "./routes/Register";
 import { Profile } from "./routes/Profile";
@@ -37,7 +37,7 @@ export function App() {
         <Route path="games/duel" element={<Duel />} />
         <Route path="games/predictor" element={<MatchPredictor />} />
         <Route path="insights" element={<Insights />} />
-        <Route path="insights/:year" element={<InsightsSeason />} />
+        <Route path="insights/:year" element={<Insights />} />
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
         <Route path="user" element={<Profile />} />
