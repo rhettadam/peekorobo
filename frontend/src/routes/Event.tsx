@@ -561,6 +561,7 @@ export function Event() {
   const year = yearFromEventKey(eventKey);
   const [metricsMode, setMetricsMode] = useState<"event" | "match" | "season">("event");
   const [bubbleMode, setBubbleMode] = useState<"event" | "season">("event");
+  const [teamsMetricsMode, setTeamsMetricsMode] = useState<"event" | "season">("event");
   const [trajectoryMetric, setTrajectoryMetric] = useState<MetricKey>("ace");
   const [trajectoryView, setTrajectoryView] = useState<TrajectoryView>("both");
   const logoColors = useGameLogoColors(year);
@@ -1123,101 +1124,168 @@ export function Event() {
   );
 
   const eventTeamColumns = useMemo<Column<EventTeamRow>[]>(
-    () => [
-      {
-        key: "rank",
-        header: "#",
-        width: 50,
-        sortValue: (r) => aceRankByTeam.get(r.team_number) ?? null,
-        render: (r) => aceRankByTeam.get(r.team_number) ?? "–",
-      },
-      {
-        key: "num",
-        header: "#",
-        width: 80,
-        sortValue: (r) => r.team_number,
-        render: (r) => <TeamName teamNumber={r.team_number} numberOnly year={year ?? undefined} />,
-      },
-      {
-        key: "team",
-        header: "Team",
-        sortValue: (r) => (r.nickname || nicknameOf(r.team_number)).toLowerCase(),
-        exportValue: (r) => r.nickname || nicknameOf(r.team_number),
-        render: (r) => (
-          <Group gap="sm" wrap="nowrap">
-            <TeamAvatar teamNumber={r.team_number} size={28} radius={6} bordered />
-            <TeamName
-              teamNumber={r.team_number}
-              nickname={r.nickname || undefined}
-              withNumber={false}
-              year={year ?? undefined}
-            />
-          </Group>
-        ),
-      },
-      {
-        key: "location",
-        header: "Location",
-        sortValue: (r) => locationString(r.city, r.state_prov, r.country),
-        render: (r) => locationString(r.city, r.state_prov, r.country),
-      },
-      {
-        key: "raw",
-        header: "RAW",
-        width: 80,
-        sortValue: (r) => r.event?.raw ?? null,
-        render: (r) => formatNumber(r.event?.raw),
-      },
-      {
-        key: "confidence",
-        header: "Confidence",
-        width: 110,
-        sortValue: (r) => r.event?.confidence ?? null,
-        render: (r) => <ConfidenceCell value={r.event?.confidence ?? null} median={confMedian} />,
-      },
-      {
-        key: "seasonAce",
-        header: "Season ACE",
-        width: 110,
-        sortValue: (r) => r.season?.ace ?? null,
-        render: (r) => (
-          <MetricCell value={r.season?.ace ?? null} thresholds={seasonThresholds.ace} />
-        ),
-      },
-      {
-        key: "auto",
-        header: "Auto",
-        width: 80,
-        sortValue: (r) => r.event?.auto_raw ?? null,
-        render: (r) => (
-          <MetricCell value={r.event?.auto_raw ?? null} thresholds={metricThresholds.auto} />
-        ),
-      },
-      {
-        key: "teleop",
-        header: "Teleop",
-        width: 80,
-        sortValue: (r) => r.event?.teleop_raw ?? null,
-        render: (r) => (
-          <MetricCell value={r.event?.teleop_raw ?? null} thresholds={metricThresholds.teleop} />
-        ),
-      },
-      {
-        key: "endgame",
-        header: "Endgame",
-        width: 90,
-        sortValue: (r) => r.event?.endgame_raw ?? null,
-        render: (r) => (
-          <MetricCell value={r.event?.endgame_raw ?? null} thresholds={metricThresholds.endgame} />
-        ),
-      },
-    ],
+    () => {
+      const isSeason = teamsMetricsMode === "season";
+      /** Prefer event metrics in event mode; fall back to season when event is missing. */
+      const resolve = (r: EventTeamRow) => {
+        if (isSeason) {
+          return { src: r.season, fallback: false as const };
+        }
+        if (r.event) return { src: r.event, fallback: false as const };
+        return { src: r.season, fallback: Boolean(r.season) };
+      };
+      const thresholdsFor = (fallback: boolean) =>
+        isSeason || fallback ? seasonThresholds : metricThresholds;
+      const confMedFor = (fallback: boolean) =>
+        isSeason || fallback ? seasonConfMedian : confMedian;
+
+      const cols: Column<EventTeamRow>[] = [
+        {
+          key: "rank",
+          header: isSeason ? "Global Rank" : "Event Rank",
+          width: isSeason ? 110 : 90,
+          align: "right",
+          sortValue: (r) => {
+            if (isSeason) return seasonRankByTeam.get(r.team_number)?.rank ?? null;
+            // Only rank teams that have real event metrics (not season fallback).
+            return r.event ? aceRankByTeam.get(r.team_number) ?? null : null;
+          },
+          render: (r) => {
+            if (isSeason) {
+              const meta = seasonRankByTeam.get(r.team_number);
+              if (meta?.rank == null) return "—";
+              return meta.count
+                ? `${meta.rank.toLocaleString()} / ${meta.count.toLocaleString()}`
+                : meta.rank.toLocaleString();
+            }
+            if (!r.event) return "—";
+            return aceRankByTeam.get(r.team_number) ?? "—";
+          },
+        },
+        {
+          key: "num",
+          header: "#",
+          width: 80,
+          sortValue: (r) => r.team_number,
+          render: (r) => (
+            <TeamName teamNumber={r.team_number} numberOnly year={year ?? undefined} />
+          ),
+        },
+        {
+          key: "team",
+          header: "Team",
+          sortValue: (r) => (r.nickname || nicknameOf(r.team_number)).toLowerCase(),
+          exportValue: (r) => r.nickname || nicknameOf(r.team_number),
+          render: (r) => (
+            <Group gap="sm" wrap="nowrap">
+              <TeamAvatar teamNumber={r.team_number} size={28} radius={6} bordered />
+              <TeamName
+                teamNumber={r.team_number}
+                nickname={r.nickname || undefined}
+                withNumber={false}
+                year={year ?? undefined}
+              />
+            </Group>
+          ),
+        },
+        {
+          key: "location",
+          header: "Location",
+          sortValue: (r) => locationString(r.city, r.state_prov, r.country),
+          render: (r) => locationString(r.city, r.state_prov, r.country),
+        },
+        {
+          key: "raw",
+          header: "RAW",
+          width: 80,
+          sortValue: (r) => resolve(r).src?.raw ?? null,
+          render: (r) => formatNumber(resolve(r).src?.raw),
+        },
+        {
+          key: "confidence",
+          header: "Confidence",
+          width: 110,
+          sortValue: (r) => resolve(r).src?.confidence ?? null,
+          render: (r) => {
+            const { src, fallback } = resolve(r);
+            return (
+              <ConfidenceCell value={src?.confidence ?? null} median={confMedFor(fallback)} />
+            );
+          },
+        },
+        {
+          key: "ace",
+          header: isSeason ? "Season ACE" : "Event ACE",
+          width: 110,
+          sortValue: (r) => resolve(r).src?.ace ?? null,
+          render: (r) => {
+            const { src, fallback } = resolve(r);
+            return (
+              <Group gap={4} wrap="nowrap" justify="center">
+                <MetricCell value={src?.ace ?? null} thresholds={thresholdsFor(fallback).ace} />
+                {fallback ? (
+                  <Badge size="xs" variant="outline" color="gray" title="No event metrics yet; showing season">
+                    season
+                  </Badge>
+                ) : null}
+              </Group>
+            );
+          },
+        },
+        {
+          key: "auto",
+          header: "Auto",
+          width: 80,
+          sortValue: (r) => resolve(r).src?.auto_raw ?? null,
+          render: (r) => {
+            const { src, fallback } = resolve(r);
+            return (
+              <MetricCell value={src?.auto_raw ?? null} thresholds={thresholdsFor(fallback).auto} />
+            );
+          },
+        },
+        {
+          key: "teleop",
+          header: "Teleop",
+          width: 80,
+          sortValue: (r) => resolve(r).src?.teleop_raw ?? null,
+          render: (r) => {
+            const { src, fallback } = resolve(r);
+            return (
+              <MetricCell
+                value={src?.teleop_raw ?? null}
+                thresholds={thresholdsFor(fallback).teleop}
+              />
+            );
+          },
+        },
+        {
+          key: "endgame",
+          header: "Endgame",
+          width: 90,
+          sortValue: (r) => resolve(r).src?.endgame_raw ?? null,
+          render: (r) => {
+            const { src, fallback } = resolve(r);
+            return (
+              <MetricCell
+                value={src?.endgame_raw ?? null}
+                thresholds={thresholdsFor(fallback).endgame}
+              />
+            );
+          },
+        },
+      ];
+      return cols;
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
+      teamsMetricsMode,
       aceRankByTeam,
+      seasonRankByTeam,
       metricThresholds,
       seasonThresholds,
       confMedian,
+      seasonConfMedian,
       year,
       searchIdx,
     ],
@@ -1572,19 +1640,32 @@ export function Event() {
             <EmptyState>No teams listed for this event yet.</EmptyState>
           ) : (
             <Stack gap="sm">
-              <Text size="sm" c="dimmed">
-                Event component metrics and season ACE. Sorted by season ACE by default.
-              </Text>
+              <Group justify="space-between" align="center" wrap="wrap">
+                <SegmentedControl
+                  value={teamsMetricsMode}
+                  onChange={(v) => setTeamsMetricsMode(v as "event" | "season")}
+                  data={[
+                    { label: "Event metrics", value: "event" },
+                    { label: "Season metrics", value: "season" },
+                  ]}
+                />
+                <Text size="sm" c="dimmed" maw={520}>
+                  {teamsMetricsMode === "event"
+                    ? "All columns are this event’s metrics. If a team has no event data yet, season metrics are shown with a “season” tag."
+                    : `All columns are full ${year ?? ""} season metrics (same scale as the leaderboard).`}
+                </Text>
+              </Group>
               <AceLegend />
               <DataTable
+                key={`teams-${teamsMetricsMode}`}
                 data={eventTeamRows}
                 columns={eventTeamColumns}
                 getRowKey={(t) => t.team_number}
-                initialSort={{ key: "seasonAce", dir: "desc" }}
+                initialSort={{ key: "ace", dir: "desc" }}
                 minWidth={1080}
                 stickyHeader
                 defaultPageSize={50}
-                exportFileName={`${eventKey}-teams`}
+                exportFileName={`${eventKey}-teams-${teamsMetricsMode}`}
               />
             </Stack>
           )}

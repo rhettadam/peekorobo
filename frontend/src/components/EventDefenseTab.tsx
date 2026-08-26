@@ -24,11 +24,14 @@ import { TeamName } from "./TeamName";
 import type { EventPerfInfo, MatchResponse } from "../types/api";
 import {
   countHighDefenseTeams,
-  defensePctTopQuartile,
+  defenseFocusTopQuartile,
   eventResidualStats,
   matchDefenseRows,
+  playedMatchesForStage,
   teamDefenseRows,
   thresholdSliderMax,
+  MIN_MATCHES_FOR_INDICATOR,
+  type DefenseStage,
   type MatchDefenseRow,
   type TeamDefenseRow,
   type TeamImpactPoint,
@@ -61,14 +64,14 @@ function defensePctStyle(pct: number | null): CSSProperties {
   let bg = "transparent";
   let fw = 600;
   let color: string | undefined;
-  if (pct >= 50) {
+  if (pct >= 40) {
     bg = FLAG_STRONG;
     fw = 800;
     color = "#fff";
-  } else if (pct >= 35) {
+  } else if (pct >= 25) {
     bg = FLAG_TINT;
     fw = 700;
-  } else if (pct >= 20) {
+  } else if (pct >= 15) {
     bg = "rgba(230, 126, 34, 0.18)";
     fw = 600;
   }
@@ -81,7 +84,23 @@ function defensePctStyle(pct: number | null): CSSProperties {
     borderRadius: 6,
     padding: "4px 8px",
     fontWeight: fw,
-    fontSize: pct >= 50 ? 15 : 13,
+    fontSize: pct >= 40 ? 15 : 13,
+  };
+}
+
+function focusScoreStyle(score: number | null, topQ: number | null): CSSProperties {
+  if (score === null || score <= 0) return { fontWeight: 500 };
+  const hot = topQ !== null && score >= topQ;
+  return {
+    display: "inline-block",
+    minWidth: 52,
+    textAlign: "center",
+    backgroundColor: hot ? FLAG_STRONG : score > 0 ? FLAG_TINT : undefined,
+    color: hot ? "#fff" : undefined,
+    borderRadius: 6,
+    padding: "4px 8px",
+    fontWeight: hot ? 800 : 700,
+    fontSize: hot ? 15 : 13,
   };
 }
 
@@ -104,10 +123,13 @@ function ImpactSparkline({ series, threshold }: { series: TeamImpactPoint[]; thr
   return (
     <Tooltip
       label={series
-        .map((p) => `QM${p.matchNumber}: ${p.impact >= 0 ? "+" : ""}${p.impact.toFixed(0)}${p.flagged ? " ★" : ""}`)
+        .map((p) => {
+          const label = shortMatchLabel(p.compLevel, p.setNumber, p.matchNumber);
+          return `${label}: ${p.impact >= 0 ? "+" : ""}${p.impact.toFixed(0)}${p.flagged ? " ★" : ""}`;
+        })
         .join(" · ")}
       multiline
-      maw={360}
+      maw={420}
       withArrow
     >
       <svg width={w} height={h} aria-hidden style={{ display: "block", cursor: "default" }}>
@@ -213,18 +235,24 @@ export function EventDefenseTab({
     return map;
   }, [perfs]);
 
-  const residualStats = useMemo(
-    () => eventResidualStats(matches, aceByTeam),
-    [matches, aceByTeam],
-  );
-
+  const [stage, setStage] = useState<DefenseStage>("qm");
   const [thresholdLocked, setThresholdLocked] = useState(true);
   const [threshold, setThreshold] = useState<number | null>(null);
   const [view, setView] = useState<ViewMode>("teams");
   const [selectedTeam, setSelectedTeam] = useState<number | null>(null);
   const [matchFilter, setMatchFilter] = useState<MatchFilter>("all");
 
-  // Keep threshold on event σ while locked (and seed once when stats arrive).
+  const hasPlayoffs = useMemo(
+    () => playedMatchesForStage(matches, "playoff").length > 0,
+    [matches],
+  );
+
+  const residualStats = useMemo(
+    () => eventResidualStats(matches, aceByTeam, stage),
+    [matches, aceByTeam, stage],
+  );
+
+  // Keep threshold on stage σ while locked (and seed once when stats arrive / stage changes).
   useEffect(() => {
     if (!residualStats) return;
     setThreshold((prev) => {
@@ -236,17 +264,18 @@ export function EventDefenseTab({
   const effectiveThreshold = threshold ?? residualStats?.defaultThreshold ?? 15;
 
   const allMatchRows = useMemo(
-    () => matchDefenseRows(matches, aceByTeam, effectiveThreshold),
-    [matches, aceByTeam, effectiveThreshold],
+    () => matchDefenseRows(matches, aceByTeam, effectiveThreshold, stage),
+    [matches, aceByTeam, effectiveThreshold, stage],
   );
 
   const teamRows = useMemo(
-    () => teamDefenseRows(matches, teamNumbers, perfsByTeam, aceByTeam, effectiveThreshold),
-    [matches, teamNumbers, perfsByTeam, aceByTeam, effectiveThreshold],
+    () =>
+      teamDefenseRows(matches, teamNumbers, perfsByTeam, aceByTeam, effectiveThreshold, stage),
+    [matches, teamNumbers, perfsByTeam, aceByTeam, effectiveThreshold, stage],
   );
 
-  const topQ = useMemo(() => defensePctTopQuartile(teamRows), [teamRows]);
-  const highDefenseCount = useMemo(() => countHighDefenseTeams(teamRows, 50), [teamRows]);
+  const topQ = useMemo(() => defenseFocusTopQuartile(teamRows), [teamRows]);
+  const highDefenseCount = useMemo(() => countHighDefenseTeams(teamRows, 40), [teamRows]);
   const sliderMax = useMemo(
     () => thresholdSliderMax(residualStats, allMatchRows),
     [residualStats, allMatchRows],
@@ -280,6 +309,23 @@ export function EventDefenseTab({
     if (residualStats) setThreshold(residualStats.defaultThreshold);
     setThresholdLocked(true);
   };
+
+  const sigmaLabel = stage === "qm" ? "Quals σ" : "Playoffs σ";
+
+  const stageControl = (
+    <SegmentedControl
+      value={stage}
+      onChange={(v) => {
+        setStage(v as DefenseStage);
+        setThresholdLocked(true);
+        setThreshold(null);
+      }}
+      data={[
+        { label: "Quals", value: "qm" },
+        { label: "Playoffs", value: "playoff", disabled: !hasPlayoffs },
+      ]}
+    />
+  );
 
   const teamColumns = useMemo<Column<TeamDefenseRow>[]>(
     () => [
@@ -321,16 +367,44 @@ export function EventDefenseTab({
         ),
       },
       {
+        key: "focusScore",
+        header: (
+          <Tooltip label="Mean flagged impact × √flagged matches — ranks consistent, large asymmetric shortfalls">
+            <span>Focus</span>
+          </Tooltip>
+        ),
+        width: 90,
+        sortValue: (r) => r.focusScore,
+        exportValue: (r) => (r.focusScore !== null ? Math.round(r.focusScore * 10) / 10 : null),
+        render: (r) =>
+          r.focusScore === null ? (
+            <Text size="sm" c="dimmed" title={`Needs ≥${MIN_MATCHES_FOR_INDICATOR} matches`}>
+              —
+            </Text>
+          ) : (
+            <span style={focusScoreStyle(r.focusScore, topQ)}>{formatNumber(r.focusScore, 1)}</span>
+          ),
+      },
+      {
         key: "defensePct",
-        header: "Defense %",
+        header: (
+          <Tooltip label={`% of matches with asymmetric opponent underperformance > X (≥${MIN_MATCHES_FOR_INDICATOR} matches)`}>
+            <span>Defense %</span>
+          </Tooltip>
+        ),
         width: 100,
         sortValue: (r) => r.defensePct,
         exportValue: (r) => (r.defensePct !== null ? Math.round(r.defensePct * 10) / 10 : null),
-        render: (r) => (
-          <span style={defensePctStyle(r.defensePct)}>
-            {r.defensePct !== null ? `${formatNumber(r.defensePct, 0)}%` : "-"}
-          </span>
-        ),
+        render: (r) =>
+          r.defensePct === null ? (
+            <Text size="sm" c="dimmed" title={`Needs ≥${MIN_MATCHES_FOR_INDICATOR} matches`}>
+              —
+            </Text>
+          ) : (
+            <span style={defensePctStyle(r.defensePct)}>
+              {`${formatNumber(r.defensePct, 0)}%`}
+            </span>
+          ),
       },
       {
         key: "flagged",
@@ -342,11 +416,24 @@ export function EventDefenseTab({
           <Badge
             size="sm"
             variant={r.flaggedCount > 0 ? "filled" : "light"}
-            color={r.flaggedCount / Math.max(1, r.matchCount) >= 0.5 ? "orange" : "gray"}
+            color={
+              r.defensePct !== null && r.defensePct >= 40
+                ? "orange"
+                : r.flaggedCount > 0
+                  ? "yellow"
+                  : "gray"
+            }
           >
             {r.flaggedCount}/{r.matchCount}
           </Badge>
         ),
+      },
+      {
+        key: "meanFlagged",
+        header: "Flag Mean",
+        width: 95,
+        sortValue: (r) => r.meanFlaggedImpact,
+        render: (r) => formatNumber(r.meanFlaggedImpact, 1),
       },
       {
         key: "meanImpact",
@@ -367,12 +454,13 @@ export function EventDefenseTab({
         header: "Max Imp",
         width: 90,
         sortValue: (r) => r.maxImpact,
-        render: (r) =>
-          r.maxImpact !== null ? (
-            <ImpactCell value={r.maxImpact} flagged={r.maxImpact > effectiveThreshold} />
-          ) : (
-            "-"
-          ),
+        render: (r) => {
+          if (r.maxImpact === null) return "-";
+          const maxWasFlagged = r.impactSeries.some(
+            (p) => p.flagged && p.impact === r.maxImpact,
+          );
+          return <ImpactCell value={r.maxImpact} flagged={maxWasFlagged} />;
+        },
       },
       {
         key: "sumImpact",
@@ -393,7 +481,7 @@ export function EventDefenseTab({
         header: "Impact by match",
         width: 130,
         exportValue: null,
-        sortValue: (r) => r.meanImpact,
+        sortValue: (r) => r.focusScore,
         render: (r) => <ImpactSparkline series={r.impactSeries} threshold={effectiveThreshold} />,
       },
       {
@@ -440,7 +528,7 @@ export function EventDefenseTab({
       },
     ],
     // selectTeamForMatches is stable enough via closures; recompute when threshold/ACE change
-    [year, nicknameOf, effectiveThreshold, confMedian, metricThresholds],
+    [year, nicknameOf, effectiveThreshold, confMedian, metricThresholds, topQ],
   );
 
   const matchColumns = useMemo<Column<MatchDefenseRow>[]>(
@@ -449,7 +537,14 @@ export function EventDefenseTab({
         key: "match",
         header: "Match",
         width: 80,
-        sortValue: (r) => r.match.match_number,
+        sortValue: (r) => {
+          const order: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
+          return (
+            (order[r.match.comp_level] ?? 9) * 1_000_000 +
+            r.match.set_number * 1000 +
+            r.match.match_number
+          );
+        },
         exportValue: (r) =>
           shortMatchLabel(r.match.comp_level, r.match.set_number, r.match.match_number),
         render: (r) => (
@@ -572,34 +667,44 @@ export function EventDefenseTab({
 
   if (!residualStats || teamRows.length === 0) {
     return (
-      <EmptyState>
-        No defense indicator data yet (needs played qualification matches with score predictions).
-      </EmptyState>
+      <Stack gap="md">
+        <Group justify="space-between" wrap="wrap">
+          {stageControl}
+        </Group>
+        <EmptyState>
+          {stage === "playoff"
+            ? "No playoff defense data yet (needs played elimination matches with score predictions)."
+            : "No defense indicator data yet (needs played qualification matches with score predictions)."}
+        </EmptyState>
+      </Stack>
     );
   }
 
   return (
     <Stack gap="md">
-      <Stack gap={4}>
-        <Text size="sm" c="dimmed">
-          Defensive Impact = opposing alliance predicted score − actual score. Defense Indicator
-          (Defense %) = share of a team&apos;s quals where Impact &gt; X. This is a{" "}
+      <Group justify="space-between" align="flex-start" wrap="wrap">
+        {stageControl}
+        <Text size="sm" c="dimmed" maw={640}>
+          Defensive Impact = opposing predicted − actual. A match is flagged only when opponents
+          underperform by more than X <Text span fw={600} c="dimmed">and</Text> your alliance does
+          not also collapse (asymmetric) — mutual failures are ignored. Focus = mean flagged impact
+          × √flagged count. Still a{" "}
           <Text span fw={600} c="dimmed">
             scout-focusing flag
           </Text>
-          , not proof a team played defense — scoring failures and intermittent defense add noise.
+          , not proof of defense.
         </Text>
-      </Stack>
+      </Group>
 
       <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="md">
-        <InsightStat label="Event σ (X default)" value={formatNumber(residualStats.std, 1)} />
+        <InsightStat label={`${sigmaLabel} (X = 1.5σ)`} value={formatNumber(residualStats.std, 1)} />
         <InsightStat label="Threshold X" value={`${formatNumber(effectiveThreshold, 1)} pts`} />
         <InsightStat label="Mean |residual|" value={formatNumber(residualStats.meanAbs, 1)} />
         <InsightStat
-          label="Large-Δ matches"
+          label="Asymmetric flags"
           value={`${residualStats.largeImpactMatchCount}/${allMatchRows.length}`}
         />
-        <InsightStat label="Teams Defense % ≥ 50" value={String(highDefenseCount)} />
+        <InsightStat label="Teams Defense % ≥ 40" value={String(highDefenseCount)} />
         <InsightStat label="Alliance residuals" value={String(residualStats.count)} />
       </SimpleGrid>
 
@@ -614,7 +719,7 @@ export function EventDefenseTab({
           <Stack gap={2}>
             <Text size="sm" fw={600}>
               Defense threshold X = {formatNumber(effectiveThreshold, 1)} pts
-              {thresholdLocked ? " (locked to event σ)" : " (custom)"}
+              {thresholdLocked ? ` (locked to ${sigmaLabel})` : " (custom)"}
             </Text>
             <Text size="xs" c="dimmed">
               Unlock to tune how large an opponent underperformance must be to flag a match.
@@ -637,7 +742,7 @@ export function EventDefenseTab({
               leftSection={<IconRefresh size={14} />}
               onClick={resetThreshold}
             >
-              Reset to event σ
+              Reset to {sigmaLabel}
             </Button>
           </Group>
         </Group>
@@ -719,19 +824,20 @@ export function EventDefenseTab({
         <Stack gap="sm">
           <AceLegend />
           <DataTable
+            key={`defense-teams-${stage}`}
             data={teamRows}
             columns={teamColumns}
             getRowKey={(r) => r.teamNumber}
-            initialSort={{ key: "defensePct", dir: "desc" }}
-            minWidth={1400}
+            initialSort={{ key: "focusScore", dir: "desc" }}
+            minWidth={1480}
             stickyHeader
             defaultPageSize={50}
-            exportFileName={`${eventKey}-defense`}
+            exportFileName={`${eventKey}-defense-${stage}`}
             rowStyle={(r) => {
-              if ((r.defensePct ?? 0) >= 50) return { backgroundColor: HIGH_DEFENSE_ROW };
-              if (topQ !== null && (r.defensePct ?? 0) >= topQ) {
-                return { backgroundColor: TOP_QUARTILE_ROW };
+              if ((r.focusScore ?? 0) > 0 && topQ !== null && (r.focusScore ?? 0) >= topQ) {
+                return { backgroundColor: HIGH_DEFENSE_ROW };
               }
+              if ((r.defensePct ?? 0) >= 40) return { backgroundColor: TOP_QUARTILE_ROW };
               return undefined;
             }}
           />
@@ -739,10 +845,12 @@ export function EventDefenseTab({
       ) : (
         <Stack gap="sm">
           <Text size="sm" c="dimmed">
-            Red Impact = blue predicted − blue actual (opponents underperformed while facing red).
-            Blue Impact is the mirror. Flagged cells exceed X = {formatNumber(effectiveThreshold, 1)}.
+            Red Impact = blue predicted − blue actual. A side is flagged only if Impact &gt; X and
+            that side&apos;s own residual is not a mutual collapse. X ={" "}
+            {formatNumber(effectiveThreshold, 1)}.
           </Text>
           <DataTable
+            key={`defense-matches-${stage}`}
             data={filteredMatchRows}
             columns={matchColumns}
             getRowKey={(r) => r.match.match_key}
@@ -750,7 +858,7 @@ export function EventDefenseTab({
             minWidth={1200}
             stickyHeader
             defaultPageSize={50}
-            exportFileName={`${eventKey}-defense-matches`}
+            exportFileName={`${eventKey}-defense-matches-${stage}`}
             rowStyle={(r) => {
               if (r.redFlagged || r.blueFlagged) return { backgroundColor: TOP_QUARTILE_ROW };
               return undefined;

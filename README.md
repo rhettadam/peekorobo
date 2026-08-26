@@ -72,11 +72,11 @@ Event page (`/event/:key`) tabs:
 
 | Tab | Contents |
 |-----|----------|
-| **Teams** | Event roster with ACE and records |
+| **Teams** | Event roster; Event vs Season metrics toggle (season fallback when event metrics missing) |
 | **Metrics** | Per-team ACE/RAW/auto/teleop/endgame; toggle event vs season metrics |
 | **Matches** | Qual + playoff tables (paginated), colored W-L-T |
 | **SoS** | Strength of schedule (client-side from matches + event ACE) |
-| **Defense** | Defense Indicator & Defensive Impact (opponent underperformance vs ACE prediction; configurable threshold; team + match views) |
+| **Defense** | Defense Indicator & Defensive Impact (quals/playoffs toggle; opponent underperformance vs ACE prediction; configurable threshold; team + match views) |
 | **Rankings** | Qual rankings (W/L/T/DQ, ACE, event ACE rank) + playoff bracket |
 | **Awards** | Grouped award cards |
 

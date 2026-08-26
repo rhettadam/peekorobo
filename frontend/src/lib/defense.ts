@@ -6,15 +6,61 @@ export function allianceResidual(pred: number, actual: number): number {
   return pred - actual;
 }
 
+/**
+ * Flag an alliance only when opponents underperformed by more than `threshold`
+ * AND this alliance did not also collapse (asymmetric underperformance).
+ *
+ * Filters mutual-failure / weird matches where both alliances miss prediction —
+ * those are usually not useful defense review targets.
+ */
+export function isAsymmetricDefenseFlag(
+  oppImpact: number,
+  ownResidual: number,
+  threshold: number,
+): boolean {
+  if (!(oppImpact > threshold)) return false;
+  // Own alliance must underperform less than half the opponent shortfall
+  // (and not more than half the threshold). Overperformance (negative residual) always passes.
+  return ownResidual < oppImpact * 0.5 && ownResidual <= threshold * 0.5;
+}
+
+/** Qualification matches vs elimination / playoff matches. */
+export type DefenseStage = "qm" | "playoff";
+
+const COMP_LEVEL_ORDER: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
+
+/** Default multiplier on residual σ for the Defense Indicator threshold. */
+export const DEFAULT_THRESHOLD_SIGMA = 1.5;
+
+/** Min matches before Defense % / Focus are treated as reliable. */
+export const MIN_MATCHES_FOR_INDICATOR = 3;
+
+function matchSortKey(m: MatchResponse): number {
+  return (COMP_LEVEL_ORDER[m.comp_level] ?? 9) * 1_000_000 + m.set_number * 1000 + m.match_number;
+}
+
+export function playedMatchesForStage(
+  matches: MatchResponse[],
+  stage: DefenseStage,
+): MatchResponse[] {
+  return matches
+    .filter((m) => {
+      if (!isPlayed(m)) return false;
+      if (stage === "qm") return m.comp_level === "qm";
+      return m.comp_level !== "qm";
+    })
+    .sort((a, b) => matchSortKey(a) - matchSortKey(b));
+}
+
 export interface EventResidualStats {
   mean: number;
   std: number;
   meanAbs: number;
-  /** Default Defense Indicator threshold X (= 1σ of residuals). */
+  /** Default Defense Indicator threshold X (= 1.5σ of residuals). */
   defaultThreshold: number;
   /** Number of alliance-side residuals used. */
   count: number;
-  /** Played quals where either side's |residual| exceeds defaultThreshold. */
+  /** Played matches with at least one asymmetric defense flag at default X. */
   largeImpactMatchCount: number;
 }
 
@@ -26,6 +72,10 @@ export interface MatchDefenseRow {
   redImpact: number;
   /** Defensive impact attributed to blue (opp red underperformed). */
   blueImpact: number;
+  /** Red alliance residual (red pred − red actual). */
+  redOwnResidual: number;
+  /** Blue alliance residual (blue pred − blue actual). */
+  blueOwnResidual: number;
   redFlagged: boolean;
   blueFlagged: boolean;
 }
@@ -33,16 +83,27 @@ export interface MatchDefenseRow {
 export interface TeamImpactPoint {
   matchKey: string;
   matchNumber: number;
+  compLevel: string;
+  setNumber: number;
   impact: number;
+  ownResidual: number;
   flagged: boolean;
 }
 
 export interface TeamDefenseRow {
   teamNumber: number;
+  /** % of matches with an asymmetric defense flag. Null if too few matches. */
   defensePct: number | null;
+  /**
+   * Scout-focus score: mean flagged impact × √flaggedCount.
+   * Rewards consistent, large asymmetric underperformance vs noisy one-offs.
+   */
+  focusScore: number | null;
   flaggedCount: number;
   matchCount: number;
   meanImpact: number | null;
+  /** Mean impact on flagged matches only. */
+  meanFlaggedImpact: number | null;
   medianImpact: number | null;
   maxImpact: number | null;
   sumImpact: number | null;
@@ -74,43 +135,49 @@ function median(xs: number[]): number | null {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-function playedQuals(matches: MatchResponse[]): MatchResponse[] {
-  return matches.filter((m) => m.comp_level === "qm" && isPlayed(m));
-}
-
 /**
- * Collect residuals (pred − actual) for both alliances across played quals.
- * Used for event σ and the default Defense Indicator threshold.
+ * Collect residuals (pred − actual) for both alliances across played matches
+ * in the selected stage. Used for stage σ and the default Defense Indicator threshold.
  */
 export function eventResidualStats(
   matches: MatchResponse[],
   aceByTeam: Map<number, number | null | undefined> | undefined,
+  stage: DefenseStage = "qm",
 ): EventResidualStats | null {
-  const quals = playedQuals(matches);
+  const staged = playedMatchesForStage(matches, stage);
   const residuals: number[] = [];
-  let largeImpactMatchCount = 0;
 
-  for (const m of quals) {
+  for (const m of staged) {
     const pred = predictedMatchScores(m, aceByTeam);
     if (!pred) continue;
-    const redR = allianceResidual(pred.red, m.red_score);
-    const blueR = allianceResidual(pred.blue, m.blue_score);
-    residuals.push(redR, blueR);
+    residuals.push(
+      allianceResidual(pred.red, m.red_score),
+      allianceResidual(pred.blue, m.blue_score),
+    );
   }
 
   if (residuals.length === 0) return null;
 
   const m = mean(residuals)!;
   const s = stdDev(residuals) ?? 0;
-  const defaultThreshold = Math.max(1, Math.round(s * 10) / 10);
+  // 1.5σ cuts a lot of normal prediction noise vs 1σ (~16% one-tail flags).
+  const defaultThreshold = Math.max(1, Math.round(DEFAULT_THRESHOLD_SIGMA * s * 10) / 10);
   const meanAbs = mean(residuals.map(Math.abs))!;
 
-  for (const match of quals) {
+  let largeImpactMatchCount = 0;
+  for (const match of staged) {
     const pred = predictedMatchScores(match, aceByTeam);
     if (!pred) continue;
-    const redR = Math.abs(allianceResidual(pred.red, match.red_score));
-    const blueR = Math.abs(allianceResidual(pred.blue, match.blue_score));
-    if (redR > defaultThreshold || blueR > defaultThreshold) largeImpactMatchCount += 1;
+    const redOwn = allianceResidual(pred.red, match.red_score);
+    const blueOwn = allianceResidual(pred.blue, match.blue_score);
+    const redImpact = blueOwn; // red's defensive impact = blue underperformance
+    const blueImpact = redOwn;
+    if (
+      isAsymmetricDefenseFlag(redImpact, redOwn, defaultThreshold) ||
+      isAsymmetricDefenseFlag(blueImpact, blueOwn, defaultThreshold)
+    ) {
+      largeImpactMatchCount += 1;
+    }
   }
 
   return {
@@ -123,7 +190,7 @@ export function eventResidualStats(
   };
 }
 
-/** Suggested slider max based on event residual spread. */
+/** Suggested slider max based on residual spread. */
 export function thresholdSliderMax(stats: EventResidualStats | null, matchRows: MatchDefenseRow[]): number {
   const fromStats = stats ? Math.max(stats.std * 3, stats.defaultThreshold * 2) : 40;
   let maxImpact = 0;
@@ -137,26 +204,30 @@ export function matchDefenseRows(
   matches: MatchResponse[],
   aceByTeam: Map<number, number | null | undefined> | undefined,
   threshold: number,
+  stage: DefenseStage = "qm",
 ): MatchDefenseRow[] {
   const rows: MatchDefenseRow[] = [];
-  for (const m of playedQuals(matches)) {
+  for (const m of playedMatchesForStage(matches, stage)) {
     const pred = predictedMatchScores(m, aceByTeam);
     if (!pred) continue;
+    const redOwnResidual = allianceResidual(pred.red, m.red_score);
+    const blueOwnResidual = allianceResidual(pred.blue, m.blue_score);
     // Red's defensive impact = how much blue underperformed prediction
-    const redImpact = allianceResidual(pred.blue, m.blue_score);
+    const redImpact = blueOwnResidual;
     // Blue's defensive impact = how much red underperformed prediction
-    const blueImpact = allianceResidual(pred.red, m.red_score);
+    const blueImpact = redOwnResidual;
     rows.push({
       match: m,
       redPred: pred.red,
       bluePred: pred.blue,
       redImpact,
       blueImpact,
-      redFlagged: redImpact > threshold,
-      blueFlagged: blueImpact > threshold,
+      redOwnResidual,
+      blueOwnResidual,
+      redFlagged: isAsymmetricDefenseFlag(redImpact, redOwnResidual, threshold),
+      blueFlagged: isAsymmetricDefenseFlag(blueImpact, blueOwnResidual, threshold),
     });
   }
-  rows.sort((a, b) => a.match.match_number - b.match.match_number);
   return rows;
 }
 
@@ -166,45 +237,65 @@ export function teamDefenseRows(
   perfsByTeam: Map<number, EventPerfInfo>,
   aceByTeam: Map<number, number | null | undefined> | undefined,
   threshold: number,
+  stage: DefenseStage = "qm",
 ): TeamDefenseRow[] {
-  const quals = playedQuals(matches);
+  const staged = playedMatchesForStage(matches, stage);
   const rows: TeamDefenseRow[] = [];
 
   for (const tn of teamNumbers) {
     const impacts: number[] = [];
+    const flaggedImpacts: number[] = [];
     const series: TeamImpactPoint[] = [];
     let flaggedCount = 0;
 
-    for (const m of quals) {
+    for (const m of staged) {
       const onRed = m.red_teams.includes(tn);
       const onBlue = m.blue_teams.includes(tn);
       if (!onRed && !onBlue) continue;
       const pred = predictedMatchScores(m, aceByTeam);
       if (!pred) continue;
-      const impact = onRed
-        ? allianceResidual(pred.blue, m.blue_score)
-        : allianceResidual(pred.red, m.red_score);
-      const flagged = impact > threshold;
-      if (flagged) flaggedCount += 1;
+      const redOwn = allianceResidual(pred.red, m.red_score);
+      const blueOwn = allianceResidual(pred.blue, m.blue_score);
+      const impact = onRed ? blueOwn : redOwn;
+      const ownResidual = onRed ? redOwn : blueOwn;
+      const flagged = isAsymmetricDefenseFlag(impact, ownResidual, threshold);
+      if (flagged) {
+        flaggedCount += 1;
+        flaggedImpacts.push(impact);
+      }
       impacts.push(impact);
       series.push({
         matchKey: m.match_key,
         matchNumber: m.match_number,
+        compLevel: m.comp_level,
+        setNumber: m.set_number,
         impact,
+        ownResidual,
         flagged,
       });
     }
 
-    series.sort((a, b) => a.matchNumber - b.matchNumber);
     const matchCount = impacts.length;
     const perf = perfsByTeam.get(tn);
+    const meanFlaggedImpact = mean(flaggedImpacts);
+    const reliable = matchCount >= MIN_MATCHES_FOR_INDICATOR;
+    const defensePct = reliable && matchCount ? (flaggedCount / matchCount) * 100 : null;
+    // Focus: size of flagged shortfalls × consistency (√count). Null until enough matches.
+    const focusScore =
+      reliable && meanFlaggedImpact !== null && flaggedCount > 0
+        ? meanFlaggedImpact * Math.sqrt(flaggedCount)
+        : reliable
+          ? 0
+          : null;
 
     rows.push({
       teamNumber: tn,
-      defensePct: matchCount ? (flaggedCount / matchCount) * 100 : null,
+      defensePct,
+      focusScore,
       flaggedCount,
       matchCount,
       meanImpact: mean(impacts),
+      meanFlaggedImpact,
       medianImpact: median(impacts),
       maxImpact: impacts.length ? Math.max(...impacts) : null,
       sumImpact: impacts.length ? impacts.reduce((a, b) => a + b, 0) : null,
@@ -221,20 +312,20 @@ export function teamDefenseRows(
 
   return rows
     .filter((r) => r.matchCount > 0)
-    .sort((a, b) => (b.defensePct ?? 0) - (a.defensePct ?? 0));
+    .sort((a, b) => (b.focusScore ?? -1) - (a.focusScore ?? -1));
 }
 
-/** Top-quartile cutoff for defensePct among teams with data. */
-export function defensePctTopQuartile(rows: TeamDefenseRow[]): number | null {
-  const pcts = rows
-    .map((r) => r.defensePct)
-    .filter((v): v is number => v !== null)
+/** Top-quartile cutoff for focusScore among teams with enough matches. */
+export function defenseFocusTopQuartile(rows: TeamDefenseRow[]): number | null {
+  const scores = rows
+    .map((r) => r.focusScore)
+    .filter((v): v is number => v !== null && v > 0)
     .sort((a, b) => a - b);
-  if (pcts.length === 0) return null;
-  const idx = Math.max(0, Math.ceil(pcts.length * 0.75) - 1);
-  return pcts[idx];
+  if (scores.length === 0) return null;
+  const idx = Math.max(0, Math.ceil(scores.length * 0.75) - 1);
+  return scores[idx];
 }
 
-export function countHighDefenseTeams(rows: TeamDefenseRow[], minPct = 50): number {
+export function countHighDefenseTeams(rows: TeamDefenseRow[], minPct = 40): number {
   return rows.filter((r) => (r.defensePct ?? 0) >= minPct).length;
 }
