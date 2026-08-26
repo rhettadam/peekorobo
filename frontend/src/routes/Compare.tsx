@@ -16,7 +16,7 @@ import {
   Title,
 } from "@mantine/core";
 import { IconPlus, IconX } from "@tabler/icons-react";
-import { LineChart } from "@mantine/charts";
+import { AreaChart } from "@mantine/charts";
 import { useQueries } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { apiGet } from "../api/client";
@@ -51,6 +51,9 @@ const MAX_TEAMS = 8;
 const SUMMARY_METRICS: MetricKey[] = ["ace", "raw", "auto", "teleop", "endgame", "confidence"];
 const RANK_PILL = "#455a64";
 const COMP_LEVEL_ORDER: Record<string, number> = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
+
+/** Y-axis metric for the all-seasons chart. */
+type SeasonChartMetric = "ace" | "rank" | "normAce";
 
 function metricValue(
   perf: TeamPerfInfo | EventPerfEntry | undefined,
@@ -93,6 +96,26 @@ function matchMetricValue(match: TeamMatchRating | undefined, metric: MetricKey)
     default:
       return null;
   }
+}
+
+/** Global percentile from rank: 1 = best (rank 1), near 0 = worst. */
+function normalizedAceFromRank(rank?: number | null, count?: number | null): number | null {
+  if (rank == null || count == null || !Number.isFinite(rank) || !Number.isFinite(count)) return null;
+  if (rank <= 0 || count <= 0) return null;
+  return (count - rank + 1) / count;
+}
+
+function seasonChartValue(p: TeamPerfInfo | undefined, metric: SeasonChartMetric): number | null {
+  if (!p) return null;
+  if (metric === "ace") return metricValue(p, "ace");
+  if (metric === "rank") return p.rank_global ?? null;
+  return normalizedAceFromRank(p.rank_global, p.count_global);
+}
+
+function seasonChartLabel(metric: SeasonChartMetric): string {
+  if (metric === "rank") return "Global rank";
+  if (metric === "normAce") return "Normalized ACE";
+  return "ACE";
 }
 
 function sortEventKeysChronologically(keys: string[], metaByKey: Map<string, EventData>): string[] {
@@ -148,6 +171,18 @@ function teamMetricKey(tn: number, metric: MetricKey): string {
   return `t${tn}__${metric}`;
 }
 
+function teamMatchLabelKey(tn: number): string {
+  return `t${tn}__matchLabel`;
+}
+
+function teamRankKey(tn: number): string {
+  return `t${tn}__rank`;
+}
+
+function teamNormAceKey(tn: number): string {
+  return `t${tn}__normAce`;
+}
+
 interface CompareChartRow {
   x: string;
   title: string;
@@ -159,8 +194,9 @@ function packTeamMetrics(
   row: CompareChartRow,
   tn: number,
   values: Record<MetricKey, number | null>,
+  primary?: number | null,
 ) {
-  row[teamSeriesKey(tn)] = values.ace;
+  row[teamSeriesKey(tn)] = primary !== undefined ? primary : values.ace;
   for (const m of SUMMARY_METRICS) row[teamMetricKey(tn, m)] = values[m];
 }
 
@@ -180,9 +216,11 @@ function RankPill({ label, rank, count }: { label: string; rank?: number | null;
 function CompareTooltip({
   payload,
   teams,
+  chartMetric,
 }: {
   payload?: Array<{ payload?: CompareChartRow }>;
   teams: number[];
+  chartMetric: SeasonChartMetric;
 }) {
   const row = payload?.[0]?.payload;
   if (!row) return null;
@@ -193,46 +231,61 @@ function CompareTooltip({
   if (!present.length) return null;
 
   return (
-    <Card withBorder radius="md" padding="sm" shadow="md" style={{ minWidth: 220, maxWidth: 320 }}>
+    <Card withBorder radius="md" padding="sm" shadow="md" style={{ minWidth: 220, maxWidth: 340 }}>
       <Text fw={700} size="sm" lineClamp={2}>
         {row.title}
       </Text>
       {row.subtitle ? (
-        <Text size="xs" c="dimmed" mb={4}>
+        <Text size="xs" c="dimmed" mb={6}>
           {row.subtitle}
         </Text>
       ) : null}
-      <Stack gap="xs" mt={6}>
+      <Stack gap={8}>
         {present.map((tn) => {
-          const color = TEAM_COLORS[teams.indexOf(tn) % TEAM_COLORS.length];
+          const matchLabel = row[teamMatchLabelKey(tn)];
+          const rank = row[teamRankKey(tn)];
+          const norm = row[teamNormAceKey(tn)];
+          const primary = row[teamSeriesKey(tn)];
           return (
-            <Stack key={tn} gap={2}>
-              <Group gap={6} wrap="nowrap">
-                <Box
-                  style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }}
-                />
-                <Text size="xs" fw={700}>
+            <Box key={tn}>
+              <Group gap={6} justify="space-between" wrap="nowrap">
+                <Text size="sm" fw={700}>
                   {tn}
                 </Text>
+                <Text size="sm" fw={700}>
+                  {chartMetric === "rank"
+                    ? `#${primary}`
+                    : chartMetric === "normAce"
+                      ? typeof primary === "number"
+                        ? `${(primary * 100).toFixed(1)}%`
+                        : "—"
+                      : formatNumber(typeof primary === "number" ? primary : null)}
+                </Text>
               </Group>
-              {SUMMARY_METRICS.map((m) => {
-                const raw = row[teamMetricKey(tn, m)];
-                const value =
-                  m === "confidence" && typeof raw === "number"
-                    ? `${Math.round(raw * 100)}%`
-                    : formatNumber(typeof raw === "number" ? raw : null);
-                return (
-                  <Group key={m} justify="space-between" gap="lg" wrap="nowrap" pl={14}>
-                    <Text size="xs" c="dimmed">
-                      {METRIC_STYLES[m].label}
+              {typeof matchLabel === "string" && matchLabel ? (
+                <Text size="xs" c="dimmed" lineClamp={1}>
+                  {matchLabel}
+                </Text>
+              ) : null}
+              {rank != null || norm != null ? (
+                <Text size="xs" c="dimmed">
+                  {rank != null ? `World #${rank}` : null}
+                  {rank != null && norm != null ? " · " : null}
+                  {typeof norm === "number" ? `Norm ${(norm * 100).toFixed(1)}%` : null}
+                </Text>
+              ) : null}
+              <Group gap={4} mt={4}>
+                {SUMMARY_METRICS.filter((m) => m !== "ace").map((m) => {
+                  const v = row[teamMetricKey(tn, m)];
+                  if (v === null || v === undefined) return null;
+                  return (
+                    <Text key={m} size="xs" c="dimmed">
+                      {METRIC_STYLES[m].label} {formatNumber(typeof v === "number" ? v : null)}
                     </Text>
-                    <Text size="xs" fw={600}>
-                      {value}
-                    </Text>
-                  </Group>
-                );
-              })}
-            </Stack>
+                  );
+                })}
+              </Group>
+            </Box>
           );
         })}
       </Stack>
@@ -257,6 +310,7 @@ export function Compare() {
   const year = Number(searchParams.get("year")) || CURRENT_YEAR;
   const [rangeMode, setRangeMode] = useState<"single" | "all">("single");
   const [grain, setGrain] = useState<"event" | "match">("match");
+  const [seasonMetric, setSeasonMetric] = useState<SeasonChartMetric>("ace");
 
   useEffect(() => {
     document.title = "Compare Teams - Peekorobo";
@@ -338,14 +392,22 @@ export function Compare() {
         const row: CompareChartRow = { x: String(y), title: String(y) };
         for (const tn of teams) {
           const p = perfByTeam.get(tn)?.team_perfs.find((item) => item.year === y);
-          packTeamMetrics(row, tn, {
-            ace: metricValue(p, "ace"),
-            raw: metricValue(p, "raw"),
-            auto: metricValue(p, "auto"),
-            teleop: metricValue(p, "teleop"),
-            endgame: metricValue(p, "endgame"),
-            confidence: metricValue(p, "confidence"),
-          });
+          packTeamMetrics(
+            row,
+            tn,
+            {
+              ace: metricValue(p, "ace"),
+              raw: metricValue(p, "raw"),
+              auto: metricValue(p, "auto"),
+              teleop: metricValue(p, "teleop"),
+              endgame: metricValue(p, "endgame"),
+              confidence: metricValue(p, "confidence"),
+            },
+            seasonChartValue(p, seasonMetric),
+          );
+          if (p?.rank_global != null) row[teamRankKey(tn)] = p.rank_global;
+          const norm = normalizedAceFromRank(p?.rank_global, p?.count_global);
+          if (norm != null) row[teamNormAceKey(tn)] = norm;
         }
         return row;
       });
@@ -353,36 +415,32 @@ export function Compare() {
     }
 
     if (effectiveGrain === "match") {
-      const byKey = new Map<string, TeamMatchRating>();
+      // Align on each team's own season match index (1st match, 2nd, …) — not a shared calendar.
+      const orderedByTeam = new Map<number, TeamMatchRating[]>();
       for (const tn of teams) {
-        for (const m of matchesByTeam.get(tn) ?? []) {
-          if (m.match_key && !byKey.has(m.match_key)) byKey.set(m.match_key, m);
-        }
+        orderedByTeam.set(
+          tn,
+          sortMatchesChronologically(matchesByTeam.get(tn) ?? [], eventMetaByKey),
+        );
       }
-      const timeline = sortMatchesChronologically([...byKey.values()], eventMetaByKey);
-      const ratingsAt = new Map<number, Map<string, TeamMatchRating>>();
-      for (const tn of teams) {
-        const map = new Map<string, TeamMatchRating>();
-        for (const m of matchesByTeam.get(tn) ?? []) map.set(m.match_key, m);
-        ratingsAt.set(tn, map);
-      }
-
+      const maxLen = Math.max(0, ...teams.map((tn) => orderedByTeam.get(tn)?.length ?? 0));
       const rows: CompareChartRow[] = [];
       const ticks: string[] = [];
-      for (let i = 0; i < timeline.length; i++) {
-        const m = timeline[i];
-        const meta = eventMetaByKey.get(m.event_key);
-        const eventName = meta?.event_data.name ?? m.event_key.replace(String(year), "").toUpperCase();
-        const firstOfEvent = i === 0 || timeline[i - 1].event_key !== m.event_key;
+      for (let i = 0; i < maxLen; i++) {
+        const matchNum = i + 1;
         const row: CompareChartRow = {
-          x: m.match_key,
-          title: `${eventName} · ${shortMatchLabel(m)}`,
-          subtitle: [eventWeekLabel(meta?.week), m.event_key.replace(String(year), "").toUpperCase()]
-            .filter(Boolean)
-            .join(" · "),
+          x: String(matchNum),
+          title: `Match ${matchNum}`,
+          subtitle: "Each team’s own season match order",
         };
         for (const tn of teams) {
-          const match = ratingsAt.get(tn)?.get(m.match_key);
+          const match = orderedByTeam.get(tn)?.[i];
+          if (match) {
+            const meta = eventMetaByKey.get(match.event_key);
+            const eventName =
+              meta?.event_data.name ?? match.event_key.replace(String(year), "").toUpperCase();
+            row[teamMatchLabelKey(tn)] = `${eventName} · ${shortMatchLabel(match)}`;
+          }
           packTeamMetrics(row, tn, {
             ace: matchMetricValue(match, "ace"),
             raw: matchMetricValue(match, "raw"),
@@ -393,7 +451,9 @@ export function Compare() {
           });
         }
         rows.push(row);
-        ticks.push(firstOfEvent ? m.event_key.replace(String(year), "").toUpperCase() : "");
+        // Label every match when few; otherwise every 5th + first/last.
+        const showTick = maxLen <= 16 || matchNum === 1 || matchNum === maxLen || matchNum % 5 === 0;
+        ticks.push(showTick ? String(matchNum) : "");
       }
       return { chartData: rows, series: seriesList, xTicks: ticks, sortedEventKeys: [] as string[] };
     }
@@ -432,7 +492,7 @@ export function Compare() {
       xTicks: keys.map((ek) => chartEventLabel(ek, year, eventMetaByKey.get(ek))),
       sortedEventKeys: keys,
     };
-  }, [teams, perfByTeam, matchesByTeam, rangeMode, effectiveGrain, year, eventMetaByKey]);
+  }, [teams, perfByTeam, matchesByTeam, rangeMode, effectiveGrain, year, eventMetaByKey, seasonMetric]);
 
   const tickByX = useMemo(() => {
     const map = new Map<string, string>();
@@ -445,11 +505,24 @@ export function Compare() {
     [chartData, tickByX],
   );
 
+  const activeChartMetric: SeasonChartMetric = rangeMode === "all" ? seasonMetric : "ace";
+  const yAxisLabel = rangeMode === "all" ? seasonChartLabel(seasonMetric) : "ACE";
+  const chartTitle =
+    rangeMode === "all"
+      ? `${seasonChartLabel(seasonMetric)} by season`
+      : effectiveGrain === "match"
+        ? `ACE by season match # — ${year}`
+        : `ACE by event — ${year}`;
+
   return (
     <Stack gap="md" py="md">
       <Title order={1}>Compare</Title>
       <Text c="dimmed" size="sm">
-        ACE over time. Hover a point for auto, teleop, endgame, RAW, and confidence.
+        {rangeMode === "all"
+          ? "Compare ACE, global rank, or normalized ACE across seasons. Hover for component metrics."
+          : effectiveGrain === "match"
+            ? "ACE by each team’s own season match number (no calendar gaps). Hover for that team’s match."
+            : "ACE by event. Hover a point for auto, teleop, endgame, RAW, and confidence."}
       </Text>
 
       <Group align="flex-end" gap="sm" wrap="wrap">
@@ -487,6 +560,22 @@ export function Compare() {
             ]}
           />
         </Stack>
+        {rangeMode === "all" ? (
+          <Stack gap={4}>
+            <Text size="sm" fw={500}>
+              Metric
+            </Text>
+            <SegmentedControl
+              value={seasonMetric}
+              onChange={(v) => setSeasonMetric(v as SeasonChartMetric)}
+              data={[
+                { value: "ace", label: "ACE" },
+                { value: "rank", label: "Rank" },
+                { value: "normAce", label: "Norm ACE" },
+              ]}
+            />
+          </Stack>
+        ) : null}
         {rangeMode === "single" && hasMatchSeries ? (
           <Stack gap={4}>
             <Text size="sm" fw={500}>
@@ -544,29 +633,49 @@ export function Compare() {
           ))}
         </Group>
       ) : (
-        <Text c="dimmed">Add teams by number to compare their ACE.</Text>
+        <Text c="dimmed">Add teams by number to compare.</Text>
       )}
 
       {teams.length > 0 && chartData.length > 0 ? (
         <Card withBorder padding="md" radius="md">
-          <Text fw={600} mb="sm">
-            {rangeMode === "all"
-              ? `ACE by season`
-              : effectiveGrain === "match"
-                ? `ACE by match — ${year}`
-                : `ACE by event — ${year}`}
+          <Text fw={600} mb={4}>
+            {chartTitle}
           </Text>
-          <LineChart
+          {rangeMode === "all" && seasonMetric === "normAce" ? (
+            <Text size="xs" c="dimmed" mb="sm">
+              Normalized ACE = global percentile from rank (100% ≈ #1). Comparable across years when
+              raw ACE scales shift.
+            </Text>
+          ) : rangeMode === "single" && effectiveGrain === "match" ? (
+            <Text size="xs" c="dimmed" mb="sm">
+              X-axis is match number in each team’s season (1 = first match played), so lines stay
+              continuous even when teams attend different events.
+            </Text>
+          ) : (
+            <Box mb="sm" />
+          )}
+          <AreaChart
             h={360}
             data={chartData}
             dataKey="x"
             series={series}
             curveType="monotone"
             withDots
-            connectNulls
+            withGradient
+            connectNulls={rangeMode === "all" || effectiveGrain === "event"}
             withLegend
             gridAxis="xy"
-            yAxisLabel="ACE"
+            yAxisLabel={yAxisLabel}
+            yAxisProps={
+              seasonMetric === "rank" && rangeMode === "all"
+                ? { reversed: true, allowDecimals: false, domain: [1, "dataMax"] }
+                : seasonMetric === "normAce" && rangeMode === "all"
+                  ? {
+                      domain: [0, 1],
+                      tickFormatter: (v: number) => `${Math.round(Number(v) * 100)}%`,
+                    }
+                  : undefined
+            }
             xAxisProps={{
               ticks: axisTicks,
               interval: 0,
@@ -578,6 +687,7 @@ export function Compare() {
                 <CompareTooltip
                   payload={payload as Array<{ payload?: CompareChartRow }>}
                   teams={teams}
+                  chartMetric={activeChartMetric}
                 />
               ),
             }}

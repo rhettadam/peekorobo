@@ -76,7 +76,6 @@ Event page (`/event/:key`) tabs:
 | **Metrics** | Per-team ACE/RAW/auto/teleop/endgame; toggle event vs season metrics |
 | **Matches** | Qual + playoff tables (paginated), colored W-L-T |
 | **SoS** | Strength of schedule (client-side from matches + event ACE) |
-| **Defense** | Defense Indicator & Defensive Impact (quals/playoffs toggle; opponent underperformance vs ACE prediction; configurable threshold; team + match views) |
 | **Rankings** | Qual rankings (W/L/T/DQ, ACE, event ACE rank) + playoff bracket |
 | **Awards** | Grouped award cards |
 

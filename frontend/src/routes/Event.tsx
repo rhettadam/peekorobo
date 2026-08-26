@@ -40,7 +40,6 @@ import {
 } from "../components/MetricTrajectoryCell";
 import { DataTable, type Column } from "../components/DataTable";
 import { TeamBubbleChart } from "../components/TeamBubbleChart";
-import { EventDefenseTab } from "../components/EventDefenseTab";
 import type {
   EventPerfInfo,
   MatchResponse,
@@ -1628,7 +1627,6 @@ export function Event() {
           <Tabs.Tab value="bubble">Bubble</Tabs.Tab>
           <Tabs.Tab value="matches">Matches</Tabs.Tab>
           <Tabs.Tab value="sos">SoS</Tabs.Tab>
-          <Tabs.Tab value="defense">Defense</Tabs.Tab>
           <Tabs.Tab value="rankings">Rankings</Tabs.Tab>
           <Tabs.Tab value="awards">Awards</Tabs.Tab>
         </Tabs.List>
@@ -1814,27 +1812,6 @@ export function Event() {
                   exportFileName={`${eventKey}-strength-of-schedule`}
                 />
               </Stack>
-            )}
-          </Tabs.Panel>
-
-          <Tabs.Panel value="defense" pt="md">
-            {matchesQuery.isLoading || perfsQuery.isLoading || teamsQuery.isLoading ? (
-              <LoadingState />
-            ) : (
-              <EventDefenseTab
-                eventKey={eventKey}
-                year={year}
-                matches={matchesQuery.data?.matches ?? []}
-                perfs={perfsQuery.data?.perfs ?? []}
-                teamNumbers={
-                  (teamsQuery.data?.teams ?? []).length
-                    ? (teamsQuery.data?.teams ?? []).map((t) => t.team_number)
-                    : (perfsQuery.data?.perfs ?? []).map((p) => p.team_number)
-                }
-                nicknameOf={nicknameOf}
-                metricThresholds={metricThresholds}
-                confMedian={confMedian}
-              />
             )}
           </Tabs.Panel>
 
