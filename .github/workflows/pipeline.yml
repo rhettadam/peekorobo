@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       year:
-        description: "Season year(s), comma-separated (e.g. 2026 or 2024,2025,2026). Defaults to the current year."
+        description: "Season year(s), comma-separated (e.g. 2027 or 2025,2026,2027). Defaults to 2027."
         required: false
       mode:
         description: "full or live"
@@ -74,9 +74,9 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Resolve season year(s)
         run: echo "YEAR=${{ github.event.inputs.year || '' }}" >> "$GITHUB_ENV"
-      - name: Default year to current
+      - name: Default year to current season
         if: env.YEAR == ''
-        run: echo "YEAR=$(date -u +%Y)" >> "$GITHUB_ENV"
+        run: echo "YEAR=2027" >> "$GITHUB_ENV"
       - name: Refresh ACE for active-event teams (incremental)
         run: python data/run.py "$YEAR" --active-only
       - name: Refresh rankings + awards (active events only)
@@ -102,9 +102,9 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Resolve season year(s)
         run: echo "YEAR=${{ github.event.inputs.year || '' }}" >> "$GITHUB_ENV"
-      - name: Default year to current
+      - name: Default year to current season
         if: env.YEAR == ''
-        run: echo "YEAR=$(date -u +%Y)" >> "$GITHUB_ENV"
+        run: echo "YEAR=2027" >> "$GITHUB_ENV"
       - name: Full ACE recompute + ranks + predictions
         run: python data/run.py "$YEAR"
       - name: Refresh rankings + awards (all events)
@@ -137,7 +137,7 @@ jobs:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
           VITE_SEARCH_BASE_URL: /data
           VITE_ASSETS_BASE_URL: /assets
-          VITE_CURRENT_YEAR: "2026"
+          VITE_CURRENT_YEAR: "2027"
         run: |
           npm ci
           npm run build

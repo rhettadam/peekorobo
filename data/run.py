@@ -1994,7 +1994,12 @@ def _fetch_and_store_team_data_impl(
         )
 
     create_event_db(year, only_event_keys=only_event_keys)
-    
+
+    # Full runs read the roster before events are written. A new season has no
+    # event_teams yet, so reload after the TBA ingest or this pass writes zero teams.
+    if not active_only and not sample_mode:
+        all_teams = get_teams_for_year(year)
+
     if shutdown_event.is_set():
         print("Shutdown requested, stopping team data processing...")
         return

@@ -1,4 +1,4 @@
-export const CURRENT_YEAR: number = Number(import.meta.env.VITE_CURRENT_YEAR) || 2026;
+export const CURRENT_YEAR: number = Number(import.meta.env.VITE_CURRENT_YEAR) || 2027;
 
 // Earliest FRC season (1992). Year pickers go back to the beginning, matching
 // the original app's range(1992, current+1).

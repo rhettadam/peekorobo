@@ -80,7 +80,7 @@ npm run preview    # preview the production build locally
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | Base URL of the FastAPI backend | `/api` |
 | `VITE_SEARCH_BASE_URL` | Base URL for static `/data` JSON (leaderboards, filters) | `/data` |
-| `VITE_CURRENT_YEAR` | Default FRC season | `2026` |
+| `VITE_CURRENT_YEAR` | Default FRC season | `2027` |
 
 ## Deployment
 
