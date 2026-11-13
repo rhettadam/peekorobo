@@ -12,6 +12,10 @@ if not DB_URL:
     raise RuntimeError("DB_URL or DATABASE_URL must be set in the environment.")
 if DB_URL.startswith("postgres://"):
     DB_URL = DB_URL.replace("postgres://", "postgresql://", 1)
+# SQLAlchemy 2.1+ defaults bare postgresql:// to psycopg (v3). We ship
+# psycopg2-binary, so pin the legacy dialect unless a driver is already set.
+if DB_URL.startswith("postgresql://"):
+    DB_URL = "postgresql+psycopg2://" + DB_URL[len("postgresql://") :]
 
 # Neon (and most cloud Postgres) require TLS. Ensure sslmode=require is present
 # so SQLAlchemy/psycopg2 do not attempt an insecure startup.
