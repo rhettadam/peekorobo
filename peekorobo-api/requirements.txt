@@ -1,6 +1,7 @@
 fastapi>=0.129.0
 uvicorn[standard]>=0.30.0
-sqlalchemy>=2.0.46
+# Stay on 2.0 until we migrate off psycopg2 / sqlalchemy.util.NoneType usage.
+sqlalchemy>=2.0.46,<2.1
 psycopg2-binary>=2.9.10
 python-dotenv>=1.0.0
 slowapi>=0.1.9

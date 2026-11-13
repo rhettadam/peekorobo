@@ -1,13 +1,21 @@
 import json
 from typing import Optional
 
-from sqlalchemy.util import NoneType
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import INT, REAL, select, func
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from data.db import Base
 from data.models.teams import Teams, _district_match
 from query.team_epas import TeamPerfRequest, TeamPerfResponse, TeamPerfInfo, TeamPerfListRequest, TeamPerfListResponse
+
+
+def _as_float(value) -> Optional[float]:
+    return float(value) if value is not None else None
+
+
+def _as_int(value) -> Optional[int]:
+    return int(value) if value is not None else None
+
 
 class TeamEpa(Base):
     __tablename__ = "team_epas"
@@ -46,24 +54,24 @@ def from_db_row(team_epa : TeamEpa) -> TeamPerfInfo:
         event_perf_raw = []
     return TeamPerfInfo(
         year=team_epa.year.numerator,
-        raw=float(team_epa.raw) if not isinstance(team_epa.raw, NoneType) else None,
-        ace=float(team_epa.ace) if not isinstance(team_epa.ace, NoneType) else None,
-        confidence=float(team_epa.confidence) if not isinstance(team_epa.confidence, NoneType) else None,
-        auto_raw=float(team_epa.auto_raw) if not isinstance(team_epa.auto_raw, NoneType) else None,
-        teleop_raw=float(team_epa.teleop_raw) if not isinstance(team_epa.teleop_raw, NoneType) else None,
-        endgame_raw=float(team_epa.endgame_raw) if not isinstance(team_epa.endgame_raw, NoneType) else None,
-        wins=int(team_epa.wins) if not isinstance(team_epa.wins, NoneType) else None,
-        losses=int(team_epa.losses) if not isinstance(team_epa.losses, NoneType) else None,
-        ties=int(team_epa.ties) if not isinstance(team_epa.ties, NoneType) else None,
+        raw=_as_float(team_epa.raw),
+        ace=_as_float(team_epa.ace),
+        confidence=_as_float(team_epa.confidence),
+        auto_raw=_as_float(team_epa.auto_raw),
+        teleop_raw=_as_float(team_epa.teleop_raw),
+        endgame_raw=_as_float(team_epa.endgame_raw),
+        wins=_as_int(team_epa.wins),
+        losses=_as_int(team_epa.losses),
+        ties=_as_int(team_epa.ties),
         event_perf=event_perf_raw,
-        rank_global=int(team_epa.rank_global) if not isinstance(team_epa.rank_global, NoneType) else None,
-        rank_country=int(team_epa.rank_country) if not isinstance(team_epa.rank_country, NoneType) else None,
-        rank_state=int(team_epa.rank_state) if not isinstance(team_epa.rank_state, NoneType) else None,
-        rank_district=int(team_epa.rank_district) if not isinstance(team_epa.rank_district, NoneType) else None,
-        count_global=int(team_epa.count_global) if not isinstance(team_epa.count_global, NoneType) else None,
-        count_country=int(team_epa.count_country) if not isinstance(team_epa.count_country, NoneType) else None,
-        count_state=int(team_epa.count_state) if not isinstance(team_epa.count_state, NoneType) else None,
-        count_district=int(team_epa.count_district) if not isinstance(team_epa.count_district, NoneType) else None,
+        rank_global=_as_int(team_epa.rank_global),
+        rank_country=_as_int(team_epa.rank_country),
+        rank_state=_as_int(team_epa.rank_state),
+        rank_district=_as_int(team_epa.rank_district),
+        count_global=_as_int(team_epa.count_global),
+        count_country=_as_int(team_epa.count_country),
+        count_state=_as_int(team_epa.count_state),
+        count_district=_as_int(team_epa.count_district),
     )
 
 def get_team_epa(db : Session, team_number : int, query: TeamPerfRequest) -> TeamPerfResponse:
